@@ -95,7 +95,11 @@ export default defineConfig({
         },
         {
           label: "Concepts",
-          items: ["concepts/subjects", "concepts/one-run"],
+          items: [
+            "concepts/subjects",
+            "concepts/one-run",
+            "concepts/capabilities",
+          ],
         },
         {
           label: "Reference",

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readNeeds } from "../capabilities.js";
 import { regex } from "./rules.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { isUnitScore } from "../score.js";
@@ -18,6 +19,7 @@ export type FieldType =
   | "bool"
   | "enum"
   | "texts"
+  | "needs"
   | "matcher"
   | "matchers"
   | "object";
@@ -100,6 +102,17 @@ export const FIELDS: Record<string, FieldDef> = {
       "an object of at least two named answers, each with a number from 0 to 1",
     meaning:
       "An object of at least two answers, each with a number from 0 to 1 that says what the answer is worth.",
+  },
+  requires: {
+    type: "needs",
+    meaning:
+      'A list of capabilities the check needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host\'s `PATH`. A harness that lacks one cannot run the check.',
+  },
+  ifUnsupported: {
+    type: "enum",
+    values: ["skip", "not-applicable"],
+    meaning:
+      'What a harness that lacks what the check needs does: "skip" drops this check and re-normalizes the weights, "not-applicable" excludes the whole case. Default: "not-applicable".',
   },
 };
 
@@ -226,6 +239,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     }
     return value as string[];
   },
+  needs: (value, at) => readNeeds(value, at.where),
   matcher: (value, at) => {
     if (!isPlainObject(value)) {
       throw failure(at, `"${at.name}" must be an object`);

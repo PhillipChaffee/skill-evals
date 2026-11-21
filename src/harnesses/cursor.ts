@@ -54,6 +54,8 @@ const cursor: Harness = {
   bin: "cursor-agent",
   authFiles: [".cursor/auth.json", ".config/cursor/auth.json"],
   authEnv: ["CURSOR_API_KEY"],
+  capabilities: new Set(["subagents"]),
+  status: "unverified",
 
   invocation({ subject, home, workspace, prompt, model }) {
     const placed = placeSkills(subject, path.join(home, ".cursor", "skills"));

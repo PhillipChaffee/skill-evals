@@ -104,6 +104,16 @@ const CASES: Row[] = [
       /non-empty list of non-empty strings/,
     ]),
   ],
+  [
+    "needs",
+    ["mcp", "bin:git"],
+    [
+      [["telepathy"], /unknown capability "telepathy"; known: subagents/],
+      [["bin:a b"], /unknown capability "bin:a b"/],
+      [[1], /unknown capability 1;/],
+      ["mcp", /"requires" must be a list of capability names/],
+    ],
+  ],
   ["matcher", { a: 1 }, [null, [], "a"].map((v): Bad => [v, OBJECT])],
   [
     "matchers",

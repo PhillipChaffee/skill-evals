@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { findOnPath, isExecutable } from "../capabilities.js";
 import { UsageError } from "../scope.js";
 import claudeCode from "./claude-code.js";
 import codex from "./codex.js";
@@ -31,20 +31,6 @@ export const overrideVar = (harness: Harness): string =>
   `SKILL_EVALS_BIN_${harness.id.toUpperCase().replaceAll("-", "_")}`;
 
 /**
- * Tells whether a path can be spawned.
- * @param file - A path, which need not exist.
- * @returns True for a regular file that this user may execute.
- */
-function isExecutable(file: string): boolean {
-  try {
-    fs.accessSync(file, fs.constants.X_OK);
-    return fs.statSync(file).isFile();
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Looks for a harness on this machine.
  * @param harness - The harness to find.
  * @param env - Where `PATH` and the harness's `SKILL_EVALS_BIN_<ID>` override are read from.
@@ -55,13 +41,8 @@ export function findBin(
   env: Env = process.env,
 ): string | null {
   const bin = env[overrideVar(harness)] || harness.bin;
-  const candidates = bin.includes(path.sep)
-    ? [path.resolve(bin)]
-    : (env["PATH"] ?? "")
-        .split(path.delimiter)
-        .filter(Boolean)
-        .map((dir) => path.join(dir, bin));
-  return candidates.find(isExecutable) ?? null;
+  if (!bin.includes(path.sep)) return findOnPath(bin, env);
+  return isExecutable(path.resolve(bin)) ? path.resolve(bin) : null;
 }
 
 /**

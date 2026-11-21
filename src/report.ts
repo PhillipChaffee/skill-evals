@@ -185,6 +185,9 @@ const LEADING_COLUMNS = 3;
  */
 function harnessSection(section: Section): string {
   const { suite, cases, records, labels } = section;
+  if (suite.applicable === 0) {
+    return `## ${suite.harness}\n\nno case applies to ${suite.harness}: ${String(suite.total)} cases not applicable`;
+  }
   const heading = (title: string): string =>
     labels.length > 1 ? `${title}, A / B (B - A)` : title;
   const invalid = records.flatMap((record) => {
@@ -204,7 +207,7 @@ function harnessSection(section: Section): string {
     `| ${rule.join(" | ")} |`,
     ...cases.map((caseDef) => caseRow(caseDef, section)),
     "",
-    `Suite score: ${versus(Object.values(suite.suite), formatScore)}`,
+    `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases)`,
     ...scorerLine(
       "Judge",
       records.flatMap((record) => record.judge ?? []),
@@ -217,6 +220,66 @@ function harnessSection(section: Section): string {
       ? ["", "Invalid runs, not counted above:", "", ...invalid]
       : []),
   ].join("\n");
+}
+
+/**
+ * Lists the pairs of harness and case that were not run.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when every case ran on every harness.
+ */
+function notApplicableSection(evaluation: Evaluation): string[] {
+  if (evaluation.notApplicable.length === 0) return [];
+  return [
+    "",
+    "## Not applicable",
+    "",
+    "These cases did not run. They have no score, and they are neither a pass nor a failure.",
+    "",
+    ...evaluation.notApplicable.map(
+      ({ harness, caseId, reason }) => `- ${harness} \`${caseId}\`: ${reason}`,
+    ),
+  ];
+}
+
+/**
+ * Lists the checks that a harness dropped from a case that ran.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when no check was skipped.
+ */
+function skippedSection(evaluation: Evaluation): string[] {
+  if (evaluation.skippedChecks.length === 0) return [];
+  return [
+    "",
+    "## Ran with checks skipped",
+    "",
+    "The score of these cases on that harness is over the checks that stayed, with their weights re-normalized.",
+    "",
+    ...evaluation.skippedChecks.map(
+      ({ harness, caseId, checks, missing }) =>
+        `- ${harness} \`${caseId}\`: skipped ${checks.map((check) => `\`${check}\``).join(", ")}, which need ${missing.join(", ")}`,
+    ),
+  ];
+}
+
+/**
+ * Shows the score over the cases that apply to every harness, the only score that compares harnesses.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing for a single harness.
+ */
+function commonSection(evaluation: Evaluation): string[] {
+  const { commonSet } = evaluation;
+  if (!commonSet) return [];
+  return [
+    "",
+    "## Common set",
+    "",
+    `Common set (${String(commonSet.cases.length)} cases: ${commonSet.cases.join(", ") || "none"}). Only these scores compare harnesses.`,
+    "",
+    ...Object.entries(commonSet.suite).map(
+      ([harness, scores]) =>
+        `- ${harness}: ${versus(Object.values(scores), formatScore)}`,
+    ),
+  ];
 }
 
 /**
@@ -233,7 +296,8 @@ export function renderReport(evaluation: Evaluation): string {
   const sections = evaluation.suites.map((suite) =>
     harnessSection({
       suite,
-      cases,
+      // The cases as this harness ran them, so that a dropped check does not shift the lines of the others.
+      cases: evaluation.applied[suite.harness] ?? [],
       records: records.filter((record) => record.harness === suite.harness),
       labels,
     }),
@@ -255,6 +319,9 @@ export function renderReport(evaluation: Evaluation): string {
     `- Output: ${evaluation.outDir}`,
     "",
     sections.join("\n\n"),
+    ...commonSection(evaluation),
+    ...skippedSection(evaluation),
+    ...notApplicableSection(evaluation),
     ...(belowBar.length
       ? ["", "Below the pass bar:", "", ...belowBar.map((line) => `- ${line}`)]
       : []),

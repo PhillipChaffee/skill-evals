@@ -51,6 +51,8 @@ test("evaluate returns suite scores for one subject without printing or exiting"
         },
       ],
       suite: { subject: 0.5 },
+      applicable: 1,
+      total: 1,
     },
   ]);
   expect(evaluation.records.map((record) => record.score)).toEqual([0.5, 0.5]);
@@ -63,7 +65,12 @@ test("evaluate returns suite scores for one subject without printing or exiting"
   const written = path.join(evaluation.outDir, "results.json");
   expect(fs.readFileSync(written, "utf8")).toBe(
     JSON.stringify(
-      { ...evaluation, cases: undefined, outDir: undefined },
+      {
+        ...evaluation,
+        cases: undefined,
+        applied: undefined,
+        outDir: undefined,
+      },
       null,
       "\t",
     ),

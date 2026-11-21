@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Need } from "./capabilities.js";
 import type { FieldDef, Mode } from "./checks/fields.js";
 import { WEIGHT, extensionsOf, readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
+import { HARNESSES } from "./harnesses/index.js";
 import { UsageError, messageOf } from "./scope.js";
 
 /** One prompt and what a good run of it does. */
@@ -15,6 +17,12 @@ export interface Case {
   minScore?: number | undefined;
   maxTurns?: number | undefined;
   timeoutSeconds: number;
+  /** What a harness must be able to do for the case to apply, besides what its checks imply. */
+  requires: Need[];
+  /** The harnesses the case is for, when it is for some only. A last resort: `note` says why. */
+  harnesses?: string[] | undefined;
+  /** Why the case is limited to `harnesses`; the report shows it as the reason the case is not applicable elsewhere. */
+  note?: string | undefined;
   /** A directory whose content the agent starts with, or null for an empty workspace. */
   workspaceDir: string | null;
   /** The keys of the case file that start with `x-`, which belong to the case's author. */
@@ -39,6 +47,20 @@ export const CASE_KEYS: Record<string, FieldDef> = {
   timeoutSeconds: {
     type: "int",
     meaning: "The seconds a run may take. Default: 600.",
+  },
+  requires: {
+    type: "needs",
+    meaning:
+      'A list of capabilities the case needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host\'s `PATH`. A harness that lacks one reports the case as not applicable.',
+  },
+  harnesses: {
+    type: "texts",
+    meaning:
+      "The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.",
+  },
+  note: {
+    type: "text",
+    meaning: "Why the case is limited to `harnesses`. The report shows it.",
   },
 };
 
@@ -74,6 +96,22 @@ function loadCase(dir: string, mode: Mode): Case {
     raw?.[key] === undefined || (key === "weight" && raw[key] === null)
       ? undefined
       : readField(CASE_KEYS, key, at);
+  const harnesses = read("harnesses") as string[] | undefined;
+  const note = read("note") as string | undefined;
+  if (harnesses) {
+    const known = HARNESSES.map((harness) => harness.id);
+    const unknown = harnesses.find((id) => !known.includes(id));
+    if (unknown !== undefined) {
+      throw new UsageError(
+        `${file}: unknown harness "${unknown}"; known: ${known.join(", ")}`,
+      );
+    }
+    if (note === undefined) {
+      throw new UsageError(
+        `${file}: "harnesses" needs a "note" that says why the case is limited`,
+      );
+    }
+  }
   const workspaceDir = path.join(dir, "workspace");
   return {
     id,
@@ -84,6 +122,9 @@ function loadCase(dir: string, mode: Mode): Case {
     weight: (read("weight") as number | undefined) ?? 1,
     minScore: read("minScore") as number | undefined,
     maxTurns: read("maxTurns") as number | undefined,
+    requires: (read("requires") as Need[] | undefined) ?? [],
+    harnesses,
+    note,
     timeoutSeconds:
       (read("timeoutSeconds") as number | undefined) ?? DEFAULT_TIMEOUT_SECONDS,
     workspaceDir: fs.existsSync(workspaceDir) ? workspaceDir : null,

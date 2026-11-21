@@ -69,21 +69,40 @@ const HARNESSES: Harness[];
 
 ## Types
 
+### Capability
+
+The name of something a harness can observe or do.
+
+```ts
+type Capability = keyof typeof CAPABILITIES;
+```
+
+### Need
+
+What a case or a check can need: a capability of the harness, or `bin:<name>`, an executable on the host's `PATH`.
+
+```ts
+type Need = Capability | `bin:${string}`;
+```
+
 ### Case
 
 One prompt and what a good run of it does.
 
-| Property         | Type                      | Description                                                                        |
-| ---------------- | ------------------------- | ---------------------------------------------------------------------------------- |
-| `id`             | `string`                  |                                                                                    |
-| `prompt`         | `string`                  |                                                                                    |
-| `checks`         | `Check[]`                 |                                                                                    |
-| `weight`         | `number`                  |                                                                                    |
-| `minScore?`      | `number \| undefined`     |                                                                                    |
-| `maxTurns?`      | `number \| undefined`     |                                                                                    |
-| `timeoutSeconds` | `number`                  |                                                                                    |
-| `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.   |
-| `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author. |
+| Property         | Type                      | Description                                                                                                     |
+| ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `id`             | `string`                  |                                                                                                                 |
+| `prompt`         | `string`                  |                                                                                                                 |
+| `checks`         | `Check[]`                 |                                                                                                                 |
+| `weight`         | `number`                  |                                                                                                                 |
+| `minScore?`      | `number \| undefined`     |                                                                                                                 |
+| `maxTurns?`      | `number \| undefined`     |                                                                                                                 |
+| `timeoutSeconds` | `number`                  |                                                                                                                 |
+| `requires`       | `Need[]`                  | What a harness must be able to do for the case to apply, besides what its checks imply.                         |
+| `harnesses?`     | `string[] \| undefined`   | The harnesses the case is for, when it is for some only. A last resort: `note` says why.                        |
+| `note?`          | `string \| undefined`     | Why the case is limited to `harnesses`; the report shows it as the reason the case is not applicable elsewhere. |
+| `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                |
+| `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                              |
 
 ### Check
 
@@ -97,23 +116,27 @@ type Check = RuledCheck | JudgedCheck | DecisionCheck;
 
 What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty.
 
-| Property        | Type                                                       | Description                                                                                          |
-| --------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `cases`         | `Case[]`                                                   |                                                                                                      |
-| `outDir`        | `string`                                                   |                                                                                                      |
-| `subjects`      | `SubjectSummary[]`                                         |                                                                                                      |
-| `harnesses`     | `string[]`                                                 |                                                                                                      |
-| `harnessReason` | `string`                                                   |                                                                                                      |
-| `model`         | `string \| null`                                           |                                                                                                      |
-| `judge`         | `string`                                                   | The harness and model that scored the judged checks, in words.                                       |
-| `decisionModel` | `string \| null`                                           | The model that scored the decision checks; null when none is set.                                    |
-| `reps`          | `number`                                                   |                                                                                                      |
-| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>` | For each case id, what its file holds that the tool does not read: its `x-` keys.                    |
-| `suites`        | `SuiteScore[]`                                             |                                                                                                      |
-| `belowBar`      | `string[]`                                                 | The pass bars that were not reached.                                                                 |
-| `invalid`       | `string[]`                                                 | The runs that do not count, each with its reason.                                                    |
-| `sourceChanged` | `string[]`                                                 | The paths of a subject directory that changed while the command ran, each as the user would type it. |
-| `records`       | `RunRecord[]`                                              |                                                                                                      |
+| Property        | Type                                                                          | Description                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cases`         | `Case[]`                                                                      | Every loaded case, applicable or not.                                                                                                                                                                   |
+| `applied`       | `Record<string, Case[]>`                                                      | For each harness id, the cases it ran, with the checks that it dropped left out.                                                                                                                        |
+| `outDir`        | `string`                                                                      |                                                                                                                                                                                                         |
+| `subjects`      | `SubjectSummary[]`                                                            |                                                                                                                                                                                                         |
+| `harnesses`     | `string[]`                                                                    |                                                                                                                                                                                                         |
+| `harnessReason` | `string`                                                                      |                                                                                                                                                                                                         |
+| `model`         | `string \| null`                                                              |                                                                                                                                                                                                         |
+| `judge`         | `string`                                                                      | The harness and model that scored the judged checks, in words.                                                                                                                                          |
+| `decisionModel` | `string \| null`                                                              | The model that scored the decision checks; null when none is set.                                                                                                                                       |
+| `reps`          | `number`                                                                      |                                                                                                                                                                                                         |
+| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>`                    | For each case id, what its file holds that the tool does not read: its `x-` keys.                                                                                                                       |
+| `suites`        | `SuiteScore[]`                                                                |                                                                                                                                                                                                         |
+| `belowBar`      | `string[]`                                                                    | The pass bars that were not reached.                                                                                                                                                                    |
+| `notApplicable` | `{ harness: string; caseId: string; missing: string[]; reason: string; }[]`   | The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs.                                                                                      |
+| `skippedChecks` | `{ harness: string; caseId: string; checks: string[]; missing: string[]; }[]` | The checks that a harness dropped from a case that still ran, because they say `ifUnsupported: "skip"`.                                                                                                 |
+| `commonSet`     | `CommonSet \| null`                                                           | The score over the cases that apply to every harness that has any, for each harness and subject label. Only that number compares harnesses. Null when fewer than two harnesses have an applicable case. |
+| `invalid`       | `string[]`                                                                    | The runs that do not count, each with its reason.                                                                                                                                                       |
+| `sourceChanged` | `string[]`                                                                    | The paths of a subject directory that changed while the command ran, each as the user would type it.                                                                                                    |
+| `records`       | `RunRecord[]`                                                                 |                                                                                                                                                                                                         |
 
 ### EvaluateOptions
 
@@ -145,34 +168,39 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 
 What `evaluate` writes to `results.json`.
 
-| Property        | Type                                                       | Description                                                                                          |
-| --------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `subjects`      | `SubjectSummary[]`                                         |                                                                                                      |
-| `harnesses`     | `string[]`                                                 |                                                                                                      |
-| `harnessReason` | `string`                                                   |                                                                                                      |
-| `model`         | `string \| null`                                           |                                                                                                      |
-| `judge`         | `string`                                                   | The harness and model that scored the judged checks, in words.                                       |
-| `decisionModel` | `string \| null`                                           | The model that scored the decision checks; null when none is set.                                    |
-| `reps`          | `number`                                                   |                                                                                                      |
-| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>` | For each case id, what its file holds that the tool does not read: its `x-` keys.                    |
-| `suites`        | `SuiteScore[]`                                             |                                                                                                      |
-| `belowBar`      | `string[]`                                                 | The pass bars that were not reached.                                                                 |
-| `invalid`       | `string[]`                                                 | The runs that do not count, each with its reason.                                                    |
-| `sourceChanged` | `string[]`                                                 | The paths of a subject directory that changed while the command ran, each as the user would type it. |
-| `records`       | `RunRecord[]`                                              |                                                                                                      |
+| Property        | Type                                                                          | Description                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subjects`      | `SubjectSummary[]`                                                            |                                                                                                                                                                                                         |
+| `harnesses`     | `string[]`                                                                    |                                                                                                                                                                                                         |
+| `harnessReason` | `string`                                                                      |                                                                                                                                                                                                         |
+| `model`         | `string \| null`                                                              |                                                                                                                                                                                                         |
+| `judge`         | `string`                                                                      | The harness and model that scored the judged checks, in words.                                                                                                                                          |
+| `decisionModel` | `string \| null`                                                              | The model that scored the decision checks; null when none is set.                                                                                                                                       |
+| `reps`          | `number`                                                                      |                                                                                                                                                                                                         |
+| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>`                    | For each case id, what its file holds that the tool does not read: its `x-` keys.                                                                                                                       |
+| `suites`        | `SuiteScore[]`                                                                |                                                                                                                                                                                                         |
+| `belowBar`      | `string[]`                                                                    | The pass bars that were not reached.                                                                                                                                                                    |
+| `notApplicable` | `{ harness: string; caseId: string; missing: string[]; reason: string; }[]`   | The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs.                                                                                      |
+| `skippedChecks` | `{ harness: string; caseId: string; checks: string[]; missing: string[]; }[]` | The checks that a harness dropped from a case that still ran, because they say `ifUnsupported: "skip"`.                                                                                                 |
+| `commonSet`     | `CommonSet \| null`                                                           | The score over the cases that apply to every harness that has any, for each harness and subject label. Only that number compares harnesses. Null when fewer than two harnesses have an applicable case. |
+| `invalid`       | `string[]`                                                                    | The runs that do not count, each with its reason.                                                                                                                                                       |
+| `sourceChanged` | `string[]`                                                                    | The paths of a subject directory that changed while the command ran, each as the user would type it.                                                                                                    |
+| `records`       | `RunRecord[]`                                                                 |                                                                                                                                                                                                         |
 
 ### Harness
 
 The adapter of one coding-agent CLI.
 
-| Property     | Type                              | Description                                                                                                       |
-| ------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `id`         | `string`                          |                                                                                                                   |
-| `bin`        | `string`                          | The name of the executable on PATH.                                                                               |
-| `authFiles`  | `string[]`                        | Login files to copy into the throwaway home, relative to the user's home.                                         |
-| `authEnv`    | `string[]`                        | Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. |
-| `invocation` | `(input: RunInput) => Invocation` |                                                                                                                   |
-| `parse`      | `(stdout: string) => Parsed`      | May throw on a stream it does not understand; the caller reports that as a failed run.                            |
+| Property       | Type                                                                                                                                                                                                                                                                                                                                                               | Description                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`           | `string`                                                                                                                                                                                                                                                                                                                                                           |                                                                                                                         |
+| `bin`          | `string`                                                                                                                                                                                                                                                                                                                                                           | The name of the executable on PATH.                                                                                     |
+| `authFiles`    | `string[]`                                                                                                                                                                                                                                                                                                                                                         | Login files to copy into the throwaway home, relative to the user's home.                                               |
+| `authEnv`      | `string[]`                                                                                                                                                                                                                                                                                                                                                         | Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name.       |
+| `capabilities` | `ReadonlySet<"subagents" \| "multiTurn" \| "userInvoke" \| "toolOutputs" \| "assistantText" \| "turnGrouping" \| "childCalls" \| "childText" \| "rules" \| "hooks" \| "history" \| "historyNative" \| "askUser" \| "toolDurations" \| "sessionStore" \| "compact" \| "clear" \| "resume" \| "mcp" \| "skillListing" \| "loadedReport" \| "isolated" \| "sandbox">` | What the adapter can observe or do, each proven by a parser test on a stream. A case that needs more is not applicable. |
+| `status`       | `"real-model" \| "scripted" \| "unverified"`                                                                                                                                                                                                                                                                                                                       | How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified).             |
+| `invocation`   | `(input: RunInput) => Invocation`                                                                                                                                                                                                                                                                                                                                  |                                                                                                                         |
+| `parse`        | `(stdout: string) => Parsed`                                                                                                                                                                                                                                                                                                                                       | May throw on a stream it does not understand; the caller reports that as a failed run.                                  |
 
 ### Parsed
 
@@ -258,15 +286,26 @@ A case's scores, keyed by subject label.
 | `minScore?` | `number \| undefined`            |             |
 | `scores`    | `Record<string, number \| null>` |             |
 
+### CommonSet
+
+The score over the cases that apply to every harness that has any, for each harness and subject label.
+
+| Property | Type                                             | Description                                                |
+| -------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| `cases`  | `string[]`                                       | The ids of the cases that apply to all of those harnesses. |
+| `suite`  | `Record<string, Record<string, number \| null>>` |                                                            |
+
 ### SuiteScore
 
 One harness's case scores, and its suite score keyed by subject label.
 
-| Property  | Type                             | Description |
-| --------- | -------------------------------- | ----------- |
-| `harness` | `string`                         |             |
-| `cases`   | `CaseScore[]`                    |             |
-| `suite`   | `Record<string, number \| null>` |             |
+| Property     | Type                             | Description                                                                            |
+| ------------ | -------------------------------- | -------------------------------------------------------------------------------------- |
+| `harness`    | `string`                         |                                                                                        |
+| `cases`      | `CaseScore[]`                    |                                                                                        |
+| `suite`      | `Record<string, number \| null>` |                                                                                        |
+| `applicable` | `number`                         | How many cases apply to the harness. Only these are in `cases` and in the suite score. |
+| `total`      | `number`                         | How many cases the suite has, applicable or not.                                       |
 
 ### SubjectSummary
 

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { Capability } from "../capabilities.js";
 import type { Subject } from "../subject.js";
 
 // Every tool kind with what it means. The docs list the kinds from this table.
@@ -102,6 +103,10 @@ export interface Harness {
   authFiles: string[];
   /** Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. */
   authEnv: string[];
+  /** What the adapter can observe or do, each proven by a parser test on a stream. A case that needs more is not applicable. */
+  capabilities: ReadonlySet<Capability>;
+  /** How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified). */
+  status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;

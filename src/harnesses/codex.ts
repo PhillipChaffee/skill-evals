@@ -72,6 +72,8 @@ const codex: Harness = {
   bin: "codex",
   authFiles: [".codex/auth.json"],
   authEnv: OPENAI_ENV,
+  capabilities: new Set(["subagents"]),
+  status: "scripted",
 
   invocation({ subject, home, workspace, prompt, model }) {
     const codexHome = path.join(home, ".codex");

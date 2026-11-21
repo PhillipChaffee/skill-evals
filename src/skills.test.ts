@@ -70,7 +70,9 @@ test("run --a none --b <skills dir> reports the no-skills baseline as A", async 
   ]);
   expect(result.stdout).toMatch(/^- A: no skills$/m);
   expect(result.stdout).toMatch(/`skill_loaded greet` A 0\/1, B 1\/1/);
-  expect(result.stdout).toMatch(/^Suite score: 0\.00 \/ 1\.00 \(\+1\.00\)$/m);
+  expect(result.stdout).toMatch(
+    /^Suite score: 0\.00 \/ 1\.00 \(\+1\.00\) \(1 of 1 cases\)$/m,
+  );
 });
 
 test("a run whose harness lists none of the subject's skills is invalid", async () => {

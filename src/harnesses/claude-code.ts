@@ -55,6 +55,13 @@ const claudeCode: Harness = {
   bin: "claude",
   authFiles: [".claude/.credentials.json"],
   authEnv: ANTHROPIC_ENV,
+  capabilities: new Set([
+    "subagents",
+    "childCalls",
+    "loadedReport",
+    "skillListing",
+  ]),
+  status: "real-model",
 
   invocation({ subject, home, prompt, model, maxTurns }) {
     const configDir = path.join(home, ".claude");

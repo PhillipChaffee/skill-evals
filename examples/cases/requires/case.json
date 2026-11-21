@@ -1,0 +1,14 @@
+{
+  "requires": ["bin:git"],
+  "checks": [
+    { "type": "tool_called", "kind": "shell", "inputMatches": "git log" },
+    { "type": "output_contains", "text": "done" },
+    {
+      "type": "tool_not_called",
+      "kind": "subagent",
+      "requires": ["subagents"],
+      "ifUnsupported": "skip"
+    }
+  ],
+  "timeoutSeconds": 300
+}

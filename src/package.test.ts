@@ -78,7 +78,7 @@ test(
     ];
     const scored = run(bin, "score", "--subject", "none", ...flags);
     expect(scored.status, scored.stderr).toBe(0);
-    expect(scored.stdout).toMatch(/^Suite score: 1\.00$/m);
+    expect(scored.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
     expect(fs.existsSync(path.join(project, "results/results.json"))).toBe(
       true,
     );

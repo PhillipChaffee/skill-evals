@@ -1,3 +1,4 @@
+import type { Capability, Need } from "../capabilities.js";
 import type { ToolCall, ToolKind } from "../harnesses/shared.js";
 import { isUnitScore } from "../score.js";
 import { UsageError } from "../scope.js";
@@ -28,11 +29,18 @@ interface CheckFields {
   rubric?: string;
   question?: string;
   expect?: "yes" | "no";
+  /** What the harness must be able to do for the check to apply, besides what its type implies. */
+  requires?: Need[];
+  /** What a harness that lacks a need does: drop this check, or exclude the whole case. Default: the whole case. */
+  ifUnsupported?: "skip" | "not-applicable";
   /** Keys that start with `x-` belong to the case author. Loading keeps them, and nothing reads them. */
   [extension: `x-${string}`]: unknown;
 }
 /** The name of a field a check may carry. */
-export type Field = Exclude<keyof CheckFields, `x-${string}`>;
+export type Field = Exclude<
+  keyof CheckFields,
+  `x-${string}` | "requires" | "ifUnsupported"
+>;
 
 /** A check that a rule scores from what the run left behind. */
 export type RuledCheck = CheckFields & { type: RuledType; weight: number };
@@ -86,8 +94,8 @@ export interface Spec {
   /** One more sentence about the fields, for what the lists above cannot say. */
   note?: string;
   rule?: Rule;
-  /** What a run must be able to do for the check to apply. No check names one yet. */
-  needs?: (check: Check) => string[];
+  /** What a harness must be able to do for the check to apply, besides the check's own `requires`. No check type names one yet. */
+  needs?: (check: Check) => Capability[];
 }
 /** A ruled check whose fields in `F` are set, which loading the case made sure of. */
 export type With<F extends Field> = RuledCheck & Required<Pick<CheckFields, F>>;
@@ -209,7 +217,11 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
   );
   const at = { where, owner: type, siblings: record };
   const extensions = extensionsOf(
-    ["type", "weight", ...spec.fields, ...(spec.optional ?? [])],
+    [
+      ...["type", "weight", "requires", "ifUnsupported"],
+      ...spec.fields,
+      ...(spec.optional ?? []),
+    ],
     at,
     mode,
   );
@@ -218,7 +230,10 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
       ? 1
       : readField({ weight: WEIGHT }, "weight", at);
   const given: Record<string, unknown> = {};
-  for (const field of [...spec.fields, ...optional]) {
+  const capabilities = ["requires", "ifUnsupported"].filter(
+    (field) => record[field] !== undefined,
+  );
+  for (const field of [...spec.fields, ...optional, ...capabilities]) {
     given[field] = readField(FIELDS, field, at);
   }
   if (spec.oneOf && !spec.oneOf.some((field) => given[field] !== undefined)) {

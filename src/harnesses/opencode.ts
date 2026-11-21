@@ -50,6 +50,8 @@ const opencode: Harness = {
   bin: "opencode",
   authFiles: [".local/share/opencode/auth.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
+  capabilities: new Set(["subagents"]),
+  status: "scripted",
 
   invocation({ subject, home, workspace, prompt, model }) {
     const configDir = path.join(home, ".config", "opencode");

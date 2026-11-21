@@ -28,6 +28,8 @@ A case is a directory under `evals/cases/`. Its name is the case id.
 
 Every check takes an optional `weight`, a positive number that defaults to 1.
 
+A case file can also say what a harness must be able to do to run it. These keys are described in [Needs and not-applicable cases](#needs-and-not-applicable-cases).
+
 [Checks](../reference/checks.md) lists every check type with its fields.
 
 In every harness, "loaded a skill" means that the agent called the harness's skill tool with that skill's name, or that any tool call pointed at `skills/<name>/SKILL.md`.
@@ -55,6 +57,38 @@ A key that a case file does not take is a load error. The error names the key, t
 A key that starts with `x-` is yours. Loading keeps it, nothing reads it, and `results.json` repeats it: a case's `x-` keys are in `caseMeta` under the case id, and a check's own `x-` keys are in its entry of the run record.
 
 `--lenient` (or `"lenient": true` in the config file) loads a file that has other unknown keys. It drops each one and prints one warning for it on standard error. It exists for a suite that was written before keys were checked, and it is for one release.
+
+## Needs and not-applicable cases
+
+Harnesses report different things. A case or a check can name what it needs, and a harness that lacks it reports the case as not applicable: no runs, no score, and a line in the report. [Capabilities](../concepts/capabilities.md) lists the names and which harness declares which.
+
+| Key             | Where           | Holds                                                                                                                                |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `requires`      | case or a check | A list of capability names, or `bin:<name>` for an executable on `PATH`. An unknown name is a load error that lists the known names. |
+| `ifUnsupported` | a check         | `"skip"` drops this check on a harness that lacks what it needs, and re-normalizes the weights. The default is `"not-applicable"`.   |
+| `harnesses`     | case            | The harness ids the case is for. A last resort. It needs a `note`.                                                                   |
+| `note`          | case            | Why the case is limited to `harnesses`. The report shows it as the reason.                                                           |
+
+This case needs `git` on the machine, and it still runs on a harness that cannot see subagents, because that one check is skipped there:
+
+```json
+{
+  "requires": ["bin:git"],
+  "checks": [
+    { "type": "tool_called", "kind": "shell", "inputMatches": "git log" },
+    { "type": "output_contains", "text": "done" },
+    {
+      "type": "tool_not_called",
+      "kind": "subagent",
+      "requires": ["subagents"],
+      "ifUnsupported": "skip"
+    }
+  ],
+  "timeoutSeconds": 300
+}
+```
+
+A skipped check changes what the case's score means on that harness, so the report lists the case under "Ran with checks skipped". Only the common-set score, over the cases that apply to every harness, compares harnesses.
 
 ## Tool checks
 

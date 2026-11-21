@@ -180,12 +180,16 @@ test("scores are weighted means of the checks and of the cases", async () => {
         { id: "steady", weight: 2, scores: { a: 1, b: 1 } },
       ],
       suite: { a: (1 / 3 + 2) / 3, b: 1 },
+      applicable: 2,
+      total: 2,
     },
   ]);
   expect(better.stdout).toMatch(
     /^\| restate \| 0\.33 \/ 1\.00 \(\+0\.67\) \| `skill_loaded bro \(weight 3\)` A 0\/1, B 1\/1<br>/m,
   );
-  expect(better.stdout).toMatch(/^Suite score: 0\.78 \/ 1\.00 \(\+0\.22\)$/m);
+  expect(better.stdout).toMatch(
+    /^Suite score: 0\.78 \/ 1\.00 \(\+0\.22\) \(2 of 2 cases\)$/m,
+  );
   expect(better.stdout).not.toMatch(/pass bar/);
 });
 
@@ -233,7 +237,7 @@ test("score runs the suite on one subject and applies the pass bar to it", async
   expect(good.stdout).toMatch(
     /^\| restate \| 1\.00 \| `skill_loaded bro \(weight 3\)` 2\/2<br>.*\| \$0\.0300 \|$/m,
   );
-  expect(good.stdout).toMatch(/^Suite score: 1\.00$/m);
+  expect(good.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
   const kept = path.join(outDir, "claude-code/restate/subject2.final.md");
   expect(fs.existsSync(kept)).toBe(true);
 
@@ -267,5 +271,5 @@ test("a prompt that starts with a dash reaches the agent as the prompt", async (
     outDir,
   ]);
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/^Suite score: 1\.00$/m);
+  expect(result.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
 });

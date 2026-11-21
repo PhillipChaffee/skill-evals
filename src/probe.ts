@@ -1,11 +1,15 @@
+import fs from "node:fs";
+import { binNeeds, hostCapabilities } from "./applicability.js";
 import { exclusionsOf } from "./exclusions.js";
 import type { Case } from "./cases.js";
+import { loadCases } from "./cases.js";
 import { findBin, namedHarnesses } from "./harnesses/index.js";
+import type { Harness } from "./harnesses/shared.js";
 import type { Project } from "./project.js";
 import { withConfig } from "./project.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason, runOnce } from "./run.js";
-import { outputDir } from "./scope.js";
+import { UsageError, outputDir } from "./scope.js";
 import type { Subject } from "./subject.js";
 import {
   SUBJECT_CHANGED_EXIT_CODE,
@@ -38,6 +42,7 @@ const probe = (subject: Subject): Case => ({
     ? `Use the ${subject.skills[0]} skill on this sentence: "The cache is cold."`
     : "Reply with the single word: pong",
   checks: [],
+  requires: [],
   weight: 1,
   timeoutSeconds: PROBE_TIMEOUT_SECONDS,
   workspaceDir: null,
@@ -82,6 +87,48 @@ function ranRow(subject: Subject, record: RunRecord): string[] {
 }
 
 /**
+ * Says which executables the loaded cases ask for are on this machine.
+ * @param cases - The cases the project holds, or why they could not be read.
+ * @returns One line: the `bin:<name>` host capabilities that are present, or "none requested".
+ */
+function hostLine(cases: Case[] | string): string {
+  if (typeof cases === "string")
+    return `Host capabilities: cases not read (${cases})`;
+  const asked = binNeeds(cases);
+  if (asked.length === 0) return "Host capabilities: none requested";
+  const present = [...hostCapabilities(cases)].sort();
+  return `Host capabilities: ${present.join(", ") || `none present, of ${asked.join(", ")}`}`;
+}
+
+/**
+ * Lists what each harness declares it can observe or do.
+ * @param harnesses - The harnesses the command looked at.
+ * @returns One line for each harness: its id, its status, and its capabilities.
+ */
+const capabilityLines = (harnesses: Harness[]): string[] =>
+  harnesses.map(
+    (harness) =>
+      `- ${harness.id} (${harness.status}): ${[...harness.capabilities].join(", ") || "none"}`,
+  );
+
+/**
+ * Lays out what the harnesses and the host can do, which decides whether a case applies.
+ * @param cases - The cases the project holds, or why they could not be read.
+ * @param harnesses - The harnesses the command looked at.
+ * @returns The host line, and a line for each harness.
+ */
+const capabilityNotes = (
+  cases: Case[] | string,
+  harnesses: Harness[],
+): string =>
+  [
+    hostLine(cases),
+    "",
+    "Capabilities of each harness. A case that needs more is not applicable there:",
+    ...capabilityLines(harnesses),
+  ].join("\n");
+
+/**
  * Lays out the `check` output.
  * @param subject - What the harnesses were asked to load.
  * @param outDir - Where the runs' files are, or "nothing ran".
@@ -100,6 +147,21 @@ function table(subject: Subject, outDir: string, rows: string[][]): string {
         `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`,
     ),
   ].join("\n");
+}
+
+/**
+ * Loads the cases of the project for the host line, without letting a bad case stop the probe.
+ * @param dir - The cases directory.
+ * @param lenient - Whether a case file may hold unknown keys.
+ * @returns The cases, or the reason they could not be read.
+ */
+function loadSafely(dir: string, lenient: boolean): Case[] | string {
+  try {
+    return loadCases(dir, "*", { lenient, onWarning: () => undefined });
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    return error.message.replace(/\s+/g, " ").slice(0, SHOWN_ERROR_LENGTH);
+  }
 }
 
 /**
@@ -150,7 +212,13 @@ export async function check(
       failed ||= invalidReason(record) !== null;
       rows.push([harness.id, ...ranRow(subject, record)]);
     }
-    console.log(table(subject, outDir, rows));
+    const cases = fs.existsSync(options.cases)
+      ? loadSafely(options.cases, options.lenient ?? false)
+      : [];
+    const harnesses = located.map((entry) => entry.harness);
+    console.log(
+      `${table(subject, outDir, rows)}\n\n${capabilityNotes(cases, harnesses)}`,
+    );
     const changed = changedAtSource([subject]);
     if (changed.length > 0) {
       console.error(`skill-evals: ${sourceChangedMessage(changed)}`);

@@ -17,6 +17,10 @@ export interface SuiteScore {
   harness: string;
   cases: CaseScore[];
   suite: Record<string, number | null>;
+  /** How many cases apply to the harness. Only these are in `cases` and in the suite score. */
+  applicable: number;
+  /** How many cases the suite has, applicable or not. */
+  total: number;
 }
 
 /** The part of a run record that scoring reads. */
@@ -37,6 +41,8 @@ interface WeightedCase {
 // Absorbs float error in a mean, so three runs at 0.8 reach a bar of 0.8.
 const EPSILON = 1e-9;
 const SCORE_DECIMALS = 2;
+// A comparison needs two harnesses.
+const MIN_COMPARED = 2;
 
 /**
  * Tells whether a value read from a file or a model is usable as a score.
@@ -89,13 +95,17 @@ const caseScore = (records: ScoredRun[]): number | null =>
  * @param run.cases - The cases, in report order.
  * @param run.records - Every run; one whose score is null does not count toward its case.
  * @param run.labels - The subject labels to score.
- * @returns One entry for each harness. A case with no valid run has the score null, and so has its suite.
+ * @param run.applicable - For each harness id, the ids of the cases that apply to it. Only those are scored, and the
+ *   others count only in `total`. Default: every case on every harness.
+ * @returns One entry for each harness. A case with no valid run has the score null, and so has its suite; so has a
+ *   harness to which no case applies.
  */
 export function scoreSuites(run: {
   harnesses: string[];
   cases: WeightedCase[];
   records: ScoredRun[];
   labels: readonly string[];
+  applicable?: Record<string, string[]>;
 }): SuiteScore[] {
   const perLabel = (
     score: (label: string) => number | null,
@@ -103,17 +113,22 @@ export function scoreSuites(run: {
     Object.fromEntries(run.labels.map((label) => [label, score(label)]));
   return run.harnesses.map((harness) => {
     const mine = run.records.filter((record) => record.harness === harness);
-    const scored = run.cases.map(({ id, weight, minScore }) => ({
-      id,
-      weight,
-      minScore,
-      scores: perLabel((label) =>
-        caseScore(mine.filter((r) => r.caseId === id && r.subject === label)),
-      ),
-    }));
+    const ids = run.applicable?.[harness];
+    const scored = run.cases
+      .filter(({ id }) => ids?.includes(id) ?? true)
+      .map(({ id, weight, minScore }) => ({
+        id,
+        weight,
+        minScore,
+        scores: perLabel((label) =>
+          caseScore(mine.filter((r) => r.caseId === id && r.subject === label)),
+        ),
+      }));
     return {
       harness,
       cases: scored,
+      applicable: scored.length,
+      total: run.cases.length,
       suite: perLabel((label) =>
         weightedMean(
           scored.map((c) => ({
@@ -142,7 +157,9 @@ export function failedBars(
   label: string,
   minScore: number | undefined,
 ): string[] {
-  return suites.flatMap(({ harness, cases, suite }) => {
+  return suites.flatMap(({ harness, cases, suite, applicable }) => {
+    // A harness to which no case applies has no score to measure against a bar.
+    if (applicable === 0) return [];
     const suiteScore = suite[label] ?? null;
     return [
       ...missed(suiteScore, minScore).map(
@@ -158,4 +175,50 @@ export function failedBars(
       }),
     ];
   });
+}
+
+/** The score over the cases that apply to every harness that has any, for each harness and subject label. */
+export interface CommonSet {
+  /** The ids of the cases that apply to all of those harnesses. */
+  cases: string[];
+  suite: Record<string, Record<string, number | null>>;
+}
+
+/**
+ * Scores the cases that apply to every harness that has an applicable case, the only scores that compare harnesses.
+ * @param run - The same inputs as `scoreSuites`; `applicable` is required.
+ * @param run.harnesses - The ids of the harnesses, in report order.
+ * @param run.cases - The cases, in report order.
+ * @param run.records - Every run.
+ * @param run.labels - The subject labels to score.
+ * @param run.applicable - For each harness id, the ids of the cases that apply to it.
+ * @returns The common cases and each harness's suite score over them. Null unless two harnesses have an applicable
+ *   case, because a harness with none is left out.
+ */
+export function commonSet(run: {
+  harnesses: string[];
+  cases: WeightedCase[];
+  records: ScoredRun[];
+  labels: readonly string[];
+  applicable: Record<string, string[]>;
+}): CommonSet | null {
+  const sets = run.harnesses.flatMap((id) => {
+    const ids = run.applicable[id] ?? [];
+    return ids.length > 0 ? [{ id, ids }] : [];
+  });
+  if (sets.length < MIN_COMPARED) return null;
+  const common = run.cases
+    .map(({ id }) => id)
+    .filter((id) => sets.every(({ ids }) => ids.includes(id)));
+  const scored = scoreSuites({
+    ...run,
+    harnesses: sets.map(({ id }) => id),
+    applicable: Object.fromEntries(sets.map(({ id }) => [id, common])),
+  });
+  return {
+    cases: common,
+    suite: Object.fromEntries(
+      scored.map(({ harness, suite }) => [harness, suite]),
+    ),
+  };
 }

@@ -12,12 +12,14 @@ import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
 import { requireEnvNames } from "./env.js";
 import { invalidReason, runOnce } from "./run.js";
-import type { SuiteScore } from "./score.js";
-import { failedBars, isUnitScore, scoreSuites } from "./score.js";
+import type { CommonSet, SuiteScore } from "./score.js";
+import { commonSet, failedBars, isUnitScore, scoreSuites } from "./score.js";
 import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject, SubjectSummary } from "./subject.js";
 import { changedAtSource, resolveSubject } from "./subject.js";
 import { exclusionsOf } from "./exclusions.js";
+import type { Partition } from "./applicability.js";
+import { partitionApplicable } from "./applicability.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions {
@@ -77,6 +79,15 @@ export interface Results {
   suites: SuiteScore[];
   /** The pass bars that were not reached. */
   belowBar: string[];
+  /** The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs. */
+  notApplicable: Partition["notApplicable"];
+  /** The checks that a harness dropped from a case that still ran, because they say `ifUnsupported: "skip"`. */
+  skippedChecks: Partition["skippedChecks"];
+  /**
+   * The score over the cases that apply to every harness that has any, for each harness and subject label. Only that
+   * number compares harnesses. Null when fewer than two harnesses have an applicable case.
+   */
+  commonSet: CommonSet | null;
   /** The runs that do not count, each with its reason. */
   invalid: string[];
   /** The paths of a subject directory that changed while the command ran, each as the user would type it. */
@@ -86,7 +97,10 @@ export interface Results {
 
 /** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty. */
 export interface Evaluation extends Results {
+  /** Every loaded case, applicable or not. */
   cases: Case[];
+  /** For each harness id, the cases it ran, with the checks that it dropped left out. */
+  applied: Record<string, Case[]>;
   outDir: string;
 }
 
@@ -164,13 +178,29 @@ function decisionFor(cases: Case[], options: Config): DecisionService | null {
   return connect({ model, url, env: process.env, timeoutMs });
 }
 
+/**
+ * Loads the cases the options name.
+ * @param options - The options after the config file was applied.
+ * @returns The cases, which the glob selects.
+ */
+const casesOf = (
+  options: Pick<EvaluateOptions, "caseGlob" | "lenient" | "onWarning"> & {
+    cases: string;
+  },
+): Case[] =>
+  loadCases(options.cases, options.caseGlob, {
+    lenient: options.lenient ?? false,
+    ...(options.onWarning && { onWarning: options.onWarning }),
+  });
+
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */
 interface Plan {
   chosen: Located[];
   judgeOf: (located: Located) => Judge;
   decision: DecisionService | null;
   pass: string[] | undefined;
-  cases: Case[];
+  /** For each harness id, the cases it runs. */
+  applied: Record<string, Case[]>;
   reps: number;
   subjects: Subject[];
   model: string | undefined;
@@ -184,11 +214,11 @@ interface Plan {
  * @returns The records in the order the runs were made.
  */
 async function runAll(plan: Plan): Promise<RunRecord[]> {
-  const { cases, reps, subjects, model, outDir, decision, pass } = plan;
+  const { reps, subjects, model, outDir, decision, pass } = plan;
   const records: RunRecord[] = [];
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
-    for (const caseDef of cases) {
+    for (const caseDef of plan.applied[located.harness.id] ?? []) {
       for (let rep = 1; rep <= reps; rep++) {
         for (const subject of subjects) {
           const run = {
@@ -223,6 +253,7 @@ interface Finished {
   minScore: number | undefined;
   reps: number;
   cases: Case[];
+  parts: Partition;
   records: RunRecord[];
   sourceChanged: string[];
 }
@@ -237,7 +268,17 @@ function summarize(finished: Finished): Results {
   const { cases, records } = finished;
   const labels = subjects.map(({ label }) => label);
   const harnesses = selection.chosen.map(({ harness }) => harness.id);
-  const suites = scoreSuites({ harnesses, cases, records, labels });
+  const { parts } = finished;
+  const applicable = Object.fromEntries(
+    Object.entries(parts.ran).map(([id, ran]) => [id, ran.map((c) => c.id)]),
+  );
+  const suites = scoreSuites({
+    harnesses,
+    cases,
+    records,
+    labels,
+    applicable,
+  });
   return {
     subjects: subjects.map(({ label, spec, kind, dir, skills, commit }) => ({
       label,
@@ -258,6 +299,9 @@ function summarize(finished: Finished): Results {
     ),
     suites,
     belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
+    notApplicable: parts.notApplicable,
+    skippedChecks: parts.skippedChecks,
+    commonSet: commonSet({ harnesses, cases, records, labels, applicable }),
     invalid: records.flatMap((record) => {
       const reason = invalidReason(record);
       const run = `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`;
@@ -302,11 +346,9 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
     ? selectHarnesses(options.judgeHarness).chosen
     : [];
   const judgeModel = options.judgeModel ?? model;
-  const cases = loadCases(options.cases, options.caseGlob, {
-    lenient: options.lenient ?? false,
-    ...(options.onWarning && { onWarning: options.onWarning }),
-  });
+  const cases = casesOf(options);
   const decision = decisionFor(cases, options);
+  const parts = partitionApplicable(selection.chosen, cases);
   const subjects: Subject[] = [];
   try {
     const scope = { ...project, left: exclusionsOf(options, cwd) };
@@ -322,7 +364,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       }),
       decision,
       pass: options.env,
-      cases,
+      applied: parts.ran,
       reps,
       subjects,
       model,
@@ -339,11 +381,12 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       minScore,
       reps,
       cases,
+      parts,
       records,
       sourceChanged: changedAtSource(subjects),
     });
     writeResults(outDir, results);
-    return { ...results, cases, outDir };
+    return { ...results, cases, applied: parts.ran, outDir };
   } finally {
     for (const subject of subjects) subject.dispose();
   }
