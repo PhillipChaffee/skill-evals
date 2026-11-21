@@ -375,6 +375,19 @@ test("check shows, for each harness, that it is missing or what its adapter deli
 	assert.match(cells(broken.stdout, "codex")[3], /^NO: /);
 });
 
+test("check reports a harness that fails to log in as ran: no and continues", (t) => {
+	const box = sandbox(t);
+	box.write("skills/greet/SKILL.md", "Say hello.\n");
+
+	const fixture = (name) => path.join(import.meta.dirname, "fixtures", name);
+	const env = { SKILL_EVALS_BIN_PI: fixture("logged-out-harness.mjs"), SKILL_EVALS_BIN_CODEX: fixture("garbled-harness.mjs") };
+	const result = box.cli(["check", "--out", path.join(box.root, "probe")], env);
+	assert.equal(result.status, 1, result.stderr);
+	assert.match(result.stdout, /^\| pi \| yes \| NO: exit 1: Error: Authentication required\. Please run 'agent login' first\. \|/m);
+	assert.match(result.stdout, /^\| claude-code \| yes \| yes \| yes \| greet \|/m);
+	assert.match(result.stdout, /^\| codex \| yes \| NO: the codex adapter could not read the stream: /m);
+});
+
 test("a prompt that starts with a dash reaches the agent as the prompt", (t) => {
 	const box = sandbox(t);
 	box.write("cases/dashed/prompt.md", "--help me\n");

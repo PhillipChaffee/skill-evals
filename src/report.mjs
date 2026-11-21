@@ -92,23 +92,17 @@ function harnessSection(suite, cases, records, labels) {
 	].join("\n");
 }
 
-/**
- * @param {{ subjects: import("./subject.mjs").Subject[],
- *   selection: ReturnType<typeof import("./harnesses/index.mjs").selectHarnesses>,
- *   cases: import("./cases.mjs").Case[], records: import("./run.mjs").RunRecord[],
- *   suites: import("./score.mjs").SuiteScore[], belowBar: string[], judgeNote: string,
- *   reps: number, model?: string, outDir: string }} run
- */
-export function renderReport({ subjects, selection, cases, records, suites, belowBar, judgeNote, reps, model, outDir }) {
+/** @param {import("./index.mjs").Evaluation} evaluation */
+export function renderReport({ subjects, harnesses, harnessReason, cases, records, suites, belowBar, judge, reps, model, outDir }) {
 	const labels = subjects.map((subject) => subject.label);
 	const judged = cases.some((caseDef) => caseDef.checks.some(isJudged));
 	return [
 		subjects.length > 1 ? "# Skill comparison" : "# Skill scores",
 		"",
 		...subjects.map((subject) => `- ${subject.label.toUpperCase()}: ${describeSubject(subject)}`),
-		`- Harness: ${selection.chosen.map(({ harness }) => harness.id).join(", ")} (${selection.reason})`,
+		`- Harness: ${harnesses.join(", ")} (${harnessReason})`,
 		`- Model: ${model ?? "the harness default"}`,
-		...(judged ? [`- Judge: ${judgeNote}`] : []),
+		...(judged ? [`- Judge: ${judge}`] : []),
 		`- Reps: ${reps} for each ${subjects.length > 1 ? "subject and case" : "case"}`,
 		`- Output: ${outDir}`,
 		"",

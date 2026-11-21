@@ -1,14 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
-import { HARNESSES, findBin, namedHarnesses, selectHarnesses } from "./harnesses/index.mjs";
+import { HARNESSES, findBin, namedHarnesses } from "./harnesses/index.mjs";
 import { loadCases } from "./cases.mjs";
+import { evaluate } from "./index.mjs";
 import { findProject, withConfig } from "./project.mjs";
 import { renderReport } from "./report.mjs";
 import { invalidReason, runOnce } from "./run.mjs";
-import { failedBars, isUnitScore, scoreSuites } from "./score.mjs";
-import { UsageError } from "./scope.mjs";
+import { UsageError, outputDir, requireSupportedPlatform } from "./scope.mjs";
 import { describeSubject, resolveSubject } from "./subject.mjs";
 
 const USAGE = `Usage: skill-evals <command> [options]
@@ -68,62 +66,15 @@ const probe = (subject) => ({
 	workspaceDir: null,
 });
 
-function outputDir(requested) {
-	if (!requested) return fs.mkdtempSync(path.join(os.tmpdir(), "runs-"));
-	fs.mkdirSync(requested, { recursive: true });
-	return path.resolve(requested);
-}
-
-/**
- * Runs the suite on each subject and scores it. The last subject is the one under test.
- * @param {["a" | "b" | "subject", string][]} specs  label and spec of each subject
- */
-async function evaluate(given, specs, project) {
-	const options = withConfig(project, given);
-	const { reps = 3, minScore } = options;
-	if (!Number.isInteger(reps) || reps < 1) throw new UsageError("reps must be a positive integer");
-	if (minScore !== undefined && !isUnitScore(minScore)) throw new UsageError("minScore must be a number from 0 to 1");
-	const selection = selectHarnesses(options.harness);
-	const judgeHarness = options.judgeHarness && selectHarnesses(options.judgeHarness).chosen[0];
-	const judgeModel = options.judgeModel ?? options.model;
-	const cases = loadCases(options.cases, options.caseGlob);
-	const subjects = [];
-	try {
-		for (const [label, spec] of specs) subjects.push(resolveSubject(label, spec, project));
-		const outDir = outputDir(options.outDir);
-		const records = [];
-		for (const { harness, bin } of selection.chosen) {
-			const judge = { ...(judgeHarness ?? { harness, bin }), model: judgeModel };
-			for (const caseDef of cases) {
-				for (let rep = 1; rep <= reps; rep++) {
-					for (const subject of subjects) {
-						const record = await runOnce({ harness, bin, subject, caseDef, rep, model: options.model, judge, outDir });
-						records.push(record);
-						const outcome = invalidReason(record) ?? `score ${record.score.toFixed(2)}`;
-						console.error(`${harness.id} ${caseDef.id} ${subject.label}${rep}: ${outcome}`);
-					}
-				}
-			}
-		}
-		const labels = subjects.map((subject) => subject.label);
-		const suites = scoreSuites(
-			selection.chosen.map(({ harness }) => harness.id),
-			cases,
-			records,
-			labels,
-		);
-		const belowBar = failedBars(suites, labels.at(-1), minScore);
-		const judgeNote = `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`;
-		const summary = subjects.map(({ label, spec, kind, dir, skills, commit }) => ({ label, spec, kind, dir, skills, commit }));
-		fs.writeFileSync(
-			path.join(outDir, "results.json"),
-			JSON.stringify({ subjects: summary, model: options.model ?? null, judge: judgeNote, reps, suites, belowBar, records }, null, "\t"),
-		);
-		console.log(renderReport({ subjects, selection, cases, records, suites, belowBar, judgeNote, reps, model: options.model, outDir }));
-		return records.some(invalidReason) || belowBar.length ? 1 : 0;
-	} finally {
-		for (const subject of subjects) subject.dispose();
-	}
+/** Runs the suite, prints its report, and returns the exit code. */
+async function suite(options) {
+	const onRun = (record) => {
+		const outcome = invalidReason(record) ?? `score ${record.score.toFixed(2)}`;
+		console.error(`${record.harness} ${record.caseId} ${record.subject}${record.rep}: ${outcome}`);
+	};
+	const evaluation = await evaluate({ ...options, onRun });
+	console.log(renderReport(evaluation));
+	return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
 }
 
 // What an adapter can fill in a run record; `check` shows which of these a harness delivered.
@@ -140,7 +91,7 @@ async function check(given, project) {
 	const located = namedHarnesses(options.harness).map((harness) => ({ harness, bin: findBin(harness) }));
 	const subject = resolveSubject("subject", options.subject ?? project.root, project);
 	try {
-		const outDir = located.some((entry) => entry.bin) ? outputDir(options.outDir) : "nothing ran";
+		const outDir = located.some((entry) => entry.bin) ? outputDir(options.outDir, project.cwd) : "nothing ran";
 		const rows = [];
 		let failed = false;
 		for (const { harness, bin } of located) {
@@ -201,19 +152,11 @@ function list(given, project) {
 
 const COMMANDS = {
 	run: {
-		handler: ({ a = "main", b, ...options }, project) =>
-			evaluate(
-				options,
-				[
-					["a", a],
-					["b", b ?? project.root],
-				],
-				project,
-			),
+		handler: ({ a = "main", b, ...options }, project) => suite({ ...options, subjects: [a, b ?? project.root] }),
 		flags: ["a", "b", ...SUITE_FLAGS],
 	},
 	score: {
-		handler: ({ subject, ...options }, project) => evaluate(options, [["subject", subject ?? project.root]], project),
+		handler: ({ subject, ...options }, project) => suite({ ...options, subjects: [subject ?? project.root] }),
 		flags: ["subject", ...SUITE_FLAGS],
 	},
 	check: { handler: check, flags: ["subject", "harness", "model", "out"] },
@@ -223,6 +166,7 @@ const COMMANDS = {
 /** @returns {Promise<number>} the exit code */
 export async function main([name, ...args]) {
 	try {
+		requireSupportedPlatform();
 		const command = COMMANDS[name];
 		if (!command) throw new UsageError(`${name ? `unknown command "${name}"` : "missing command"}\n\n${USAGE}`);
 		const { values } = parseArgs({ args, options: Object.fromEntries(command.flags.map((flag) => [flag, { type: "string" }])) });

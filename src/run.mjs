@@ -158,6 +158,22 @@ async function attempt(harness, bin, input, timeoutSeconds) {
 	return { ...result, durationMs: Date.now() - started };
 }
 
+/** @returns {import("./harnesses/shared.mjs").Parsed} with an error in place of an exception for a stream the adapter cannot read */
+function parseStream(harness, stdout) {
+	try {
+		return harness.parse(stdout);
+	} catch (error) {
+		return {
+			finalText: "",
+			toolCalls: [],
+			tokens: null,
+			costUsd: null,
+			loaded: { paths: null, skills: null },
+			error: `the ${harness.id} adapter could not read the stream: ${error.message}`,
+		};
+	}
+}
+
 /**
  * One prompt in one harness, in a fresh home and workspace. `use` sees the result while the workspace still exists.
  * @template T
@@ -175,7 +191,7 @@ async function session({ harness, bin, subject, prompt, model, maxTurns, timeout
 		copyAuthFiles(harness.authFiles, home.dir);
 		const input = { subject, home: home.dir, workspace: workspace.dir, prompt, model, maxTurns };
 		const { stdout, failure, durationMs } = await attempt(harness, bin, input, timeoutSeconds);
-		const parsed = harness.parse(stdout);
+		const parsed = parseStream(harness, stdout);
 		// The harness's own message is the most specific one, but only when it produced a stream at all.
 		const error = (stdout.trim() && parsed.error) || failure || parsed.error || null;
 		return await use({ stdout, parsed, error, durationMs, workspace: workspace.dir });
