@@ -3,22 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>skill-evals: score what your agent skills change</title>
+    <title>skill-evals: know what your agent skills actually do</title>
     <meta
       name="description"
-      content="skill-evals runs the same prompts with and without your skill, in a real coding agent, and scores every run from 0 to 1. Works with Claude Code, Codex, Cursor, OpenCode, and Pi."
+      content="An agent does not do the same thing twice. skill-evals runs your skills across the scenarios you care about, in a real coding agent, and scores each run against what you defined as success. Works with Claude Code, Codex, Cursor, OpenCode, and Pi."
     />
     <meta name="theme-color" content="#0d0f0c" />
     <meta name="color-scheme" content="dark" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="skill-evals" />
-    <meta
-      property="og:title"
-      content="Does your skill change what the agent does?"
-    />
+    <meta property="og:title" content="Know what your skills actually do." />
     <meta
       property="og:description"
-      content="skill-evals runs the same prompts with and without your skill, in a real coding agent, and scores every run from 0 to 1."
+      content="Run your skills across the scenarios you care about, in a real coding agent. Define success, get a score, and see what each change does."
     />
     <meta name="twitter:card" content="summary" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -52,11 +49,12 @@
     <main id="main" class="container">
       <section id="top" class="hero">
         <p class="eyebrow">evals for agent skills</p>
-        <h1>Does your skill change what the agent does?</h1>
+        <h1>Know what your skills actually do.</h1>
         <p class="lede">
-          skill-evals runs the same prompts with and without your skill, in a
-          real coding agent, and scores every run from 0 to 1. You see the
-          difference before you merge.
+          An agent does not do the same thing twice. skill-evals runs your
+          skills across the scenarios you care about, in a real coding agent,
+          and scores each run against what you defined as success. Change a
+          skill, run it again, and see what the change did.
         </p>
         <div class="hero-actions">
           <div class="command">
@@ -160,31 +158,64 @@
         only described.
       </p>
 
+      <section id="why" class="section">
+        <h2>Reading a skill is not running it</h2>
+        <div class="steps">
+          <article class="card">
+            <p class="step">understand</p>
+            <h3>What it does, not what it says</h3>
+            <p>
+              A language model can load a skill on one run and ignore it on the
+              next. Run each scenario several times and see what happens, and
+              how often.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">define</p>
+            <h3>Say what success is</h3>
+            <p>
+              Write down what a good result looks like for each scenario. That
+              turns "it seems better" into a benchmark you can score against.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">change</p>
+            <h3>See what an edit did</h3>
+            <p>
+              Reword a description, add a rule, swap the model. Run the same
+              scenarios again and compare the scores, before you merge.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section id="how" class="section">
         <h2>How it works</h2>
         <div class="steps">
           <article class="card">
             <p class="step">01 · write a case</p>
-            <h3>A prompt and some checks</h3>
+            <h3>A scenario and its checks</h3>
             <p>
               A case is a folder: the prompt a user would type, and a JSON list
-              of checks. No test code.
+              of checks that say what a good result is. No test code.
             </p>
           </article>
           <article class="card">
-            <p class="step">02 · run both sides</p>
+            <p class="step">02 · run it, more than once</p>
             <h3>A real agent, a clean home</h3>
             <p>
-              Each run starts your coding agent in a throwaway home directory,
-              so your own settings and installed skills stay out.
+              Each case runs several times, with and without the skill. Every
+              run starts your coding agent in a throwaway home directory, so
+              your own settings and installed skills stay out.
             </p>
           </article>
           <article class="card">
             <p class="step">03 · read the score</p>
             <h3>0 to 1, with a pass bar</h3>
             <p>
-              Checks roll up to a score for each case and the suite. Set a
-              minimum and the command fails under it.
+              Checks roll up to a score for each case and the suite, and every
+              answer is saved so you can see why. Set a minimum and the command
+              fails under it.
             </p>
           </article>
         </div>
@@ -241,7 +272,7 @@
 
       <section id="docs" class="cta">
         <div class="cta-text">
-          <h2>Find out before you merge.</h2>
+          <h2>Change a skill. Know what changed.</h2>
           <p>
             Open source, MIT, no dependencies. Node 22 or later and one
             installed agent, on macOS or Linux.

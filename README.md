@@ -1,8 +1,12 @@
 # skill-evals
 
-Does your skill change what the agent does? `skill-evals` runs the same prompts with and without your skills, in a real coding agent, and scores every run from 0 to 1.
+Know what your skills actually do. `skill-evals` runs your skills across the scenarios you care about, in a real coding agent, and scores each run from 0 to 1 against what you defined as success.
 
-You wrote a skill and the agent seems better with it. Three things can still be wrong: the agent never loads the skill, it loads the skill and does the same as before, or it loads the skill for requests that have nothing to do with it. A score for each case tells you which, before you merge.
+A language model does not do the same thing twice, so reading a skill tells you what you wrote and not what the agent will do with it. An eval is how you find out:
+
+- **Understand.** Run each scenario several times and see what the agent does, and how often. It may never load the skill, load it and do the same as before, or load it for requests that have nothing to do with it.
+- **Define success.** Write down what a good result is for each scenario. That turns "it seems better" into a benchmark you can score against.
+- **Change with evidence.** Edit the skill, run the same scenarios again, and compare the scores before you merge.
 
 This is a report for one `commit-message` skill, in Claude Code, with three runs for each side. A is no skills and B is the folder that holds the skill.
 
