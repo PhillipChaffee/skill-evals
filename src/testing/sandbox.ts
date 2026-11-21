@@ -18,6 +18,8 @@ export const fixture = (name: string): string => path.join(fixturesDir, name);
 /** A stand-in harness executable that speaks Claude Code's stream format and runs no model. */
 export const fakeHarness = fixture("fake-harness.mjs");
 
+const EXECUTABLE = 0o755;
+
 // What npm and the shell put in the environment of a command started with `npx skill-evals`.
 const LAUNCHED_BY_NPX = {
   npm_lifecycle_script: "skill-evals",
@@ -123,10 +125,17 @@ export function sandbox(): Sandbox {
   fs.symlinkSync(process.execPath, path.join(root, "bin/node"));
   const git = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
   fs.symlinkSync(git, path.join(root, "bin/git"));
+  // A launcher that tells the fake where this sandbox keeps its scripts and judge replies, so no variable of the
+  // command line's environment has to carry them.
+  const launcher = write(
+    "bin/fake-agent.mjs",
+    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; await import(${JSON.stringify(fakeHarness)});\n`,
+  );
+  fs.chmodSync(launcher, EXECUTABLE);
   const env = {
     PATH: path.join(root, "bin"),
     HOME: root,
-    SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness,
+    SKILL_EVALS_BIN_CLAUDE_CODE: launcher,
     ...LAUNCHED_BY_NPX,
   };
   const cli: Sandbox["cli"] = async (args, extra = {}, cwd = root) => {

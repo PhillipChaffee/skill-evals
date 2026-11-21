@@ -76,7 +76,7 @@ test("list shows the harnesses in preference order, the default one, and the cas
   expect(empty.stdout).toMatch(/pi.*claude-code.*cursor.*opencode.*codex/s);
   expect(empty.stdout).toMatch(/^- pi: not installed \("pi" not found\)$/m);
   expect(empty.stdout).toMatch(
-    /^- claude-code: installed \(.*fake-harness\.mjs\)$/m,
+    /^- claude-code: installed \(.*fake-agent\.mjs\)$/m,
   );
   expect(empty.stdout).toMatch(/^Default harness: claude-code$/m);
   expect(empty.stdout).toMatch(/^- none: the directory does not exist$/m);

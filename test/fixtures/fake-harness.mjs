@@ -3,8 +3,12 @@
 // - Given the judge's prompt, it is the judge: it appends its prompt and model to `prompts.jsonl` in $FAKE_JUDGE_DIR
 //   and replies with the next unused entry of `replies.json` there.
 // - Given --plugin-dir, it behaves as `behavior.json` in that directory says (a plugin without one is plain).
+// - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
+//   that transcript instead of the behaviour below. Turn n of the script answers the n-th prompt of a session.
 // - It lists the skills installed in its config directory at startup, unless $FAKE_HIDE_SKILLS is set, and loads
 //   each one that the prompt names.
+import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -32,7 +36,9 @@ const prompt = process.argv[process.argv.indexOf("--") + 1];
 const pluginDir = flag("--plugin-dir");
 
 if (prompt.startsWith("Grade one answer")) {
-  const dir = process.env.FAKE_JUDGE_DIR;
+  const dir =
+    process.env.FAKE_JUDGE_DIR ??
+    path.join(process.env.FAKE_DIR ?? "", "judge");
   const replies = JSON.parse(
     fs.readFileSync(path.join(dir, "replies.json"), "utf8"),
   );
@@ -49,6 +55,156 @@ if (prompt.startsWith("Grade one answer")) {
   process.exit(0);
 }
 
+/**
+ * Finds the first script, by file name, that fits this run.
+ * @returns The script and its file's name, or null when none fits.
+ */
+function matchingScript() {
+  const dir =
+    process.env.FAKE_DIR && path.join(process.env.FAKE_DIR, "scripts");
+  if (!dir || !fs.existsSync(dir)) return null;
+  for (const file of fs.readdirSync(dir).sort()) {
+    const found = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+    const { prompt: wanted, plugin } = found.match ?? {};
+    if (
+      (wanted === undefined || prompt.includes(wanted)) &&
+      (plugin === undefined || plugin === Boolean(pluginDir))
+    ) {
+      return { found, file };
+    }
+  }
+  return null;
+}
+
+/**
+ * Counts the prompts this session has had, by the workspace it runs in.
+ * @param file - The script's file name.
+ * @returns The index of this prompt, from 0.
+ */
+function turnIndex(file) {
+  const dir = path.join(process.env.FAKE_DIR, "state");
+  fs.mkdirSync(dir, { recursive: true });
+  const key = crypto.createHash("sha1").update(process.cwd()).digest("hex");
+  const counter = path.join(dir, `${file}-${key}`);
+  const turn = fs.existsSync(counter)
+    ? Number(fs.readFileSync(counter, "utf8"))
+    : 0;
+  fs.writeFileSync(counter, String(turn + 1));
+  return turn;
+}
+
+/**
+ * Plays one turn of a script as a stream.
+ * @param steps - The turn's steps.
+ * @param turn - The index of the turn, which keeps ids unique across a session.
+ */
+function play(steps, turn) {
+  let count = 0;
+  let final = "";
+  const id = (kind) => `${kind}_${turn}_${count++}`;
+  const assistant = (content, parent) =>
+    emit({
+      type: "assistant",
+      message: { id: id("msg"), role: "assistant", content },
+      parent_tool_use_id: parent,
+    });
+  const toolResult = (use, content, isError, parent) =>
+    emit({
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: use,
+            content,
+            is_error: isError,
+          },
+        ],
+      },
+      parent_tool_use_id: parent,
+    });
+  // Makes a call's tool_use block, and returns what to do once it has been announced: run it, and report the result.
+  const prepare = ({ name, input, output = "", exec, write }) => {
+    const use = id("toolu");
+    return {
+      block: { type: "tool_use", id: use, name, input },
+      settle: (parent) => {
+        if (write) {
+          fs.mkdirSync(path.dirname(path.resolve(write.path)), {
+            recursive: true,
+          });
+          fs.writeFileSync(write.path, write.content);
+        }
+        if (!exec) return toolResult(use, output, false, parent);
+        // The sandbox's PATH holds node and git only, so a command also gets the system's.
+        const ran = spawnSync("sh", ["-c", `(${input.command}) 2>&1`], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin`,
+          },
+        });
+        return toolResult(use, ran.stdout, ran.status !== 0, parent);
+      },
+    };
+  };
+  const step = (one, parent) => {
+    if ("text" in one) {
+      assistant([{ type: "text", text: one.text }], parent);
+      final = one.text;
+    } else if ("call" in one) {
+      const { block, settle } = prepare(one.call);
+      assistant([block], parent);
+      settle(parent);
+    } else if ("parallel" in one) {
+      const prepared = one.parallel.map((each) => prepare(each.call));
+      assistant(
+        prepared.map(({ block }) => block),
+        parent,
+      );
+      for (const { settle } of prepared) settle(parent);
+    } else if ("agent" in one) {
+      const { type, prompt: task, steps: inner } = one.agent;
+      const { block, settle } = prepare({
+        name: "Agent",
+        input: { subagent_type: type, prompt: task },
+      });
+      assistant([block], parent);
+      for (const each of inner) step(each, block.id);
+      settle(parent);
+    } else if ("hook" in one) {
+      const { event, command, exit, context = "" } = one.hook;
+      emit({
+        type: "system",
+        subtype: "hook_response",
+        hook_event: event,
+        hook_name: command,
+        exit_code: exit,
+        output: context,
+        outcome: exit === 0 ? "success" : "error",
+      });
+    } else if ("fail" in one) {
+      throw new Error(one.fail);
+    } else {
+      final = one.final;
+    }
+  };
+  try {
+    for (const one of steps) step(one, null);
+  } catch (error) {
+    emit({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      result: error.message,
+    });
+    return;
+  }
+  finish(final);
+}
+
+const played = matchingScript();
 const behaviorFile = pluginDir && path.join(pluginDir, "behavior.json");
 const behavior =
   behaviorFile && fs.existsSync(behaviorFile)
@@ -66,7 +222,13 @@ emit({
     ? [{ name: "plugin", path: behavior.ghost ? "/nowhere/else" : pluginDir }]
     : [],
   skills: process.env.FAKE_HIDE_SKILLS ? [] : installed,
+  ...played?.found.init,
 });
+if (played) {
+  const turn = turnIndex(played.file);
+  play(played.found.turns[turn] ?? [], turn);
+  process.exit(0);
+}
 const used = [
   ...(behavior.skill ? [`plugin:${behavior.skill}`] : []),
   ...installed.filter((name) => prompt.includes(name)),

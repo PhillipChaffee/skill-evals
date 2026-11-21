@@ -61,3 +61,63 @@ export function plantCase(
   box.write("cases/restate/workspace/notes.txt", "planted\n");
   return path.join(box.root, "cases");
 }
+
+/** The `system` `init` event that opens a Claude Code stream, as far as the fake harness fills it. */
+interface InitEvent {
+  type: "system";
+  subtype: "init";
+  model: string;
+  plugins: { name: string; path: string }[];
+  skills: string[];
+  tools: string[];
+}
+
+/** One thing the scripted agent does. */
+type FakeStep =
+  | { text: string }
+  | {
+      call: {
+        name: string;
+        input: unknown;
+        /** The tool result; empty when absent. */
+        output?: string;
+        /** Runs `input.command` in the workspace and uses its real combined output and exit status as the result. */
+        exec?: boolean;
+        /** A file to create in the workspace. */
+        write?: { path: string; content: string };
+      };
+    }
+  /** Calls that share one assistant message. */
+  | { parallel: FakeStep[] }
+  /** An `Agent` call, then its steps, each marked as the child of that call. */
+  | { agent: { type: string; prompt: string; steps: FakeStep[] } }
+  | {
+      hook: { event: string; command: string; exit: number; context?: string };
+    }
+  /** Ends the run with an error. */
+  | { fail: string }
+  /** Sets the final text of the run. */
+  | { final: string };
+
+/** A transcript for the fake harness to play, in place of its default behaviour. */
+export interface FakeScript {
+  /** What a run must fit for this script to play. The first script that fits is used; no `match` fits every run. */
+  match?: { prompt?: string; plugin?: boolean };
+  /** Fields of the opening `init` event to replace. */
+  init?: Partial<InitEvent>;
+  /** The steps of each turn; turn n answers the n-th prompt of a session. */
+  turns: FakeStep[][];
+}
+
+/**
+ * Writes a script for the fake harness to play. Scripts are tried in the order of their names.
+ * @param box - Where to write it.
+ * @param name - The script's file name, without the extension.
+ * @param transcript - What the agent does.
+ * @returns The script's file.
+ */
+export const script = (
+  box: Sandbox,
+  name: string,
+  transcript: FakeScript,
+): string => box.write(`fake/scripts/${name}.json`, transcript);
