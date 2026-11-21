@@ -1,6 +1,6 @@
 import type { Case, LoadOptions } from "./cases.js";
 import { loadWhere } from "./cases.js";
-import { baseGlobOf, globToRegExp, mayNameVariant } from "./glob.js";
+import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { declaresVariants } from "./discover.js";
 import { UsageError } from "./scope.js";
 
@@ -100,12 +100,13 @@ function idTests(by: Selection): IdTests {
   const unwanted = (by.notIds ?? []).map(globToRegExp);
   const anyOf = (globs: RegExp[], ...ids: string[]) =>
     globs.some((glob) => ids.some((id) => glob.test(id)));
-  const loose = wantedText.some(mayNameVariant);
   const wantedBases = wantedText.map((glob) => globToRegExp(baseGlobOf(glob)));
   return {
     mayLoad: (base, dir) =>
       !anyOf(unwanted, base) &&
-      (anyOf(wantedBases, base) || (loose && declaresVariants(dir))),
+      (anyOf(wantedBases, base) ||
+        (wantedText.some((glob) => mayReachVariantOf(glob, base)) &&
+          declaresVariants(dir))),
     chooses: ({ id, base }) =>
       anyOf(wanted, id, base) && !anyOf(unwanted, id, base),
   };

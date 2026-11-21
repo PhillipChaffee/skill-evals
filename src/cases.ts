@@ -8,7 +8,7 @@ import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
-import { baseGlobOf, globToRegExp, mayNameVariant } from "./glob.js";
+import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { HARNESSES } from "./harnesses/index.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -382,7 +382,7 @@ export function loadCases(
   const cases = loadWhere(
     casesDir,
     (id, dir) =>
-      bases.test(id) || (mayNameVariant(glob) && declaresVariants(dir)),
+      bases.test(id) || (mayReachVariantOf(glob, id) && declaresVariants(dir)),
     options,
   ).filter((one) => matcher.test(one.id) || matcher.test(one.base));
   if (cases.length === 0) {

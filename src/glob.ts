@@ -114,3 +114,21 @@ export function baseGlobOf(glob: string): string {
  */
 export const mayNameVariant = (glob: string): boolean =>
   !glob.includes("@") && /[*?{]/.test(glob);
+
+/**
+ * Takes the characters that every match of a glob starts with.
+ * @param glob - A glob.
+ * @returns The text before the first `*`, `?`, `{` or `\`, where the glob's syntax starts.
+ */
+export const literalPrefix = (glob: string): string =>
+  glob.split(/[*?{\\]/)[0] ?? "";
+
+/**
+ * Tells whether a loose glob could match a variant of a case.
+ * @param glob - A glob over case ids.
+ * @param base - The case's path.
+ * @returns True when `mayNameVariant` holds and the case's path starts with the glob's literal prefix. A variant's id
+ *   is the path, an `@` and a name, and the glob has no `@`, so its prefix must lie within the path.
+ */
+export const mayReachVariantOf = (glob: string, base: string): boolean =>
+  mayNameVariant(glob) && base.startsWith(literalPrefix(glob));

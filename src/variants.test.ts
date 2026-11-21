@@ -275,18 +275,34 @@ test("a wildcard glob that only a variant id matches still selects it, and reads
   const found = await cli(box, "list", "--case", "to*lite");
   expect(found.status, found.stderr).toBe(0);
   expect(listed(found.stdout)).toEqual(["tool@lite"]);
-  box.write("cases/risky/prompt.md", "x\n");
-  box.write("cases/risky/case.json", {
+  box.write("cases/tox/prompt.md", "x\n");
+  box.write("cases/tox/case.json", {
     checks: [],
     variants: [{ id: "q", prompt: "p" }],
   });
   const failed = await cli(box, "list", "--case", "to*lite");
   expect(failed.status).toBe(USAGE_ERROR);
   expect(failed.stderr).toContain(
-    'risky/case.json: "checks" must be a non-empty array',
+    'tox/case.json: "checks" must be a non-empty array',
   );
-  box.write("cases/risky/case.json", "{ not json");
+  box.write("cases/tox/case.json", "{ not json");
   const unparsed = await cli(box, "list", "--case", "to*lite");
   expect(unparsed.status).toBe(USAGE_ERROR);
-  expect(unparsed.stderr).toContain("case risky:");
+  expect(unparsed.stderr).toContain("case tox:");
+});
+
+test("a prefix glob never reads an unrelated variant case, and a glob that starts with a wildcard still does", async () => {
+  const box = sandbox();
+  plant(box, "tool", { variants: [{ id: "lite", prompt: "a" }] });
+  box.write("cases/other/prompt.md", "x\n");
+  box.write("cases/other/case.json", {
+    checks: [],
+    variants: [{ id: "q", prompt: "p" }],
+  });
+  const prefixed = await cli(box, "list", "--case", "to*");
+  expect(prefixed.status, prefixed.stderr).toBe(0);
+  expect(listed(prefixed.stdout)).toEqual(["tool@lite"]);
+  const open = await cli(box, "list", "--case", "*lite");
+  expect(open.status).toBe(USAGE_ERROR);
+  expect(open.stderr).toContain('other/case.json: "checks" must be');
 });

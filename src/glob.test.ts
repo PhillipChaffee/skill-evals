@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { expandGlob, globToRegExp, literalGlob } from "./glob.js";
+import {
+  baseGlobOf,
+  expandGlob,
+  globToRegExp,
+  literalGlob,
+  literalPrefix,
+  mayNameVariant,
+  mayReachVariantOf,
+} from "./glob.js";
 import { sandbox } from "./testing/sandbox.js";
 
 const TABLE: [string, string, boolean][] = [
@@ -62,4 +70,30 @@ test("expandGlob past its limit throws a usage error that names the glob", () =>
   expect(() => expandGlob(tree, "*.txt", 2)).toThrow(
     'the glob "*.txt" matches more than 2 paths',
   );
+});
+
+test("literalPrefix stops where glob syntax starts", () => {
+  expect(literalPrefix("to*")).toBe("to");
+  expect(literalPrefix("*lite")).toBe("");
+  expect(literalPrefix("a?b")).toBe("a");
+  expect(literalPrefix("a{b,c}")).toBe("a");
+  expect(literalPrefix(String.raw`a\*b*`)).toBe("a");
+  expect(literalPrefix("plain")).toBe("plain");
+});
+
+test("a loose glob reaches the variants of a case only when its prefix lies within the path", () => {
+  expect(mayNameVariant("to*")).toBe(true);
+  expect(mayNameVariant("to*@x")).toBe(false);
+  expect(mayNameVariant("plain")).toBe(false);
+  expect(mayReachVariantOf("to*", "tool")).toBe(true);
+  expect(mayReachVariantOf("to*", "other")).toBe(false);
+  expect(mayReachVariantOf("*lite", "other")).toBe(true);
+  expect(mayReachVariantOf("tool", "tool")).toBe(false);
+});
+
+test("baseGlobOf keeps the part before the first @ unless it is empty or splits a brace", () => {
+  expect(baseGlobOf("good@v1")).toBe("good");
+  expect(baseGlobOf("plain")).toBe("plain");
+  expect(baseGlobOf("@v")).toBe("**");
+  expect(baseGlobOf("{a@x,b}")).toBe("**");
 });
