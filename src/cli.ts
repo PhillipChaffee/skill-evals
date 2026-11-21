@@ -15,7 +15,8 @@ import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
 import { SUBJECT_CHANGED_EXIT_CODE, sourceChangedMessage } from "./subject.js";
 import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
-import { FLAGS, usageText } from "./usage.js";
+import { FLAGS, commandUsage, usageText } from "./usage.js";
+import { validate } from "./commands/validate.js";
 
 const USAGE_EXIT_CODE = 2;
 
@@ -137,6 +138,22 @@ export const COMMANDS: Record<string, Command> = {
     handler: check,
     flags: ["subject", "harness", "model", "out"],
   },
+  validate: {
+    description:
+      "Check a suite without running it: report every case that does not load and every skill name the subject lacks. Spends nothing.",
+    handler: validate,
+    flags: [
+      "subject",
+      "cases",
+      "lenient",
+      "case",
+      "not-case",
+      "tag",
+      "tag-all",
+      "not-tag",
+      "heldout",
+    ],
+  },
   list: {
     description:
       "Show the harnesses in default-preference order, and the cases.",
@@ -213,13 +230,41 @@ const isParseArgsError = (error: unknown): error is Error =>
   String(error.code).startsWith("ERR_PARSE_ARGS");
 
 /**
+ * Prints the help text for `--help`, `help`, and `help <command>`.
+ * @param name - The command to describe; absent for the whole tool.
+ * @returns The exit code: 0, or 2 with a line on standard error when the command is unknown.
+ */
+function help(name: string | undefined): number {
+  if (name === undefined) {
+    console.log(USAGE);
+    return 0;
+  }
+  if (!Object.hasOwn(COMMANDS, name)) {
+    console.error(`skill-evals: unknown command "${name}"\n\n${USAGE}`);
+    return USAGE_EXIT_CODE;
+  }
+  console.log(commandUsage(name, COMMANDS));
+  return 0;
+}
+
+/**
  * Runs one command line.
  * @param argv - The command and its flags, without the node and script paths.
  * @returns The exit code: 0, 1 when a run is invalid or a pass bar is not reached, or 2 with one line on standard
- *   error for a wrong command line, case file, config file, or platform. It never calls process.exit.
+ *   error for a wrong command line, case file, config file, or platform. `--help` and `help` print to standard output
+ *   and give 0; `--help` wins over every other flag. It never calls process.exit.
  */
 export async function main(argv: string[]): Promise<number> {
   const [name, ...args] = argv;
+  if (name === "--help") return help(undefined);
+  if (name === "help") return help(args[0]);
+  if (
+    name !== undefined &&
+    Object.hasOwn(COMMANDS, name) &&
+    args.includes("--help")
+  ) {
+    return help(name);
+  }
   try {
     requireSupportedPlatform();
     const command =

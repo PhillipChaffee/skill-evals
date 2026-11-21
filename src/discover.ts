@@ -19,31 +19,41 @@ const isCaseDir = (dir: string): boolean =>
  * `case.json`. Nothing under a case is searched, and a directory whose name starts with `_` is skipped with all it holds.
  * @param dir - The directory to search.
  * @param prefix - The names of the directories above it, below the cases directory.
+ * @param onError - Collecting mode: hears of each fault with the case's id, or the directory when it has none, and
+ *   discovery goes on without that directory. Absent: the first fault throws.
  * @returns The cases, unsorted.
- * @throws {UsageError} When a directory cannot be read, or the name of a case's directory holds `@` or `,`.
+ * @throws {UsageError} When a directory cannot be read, or the name of a case's directory holds `@` or `,`, and
+ *   `onError` is absent.
  */
-export function discover(dir: string, prefix: string[] = []): Found[] {
+export function discover(
+  dir: string,
+  prefix: string[] = [],
+  onError?: (caseId: string, message: string) => void,
+): Found[] {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
-    throw new UsageError(
+    const message =
       prefix.length === 0
         ? `cannot read the cases directory ${dir} (${String(code)}); create it or pass --cases`
-        : `cannot read ${dir} (${String(code)})`,
-    );
+        : `cannot read ${dir} (${String(code)})`;
+    if (!onError) throw new UsageError(message);
+    onError(dir, message);
+    return [];
   }
   return entries.flatMap((entry) => {
     if (!entry.isDirectory() || entry.name.startsWith("_")) return [];
     const where = path.join(dir, entry.name);
     const names = [...prefix, entry.name];
-    if (!isCaseDir(where)) return discover(where, names);
+    if (!isCaseDir(where)) return discover(where, names, onError);
     const id = names.join("/");
     if (names.some((name) => /[@,]/.test(name))) {
-      throw new UsageError(
-        `case ${id}: a directory name may not hold "@" or ","`,
-      );
+      const message = `case ${id}: a directory name may not hold "@" or ","`;
+      if (!onError) throw new UsageError(message);
+      onError(id, message);
+      return [];
     }
     return [{ id, dir: where }];
   });

@@ -59,7 +59,7 @@ test("the checks page has every check type and every field", () => {
 
 test("the commands page and the help text have every command, flag, and default", async () => {
   const commands = page("reference/commands.md");
-  const help = (await sandbox().cli(["help"])).stderr;
+  const help = (await sandbox().cli(["help"])).stdout;
   for (const [name, command] of Object.entries(COMMANDS)) {
     expect(commands).toContain(`| \`${name}\` | ${command.description} |`);
     expect(help).toContain(command.description);

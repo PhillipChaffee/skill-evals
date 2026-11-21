@@ -124,7 +124,7 @@ const commandsPage = (): ReferencePage => ({
     "src/cli.ts and src/usage.ts",
   )}
 
-A wrong command line prints the same commands and flags as its help text.
+${code("skill-evals --help")}, ${code("skill-evals help")}, ${code("skill-evals help <command>")} and ${code("skill-evals <command> --help")} print the help text on standard output and exit 0; ${code("--help")} wins over every other flag. A wrong command line prints the same commands and flags on standard error and exits 2.
 
 ## Commands
 

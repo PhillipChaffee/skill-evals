@@ -166,18 +166,30 @@ function describe(by: Selection): string {
  * Loads the cases of a suite and chooses among them. A case whose id the selection rules out is never read.
  * @param casesDir - The directory to search at any depth.
  * @param by - Which cases to choose.
- * @param options - How to treat unknown keys.
+ * @param options - How to treat unknown keys, and whether to collect load errors. When `onError` is set, an empty
+ *   choice is not an error if some case failed to load, because the case asked for may be one of them.
  * @returns The chosen cases, sorted by id.
- * @throws {UsageError} When the directory cannot be read, a case is invalid, or no case is chosen.
+ * @throws {UsageError} When the directory cannot be read, a case is invalid, or no case is chosen; with `onError`,
+ *   only when no case is chosen and none failed.
  */
 export function loadSelection(
   casesDir: string,
   by: Selection,
   options: LoadOptions,
 ): Case[] {
-  const loaded = loadWhere(casesDir, idTests(by).mayLoad, options);
+  const failures: string[] = [];
+  const { onError } = options;
+  const loaded = loadWhere(casesDir, idTests(by).mayLoad, {
+    ...options,
+    ...(onError && {
+      onError: (caseId: string, message: string) => {
+        failures.push(caseId);
+        onError(caseId, message);
+      },
+    }),
+  });
   const chosen = selectCases(loaded, by);
-  if (chosen.length === 0) {
+  if (chosen.length === 0 && failures.length === 0) {
     const asked = describe(by);
     const hidden =
       selectCases(loaded, { ...by, heldout: true }).length > 0

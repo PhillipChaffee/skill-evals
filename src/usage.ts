@@ -37,7 +37,8 @@ export const FLAGS = {
   b: { value: "subject", description: "The change.", default: PROJECT },
   subject: {
     value: "subject",
-    description: "The subject to score or to probe.",
+    description:
+      "The subject to score, to probe, or to check the skill names of.",
     default: PROJECT,
   },
   harness: {
@@ -229,6 +230,13 @@ const pad = (texts: string[]): string[] => {
   return texts.map((text) => text.padEnd(width));
 };
 
+const footer =
+  (): string => `A subject is what a run loads: a directory, a git ref of the project, or "none" for no skills at all.
+A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
+The project is the git repository that holds the working directory, or the working directory itself.
+${CONFIG_FILE} in the project can set a default for these keys:
+${Object.keys(CONFIG_KEYS).join(", ")}.`;
+
 /**
  * Writes the help text from the command and flag tables.
  * @param commands - Every command.
@@ -254,9 +262,40 @@ ${flags
   )
   .join("\n")}
 
-A subject is what a run loads: a directory, a git ref of the project, or "none" for no skills at all.
-A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
-The project is the git repository that holds the working directory, or the working directory itself.
-${CONFIG_FILE} in the project can set a default for these keys:
-${Object.keys(CONFIG_KEYS).join(", ")}.`;
+skill-evals help <command> or skill-evals <command> --help shows one command. --help takes no value and wins over every other flag.
+
+${footer()}`;
+}
+
+/**
+ * Writes the help text of one command.
+ * @param name - The command's name, which must be a key of `commands`.
+ * @param commands - Every command.
+ * @returns What the command does, only the flags it takes, each with its default, and what a subject and the config
+ *   file are.
+ */
+export function commandUsage(
+  name: string,
+  commands: Record<string, CommandDoc>,
+): string {
+  const command = commands[name];
+  const flags = command?.flags ?? [];
+  const syntax = pad(flags.map(flagSyntax));
+  const defaultOf = (flag: Flag): string => {
+    const spec: FlagSpec = FLAGS[flag];
+    return spec.defaultIn?.[name] ?? spec.default;
+  };
+  return `Usage: skill-evals ${name} [options]
+
+${command?.description ?? ""}
+
+Options, each with its default:
+${flags
+  .map(
+    (flag, index) =>
+      `  ${String(syntax[index])}  ${FLAGS[flag].description}\n      default: ${defaultOf(flag)}`,
+  )
+  .join("\n")}
+
+${footer()}`;
 }

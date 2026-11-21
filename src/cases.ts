@@ -327,6 +327,8 @@ export interface LoadOptions {
   lenient?: boolean;
   /** Called with a line of text for each key that `lenient` drops. */
   onWarning?: (text: string) => void;
+  /** Collecting mode: hears of a fault (case id or directory, message), skips that case and goes on. Absent: throws. */
+  onError?: (caseId: string, message: string) => void;
 }
 
 /**
@@ -350,9 +352,17 @@ export function loadWhere(
         console.error(`skill-evals: warning: ${text}`);
       }),
   };
-  return discover(casesDir)
+  return discover(casesDir, [], options.onError)
     .filter(({ id, dir }) => keep(id, dir))
-    .flatMap((found) => loadCase(found, mode))
+    .flatMap((found) => {
+      try {
+        return loadCase(found, mode);
+      } catch (error) {
+        if (!options.onError || !(error instanceof UsageError)) throw error;
+        options.onError(found.id, error.message);
+        return [];
+      }
+    })
     .sort((x, y) => x.id.localeCompare(y.id));
 }
 
