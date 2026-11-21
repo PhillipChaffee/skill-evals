@@ -4,7 +4,7 @@ import path from "node:path";
 import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
-import { NOT_REPORTED } from "./harnesses/shared.js";
+import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { ChangedFiles } from "./snapshot.js";
@@ -166,7 +166,8 @@ async function attempt(
  */
 function parseStream(harness: Harness, stdout: string): Parsed {
   try {
-    return harness.parse(stdout);
+    const parsed = harness.parse(stdout);
+    return { ...parsed, toolCalls: withIndexes(parsed.toolCalls) };
   } catch (error) {
     return {
       finalText: "",

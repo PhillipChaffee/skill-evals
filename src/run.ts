@@ -7,6 +7,7 @@ import type { DecisionService } from "./decision.js";
 import { decide } from "./decision.js";
 import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
+import { skillsLoaded } from "./skill-loads.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
@@ -107,32 +108,6 @@ const NOT_DECIDED = {
 // The key of the decision model stays out of every harness process, the agent's and the judge's.
 const withheld = (plan: RunPlan): string[] =>
   plan.decision ? [plan.decision.secret] : [];
-const SKILL_FILE = /skills[\\/]+([\w-]+)[\\/]+skill\.md/gi;
-
-/**
- * Applies the one rule for "the agent loaded a skill", shared by every harness.
- * @param toolCalls - Every tool call of a run.
- * @returns The sorted names of the skills the agent loaded: through a call of the harness's skill tool that names it
- *   (any `plugin:` prefix dropped), or through any tool call whose input points at `skills/<name>/SKILL.md`.
- */
-export function skillsLoaded(toolCalls: ToolCall[]): string[] {
-  const names = new Set<string>();
-  for (const { kind, input } of toolCalls) {
-    if (kind === "skill") {
-      // Object() turns an input that is no object into one with none of the three keys.
-      const given = Object(input) as Record<string, unknown>;
-      const named = [given["skill"], given["name"], given["id"]].find(
-        (value) => typeof value === "string",
-      );
-      if (named) names.add(named.slice(named.lastIndexOf(":") + 1));
-    }
-    for (const match of JSON.stringify(input ?? null).matchAll(SKILL_FILE)) {
-      names.add(String(match[1]));
-    }
-  }
-  return [...names].sort();
-}
-
 /**
  * Decides whether a run counts.
  * @param record - The parts of a run record that can disqualify it.

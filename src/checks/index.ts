@@ -1,5 +1,6 @@
 import type { Capability, Need } from "../capabilities.js";
 import type { ToolCall, ToolKind } from "../harnesses/shared.js";
+import type { ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
 import { UsageError } from "../scope.js";
 import { FILE_CHECKS } from "./files.js";
@@ -8,12 +9,27 @@ import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
 import { extensionsOf } from "./extensions.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
+import { ORDER_CHECKS } from "./order.js";
 import { SKILL_CHECKS } from "./skills.js";
 import { TOOL_CHECKS } from "./tools.js";
+
+/** A matcher with the end of the matching calls that counts, for `before` and `after`. */
+export type EndMatcher = ToolMatcher & { which?: "first" | "last" };
 
 /** The fields a check may carry beside its type and weight; which ones it takes depends on the type. */
 interface CheckFields {
   skill?: string;
+  anyOf?: string[];
+  min?: number;
+  max?: number;
+  sameTurn?: boolean;
+  first?: boolean;
+  before?: EndMatcher;
+  after?: EndMatcher;
+  sequence?: ToolMatcher[];
+  strict?: boolean;
+  matches?: ToolMatcher;
+  ignoring?: ToolMatcher[];
   pattern?: string;
   text?: string;
   path?: string;
@@ -89,8 +105,15 @@ export interface Spec {
   /** One more sentence about the fields, for what the lists above cannot say. */
   note?: string;
   rule?: Rule;
-  /** What a harness must be able to do for the check to apply, besides the check's own `requires`. No check type names one yet. */
+  /**
+   * Sets of fields of which exactly one set is given, for a check with more than one form. The JSON Schema says so;
+   * `validate` gives the loader's message.
+   */
+  forms?: string[][];
+  /** What a harness must be able to do for the check to apply, besides the check's own `requires`. */
   needs?: (check: Check) => Capability[];
+  /** Looks at the fields together, once each is read, for a rule that depends on more than one. Throws a `UsageError`. */
+  validate?: (given: Record<string, unknown>, where: string) => void;
 }
 /** A ruled check whose fields in `F` are set, which loading the case made sure of. */
 export type With<F extends Field> = RuledCheck & Required<Pick<CheckFields, F>>;
@@ -105,6 +128,7 @@ const RULED = {
   ...OUTPUT_CHECKS,
   ...FILE_CHECKS,
   ...TOOL_CHECKS,
+  ...ORDER_CHECKS,
   ...OBSERVED_CHECKS,
 };
 type RuledType = keyof typeof RULED;
@@ -236,6 +260,7 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
       `${where}: ${type} needs at least one of ${spec.oneOf.map((field) => `"${field}"`).join(", ")}`,
     );
   }
+  spec.validate?.(given, where);
   const answers = type === "decision" ? readAnswers(given, where) : {};
   // The steps above checked the type, the fields it requires, and the answers of a decision.
   return { type, weight, ...given, ...answers, ...extensions } as Check;
@@ -261,7 +286,7 @@ export function describeCheck(check: Check): string {
       ),
     );
   const patterns = REGEX_FIELDS.flatMap((field) => {
-    const pattern = check[field as Field];
+    const pattern = check[field as Field] as string | undefined;
     return pattern === undefined ? [] : [`/${pattern}/${check.flags ?? ""}`];
   });
   const weight = check.weight === 1 ? [] : [`(weight ${String(check.weight)})`];

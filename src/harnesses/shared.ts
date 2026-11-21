@@ -28,6 +28,12 @@ export interface ToolCall {
   name: string;
   kind: ToolKind;
   input: unknown;
+  /** The call's position in the run's list, from 0. Set once, after parsing; an adapter never sets it, and a 0.0.1 record lacks it. */
+  index?: number;
+  /** The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it. */
+  turn?: number;
+  /** The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. */
+  agent?: { id: string; type: string; parent: string | null; depth: number };
 }
 
 /** Token counts; input counts every prompt token, cached ones included. */
@@ -271,6 +277,14 @@ export const toolCall = (
   kind: (Object.hasOwn(kinds, name) ? kinds[name] : undefined) ?? "other",
   input,
 });
+
+/**
+ * Numbers the calls of a run by their position in its list.
+ * @param calls - The calls an adapter read, in the order they were made.
+ * @returns The same calls, each with its `index`.
+ */
+export const withIndexes = (calls: ToolCall[]): ToolCall[] =>
+  calls.map((call, index) => ({ ...call, index }));
 
 /**
  * Reads a stream of one JSON object per line.

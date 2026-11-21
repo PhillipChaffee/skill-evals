@@ -5,6 +5,7 @@ import { FIELDS, SLUG_PATTERN, WEIGHT } from "../checks/fields.js";
 import { CHECKS } from "../checks/index.js";
 import { CASE_ENV_PATTERN, ENV_NAME_PATTERN } from "../env.js";
 import { HARNESSES } from "../harnesses/index.js";
+import { MATCHER_KEYS } from "../matchers.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import { SCHEMA_KEY } from "../schema-key.js";
@@ -24,8 +25,9 @@ import { configMeaning } from "./reference.js";
 // and the ids of a case's directories may not hold `@` or `,`. The loader still checks all of these.
 //
 // Where the schemas are looser than the loader: a `prompt` or `promptAppend` of only whitespace, a `flags` text that
-// is not valid flags, a regular expression that does not compile, a repeated variant id, and an `options` answer with
-// an empty name pass the schema and fail to load.
+// is not valid flags, a regular expression that does not compile, a repeated variant id, an `options` answer with
+// an empty name, a `tool_order` that gives `sequence` with one of `before` and `after`, a `min` above `max`, and an `ignoring` without
+// `first`, pass the schema and fail to load.
 
 /** A JSON Schema, or a part of one. */
 type Schema = Record<string, unknown>;
@@ -47,6 +49,7 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
   path: { ...PLAIN_TEXT, pattern: INSIDE_WORKSPACE },
   kind: { type: "string", enum: TOOL_KINDS },
   int: { type: "integer", minimum: 1 },
+  count: { type: "integer", minimum: 0 },
   unit: { type: "number", minimum: 0, maximum: 1 },
   signed: { type: "number", minimum: -1, maximum: 1 },
   // A null weight counts as none: the loader has always accepted it.
@@ -76,9 +79,22 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
     additionalProperties: false,
   },
   object: { type: "object" },
-  matcher: { type: "object" },
-  matchers: { type: "array", items: { type: "object" } },
 };
+
+/**
+ * Makes the schema of a matcher.
+ * @param extras - The keys of the field besides the matcher keys.
+ * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name` and `inputMatches`.
+ *   `by` and `inputLinesMax` are left out, because the loader rejects them.
+ */
+function matcherSchema(extras: Record<string, FieldDef> = {}): Schema {
+  return {
+    type: "object",
+    properties: propertiesOf({ ...MATCHER_KEYS, ...extras }),
+    anyOf: ["kind", "name", "inputMatches"].map((key) => ({ required: [key] })),
+    additionalProperties: false,
+  };
+}
 
 /**
  * Makes the schema of one field.
@@ -90,7 +106,11 @@ function valueSchema(name: string, def: FieldDef): Schema {
   const base: Schema =
     def.type === "enum"
       ? { type: "string", enum: def.values }
-      : (BY_TYPE[def.type] ?? {});
+      : def.type === "matcher"
+        ? matcherSchema(def.extras)
+        : def.type === "matchers"
+          ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
+          : (BY_TYPE[def.type] ?? {});
   return { title: name, description: def.meaning, ...base };
 }
 
@@ -120,6 +140,7 @@ function checkSchema(type: string): Schema {
     ...(spec?.fields ?? []),
     ...(spec?.optional ?? []),
     ...(spec?.oneOf ?? []),
+    ...(spec?.forms?.flat() ?? []),
   ];
   const named = Object.fromEntries(
     [...new Set([...fields, "requires", "ifUnsupported"])].map((field) => {
@@ -141,6 +162,9 @@ function checkSchema(type: string): Schema {
     },
     ...(spec?.oneOf && {
       anyOf: spec.oneOf.map((field) => ({ required: [field] })),
+    }),
+    ...(spec?.forms && {
+      oneOf: spec.forms.map((form) => ({ required: form })),
     }),
     patternProperties: X_KEYS,
     additionalProperties: false,

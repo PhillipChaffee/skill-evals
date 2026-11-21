@@ -1,0 +1,30 @@
+{
+  "description": "The entry skill loads before any other tool call, except a read of the harness adapter notes.",
+  "tags": ["routing", "order"],
+  "targets": ["magic-mode"],
+  "checks": [
+    {
+      "type": "skill_loaded",
+      "skill": "magic-mode",
+      "first": true,
+      "ignoring": [{ "kind": "read", "inputMatches": "harness-adapter" }]
+    },
+    {
+      "type": "first_tool",
+      "matches": { "kind": "skill", "inputMatches": "magic-mode" },
+      "ignoring": [{ "kind": "read", "inputMatches": "harness-adapter" }]
+    },
+    {
+      "type": "tool_order",
+      "before": { "kind": "shell", "inputMatches": "npm test" },
+      "after": { "kind": "edit", "inputMatches": "src/" }
+    },
+    {
+      "type": "tool_order",
+      "before": { "kind": "edit", "which": "last" },
+      "after": { "kind": "shell", "inputMatches": "npm test", "which": "last" }
+    },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

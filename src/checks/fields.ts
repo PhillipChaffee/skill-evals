@@ -1,6 +1,7 @@
 import path from "node:path";
 import { readNeeds } from "../capabilities.js";
 import { caseEnvProblem } from "../env.js";
+import { CALL_FIELDS } from "./call-fields.js";
 import { regex } from "./rules.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { UsageError, messageOf } from "../scope.js";
@@ -14,6 +15,7 @@ export type FieldType =
   | "glob"
   | "kind"
   | "int"
+  | "count"
   | "unit"
   | "signed"
   | "number"
@@ -40,6 +42,8 @@ export interface FieldDef {
   values?: readonly string[];
   /** What an error message says the value must be, where the type's own wording is too general. */
   expected?: string;
+  /** For a `matcher` or `matchers`: the keys it takes besides the matcher keys, each with its own definition. */
+  extras?: Record<string, FieldDef>;
 }
 
 /** What a parser knows about the value it reads. */
@@ -92,6 +96,7 @@ export const FIELDS: Record<string, FieldDef> = {
     type: "flags",
     meaning: "The flags of the check's regular expressions.",
   },
+  ...CALL_FIELDS,
   rubric: {
     type: "text",
     meaning: "Plain text that says what a good answer does.",
@@ -173,6 +178,28 @@ const ranged =
     return value;
   };
 
+// A parser for a whole number from `low` up; `wording` is what the error says it must be.
+const whole =
+  (low: number, wording: string): FieldParser =>
+  (value, at) => {
+    if (!(
+      typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= low
+    )) {
+      throw failure(at, `${at.name} must be ${wording}`);
+    }
+    return value;
+  };
+
+// A parser for a list of objects.
+const objects: FieldParser = (value, at) => {
+  if (!Array.isArray(value) || !value.every(isPlainObject)) {
+    throw failure(at, `"${at.name}" must be a list of objects`);
+  }
+  return value;
+};
+
 // The parser of each field type. A type whose real parser lives in another module starts with a plain one, and that
 // module replaces it with registerParser. This module imports no module that uses it, so no cycle can form.
 const PARSERS: Record<FieldType, FieldParser> = {
@@ -214,12 +241,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
     }
     return kind;
   },
-  int: (value, at) => {
-    if (!(typeof value === "number" && Number.isInteger(value) && value > 0)) {
-      throw failure(at, `${at.name} must be a positive integer`);
-    }
-    return value;
-  },
+  int: whole(1, "a positive integer"),
+  count: whole(0, "a whole number, 0 or more"),
   unit: ranged(0),
   signed: ranged(-1),
   number: (value, at) => {
@@ -279,7 +302,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     if (Array.isArray(value) && value.length === 0) {
       throw failure(at, `"${at.name}" must not be empty`);
     }
-    return PARSERS.matchers(value, at);
+    return objects(value, at);
   },
   envvars: (value, at) => {
     if (!isPlainObject(value)) {
@@ -292,18 +315,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
     return value;
   },
   needs: (value, at) => readNeeds(value, at.where),
-  matcher: (value, at) => {
-    if (!isPlainObject(value)) {
-      throw failure(at, `"${at.name}" must be an object`);
-    }
-    return value;
-  },
-  matchers: (value, at) => {
-    if (!Array.isArray(value) || !value.every(isPlainObject)) {
-      throw failure(at, `"${at.name}" must be a list of objects`);
-    }
-    return value;
-  },
+  matcher: (value, at) => PARSERS.object(value, at),
+  matchers: (value, at) => objects(value, at),
   object: (value, at) => {
     if (!isPlainObject(value)) {
       throw failure(

@@ -114,6 +114,66 @@ A skipped check changes what the case's score means on that harness, so the repo
 { "type": "tool_not_called", "kind": "shell", "inputMatches": "git push" }
 ```
 
+### Count, order and first action
+
+A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. The keys `by` and `inputLinesMax` are reserved for later; a matcher that sets one is a load error (`"by" is not yet supported`), never ignored.
+
+`tool_called` takes `min` (default 1) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` counts only calls that one assistant turn issued together, which needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
+
+```json
+{
+  "type": "tool_called",
+  "kind": "subagent",
+  "inputMatches": "synthesizer",
+  "min": 1,
+  "max": 1
+}
+```
+
+`tool_order` takes either a pair or a sequence. The pair, `before` and `after`, passes when the chosen `before` call comes earlier than the chosen `after` call. Each side is a matcher with `which`, `"first"` (the default) or `"last"`. This one says a failing run of the tests came before the first source edit, and that the tests ran again after the last edit:
+
+```json
+{
+  "type": "tool_order",
+  "before": { "kind": "shell", "inputMatches": "npm test" },
+  "after": { "kind": "edit", "inputMatches": "src/" }
+}
+```
+
+```json
+{
+  "type": "tool_order",
+  "before": { "kind": "edit", "which": "last" },
+  "after": { "kind": "shell", "inputMatches": "npm test", "which": "last" }
+}
+```
+
+A `sequence` is a list of matchers that must match calls in that order, with other calls allowed between. With `strict: true` a matcher may match many calls, but no call of a later matcher comes before the first match of an earlier one, and no call of an earlier matcher comes after the first match of a later one. This is how "two researchers, then one synthesizer, and no researcher after it" is written:
+
+```json
+{
+  "type": "tool_order",
+  "sequence": [
+    { "kind": "subagent", "inputMatches": "researcher" },
+    { "kind": "subagent", "inputMatches": "synthesizer" }
+  ],
+  "strict": true
+}
+```
+
+`first_tool` checks the first tool call: `matches` is the matcher it must fit, and `ignoring` lists matchers for calls that may come before it, such as a read the agent is allowed to make first. `skill_loaded` takes `first: true` for "the first skill load is this skill, and no call outside `ignoring` came before it", and `anyOf`, a list of skills of which any is accepted, in place of `skill`. A skill load is a call of the harness's skill tool that names a skill, or a call whose input points at `skills/<name>/SKILL.md`. A `skill_loaded` with only `skill` scores as it always did.
+
+```json
+{
+  "type": "skill_loaded",
+  "skill": "magic-mode",
+  "first": true,
+  "ignoring": [{ "kind": "read", "inputMatches": "harness-adapter" }]
+}
+```
+
+Until checks can tell agents apart, every one of these sees all the calls of the run, those of a subagent included. Claude Code flattens a subagent's calls into the list. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
+
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
 
 ## Checks that a model scores

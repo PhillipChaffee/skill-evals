@@ -317,11 +317,14 @@ Token counts; input counts every prompt token, cached ones included.
 
 One tool call of the agent.
 
-| Property | Type                                                                                              | Description                  |
-| -------- | ------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `name`   | `string`                                                                                          | The harness's own tool name. |
-| `kind`   | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other"` |                              |
-| `input`  | `unknown`                                                                                         |                              |
+| Property | Type                                                                                              | Description                                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`   | `string`                                                                                          | The harness's own tool name.                                                                                                                           |
+| `kind`   | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other"` |                                                                                                                                                        |
+| `input`  | `unknown`                                                                                         |                                                                                                                                                        |
+| `index?` | `number \| undefined`                                                                             | The call's position in the run's list, from 0. Set once, after parsing; an adapter never sets it, and a 0.0.1 record lacks it.                         |
+| `turn?`  | `number \| undefined`                                                                             | The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it.                                   |
+| `agent?` | `{ id: string; type: string; parent: string \| null; depth: number; } \| undefined`               | The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. |
 
 ### CheckResult
 

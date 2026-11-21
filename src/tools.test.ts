@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import type { RuledCheck } from "./checks/index.js";
 import { checkScore } from "./checks/index.js";
-import { skillsLoaded } from "./run.js";
+import { skillsLoaded } from "./skill-loads.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
 const CODEX_STREAM = "codex.stream.jsonl";

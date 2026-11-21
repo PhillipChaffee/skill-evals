@@ -15,7 +15,7 @@ test("check prints each harness's capabilities and status, and the host set of t
   const quiet = await none.cli(["check", "--harness", CLAUDE_CODE]);
   expect(quiet.stdout).toContain("Host capabilities: none requested");
   expect(quiet.stdout).toMatch(
-    /- claude-code \(real-model\): subagents, childCalls, loadedReport, skillListing/,
+    /- claude-code \(real-model\): subagents, turnGrouping, childCalls, loadedReport, skillListing/,
   );
   expect(tableRow(quiet.stdout, CLAUDE_CODE)).toMatch(/^\| claude-code \| yes/);
 

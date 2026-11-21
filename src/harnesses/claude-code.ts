@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
+import type {
+  Harness,
+  Loaded,
+  LoadedSubject,
+  ToolCall,
+  ToolKind,
+} from "./shared.js";
 import {
   ANTHROPIC_ENV,
   foreignPaths,
@@ -39,7 +45,10 @@ type Event =
     }
   | {
       type: "assistant";
-      message?: { content?: { type: string; name: string; input: unknown }[] };
+      message?: {
+        id?: string;
+        content?: { type: string; name: string; input: unknown }[];
+      };
     }
   | {
       type: "result";
@@ -92,6 +101,7 @@ const claudeCode: Harness = {
   authEnv: ANTHROPIC_ENV,
   capabilities: new Set([
     "subagents",
+    "turnGrouping",
     "childCalls",
     "loadedReport",
     "skillListing",
@@ -132,11 +142,7 @@ const claudeCode: Harness = {
     const failure = result?.is_error ? result.result || result.subtype : null;
     return {
       finalText: result?.result ?? "",
-      toolCalls: events
-        .filter((e) => e.type === "assistant")
-        .flatMap((e) => e.message?.content ?? [])
-        .filter((block) => block.type === "tool_use")
-        .map(({ name, input }) => toolCall(KINDS, name, input)),
+      toolCalls: toolCallsOf(events),
       tokens: usage
         ? {
             input:
@@ -171,6 +177,31 @@ const claudeCode: Harness = {
   strays: strayskills,
   isolation: ISOLATION,
 };
+
+/**
+ * Reads the tool calls of a stream, with the assistant turn of each.
+ * @param events - The events of the stream, in order.
+ * @returns The `tool_use` blocks of every assistant event, a subagent's included. A turn is one assistant message:
+ *   the counter, from 1, moves on at each `message.id` it has not seen, so the blocks of one message share a turn
+ *   even when the stream splits them over several events. An assistant event without an id is a turn of its own.
+ */
+function toolCallsOf(events: Event[]): ToolCall[] {
+  const turns = new Map<string, number>();
+  let turn = 0;
+  return events.flatMap((event) => {
+    if (event.type !== "assistant") return [];
+    const id = event.message?.id;
+    const known = id === undefined ? undefined : turns.get(id);
+    const current = known ?? ++turn;
+    if (id !== undefined) turns.set(id, current);
+    return (event.message?.content ?? [])
+      .filter((block) => block.type === "tool_use")
+      .map(({ name, input }) => ({
+        ...toolCall(KINDS, name, input),
+        turn: current,
+      }));
+  });
+}
 
 /**
  * Names what Claude Code loaded that is not the subject's.

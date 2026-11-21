@@ -73,6 +73,14 @@ const CASES: Row[] = [
     [0, 1.5, "1"].map((v): Bad => [v, /field must be a positive integer/]),
   ],
   [
+    "count",
+    0,
+    [-1, 1.5, "1"].map((v): Bad => [
+      v,
+      /field must be a whole number, 0 or more/,
+    ]),
+  ],
+  [
     "unit",
     0.5,
     [2, "1", -1].map((v): Bad => [v, /field must be a number from 0 to 1/]),

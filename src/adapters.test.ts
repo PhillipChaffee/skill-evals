@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
-import { skillsLoaded } from "./run.js";
+import { skillsLoaded } from "./skill-loads.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
 const plainWords =
@@ -27,6 +27,7 @@ const STREAMS = [
           skill: "magic:bro",
           args: "The idempotent reconciler converges state.",
         },
+        turn: 1,
       },
     ],
     skills: ["bro"],
@@ -232,3 +233,37 @@ test.each(HARNESSES)(
     );
   },
 );
+
+test("claude-code gives the tool calls of one message.id one turn, and each new id the next", () => {
+  const { toolCalls } = parse(CLAUDE_CODE, "claude-code-turns.stream.jsonl");
+  expect(toolCalls.map(({ name, turn }) => [name, turn])).toEqual([
+    ["Skill", 1],
+    ["Agent", 2],
+    ["Agent", 2],
+    ["Read", 3],
+    ["Bash", 4],
+    ["Edit", 4],
+    ["Agent", 6],
+  ]);
+  expect(toolCalls.map((call) => call.index)).toEqual(Array(7).fill(undefined));
+});
+
+test("claude-code gives every call without a message id a turn of its own", () => {
+  const block = { type: "tool_use", name: "Bash", input: {} };
+  const { toolCalls } = parseText(
+    CLAUDE_CODE,
+    lines(
+      { type: "assistant", message: { content: [block, block] } },
+      { type: "assistant", message: { content: [block] } },
+    ),
+  );
+  expect(toolCalls.map((call) => call.turn)).toEqual([1, 1, 2]);
+});
+
+test("only claude-code declares turnGrouping", () => {
+  expect(
+    HARNESSES.filter((h) => h.capabilities.has("turnGrouping")).map(
+      (h) => h.id,
+    ),
+  ).toEqual([CLAUDE_CODE]);
+});

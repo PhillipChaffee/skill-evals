@@ -141,6 +141,42 @@ test("the config schema accepts the example config, and rejects an unknown key o
   expect(validate({ subjectExclude: [""] }, doc, doc)).not.toEqual([]);
 });
 
+// Checks that hold matchers: the schema renders a matcher as a strict object, and the loader agrees.
+const MATCHER_BODIES: Json[] = [
+  { checks: [{ type: "first_tool", matches: { kind: "skill" } }] },
+  { checks: [{ type: "first_tool", matches: { kind: "nope" } }] },
+  { checks: [{ type: "first_tool", matches: { flags: "i" } }] },
+  { checks: [{ type: "first_tool", matches: { kind: "edit", by: {} } }] },
+  { checks: [{ type: "first_tool", matches: { kind: "edit", extra: 1 } }] },
+  { checks: [{ type: "first_tool", matches: { name: "a" }, ignoring: [] }] },
+  {
+    checks: [
+      {
+        type: "tool_order",
+        before: { kind: "edit", which: "last" },
+        after: { name: "Bash", flags: "i" },
+      },
+    ],
+  },
+  {
+    checks: [
+      {
+        type: "tool_order",
+        before: { kind: "edit", which: "middle" },
+        after: { kind: "read" },
+      },
+    ],
+  },
+  { checks: [{ type: "tool_order", sequence: [{ kind: "edit" }] }] },
+  { checks: [{ type: "tool_order", sequence: [] }] },
+  { checks: [{ type: "tool_order", sequence: [{ kind: "edit" }], strict: 1 }] },
+  { checks: [{ type: "tool_order", before: { kind: "edit" } }] },
+  { checks: [{ type: "tool_called", kind: "edit", min: -1 }] },
+  { checks: [{ type: "skill_loaded", anyOf: ["a", "b"], first: true }] },
+  { checks: [{ type: "skill_loaded", anyOf: [] }] },
+  { checks: [{ type: "skill_loaded", skill: "a", anyOf: ["b"] }] },
+];
+
 test("the case schema and the loader agree on what a case may hold", () => {
   const box = sandbox();
   const load = (file: Json): boolean => {
@@ -168,6 +204,7 @@ test("the case schema and the loader agree on what a case may hold", () => {
     { checks: [{ ...check, weight: null }] },
     { checks: [check], weight: 0 },
     ...Object.keys(CHECKS).map((type) => ({ checks: [{ type }] })),
+    ...MATCHER_BODIES,
   ];
   for (const body of bodies) {
     expect(problems(body).length === 0, JSON.stringify(body)).toBe(load(body));
@@ -200,6 +237,21 @@ test("the schema is looser than the loader for a whitespace-only prompt, and the
     { checks: [{ type: "output_matches", pattern: "a", flags: "zz" }] },
     {
       checks: [{ type: "decision", question: "q", options: { "": 1, b: 0 } }],
+    },
+    {
+      checks: [
+        {
+          type: "tool_order",
+          sequence: [{ kind: "edit" }],
+          before: { kind: "edit" },
+        },
+      ],
+    },
+    { checks: [{ type: "tool_called", kind: "edit", min: 2, max: 0 }] },
+    {
+      checks: [
+        { type: "skill_loaded", skill: "a", ignoring: [{ kind: "read" }] },
+      ],
     },
   ];
   for (const body of gaps) {
