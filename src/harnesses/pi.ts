@@ -1,6 +1,8 @@
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  ANTHROPIC_ENV,
+  OPENAI_ENV,
   jsonLines,
   opt,
   placeSkills,
@@ -44,6 +46,7 @@ const pi: Harness = {
   id: "pi",
   bin: "pi",
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
+  authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
 
   invocation({ subject, home, prompt, model }) {
     const agentDir = path.join(home, ".pi", "agent");

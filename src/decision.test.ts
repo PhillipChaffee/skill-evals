@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { CONFIG_FILE } from "./project.js";
 import type { Scripted } from "./testing/decision-server.js";
 import { choice, decisionServer, yesNo } from "./testing/decision-server.js";
 import { plantCase, plugin } from "./testing/plant.js";
@@ -47,6 +48,7 @@ async function decided(
   const server = await decisionServer(script);
   const alpha = plugin(box, "plugin-alpha", { answer: ANSWER });
   const beta = plugin(box, "plugin-beta", { answer: ANSWER });
+  box.write(CONFIG_FILE, PASS_THE_KEY);
   const cases = plantCase(box, checks);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--out", outDir, "--reps", "1"];
@@ -60,6 +62,9 @@ async function decided(
   );
   return { box, result, outDir, received: server.received };
 }
+
+// The config passes the key on, so that a withheld key is what keeps it from the harness.
+const PASS_THE_KEY = { env: ["BASETEN_API_KEY"] };
 
 const compared = (alpha: string, beta: string): string[] => [
   "run",
@@ -179,6 +184,7 @@ test("the API key reaches neither the harness nor anything the command writes", 
 
   // Without a decision check the variable is the user's own business, for example the key of the agent's provider.
   const box = sandbox();
+  box.write(CONFIG_FILE, PASS_THE_KEY);
   const cases = plantCase(box, [{ type: "output_contains", text: "seed" }]);
   const outDir = path.join(box.root, "results");
   const flags = ["--subject", "none", "--cases", cases, "--out", outDir];

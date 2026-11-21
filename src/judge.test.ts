@@ -3,12 +3,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { parseVerdict } from "./judge.js";
 import { plantCase, plugin } from "./testing/plant.js";
-import {
-  fakeHarness,
-  readResults,
-  sandbox,
-  tableRow,
-} from "./testing/sandbox.js";
+import { readResults, sandbox, tableRow } from "./testing/sandbox.js";
 
 const RUBRIC = "Says the word fixed and nothing about weather.";
 const ANSWER = "It is fixed now.";
@@ -39,18 +34,17 @@ async function judgedRun(replies: string[], ...extra: string[]) {
     { type: "judge", rubric: RUBRIC, weight: 3 },
     { type: "output_contains", text: "broken" },
   ]);
-  box.write("judge/replies.json", replies);
+  box.write("fake/judge/replies.json", replies);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--out", outDir, ...extra];
   const result = await box.cli(
     ["run", "--a", pluginA, "--b", pluginB, ...flags],
     {
-      FAKE_JUDGE_DIR: path.join(box.root, "judge"),
-      SKILL_EVALS_BIN_CODEX: fakeHarness,
+      SKILL_EVALS_BIN_CODEX: path.join(box.root, "bin/fake-agent.mjs"),
     },
   );
   const asked = fs
-    .readFileSync(path.join(box.root, "judge/prompts.jsonl"), "utf8")
+    .readFileSync(path.join(box.root, "fake/judge/prompts.jsonl"), "utf8")
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as Asked);
@@ -164,19 +158,19 @@ test("a judged check of an invalid run is not sent to the judge", async () => {
   const box = sandbox();
   const ghost = plugin(box, "plugin-ghost", { ghost: true, answer: ANSWER });
   const cases = plantCase(box, [{ type: "judge", rubric: RUBRIC }]);
-  box.write("judge/replies.json", [YES]);
+  box.write("fake/judge/replies.json", [YES]);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--reps", "1", "--out", outDir];
 
-  const result = await box.cli(["score", "--subject", ghost, ...flags], {
-    FAKE_JUDGE_DIR: path.join(box.root, "judge"),
-  });
+  const result = await box.cli(["score", "--subject", ghost, ...flags]);
   expect(result.status).toBe(1);
   expect(readResults(outDir).records[0]?.checks[0]).toMatchObject({
     score: null,
     reason: "not judged, because the run is invalid",
   });
-  expect(fs.existsSync(path.join(box.root, "judge/prompts.jsonl"))).toBe(false);
+  expect(fs.existsSync(path.join(box.root, "fake/judge/prompts.jsonl"))).toBe(
+    false,
+  );
 });
 
 test("a verdict needs no reason, and a reason that is not text is kept as JSON", () => {

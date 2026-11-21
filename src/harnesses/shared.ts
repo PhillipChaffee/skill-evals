@@ -74,6 +74,23 @@ export interface RunInput {
   maxTurns?: number | undefined;
 }
 
+/** The variables that log in to Anthropic's API, to Bedrock and to Vertex. Names are exact, never a prefix. */
+export const ANTHROPIC_ENV = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "AWS_REGION",
+  "AWS_PROFILE",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+];
+
+/** The variables that log in to OpenAI's API. */
+export const OPENAI_ENV = ["OPENAI_API_KEY", "OPENAI_BASE_URL"];
+
 /** The adapter of one coding-agent CLI. */
 export interface Harness {
   id: string;
@@ -81,6 +98,8 @@ export interface Harness {
   bin: string;
   /** Login files to copy into the throwaway home, relative to the user's home. */
   authFiles: string[];
+  /** Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. */
+  authEnv: string[];
   invocation: (input: RunInput) => Invocation;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;

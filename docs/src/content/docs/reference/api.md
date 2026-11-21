@@ -161,13 +161,14 @@ What `evaluate` writes to `results.json`.
 
 The adapter of one coding-agent CLI.
 
-| Property     | Type                              | Description                                                                            |
-| ------------ | --------------------------------- | -------------------------------------------------------------------------------------- |
-| `id`         | `string`                          |                                                                                        |
-| `bin`        | `string`                          | The name of the executable on PATH.                                                    |
-| `authFiles`  | `string[]`                        | Login files to copy into the throwaway home, relative to the user's home.              |
-| `invocation` | `(input: RunInput) => Invocation` |                                                                                        |
-| `parse`      | `(stdout: string) => Parsed`      | May throw on a stream it does not understand; the caller reports that as a failed run. |
+| Property     | Type                              | Description                                                                                                       |
+| ------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `id`         | `string`                          |                                                                                                                   |
+| `bin`        | `string`                          | The name of the executable on PATH.                                                                               |
+| `authFiles`  | `string[]`                        | Login files to copy into the throwaway home, relative to the user's home.                                         |
+| `authEnv`    | `string[]`                        | Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. |
+| `invocation` | `(input: RunInput) => Invocation` |                                                                                                                   |
+| `parse`      | `(stdout: string) => Parsed`      | May throw on a stream it does not understand; the caller reports that as a failed run.                            |
 
 ### Parsed
 

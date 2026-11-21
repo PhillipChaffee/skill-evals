@@ -53,6 +53,7 @@ const cursor: Harness = {
   id: "cursor",
   bin: "cursor-agent",
   authFiles: [".cursor/auth.json", ".config/cursor/auth.json"],
+  authEnv: ["CURSOR_API_KEY"],
 
   invocation({ subject, home, workspace, prompt, model }) {
     placeSkills(subject, path.join(home, ".cursor", "skills"));

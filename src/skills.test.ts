@@ -8,14 +8,12 @@ const COPY_UNDER_TEST = "the copy under test\n";
 /**
  * Runs the one case "use greet", with a skill `greet` installed in the user's real home.
  * @param args - Builds the command and its subject flags from the skills folder under test.
- * @param env - Extra environment variables.
+ * @param hideSkills - Makes the fake harness report no skills at startup.
  * @returns What the command did and wrote.
  */
-async function greetRun(
-  args: (mine: string) => string[],
-  env?: Record<string, string>,
-) {
+async function greetRun(args: (mine: string) => string[], hideSkills = false) {
   const box = sandbox();
+  if (hideSkills) box.write("fake/hide-skills", "");
   const mine = skillsFolder(box, "mine", { greet: COPY_UNDER_TEST });
   // The sandbox root is the real home of the command, so this is a globally installed skill.
   box.write(".claude/skills/greet/SKILL.md", "the global copy\n");
@@ -26,7 +24,7 @@ async function greetRun(
   });
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", path.join(box.root, "cases"), "--reps", "1"];
-  const result = await box.cli([...args(mine), ...flags, "--out", outDir], env);
+  const result = await box.cli([...args(mine), ...flags, "--out", outDir]);
   return { box, result, ...readResults(outDir) };
 }
 
@@ -78,7 +76,7 @@ test("run --a none --b <skills dir> reports the no-skills baseline as A", async 
 test("a run whose harness lists none of the subject's skills is invalid", async () => {
   const { result, records } = await greetRun(
     (mine) => ["score", "--subject", mine],
-    { FAKE_HIDE_SKILLS: "1" },
+    true,
   );
   expect(result.status).toBe(1);
   expect(records[0]?.subjectLoaded).toBe(false);

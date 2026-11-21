@@ -101,9 +101,8 @@ test("check says so when a harness lists none of the subject's skills", async ()
   box.write(GREET_SKILL, SAY_HELLO);
   const out = ["--out", path.join(box.root, "probe")];
 
-  const hidden = await box.cli(["check", "--harness", CLAUDE_CODE, ...out], {
-    FAKE_HIDE_SKILLS: "1",
-  });
+  box.write("fake/hide-skills", "");
+  const hidden = await box.cli(["check", "--harness", CLAUDE_CODE, ...out]);
   expect(hidden.status).toBe(1);
   expect(cells(hidden.stdout, CLAUDE_CODE)[4]).toBe("NO");
 });

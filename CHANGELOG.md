@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The harness now starts with an allowlisted environment instead of a copy of yours. It gets `PATH`, `SHELL`, `USER`, `LOGNAME`, `TMPDIR`, `TERM`, `TZ`, `LANG`, `LANGUAGE`, `LC_*`, the proxy and certificate variables, its own adapter's login variables, and the names listed in the new `env` config key; the judge gets the same. Migration: a harness that needs a variable outside the allowlist needs it named in `env`.
 - An unknown key in a `case.json` is now a load error that names the key and the keys that are allowed. Keys that start with `x-` are kept and written to `results.json`. `--lenient` (or `lenient` in the config file) drops unknown keys with a warning, for one release. Every field of a check has a type, and the reference page lists it. Validation is stricter in two small ways: a `flags` that is not valid now fails at load even when no regular expression is beside it, and when a file has several faults, an unknown-key error is reported before the others.
 - The help text is written from the same tables that parse the command line. It lists the commands, then every flag once with its default and the commands that take it. No command, flag, or default changed.
 - The documentation is a website next to the landing page. Its reference pages for the checks, the commands and flags, the config file, the harnesses, and the API are generated from the code, and the tests fail when a committed page or a documented example no longer matches the tool.

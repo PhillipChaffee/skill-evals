@@ -74,7 +74,11 @@ test("the config page has every key with its flag, and its example file is accep
   expect(config).toContain("| `reps` | number | `--reps <n>` |");
   expect(Object.keys(EXAMPLE_CONFIG)).toEqual(Object.keys(CONFIG_KEYS));
   for (const [key, type] of Object.entries(CONFIG_KEYS))
-    expect(typeof EXAMPLE_CONFIG[key]).toBe(type);
+    expect(
+      Array.isArray(EXAMPLE_CONFIG[key])
+        ? "string[]"
+        : typeof EXAMPLE_CONFIG[key],
+    ).toBe(type);
 
   const box = sandbox();
   box.write("skill-evals.config.json", EXAMPLE_CONFIG);

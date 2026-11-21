@@ -76,6 +76,8 @@ export interface RunPlan {
   rep: number;
   model?: string | undefined;
   judge: Judge;
+  /** Names of variables the harness gets besides the allowlist: the config's `env`. */
+  pass?: string[] | undefined;
   /** The model that scores decision checks; null when no case has one. */
   decision: DecisionService | null;
   /** Where the run's stream and final text are written. */
@@ -207,6 +209,7 @@ async function scoreChecks(
         prompt: judgePrompt,
         ...JUDGE_LIMITS,
         withhold,
+        pass: plan.pass,
       },
       ({ parsed, error, durationMs }) => ({
         finalText: parsed.finalText,
@@ -323,6 +326,7 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
       timeoutSeconds,
       workspaceDir,
       withhold: withheld(plan),
+      pass: plan.pass,
     },
     (ran) => record(plan, ran),
   );

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ExecOptions } from "./exec.js";
+import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
 import { messageOf, tempDir } from "./scope.js";
@@ -21,6 +21,8 @@ export interface SessionInput {
   workspaceDir?: string | null;
   /** Environment variables the harness must not get, such as the key of the model that scores its answer. */
   withhold?: string[] | undefined;
+  /** Names of this process's variables the project's config passes to the harness. */
+  pass?: string[] | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -33,40 +35,9 @@ export interface SessionResult {
   workspace: string;
 }
 
-// This tool's own variables, and the ones npm and the shell set that name the command that is running.
-const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_|_$)/;
 // Login files hold secrets, so only the owner may read the copies.
 const OWNER_READ_WRITE = 0o600;
 const SHOWN_SETUP_WORDS = 2;
-
-/**
- * Builds the environment of the harness process.
- * @param home - The throwaway home.
- * @param extra - What the adapter adds.
- * @param withhold - Variables of this process that the harness must not get.
- * @returns This process's environment, with the home and the XDG directories moved under `home`, and without the
- *   withheld variables or any variable that names this tool.
- */
-function childEnv(
-  home: string,
-  extra: Record<string, string>,
-  withhold: string[],
-): ExecOptions["env"] {
-  const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) => !NAMES_THIS_TOOL.test(key) && !withhold.includes(key),
-    ),
-  );
-  return {
-    ...inherited,
-    HOME: home,
-    XDG_CONFIG_HOME: path.join(home, ".config"),
-    XDG_DATA_HOME: path.join(home, ".local", "share"),
-    XDG_STATE_HOME: path.join(home, ".local", "state"),
-    XDG_CACHE_HOME: path.join(home, ".cache"),
-    ...extra,
-  };
-}
 
 /**
  * Gives the harness its login in the throwaway home.
@@ -104,7 +75,14 @@ async function attempt(
   }
   const options = {
     cwd: input.workspace,
-    env: childEnv(input.home, invocation.env, session.withhold ?? []),
+    env: childEnv({
+      home: input.home,
+      base: process.env,
+      harnessEnv: invocation.env,
+      authEnv: harness.authEnv,
+      pass: session.pass ?? [],
+      withhold: session.withhold ?? [],
+    }),
     timeoutSeconds,
   };
   for (const step of invocation.setup ?? []) {

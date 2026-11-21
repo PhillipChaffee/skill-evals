@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  OPENAI_ENV,
   jsonLines,
   opt,
   placeSkills,
@@ -70,6 +71,7 @@ const codex: Harness = {
   id: "codex",
   bin: "codex",
   authFiles: [".codex/auth.json"],
+  authEnv: OPENAI_ENV,
 
   invocation({ subject, home, workspace, prompt, model }) {
     const codexHome = path.join(home, ".codex");

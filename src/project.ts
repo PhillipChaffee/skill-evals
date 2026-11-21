@@ -28,9 +28,14 @@ export function findProject(cwd: string): Project {
   }
 }
 
+// Variables of this tool, and the ones npm sets that name the command that is running; the harness never gets them.
+const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_)/;
 export const CONFIG_FILE = "skill-evals.config.json";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
-export const CONFIG_KEYS: Record<string, "string" | "number" | "boolean"> = {
+export const CONFIG_KEYS: Record<
+  string,
+  "string" | "number" | "boolean" | "string[]"
+> = {
   cases: "string",
   harness: "string",
   reps: "number",
@@ -42,6 +47,7 @@ export const CONFIG_KEYS: Record<string, "string" | "number" | "boolean"> = {
   decisionTimeout: "number",
   minScore: "number",
   lenient: "boolean",
+  env: "string[]",
 };
 
 /** The project's optional config file. */
@@ -57,6 +63,36 @@ export interface Config {
   decisionTimeout?: number;
   minScore?: number;
   lenient?: boolean;
+  /** Exact names of variables of this process that the harness gets besides the allowlist. */
+  env?: string[];
+}
+
+/**
+ * Checks the value of one config key.
+ * @param file - The config file, for the message.
+ * @param key - A known key.
+ * @param value - What the file holds.
+ * @throws {UsageError} When the value has the wrong type, or lists a name that names this tool.
+ */
+function checkValue(file: string, key: string, value: unknown): void {
+  const type = CONFIG_KEYS[key] ?? "string";
+  if (type !== "string[]") {
+    if (typeof value !== type) {
+      throw new UsageError(`${file}: "${key}" must be a ${type}`);
+    }
+    return;
+  }
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new UsageError(`${file}: "${key}" must be a list of strings`);
+  }
+  const reserved = (value as string[]).find((name) =>
+    NAMES_THIS_TOOL.test(name),
+  );
+  if (reserved !== undefined) {
+    throw new UsageError(
+      `${file}: "${key}" cannot name "${reserved}", because it names this tool or the command that runs it`,
+    );
+  }
 }
 
 /**
@@ -78,15 +114,12 @@ function loadConfig(root: string): Config {
     throw new UsageError(`${file}: must hold one JSON object`);
   }
   for (const [key, value] of Object.entries(parsed)) {
-    const type = Object.hasOwn(CONFIG_KEYS, key) ? CONFIG_KEYS[key] : undefined;
-    if (!type) {
+    if (!Object.hasOwn(CONFIG_KEYS, key)) {
       throw new UsageError(
         `${file}: unknown key "${key}"; known: ${Object.keys(CONFIG_KEYS).join(", ")}`,
       );
     }
-    if (typeof value !== type) {
-      throw new UsageError(`${file}: "${key}" must be a ${type}`);
-    }
+    checkValue(file, key, value);
   }
   // Every key and value type was checked above.
   const config = parsed as Config;

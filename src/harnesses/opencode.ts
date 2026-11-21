@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  ANTHROPIC_ENV,
+  OPENAI_ENV,
   jsonLines,
   opt,
   placeSkills,
@@ -47,6 +49,7 @@ const opencode: Harness = {
   id: "opencode",
   bin: "opencode",
   authFiles: [".local/share/opencode/auth.json"],
+  authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
 
   invocation({ subject, home, workspace, prompt, model }) {
     const configDir = path.join(home, ".config", "opencode");

@@ -10,19 +10,20 @@ _This page is generated from src/project.ts, so it says what the tool does._
 
 An optional `skill-evals.config.json` in the project root sets defaults. A flag wins over the file.
 
-| Key               | Type    | Default of                     | Meaning                                                                                                           |
-| ----------------- | ------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `cases`           | string  | `--cases <dir>`                | The directory that holds the cases.                                                                               |
-| `harness`         | string  | `--harness <ids\|all>`         | Comma-separated harness ids.                                                                                      |
-| `reps`            | number  | `--reps <n>`                   | Runs for each subject and case.                                                                                   |
-| `model`           | string  | `--model <id>`                 | Passed to the harness unchanged.                                                                                  |
-| `judgeHarness`    | string  | `--judge-harness <id>`         | The harness that scores judged checks.                                                                            |
-| `judgeModel`      | string  | `--judge-model <id>`           | The model that scores judged checks.                                                                              |
-| `decisionModel`   | string  | `--decision-model <id>`        | The decision model that scores decision checks.                                                                   |
-| `decisionUrl`     | string  | `--decision-url <url>`         | The base URL of the decision model's API.                                                                         |
-| `decisionTimeout` | number  | `--decision-timeout <seconds>` | How long one request to the decision model may take. A positive integer.                                          |
-| `minScore`        | number  | `--min-score <0..1>`           | The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower. |
-| `lenient`         | boolean | `--lenient`                    | Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept. |
+| Key               | Type     | Default of                     | Meaning                                                                                                                                    |
+| ----------------- | -------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cases`           | string   | `--cases <dir>`                | The directory that holds the cases.                                                                                                        |
+| `harness`         | string   | `--harness <ids\|all>`         | Comma-separated harness ids.                                                                                                               |
+| `reps`            | number   | `--reps <n>`                   | Runs for each subject and case.                                                                                                            |
+| `model`           | string   | `--model <id>`                 | Passed to the harness unchanged.                                                                                                           |
+| `judgeHarness`    | string   | `--judge-harness <id>`         | The harness that scores judged checks.                                                                                                     |
+| `judgeModel`      | string   | `--judge-model <id>`           | The model that scores judged checks.                                                                                                       |
+| `decisionModel`   | string   | `--decision-model <id>`        | The decision model that scores decision checks.                                                                                            |
+| `decisionUrl`     | string   | `--decision-url <url>`         | The base URL of the decision model's API.                                                                                                  |
+| `decisionTimeout` | number   | `--decision-timeout <seconds>` | How long one request to the decision model may take. A positive integer.                                                                   |
+| `minScore`        | number   | `--min-score <0..1>`           | The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.                          |
+| `lenient`         | boolean  | `--lenient`                    | Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.                          |
+| `env`             | string[] | none                           | Exact names of environment variables the harness gets besides the allowlist. A name that starts with `SKILL_EVALS_` or `npm_` is an error. |
 
 Every key is optional. `cases` resolves against the project root. `harness` narrows `check` too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
 
@@ -40,6 +41,7 @@ A file that sets every key:
   "decisionUrl": "<base-url>",
   "decisionTimeout": 60,
   "minScore": 0.8,
-  "lenient": false
+  "lenient": false,
+  "env": ["AWS_ENDPOINT_URL"]
 }
 ```

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Stands in for a harness binary behind the Claude Code adapter: no model, and a Claude Code shaped stream.
-// - Given the judge's prompt, it is the judge: it appends its prompt and model to `prompts.jsonl` in $FAKE_JUDGE_DIR
+// - Given the judge's prompt, it is the judge: it appends its prompt and model to `prompts.jsonl` in `judge/` of $FAKE_DIR
 //   and replies with the next unused entry of `replies.json` there.
 // - Given --plugin-dir, it behaves as `behavior.json` in that directory says (a plugin without one is plain).
 // - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
 //   that transcript instead of the behaviour below. Turn n of the script answers the n-th prompt of a session.
-// - It lists the skills installed in its config directory at startup, unless $FAKE_HIDE_SKILLS is set, and loads
+// - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -35,9 +35,7 @@ const prompt = process.argv[process.argv.indexOf("--") + 1];
 const pluginDir = flag("--plugin-dir");
 
 if (prompt.startsWith("Grade one answer")) {
-  const dir =
-    process.env.FAKE_JUDGE_DIR ??
-    path.join(process.env.FAKE_DIR ?? "", "judge");
+  const dir = path.join(process.env.FAKE_DIR ?? "", "judge");
   const replies = JSON.parse(
     fs.readFileSync(path.join(dir, "replies.json"), "utf8"),
   );
@@ -234,7 +232,9 @@ emit({
   plugins: pluginDir
     ? [{ name: "plugin", path: behavior.ghost ? "/nowhere/else" : pluginDir }]
     : [],
-  skills: process.env.FAKE_HIDE_SKILLS ? [] : installed,
+  skills: fs.existsSync(path.join(process.env.FAKE_DIR ?? "", "hide-skills"))
+    ? []
+    : installed,
   ...played?.found.init,
 });
 if (played) {

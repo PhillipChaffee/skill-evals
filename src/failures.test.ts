@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { CONFIG_FILE } from "./project.js";
 import { plugin } from "./testing/plant.js";
 import type { Sandbox } from "./testing/sandbox.js";
 import {
@@ -41,9 +42,13 @@ test("a harness that outlasts the case's timeout is stopped with everything it s
   const heartbeat = path.join(box.root, "heartbeat");
   const env = {
     SKILL_EVALS_BIN_CLAUDE_CODE: fixture("slow-harness.mjs"),
-    SLOW_HEARTBEAT_FILE: heartbeat,
   };
-  const { result, record } = await scored(box, env, { timeoutSeconds: 1 });
+  box.write(CONFIG_FILE, { env: ["SLOW_HEARTBEAT_FILE"] });
+  const { result, record } = await scored(
+    box,
+    { ...env, SLOW_HEARTBEAT_FILE: heartbeat },
+    { timeoutSeconds: 1 },
+  );
 
   expect(result.status).toBe(1);
   expect(record).toMatchObject({

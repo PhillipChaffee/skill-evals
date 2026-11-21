@@ -117,6 +117,7 @@ export async function check(
         // The probe has no judged check and no decision check, so neither model ever runs.
         judge: { harness, bin, model: options.model },
         decision: null,
+        pass: options.env,
         outDir,
       });
       failed ||= invalidReason(record) !== null;

@@ -8,10 +8,9 @@ import { asProcess, sandbox } from "./testing/sandbox.js";
 
 /**
  * Plants one skills folder and one case that it half passes.
- * @param env - Extra environment variables for the harness.
  * @returns The sandbox, and an `evaluate` that finds the harness through the environment, as the CLI does.
  */
-function planted(env: Record<string, string> = {}) {
+function planted() {
   const box = sandbox();
   box.write("mine/greet/SKILL.md", "Say hello.\n");
   box.write("evals/cases/hello/prompt.md", "use greet to say hello\n");
@@ -22,7 +21,7 @@ function planted(env: Record<string, string> = {}) {
     ],
   });
   const run = (options: Omit<Parameters<typeof evaluate>[0], "cwd">) =>
-    asProcess({ env: { ...box.env, ...env }, cwd: "/" }, () =>
+    asProcess({ env: box.env, cwd: "/" }, () =>
       evaluate({ cwd: box.root, ...options }),
     );
   return { box, run };
@@ -92,7 +91,8 @@ test("evaluate rejects a wrong option with a UsageError", async () => {
 });
 
 test("evaluate lists the runs that do not count, each with its reason", async () => {
-  const { run } = planted({ FAKE_HIDE_SKILLS: "1" });
+  const { box, run } = planted();
+  box.write("fake/hide-skills", "");
   const { value } = await run({
     subjects: ["mine"],
     reps: 1,

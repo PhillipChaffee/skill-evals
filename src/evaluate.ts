@@ -160,6 +160,7 @@ interface Plan {
   chosen: Located[];
   judgeOf: (located: Located) => Judge;
   decision: DecisionService | null;
+  pass: string[] | undefined;
   cases: Case[];
   reps: number;
   subjects: Subject[];
@@ -174,7 +175,7 @@ interface Plan {
  * @returns The records in the order the runs were made.
  */
 async function runAll(plan: Plan): Promise<RunRecord[]> {
-  const { cases, reps, subjects, model, outDir, decision } = plan;
+  const { cases, reps, subjects, model, outDir, decision, pass } = plan;
   const records: RunRecord[] = [];
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
@@ -189,6 +190,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
             model,
             judge,
             decision,
+            pass,
             outDir,
           };
           const record = await runOnce(run);
@@ -295,6 +297,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
         model: judgeModel,
       }),
       decision,
+      pass: options.env,
       cases,
       reps,
       subjects,

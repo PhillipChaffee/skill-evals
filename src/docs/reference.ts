@@ -182,7 +182,10 @@ A subject is what a run loads: a directory, a git ref of the project, or ${code(
 
 // A config file that sets every key. The tests make sure that it has exactly the keys of CONFIG_KEYS, each with a
 // value of the key's type, and that the tool accepts it.
-export const EXAMPLE_CONFIG: Record<string, string | number | boolean> = {
+export const EXAMPLE_CONFIG: Record<
+  string,
+  string | number | boolean | string[]
+> = {
   cases: "evals/cases",
   harness: "claude-code",
   reps: 3,
@@ -194,6 +197,7 @@ export const EXAMPLE_CONFIG: Record<string, string | number | boolean> = {
   decisionTimeout: 60,
   minScore: 0.8,
   lenient: false,
+  env: ["AWS_ENDPOINT_URL"],
 };
 
 /**
@@ -206,6 +210,11 @@ const flagsOf = (key: string): Flag[] =>
     const spec: FlagSpec = FLAGS[flag];
     return (spec.as ?? flag) === key;
   });
+
+// Keys that no flag sets.
+const CONFIG_ONLY: Record<string, string> = {
+  env: "Exact names of environment variables the harness gets besides the allowlist. A name that starts with `SKILL_EVALS_` or `npm_` is an error.",
+};
 
 const configPage = (): ReferencePage => ({
   file: "reference/config.md",
@@ -226,10 +235,11 @@ ${table(
     type,
     flagsOf(key)
       .map((flag) => code(flagSyntax(flag)))
-      .join(", "),
-    flagsOf(key)
-      .map((flag) => FLAGS[flag].description)
-      .join(" "),
+      .join(", ") || "none",
+    CONFIG_ONLY[key] ??
+      flagsOf(key)
+        .map((flag) => FLAGS[flag].description)
+        .join(" "),
   ]),
 )}
 

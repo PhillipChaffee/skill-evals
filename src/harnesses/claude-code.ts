@@ -1,6 +1,13 @@
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
-import { jsonLines, opt, placeSkills, pluginDir, toolCall } from "./shared.js";
+import {
+  ANTHROPIC_ENV,
+  jsonLines,
+  opt,
+  placeSkills,
+  pluginDir,
+  toolCall,
+} from "./shared.js";
 
 const KINDS: Record<string, ToolKind> = {
   Bash: "shell",
@@ -47,6 +54,7 @@ const claudeCode: Harness = {
   id: "claude-code",
   bin: "claude",
   authFiles: [".claude/.credentials.json"],
+  authEnv: ANTHROPIC_ENV,
 
   invocation({ subject, home, prompt, model, maxTurns }) {
     const configDir = path.join(home, ".claude");
