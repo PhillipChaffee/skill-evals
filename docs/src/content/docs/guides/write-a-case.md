@@ -118,7 +118,7 @@ A skipped check changes what the case's score means on that harness, so the repo
 
 A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. The keys `by` and `inputLinesMax` are reserved for later; a matcher that sets one is a load error (`"by" is not yet supported`), never ignored.
 
-`tool_called` takes `min` (default 1) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` counts only calls that one assistant turn issued together, which needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
+`tool_called` takes `min` (default 1) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` requires every matching call to have been issued in one assistant turn, so `min` and `max` count calls that were launched together: two researchers in one message and a third one later fails it, and a matching call with no turn fails it unless it is the only match. It needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
 
 ```json
 {
@@ -130,7 +130,7 @@ A tool check can say how many calls, in what order, and what came first. They al
 }
 ```
 
-`tool_order` takes either a pair or a sequence. The pair, `before` and `after`, passes when the chosen `before` call comes earlier than the chosen `after` call. Each side is a matcher with `which`, `"first"` (the default) or `"last"`. This one says a failing run of the tests came before the first source edit, and that the tests ran again after the last edit:
+`tool_order` takes either a pair or a sequence. The pair, `before` and `after`, passes when the chosen `before` call comes earlier than the chosen `after` call. Each side is a matcher with `which`, `"first"` (the default) or `"last"`. These two say that a run of the tests came before the first source edit, and that the tests ran again after the last edit. They do not say the first run failed: reading a tool's output arrives with the transcript checks (item 4):
 
 ```json
 {

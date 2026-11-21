@@ -26,8 +26,7 @@ import { configMeaning } from "./reference.js";
 //
 // Where the schemas are looser than the loader: a `prompt` or `promptAppend` of only whitespace, a `flags` text that
 // is not valid flags, a regular expression that does not compile, a repeated variant id, an `options` answer with
-// an empty name, a `tool_order` that gives `sequence` with one of `before` and `after`, a `min` above `max`, and an `ignoring` without
-// `first`, pass the schema and fail to load.
+// an empty name, a `tool_order` that gives `sequence` with one of `before` and `after`, and a `min` above `max`, pass the schema and fail to load.
 
 /** A JSON Schema, or a part of one. */
 type Schema = Record<string, unknown>;
@@ -163,6 +162,7 @@ function checkSchema(type: string): Schema {
     ...(spec?.oneOf && {
       anyOf: spec.oneOf.map((field) => ({ required: [field] })),
     }),
+    ...(spec?.together && { dependentRequired: spec.together }),
     ...(spec?.forms && {
       oneOf: spec.forms.map((form) => ({ required: form })),
     }),

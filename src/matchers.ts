@@ -93,21 +93,78 @@ registerParser("matcher", (value, at) =>
 );
 registerParser("matchers", parseMatchers);
 
+/** A matcher with the end of the matching calls that counts, for `before` and `after`. */
+export type EndMatcher = ToolMatcher & { which?: "first" | "last" };
+
+// The input of each call as JSON, written once however many checks and matchers look at it.
+const INPUT_JSON = new WeakMap<ToolCall, string>();
+const inputJson = (call: ToolCall): string => {
+  let text = INPUT_JSON.get(call);
+  if (text === undefined) {
+    text = JSON.stringify(call.input ?? null);
+    INPUT_JSON.set(call, text);
+  }
+  return text;
+};
+
+// A pattern that tests a text. `g` and `y` flags stay legal, so the position is reset before each test.
+const tester = (
+  pattern: string | undefined,
+  flags: string | undefined,
+): ((text: string) => boolean) => {
+  if (pattern === undefined) return () => true;
+  const expression = regex(pattern, flags);
+  return (text) => {
+    expression.lastIndex = 0;
+    return expression.test(text);
+  };
+};
+
+/**
+ * Compiles a matcher once, for a check that tests many calls.
+ * @param matcher - What a call must be.
+ * @returns A test of one call: true when every key the matcher sets fits. The kind is equal, and the patterns,
+ *   compiled with the matcher's own flags, find a match in the tool name and in the input written as JSON.
+ */
+function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
+  const name = tester(matcher.name, matcher.flags);
+  const input = tester(matcher.inputMatches, matcher.flags);
+  return (call) =>
+    (matcher.kind === undefined || call.kind === matcher.kind) &&
+    name(call.name) &&
+    input(inputJson(call));
+}
+
 /**
  * Tells whether a call fits a matcher.
  * @param matcher - What the call must be.
  * @param call - A tool call of the run.
- * @returns True when every key the matcher sets fits: the kind is equal, and the patterns, compiled with the
- *   matcher's own flags, find a match in the tool name and in the input written as JSON.
+ * @returns True when the call fits every key the matcher sets.
  */
 export const matches = (matcher: ToolMatcher, call: ToolCall): boolean =>
-  (matcher.kind === undefined || call.kind === matcher.kind) &&
-  (matcher.name === undefined ||
-    regex(matcher.name, matcher.flags).test(call.name)) &&
-  (matcher.inputMatches === undefined ||
-    regex(matcher.inputMatches, matcher.flags).test(
-      JSON.stringify(call.input ?? null),
-    ));
+  compileMatcher(matcher)(call);
+
+/**
+ * Finds the calls that fit a matcher.
+ * @param all - Every tool call of the run.
+ * @param matcher - What a call must be.
+ * @returns The positions of the matching calls, in order.
+ */
+export function hitsOf(all: ToolCall[], matcher: ToolMatcher): number[] {
+  const fits = compileMatcher(matcher);
+  return all.flatMap((call, at) => (fits(call) ? [at] : []));
+}
+
+/**
+ * Finds the first call that no matcher of a list ignores.
+ * @param all - Every tool call of the run.
+ * @param ignoring - The calls to drop.
+ * @returns Its position, or -1 when every call is ignored or there is none.
+ */
+export function firstOutside(all: ToolCall[], ignoring: ToolMatcher[]): number {
+  const skipped = ignoring.map(compileMatcher);
+  return all.findIndex((call) => !skipped.some((fits) => fits(call)));
+}
 
 /**
  * Writes a matcher the way a reason names it.

@@ -1,15 +1,21 @@
 import type { ToolCall } from "../harnesses/shared.js";
 import type { ToolMatcher } from "../matchers.js";
-import { describeMatcher, matches, quoteCalls } from "../matchers.js";
+import {
+  describeMatcher,
+  firstOutside,
+  hitsOf,
+  matches,
+  quoteCalls,
+} from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import { PASS } from "./rules.js";
 
 const TOOL_FIELDS = {
   optional: ["kind", "name", "inputMatches", "flags"],
   oneOf: ["kind", "name"],
 } satisfies Partial<Spec>;
 
-const PASS: Verdict = { score: 1 };
 const calls = (n: number): string =>
   `${String(n)} matching ${n === 1 ? "call" : "calls"}`;
 
@@ -38,9 +44,7 @@ function firstCallFits(
   matcher: ToolMatcher,
   ignoring: ToolMatcher[],
 ): Verdict {
-  const at = all.findIndex(
-    (call) => !ignoring.some((one) => matches(one, call)),
-  );
+  const at = firstOutside(all, ignoring);
   if (at < 0) {
     return {
       score: 0,
@@ -55,18 +59,20 @@ function firstCallFits(
 }
 
 /**
- * Finds the most matching calls that one turn issued.
+ * Tells whether the matching calls were all issued in one assistant turn.
  * @param all - Every tool call of the run.
  * @param hits - The positions of the matching calls.
- * @returns The largest group of matching calls with one turn; a call with no turn is a turn of its own.
+ * @returns Null when they were, or when there is at most one; else the position of the first call that is in another
+ *   turn than the first match, or has no turn and so cannot be shown to share it.
  */
-function mostInOneTurn(all: ToolCall[], hits: number[]): number {
-  const perTurn = new Map<string, number>();
-  for (const at of hits) {
-    const key = String(all[at]?.turn ?? `call ${String(at)}`);
-    perTurn.set(key, (perTurn.get(key) ?? 0) + 1);
-  }
-  return Math.max(0, ...perTurn.values());
+function straggler(all: ToolCall[], hits: number[]): number | null {
+  const [head] = hits;
+  if (head === undefined) return null;
+  const turn = all[head]?.turn;
+  return (
+    hits.slice(1).find((at) => turn === undefined || all[at]?.turn !== turn) ??
+    null
+  );
 }
 
 /**
@@ -90,11 +96,18 @@ function counted(
     const first = firstCallFits(all, matcher, []);
     if (first.score === 0) return first;
   }
-  const hits = all.flatMap((call, at) => (matches(matcher, call) ? [at] : []));
-  const sameTurn = check.sameTurn === true;
-  const count = sameTurn ? mostInOneTurn(all, hits) : hits.length;
+  const hits = hitsOf(all, matcher);
+  const apart = check.sameTurn ? straggler(all, hits) : null;
+  if (apart !== null) {
+    const turn = (at: number): string => String(all[at]?.turn ?? "unknown");
+    return {
+      score: 0,
+      reason: `the matching calls were not all issued in one turn: call #${String(apart)} is in turn ${turn(apart)}, call #${String(hits[0])} in turn ${turn(hits[0] ?? 0)}, for ${describeMatcher(matcher)}\n${quoteCalls(all, [apart])}`,
+    };
+  }
+  const count = hits.length;
   if (count >= min && count <= max) return PASS;
-  const found = sameTurn ? `at most ${calls(count)} in one turn` : calls(count);
+  const found = calls(count);
   const bound = count < min ? `min ${String(min)}` : `max ${String(max)}`;
   return {
     score: 0,
@@ -124,9 +137,10 @@ export const TOOL_CHECKS = {
     ...TOOL_FIELDS,
     optional: [...TOOL_FIELDS.optional, "min", "max", "sameTurn", "first"],
     scores:
-      "The agent made tool calls that fit every given field, and their number is from `min` to `max`.",
+      "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn.",
     note: "A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
     needs: (check) => (check.sameTurn ? ["turnGrouping"] : []),
+    notYet: ["by", "inputLinesMax"],
     validate: checkBounds,
     rule: (check, outcome) =>
       counted(check, outcome, {
@@ -137,6 +151,7 @@ export const TOOL_CHECKS = {
   tool_not_called: {
     fields: [],
     ...TOOL_FIELDS,
+    notYet: ["by", "inputLinesMax"],
     scores: "The agent made no tool call that fits every given field.",
     rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
   },

@@ -1,11 +1,10 @@
-import type { ToolMatcher } from "../matchers.js";
-import { matches, quoteCalls } from "../matchers.js";
+import { firstOutside, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { SkillLoad } from "../skill-loads.js";
 import { skillLoads } from "../skill-loads.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import { PASS } from "./rules.js";
 
-const PASS: Verdict = { score: 1 };
 const positions = (loads: SkillLoad[]): number[] =>
   loads.map(({ index }) => index);
 const list = (words: string[]): string => words.join(", ");
@@ -33,10 +32,7 @@ function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
       reason: `the first skill load is "${first.skill}" (call #${String(first.index)}), not ${names.length === 1 ? `"${list(names)}"` : `one of ${list(names)}`}\n${quoteCalls(all, [first.index])}`,
     };
   }
-  const ignoring: ToolMatcher[] = check.ignoring ?? [];
-  const before = all
-    .slice(0, first.index)
-    .findIndex((call) => !ignoring.some((one) => matches(one, call)));
+  const before = firstOutside(all.slice(0, first.index), check.ignoring ?? []);
   if (before < 0) return PASS;
   return {
     score: 0,
@@ -93,6 +89,7 @@ export const SKILL_CHECKS = {
   skill_loaded: {
     fields: [],
     forms: [["skill"], ["anyOf"]],
+    together: { ignoring: ["first"] },
     optional: ["skill", "anyOf", "first", "ignoring"],
     scores: "The agent loaded that skill, or any of the skills in `anyOf`.",
     note: "With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, because calls cannot yet be told apart by the agent that made them. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`.",

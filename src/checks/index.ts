@@ -1,20 +1,18 @@
 import type { Capability, Need } from "../capabilities.js";
 import type { ToolCall, ToolKind } from "../harnesses/shared.js";
-import type { ToolMatcher } from "../matchers.js";
+import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
 import { UsageError } from "../scope.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
 import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
+import { describeCalls } from "./describe.js";
 import { extensionsOf } from "./extensions.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
 import { ORDER_CHECKS } from "./order.js";
 import { SKILL_CHECKS } from "./skills.js";
 import { TOOL_CHECKS } from "./tools.js";
-
-/** A matcher with the end of the matching calls that counts, for `before` and `after`. */
-export type EndMatcher = ToolMatcher & { which?: "first" | "last" };
 
 /** The fields a check may carry beside its type and weight; which ones it takes depends on the type. */
 interface CheckFields {
@@ -105,6 +103,10 @@ export interface Spec {
   /** One more sentence about the fields, for what the lists above cannot say. */
   note?: string;
   rule?: Rule;
+  /** Fields that may only be given with others: field to the fields it needs. The JSON Schema says so. */
+  together?: Record<string, string[]>;
+  /** Keys of the matcher shape that no check can use yet: naming one is a load error in every mode, never dropped. */
+  notYet?: string[];
   /**
    * Sets of fields of which exactly one set is given, for a check with more than one form. The JSON Schema says so;
    * `validate` gives the loader's message.
@@ -231,6 +233,10 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
       `${where}: unknown check type ${JSON.stringify(type)}; known: ${Object.keys(CHECKS).join(", ")}`,
     );
   }
+  const unsupported = (spec.notYet ?? []).find((key) => key in record);
+  if (unsupported) {
+    throw new UsageError(`${where}: "${unsupported}" is not yet supported`);
+  }
   const optional = (spec.optional ?? []).filter(
     (field) => record[field] !== undefined,
   );
@@ -301,6 +307,7 @@ export function describeCheck(check: Check): string {
     ...quoted,
     ...answers,
     ...patterns,
+    ...describeCalls(check),
     ...weight,
   ]
     .filter(Boolean)

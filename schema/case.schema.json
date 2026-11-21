@@ -306,6 +306,7 @@
           "enum": ["skip", "not-applicable"]
         }
       },
+      "dependentRequired": { "ignoring": ["first"] },
       "oneOf": [{ "required": ["skill"] }, { "required": ["anyOf"] }],
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
@@ -618,7 +619,7 @@
     },
     "check-tool_called": {
       "title": "tool_called",
-      "description": "The agent made tool calls that fit every given field, and their number is from `min` to `max`. A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
+      "description": "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn. A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
       "type": "object",
       "required": ["type"],
       "properties": {
@@ -679,7 +680,7 @@
         },
         "sameTurn": {
           "title": "sameTurn",
-          "description": "True to count only calls that one assistant turn issued together: the largest such group is the count. Needs a harness with `turnGrouping`. Default: false.",
+          "description": "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`. Default: false.",
           "type": "boolean"
         },
         "first": {
@@ -1101,6 +1102,7 @@
           "enum": ["skip", "not-applicable"]
         }
       },
+      "dependentRequired": { "strict": ["sequence"] },
       "oneOf": [
         { "required": ["before", "after"] },
         { "required": ["sequence"] }

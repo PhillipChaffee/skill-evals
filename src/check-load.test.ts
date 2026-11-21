@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { plantCase } from "./testing/plant.js";
+import { plantCase, script, skillsFolder } from "./testing/plant.js";
+import { scoreSubject } from "./testing/runs.js";
 import { sandbox } from "./testing/sandbox.js";
 
 const ORDER = "tool_order";
@@ -76,6 +77,16 @@ const BAD: [string, unknown, RegExp][] = [
     /"ignoring" only applies with "first"/,
   ],
   [
+    "a check-level by on tool_called",
+    { type: CALLED, kind: "edit", by: {} },
+    /"by" is not yet supported/,
+  ],
+  [
+    "a check-level inputLinesMax on tool_not_called",
+    { type: "tool_not_called", kind: "edit", inputLinesMax: 2 },
+    /"inputLinesMax" is not yet supported/,
+  ],
+  [
     "a matcher that names nothing",
     { type: "first_tool", matches: { flags: "i" } },
     /needs at least one of "kind", "name", "inputMatches"/,
@@ -88,4 +99,33 @@ test.each(BAD)("%s is a load error", async (_what, check, message) => {
   const ran = await box.cli(["score", "--subject", "none", "--cases", cases]);
   expect(ran.status).toBe(2);
   expect(ran.stderr).toMatch(message);
+});
+
+test("a key that is not yet supported is an error under --lenient too, never dropped with a warning", async () => {
+  const box = sandbox();
+  const cases = plantCase(box, [{ type: CALLED, kind: "edit", by: {} }]);
+  const ran = await box.cli([
+    ...["score", "--subject", "none", "--cases", cases, "--lenient"],
+  ]);
+  expect(ran.status).toBe(2);
+  expect(ran.stderr).toMatch(/"by" is not yet supported/);
+  expect(ran.stderr).not.toMatch(/ignored unknown key/);
+});
+
+const shell = (command: string) => ({
+  call: { name: "Bash", input: { command } },
+});
+
+test("every call of a run gets its index, and a new record counts from 0", async () => {
+  const box = sandbox();
+  script(box, "run", {
+    turns: [[shell("ls"), shell("z"), { parallel: [shell("x"), shell("y")] }]],
+  });
+  const ran = await scoreSubject(box, {
+    subject: skillsFolder(box, "skills", { bro: "# bro\n" }),
+    cases: plantCase(box, [{ type: "tool_called", kind: "shell" }]),
+  });
+  expect(ran.records[0]?.toolCalls.map((call) => call.index)).toEqual([
+    0, 1, 2, 3,
+  ]);
 });

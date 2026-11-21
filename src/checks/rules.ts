@@ -1,4 +1,7 @@
-import type { Field, Rule, Spec, Test, With } from "./index.js";
+import type { Field, Rule, Spec, Test, Verdict, With } from "./index.js";
+
+/** The verdict of a check that holds. */
+export const PASS: Verdict = { score: 1 };
 
 /**
  * Compiles a pattern of a check.

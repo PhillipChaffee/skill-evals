@@ -29,7 +29,7 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   sameTurn: {
     type: "bool",
     meaning:
-      "True to count only calls that one assistant turn issued together: the largest such group is the count. Needs a harness with `turnGrouping`. Default: false.",
+      "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`. Default: false.",
   },
   first: {
     type: "bool",

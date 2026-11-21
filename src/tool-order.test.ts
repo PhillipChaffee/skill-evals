@@ -176,7 +176,11 @@ test("two researchers in one turn, then one synthesizer, none after", async () =
   const ok = await scored(TWO_THEN_ONE, checks);
   expect(ok.map((one) => one.score)).toEqual([1, 1, 1]);
   const late = await scored([...TWO_THEN_ONE, agent("researcher")], checks);
-  expect(late.map((one) => one.score)).toEqual([1, 1, 0]);
+  expect(late.map((one) => one.score)).toEqual([0, 1, 0]);
+  expect(late[0]?.reason).toMatch(
+    /not all issued in one turn: call #3 is in turn 3, call #0 in turn 1/,
+  );
+  expect(late[0]?.reason).toContain("#3 t3 main subagent Agent");
   expect(late[2]?.reason).toMatch(
     /sequence\[0\] matches call #3 after call #2/,
   );
@@ -185,9 +189,23 @@ test("two researchers in one turn, then one synthesizer, none after", async () =
     checks,
   );
   expect(apart[0]?.score).toBe(0);
-  expect(apart[0]?.reason).toMatch(
-    /at most 1 matching call in one turn, min 2/,
+  expect(apart[0]?.reason).toMatch(/not all issued in one turn: call #1/);
+  const short = await scored([agent("researcher")], checks);
+  expect(short[0]?.reason).toMatch(/1 matching call, min 2/);
+});
+
+test("a straggler researcher outside the launch turn fails sameTurn with min 2", async () => {
+  const [verdict] = await scored(
+    [
+      { parallel: [agent("researcher"), agent("researcher")] },
+      agent("researcher"),
+      agent("synthesizer"),
+    ],
+    [{ type: "tool_called", ...RESEARCHER, min: 2, sameTurn: true }],
   );
+  expect(verdict?.score).toBe(0);
+  expect(verdict?.reason).toMatch(/call #2 is in turn 2, call #0 in turn 1/);
+  expect(verdict?.reason).toContain("#2 t2 main subagent Agent");
 });
 
 test("a sequence that is not strict allows repeats and fails when a step is missing or out of order", async () => {
@@ -241,28 +259,36 @@ test("tool_not_called keeps its 0.0.1 meaning and a tool_called with no min stil
   expect(results[2]?.reason).toMatch(/1 matching call, max 0/);
 });
 
-test("a matcher's flags apply to its own fields, and a check's flags to the check's own", async () => {
-  const results = await scored(
-    [bash("NPM TEST")],
-    [
-      {
-        type: "tool_order",
-        before: { kind: "shell", inputMatches: "npm test", flags: "i" },
-        after: { kind: "shell", inputMatches: "npm test", flags: "i" },
-      },
-      {
-        type: "tool_order",
-        sequence: [{ kind: "shell", inputMatches: "npm test" }],
-      },
-      {
-        type: "tool_called",
-        kind: "shell",
-        inputMatches: "npm test",
-        flags: "i",
-      },
-    ],
-  );
-  expect(results.map((one) => one.score)).toEqual([0, 0, 1]);
+test("a matcher's flags apply to its own fields only, and a check's flags to the check's own", async () => {
+  const upper = [bash("NPM TEST"), edit("src/A.ts")];
+  const results = await scored(upper, [
+    {
+      type: "tool_order",
+      before: { ...NPM_TEST, flags: "i" },
+      after: { kind: "edit", inputMatches: "src/A" },
+    },
+    {
+      type: "tool_order",
+      before: { kind: "shell", inputMatches: "npm test" },
+      after: { kind: "edit", inputMatches: "src/a", flags: "i" },
+    },
+    {
+      type: "tool_order",
+      sequence: [
+        { ...NPM_TEST, flags: "i" },
+        { kind: "edit", inputMatches: "SRC/A" },
+      ],
+    },
+    {
+      type: "tool_called",
+      kind: "shell",
+      inputMatches: "npm test",
+      flags: "i",
+    },
+    { type: "tool_called", kind: "shell", inputMatches: "npm test" },
+  ]);
+  // Each flag applies to its own matcher: the first pair needs "i" on the shell side only, and the others lack it.
+  expect(results.map((one) => one.score)).toEqual([1, 0, 0, 1, 0]);
 });
 
 test("sameTurn on a harness without turn grouping makes the case not applicable", async () => {

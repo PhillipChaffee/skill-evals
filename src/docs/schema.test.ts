@@ -171,6 +171,31 @@ const MATCHER_BODIES: Json[] = [
   { checks: [{ type: "tool_order", sequence: [] }] },
   { checks: [{ type: "tool_order", sequence: [{ kind: "edit" }], strict: 1 }] },
   { checks: [{ type: "tool_order", before: { kind: "edit" } }] },
+  {
+    checks: [
+      {
+        type: "tool_order",
+        before: { kind: "edit" },
+        after: { kind: "read" },
+        strict: true,
+      },
+    ],
+  },
+  {
+    checks: [
+      { type: "skill_loaded", skill: "a", ignoring: [{ kind: "read" }] },
+    ],
+  },
+  {
+    checks: [
+      {
+        type: "skill_loaded",
+        skill: "a",
+        first: true,
+        ignoring: [{ kind: "read" }],
+      },
+    ],
+  },
   { checks: [{ type: "tool_called", kind: "edit", min: -1 }] },
   { checks: [{ type: "skill_loaded", anyOf: ["a", "b"], first: true }] },
   { checks: [{ type: "skill_loaded", anyOf: [] }] },
@@ -248,11 +273,6 @@ test("the schema is looser than the loader for a whitespace-only prompt, and the
       ],
     },
     { checks: [{ type: "tool_called", kind: "edit", min: 2, max: 0 }] },
-    {
-      checks: [
-        { type: "skill_loaded", skill: "a", ignoring: [{ kind: "read" }] },
-      ],
-    },
   ];
   for (const body of gaps) {
     expect(problems(body), JSON.stringify(body)).toEqual([]);

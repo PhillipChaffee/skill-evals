@@ -1,14 +1,9 @@
 import type { ToolCall } from "../harnesses/shared.js";
-import type { ToolMatcher } from "../matchers.js";
-import { describeMatcher, matches, quoteCalls } from "../matchers.js";
+import type { EndMatcher, ToolMatcher } from "../matchers.js";
+import { describeMatcher, hitsOf, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
-import type { EndMatcher, Spec, Verdict } from "./index.js";
-
-const PASS: Verdict = { score: 1 };
-
-// The positions of the calls that fit a matcher.
-const hitsOf = (all: ToolCall[], matcher: ToolMatcher): number[] =>
-  all.flatMap((call, at) => (matches(matcher, call) ? [at] : []));
+import type { Spec, Verdict } from "./index.js";
+import { PASS } from "./rules.js";
 
 /**
  * Scores the pair form: one end of the `before` calls comes before one end of the `after` calls.
@@ -49,19 +44,19 @@ function inPair(
  * Finds the first match of each matcher of a sequence, each after the one before it.
  * @param all - Every tool call of the run.
  * @param sequence - The matchers, in order.
+ * @param hits - The positions of the calls that fit each matcher.
  * @returns The positions, or the verdict of the matcher that matches no call after the one before it.
  */
 function firstMatches(
   all: ToolCall[],
   sequence: ToolMatcher[],
+  hits: number[][],
 ): number[] | Verdict {
   const firsts: number[] = [];
   for (const [step, matcher] of sequence.entries()) {
     const after = firsts.at(-1) ?? -1;
-    const at = all.findIndex(
-      (call, position) => position > after && matches(matcher, call),
-    );
-    if (at < 0) {
+    const at = hits[step]?.find((position) => position > after);
+    if (at === undefined) {
       const when = step === 0 ? "" : ` after call #${String(after)}`;
       return {
         score: 0,
@@ -73,28 +68,31 @@ function firstMatches(
   return firsts;
 }
 
+/** A call that breaks the order of a strict sequence, and what it breaks. */
+interface Disorder {
+  reason: string;
+  /** The position of the offending call. */
+  at: number;
+}
+
 /**
  * Finds a call that breaks the order of a strict sequence.
- * @param all - Every tool call of the run.
- * @param sequence - The matchers, in order.
+ * @param hits - The positions of the calls that fit each matcher.
  * @param firsts - The first match of each.
- * @returns The reason, or null when no call breaks the order.
+ * @returns The first call that does, or null when none does.
  */
-function disorder(
-  all: ToolCall[],
-  sequence: ToolMatcher[],
-  firsts: number[],
-): string | null {
-  for (const [early, earlier] of sequence.entries()) {
-    for (const [offset, later] of sequence.slice(early + 1).entries()) {
-      const step = early + 1 + offset;
-      const before = hitsOf(all, later).find((at) => at < (firsts[early] ?? 0));
+function disorder(hits: number[][], firsts: number[]): Disorder | null {
+  for (let early = 0; early < hits.length; early++) {
+    for (let step = early + 1; step < hits.length; step++) {
+      const before = hits[step]?.find((at) => at < (firsts[early] ?? 0));
       if (before !== undefined) {
-        return `sequence[${String(step)}] matches call #${String(before)} before call #${String(firsts[early])}`;
+        const reason = `sequence[${String(step)}] matches call #${String(before)} before call #${String(firsts[early])}`;
+        return { reason, at: before };
       }
-      const after = hitsOf(all, earlier).find((at) => at > (firsts[step] ?? 0));
+      const after = hits[early]?.find((at) => at > (firsts[step] ?? 0));
       if (after !== undefined) {
-        return `sequence[${String(early)}] matches call #${String(after)} after call #${String(firsts[step])}`;
+        const reason = `sequence[${String(early)}] matches call #${String(after)} after call #${String(firsts[step])}`;
+        return { reason, at: after };
       }
     }
   }
@@ -113,11 +111,15 @@ function inSequence(
   sequence: ToolMatcher[],
   strict: boolean,
 ): Verdict {
-  const firsts = firstMatches(all, sequence);
+  const hits = sequence.map((matcher) => hitsOf(all, matcher));
+  const firsts = firstMatches(all, sequence, hits);
   if (!Array.isArray(firsts)) return firsts;
-  const broken = strict ? disorder(all, sequence, firsts) : null;
+  const broken = strict ? disorder(hits, firsts) : null;
   if (broken === null) return PASS;
-  return { score: 0, reason: `${broken}\n${quoteCalls(all, firsts)}` };
+  return {
+    score: 0,
+    reason: `${broken.reason}\n${quoteCalls(all, [...firsts, broken.at])}`,
+  };
 }
 
 /**
@@ -148,6 +150,7 @@ export const ORDER_CHECKS = {
   tool_order: {
     fields: [],
     forms: [["before", "after"], ["sequence"]],
+    together: { strict: ["sequence"] },
     optional: ["before", "after", "sequence", "strict"],
     scores:
       "The calls come in the order given: with `before` and `after`, the chosen `before` call is earlier than the chosen `after` call; with `sequence`, the matchers match calls in that order.",
