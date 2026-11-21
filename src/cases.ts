@@ -20,6 +20,8 @@ export interface Case {
 }
 
 const DEFAULT_TIMEOUT_SECONDS = 600;
+// A question with one allowed answer decides nothing.
+const MIN_OPTIONS = 2;
 
 /** A value parsed from a case file, before it is known to be an object. */
 type Raw = Partial<Record<string, unknown>> | null | undefined;
@@ -107,6 +109,45 @@ function requireUsable(
 }
 
 /**
+ * Reads the answers a decision check allows.
+ * @param raw - The parsed check.
+ * @param expect - Its `expect`, which is already known to be text when it is set.
+ * @param where - Names the file and the check in an error message.
+ * @returns The `options` of the check; nothing for a yes or no question, which `expect` scores.
+ * @throws {UsageError} Unless exactly one of `expect` and `options` is set, `expect` is "yes" or "no", and `options`
+ *   is an object of at least two named answers, each worth a number from 0 to 1.
+ */
+function readAnswers(
+  raw: NonNullable<Raw>,
+  expect: string | undefined,
+  where: string,
+): { options?: Record<string, number> } {
+  const options = raw["options"];
+  if ((expect === undefined) === (options === undefined)) {
+    throw new UsageError(
+      `${where}: decision needs exactly one of "expect" and "options"`,
+    );
+  }
+  if (expect !== undefined) {
+    if (expect === "yes" || expect === "no") return {};
+    throw new UsageError(`${where}: "expect" must be "yes" or "no"`);
+  }
+  const entries =
+    options !== null && typeof options === "object" && !Array.isArray(options)
+      ? Object.entries(options)
+      : [];
+  if (
+    entries.length < MIN_OPTIONS ||
+    !entries.every(([label, value]) => label !== "" && isUnitScore(value))
+  ) {
+    throw new UsageError(
+      `${where}: "options" must be an object of at least two named answers, each with a number from 0 to 1`,
+    );
+  }
+  return { options: Object.fromEntries(entries) };
+}
+
+/**
  * Validates one check of a case file.
  * @param raw - The parsed check.
  * @param where - Names the file and the check in an error message.
@@ -127,8 +168,10 @@ function parseCheck(raw: Raw, where: string): Check {
   const weight = weightOf(raw, where);
   const given = readFields(raw, spec, where);
   requireUsable(given, where);
-  // The three steps above checked the type, the fields it requires, and the tool kind.
-  return { type, weight, ...given } as Check;
+  const answers =
+    type === "decision" ? readAnswers(raw, given.expect, where) : {};
+  // The steps above checked the type, the fields it requires, the tool kind, and the answers of a decision.
+  return { type, weight, ...given, ...answers } as Check;
 }
 
 /**
