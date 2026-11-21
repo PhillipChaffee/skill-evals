@@ -120,7 +120,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
     pi: ["scripted", ["isolated"]],
     "claude-code": [
       "real-model",
-      ["subagents", "childCalls", "loadedReport", "skillListing"],
+      ["subagents", "childCalls", "loadedReport", "skillListing", "isolated"],
     ],
     cursor: ["unverified", ["subagents"]],
     opencode: ["scripted", ["subagents"]],

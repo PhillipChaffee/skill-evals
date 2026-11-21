@@ -4,6 +4,7 @@ import path from "node:path";
 import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
+import { NOT_REPORTED } from "./harnesses/shared.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { ChangedFiles } from "./snapshot.js";
@@ -18,6 +19,8 @@ export interface SessionInput {
   prompt: string;
   model?: string | undefined;
   maxTurns?: number | undefined;
+  /** Start the harness with nothing loaded but the subject. */
+  isolated?: boolean | undefined;
   timeoutSeconds: number;
   /** Copied into the workspace before the harness starts. */
   workspaceDir?: string | null;
@@ -157,7 +160,7 @@ function parseStream(harness: Harness, stdout: string): Parsed {
       toolCalls: [],
       tokens: null,
       costUsd: null,
-      loaded: { paths: null, skills: null },
+      loaded: NOT_REPORTED,
       error: `the ${harness.id} adapter could not read the stream: ${messageOf(error)}`,
     };
   }
@@ -174,6 +177,7 @@ export async function session<T>(
   use: (result: SessionResult) => T | Promise<T>,
 ): Promise<T> {
   const { harness, subject, prompt, model, maxTurns, workspaceDir } = run;
+  const { isolated } = run;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
   try {
@@ -188,6 +192,7 @@ export async function session<T>(
       prompt,
       model,
       maxTurns,
+      isolated,
     };
     const { stdout, failure, durationMs, placedChanges } = await attempt(
       run,

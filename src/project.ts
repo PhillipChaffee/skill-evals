@@ -47,6 +47,7 @@ export const CONFIG_KEYS: Record<
   decisionTimeout: "number",
   minScore: "number",
   lenient: "boolean",
+  isolated: "boolean",
   env: "string[]",
   subjectExclude: "string[]",
 };
@@ -64,6 +65,8 @@ export interface Config {
   decisionTimeout?: number;
   minScore?: number;
   lenient?: boolean;
+  /** Start every run with nothing loaded but the subject, and invalidate a run that loaded anything else. */
+  isolated?: boolean;
   /** Exact names of variables of this process that the harness gets besides the allowlist. */
   env?: string[];
   /** Globs, relative to the subject, of paths that a run never gets: they are left out of its copy. */

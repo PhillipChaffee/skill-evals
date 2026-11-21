@@ -106,7 +106,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `mcp`           | no   | no            | no       | no         | no      |
 | `skillListing`  | no   | yes           | no       | no         | no      |
 | `loadedReport`  | no   | yes           | no       | no         | no      |
-| `isolated`      | yes  | no            | no       | no         | no      |
+| `isolated`      | yes  | yes           | no       | no         | no      |
 | `sandbox`       | no   | no            | no       | no         | no      |
 
 | Harness       | Status       | What the status says                                                                       |

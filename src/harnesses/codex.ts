@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  NOT_REPORTED,
   OPENAI_ENV,
   jsonLines,
   opt,
@@ -122,7 +123,7 @@ const codex: Harness = {
         usages.map((u) => ({ input: u.input_tokens, output: u.output_tokens })),
       ),
       costUsd: null,
-      loaded: { paths: null, skills: null },
+      loaded: NOT_REPORTED,
       error: failed ? failed.error?.message || "turn failed" : unfinished,
     };
   },

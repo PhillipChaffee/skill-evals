@@ -69,6 +69,8 @@ interface InitEvent {
   model: string;
   plugins: { name: string; path: string }[];
   skills: string[];
+  agents: string[];
+  mcp_servers: { name: string }[];
   tools: string[];
 }
 

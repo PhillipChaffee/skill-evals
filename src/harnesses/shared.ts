@@ -36,14 +36,39 @@ export interface Tokens {
   output: number;
 }
 
+/** What a harness says it loaded at startup. Null means the harness does not report that kind of thing. */
+export interface Loaded {
+  /** The directories of its plugins. */
+  paths: string[] | null;
+  /** The names of its skills, without any plugin prefix. */
+  skills: string[] | null;
+  agents: string[] | null;
+  rules: string[] | null;
+  hooks: string[] | null;
+  mcpServers: string[] | null;
+  /** The skill names as the harness listed them, with any plugin prefix, for an adapter that has one. */
+  rawSkills?: string[] | null;
+  /** The plugins with their names, for an adapter that reports them. */
+  plugins?: { name: string; path: string }[] | null;
+}
+
+/** What a harness that reports nothing about its startup gives. */
+export const NOT_REPORTED: Loaded = {
+  paths: null,
+  skills: null,
+  agents: null,
+  rules: null,
+  hooks: null,
+  mcpServers: null,
+};
+
 /** A harness's output stream in the one shape every harness shares. Null means the harness does not report the field. */
 export interface Parsed {
   finalText: string;
   toolCalls: ToolCall[];
   tokens: Tokens | null;
   costUsd: number | null;
-  /** What the harness says it loaded at startup: the directories of its plugins and the names of its skills. */
-  loaded: { paths: string[] | null; skills: string[] | null };
+  loaded: Loaded;
   error: string | null;
 }
 
@@ -75,6 +100,8 @@ export interface RunInput {
   prompt: string;
   model?: string | undefined;
   maxTurns?: number | undefined;
+  /** Start with nothing loaded but the subject. Only an adapter with the `isolated` capability is given true. */
+  isolated?: boolean | undefined;
 }
 
 /** The variables that log in to Anthropic's API, to Bedrock and to Vertex. Names are exact, never a prefix. */
@@ -110,7 +137,80 @@ export interface Harness {
   invocation: (input: RunInput) => Invocation;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
+  /**
+   * Names what the harness reported that does not come from the subject, for a harness whose report needs more than
+   * the shared rule. Absent: `foreignDefault`.
+   */
+  foreign?: (loaded: Loaded, subject: LoadedSubject | null) => string[];
 }
+
+/**
+ * Compares two paths that may reach one directory through different symlinks.
+ * @param x - A path, which need not exist.
+ * @param y - Another path.
+ * @returns True when both resolve to the same real path.
+ */
+export function samePath(x: string, y: string): boolean {
+  const real = (p: string): string => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  return real(x) === real(y);
+}
+
+/**
+ * Lists the reported plugin paths that are not the subject's copy.
+ * @param loaded - What the harness reported.
+ * @param subject - What the run loaded.
+ * @returns The paths, as reported. Only a plugin subject has a path of its own.
+ */
+export const foreignPaths = (
+  loaded: Loaded,
+  subject: LoadedSubject | null,
+): string[] =>
+  (loaded.paths ?? []).filter(
+    (reported) =>
+      !(subject?.kind === "plugin" && samePath(reported, subject.dir)),
+  );
+
+/**
+ * The shared rule for what is not the subject's: every reported plugin path, skill, agent, MCP server and hook that the
+ * subject does not own. A subject owns its copy's path and the skills it lists, and nothing else is known to be its own.
+ * @param loaded - What the harness reported.
+ * @param subject - What the run loaded; null loads nothing.
+ * @returns Human-readable names, in the order paths, skills, agents, MCP servers, hooks.
+ */
+function foreignDefault(
+  loaded: Loaded,
+  subject: LoadedSubject | null,
+): string[] {
+  const own = new Set(subject?.skills);
+  return [
+    ...foreignPaths(loaded, subject),
+    ...(loaded.skills ?? [])
+      .filter((name) => !own.has(name))
+      .map((name) => `skill ${name}`),
+    ...(loaded.agents ?? []).map((name) => `agent ${name}`),
+    ...(loaded.mcpServers ?? []).map((name) => `MCP server ${name}`),
+    ...(loaded.hooks ?? []).map((name) => `hook ${name}`),
+  ];
+}
+
+/**
+ * Names what a harness reported that does not come from the subject.
+ * @param harness - The adapter, which may have its own rule.
+ * @param loaded - What the harness reported.
+ * @param subject - What the run loaded; null loads nothing.
+ * @returns Human-readable names; none when the harness reported nothing foreign, or nothing at all.
+ */
+export const foreignOf = (
+  harness: Pick<Harness, "foreign">,
+  loaded: Loaded,
+  subject: LoadedSubject | null,
+): string[] => (harness.foreign ?? foreignDefault)(loaded, subject);
 
 /**
  * Builds a ToolCall from an adapter's table of native tool name to kind.

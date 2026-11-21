@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  NOT_REPORTED,
   ANTHROPIC_ENV,
   OPENAI_ENV,
   jsonLines,
@@ -106,7 +107,7 @@ const opencode: Harness = {
       costUsd: steps.length
         ? steps.reduce((total, step) => total + (step.cost ?? 0), 0)
         : null,
-      loaded: { paths: null, skills: null },
+      loaded: NOT_REPORTED,
       error: failure
         ? failure.data?.message || failure.name || "error"
         : unfinished,

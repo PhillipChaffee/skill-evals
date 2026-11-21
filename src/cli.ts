@@ -90,6 +90,7 @@ const SUITE_FLAGS: Flag[] = [
   "decision-url",
   "decision-timeout",
   "lenient",
+  "isolated",
   "out",
 ];
 

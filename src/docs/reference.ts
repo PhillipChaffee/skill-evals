@@ -138,6 +138,8 @@ A subject is what a run loads: a directory, a git ref of the project, or ${code(
 `,
 });
 
+const CLAUDE_CODE = "claude-code";
+
 // A config file that sets every key. The tests make sure that it has exactly the keys of CONFIG_KEYS, each with a
 // value of the key's type, and that the tool accepts it.
 export const EXAMPLE_CONFIG: Record<
@@ -145,16 +147,17 @@ export const EXAMPLE_CONFIG: Record<
   string | number | boolean | string[]
 > = {
   cases: "evals/cases",
-  harness: "claude-code",
+  harness: CLAUDE_CODE,
   reps: 3,
   model: "<model-id>",
-  judgeHarness: "claude-code",
+  judgeHarness: CLAUDE_CODE,
   judgeModel: "<model-id>",
   decisionModel: "<decision-model-id>",
   decisionUrl: "<base-url>",
   decisionTimeout: 60,
   minScore: 0.8,
   lenient: false,
+  isolated: false,
   env: ["AWS_ENDPOINT_URL"],
   subjectExclude: ["evals/cases/**", "notes/**"],
 };
@@ -213,6 +216,8 @@ ${FENCE}
 `,
 });
 
+const ISOLATED = code("--isolated");
+
 const harnessesPage = (): ReferencePage => ({
   file: "agents/harnesses.md",
   markdown: `${header(
@@ -237,6 +242,22 @@ ${table(
 )}
 
 [How each harness is started](how-they-run.md) says why the order is what it is and when to set the variable. [What was verified](verified.md) says how far each adapter is proven.
+
+## Isolation
+
+${ISOLATED} needs the ${code("isolated")} capability. Today ${code("pi")} and ${code(CLAUDE_CODE)} declare it. Any other harness with ${ISOLATED} is a usage error that names it, raised before a run starts. Flags are never trusted: the run record keeps what the harness reported as loaded, and under ${ISOLATED} anything reported that does not come from the subject makes the run invalid.
+
+| Harness | What ${ISOLATED} adds | What it cannot stop |
+| ------- | ------------------------------- | ------------------- |
+| ${code("pi")} | Nothing. Every run already starts with ${code("-ne -ns -np")}, which switch off the discovery of extensions, skills and prompt templates. | Pi does not report what it loaded, so the record shows null for every kind. |
+| ${code(CLAUDE_CODE)} | ${code('--setting-sources ""')} (no user, project or local settings), ${code("--strict-mcp-config")} (no MCP servers, because none is given with ${code("--mcp-config")}), and ${code("CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")}. Never ${code("--bare")}, which also switches off the subject plugin's own hooks. | Organization-managed plugins and policy settings load under any flag. They show in the init event, and the run is invalid. |
+
+The CLI help for ${code("claude")} 2.1.330 says ${code("--setting-sources <sources>")} takes a comma-separated list of ${code("user, project, local")}, and ${code("--strict-mcp-config")} uses only the servers from ${code("--mcp-config")}. The help does not say that an empty list is accepted. The CLI source maps an empty string to no sources, so the empty list is used. This was read from the installed code, not run against a model.
+
+What counts as outside the subject, for the harness that reports it:
+
+- **Claude Code:** a reported plugin directory that is not the per-run copy of the subject plugin, and a skill listed as ${code("plugin:skill")} whose plugin is not the subject plugin. A skill listed with no prefix is a Claude Code built-in and is not outside the subject: user-level skills live in the throwaway home, and project and local settings are off. These built-in names were not confirmed against a real capture.
+- **Any other harness that starts to report:** every reported plugin directory, skill, agent, MCP server and hook that the subject does not own.
 `,
 });
 

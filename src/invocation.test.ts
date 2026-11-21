@@ -11,6 +11,7 @@ import type {
 import { fakeHarness } from "./testing/sandbox.js";
 
 const CLAUDE_CODE = "claude-code";
+const PLUGIN_DIR = "--plugin-dir";
 
 const only = (...ids: string[]) => ({
   PATH: "",
@@ -73,7 +74,9 @@ function tempDir(prefix: string): string {
 function invoke(
   id: string,
   subject: LoadedSubject | null,
-  more: Partial<Pick<RunInput, "prompt" | "model" | "maxTurns">> = {},
+  more: Partial<
+    Pick<RunInput, "prompt" | "model" | "maxTurns" | "isolated">
+  > = {},
 ): Invocation & { home: string } {
   const home = tempDir("home-");
   const input = {
@@ -161,8 +164,8 @@ test("each adapter that loads a plugin directory points its harness at it", () =
     const { args } = invoke(id, plugin);
     return args[args.indexOf(flag) + 1];
   };
-  expect(after(CLAUDE_CODE, "--plugin-dir")).toBe(plugin.dir);
-  expect(after("cursor", "--plugin-dir")).toBe(plugin.dir);
+  expect(after(CLAUDE_CODE, PLUGIN_DIR)).toBe(plugin.dir);
+  expect(after("cursor", PLUGIN_DIR)).toBe(plugin.dir);
   expect(after("pi", "-e")).toBe(plugin.dir);
   const { home } = invoke("opencode", plugin);
   const config = path.join(home, ".config/opencode/opencode.json");
@@ -211,4 +214,26 @@ test("each adapter keeps a prompt that starts with a dash as the prompt", () => 
   const onStdin = [prompt, false];
   // Pi, the first harness, takes its prompt on standard input.
   expect(placed).toEqual([onStdin, ...Array<string[]>(4).fill(asArgument)]);
+});
+
+test("the claude-code invocation carries its isolation switches only when isolated", () => {
+  const plain = invoke(CLAUDE_CODE, null);
+  expect(plain.args).not.toContain("--setting-sources");
+  expect(plain.args).not.toContain("--strict-mcp-config");
+  expect(plain.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+  const plugin: LoadedSubject = { ...skillsSubject(), kind: "plugin" };
+  const { args, env } = invoke(CLAUDE_CODE, plugin, { isolated: true });
+  // An empty list: no user, project or local settings. Never --bare, which switches off the plugin's own hooks.
+  expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
+  expect(args).toContain("--strict-mcp-config");
+  expect(args).not.toContain("--bare");
+  expect(args[args.indexOf(PLUGIN_DIR) + 1]).toBe(plugin.dir);
+  expect(env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
+  expect(args.at(-1)).toBe("say hello");
+});
+
+test("pi, which is always started with discovery off, takes the same arguments isolated or not", () => {
+  expect(invoke("pi", null, { isolated: true }).args).toEqual(
+    invoke("pi", null).args,
+  );
 });

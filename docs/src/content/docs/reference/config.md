@@ -23,6 +23,7 @@ An optional `skill-evals.config.json` in the project root sets defaults. A flag 
 | `decisionTimeout` | number   | `--decision-timeout <seconds>` | How long one request to the decision model may take. A positive integer.                                                                                                                                                                                                                                               |
 | `minScore`        | number   | `--min-score <0..1>`           | The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.                                                                                                                                                                                                      |
 | `lenient`         | boolean  | `--lenient`                    | Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.                                                                                                                                                                                                      |
+| `isolated`        | boolean  | `--isolated`                   | Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.                                                                                                                           |
 | `env`             | string[] | none                           | Names of environment variables the harness gets besides the allowlist. An exact variable name: not empty, without `=`, not `_`, and not starting with `SKILL_EVALS_` or `npm_`. Anything else is an error.                                                                                                             |
 | `subjectExclude`  | string[] | none                           | Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides `.git`, `node_modules`, the cases directory and the output directory. `*` matches within one directory, `**` matches any depth, `?` one character, and `{a,b}` either. See [Subjects](../concepts/subjects.md). |
 
@@ -43,6 +44,7 @@ A file that sets every key:
   "decisionTimeout": 60,
   "minScore": 0.8,
   "lenient": false,
+  "isolated": false,
   "env": ["AWS_ENDPOINT_URL"],
   "subjectExclude": ["evals/cases/**", "notes/**"]
 }

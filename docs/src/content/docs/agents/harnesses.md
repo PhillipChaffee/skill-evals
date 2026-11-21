@@ -19,3 +19,19 @@ A harness is a coding agent's command-line program. `run` and `score` use the fi
 | 5     | `codex`       | `codex`        | `SKILL_EVALS_BIN_CODEX`                |
 
 [How each harness is started](how-they-run.md) says why the order is what it is and when to set the variable. [What was verified](verified.md) says how far each adapter is proven.
+
+## Isolation
+
+`--isolated` needs the `isolated` capability. Today `pi` and `claude-code` declare it. Any other harness with `--isolated` is a usage error that names it, raised before a run starts. Flags are never trusted: the run record keeps what the harness reported as loaded, and under `--isolated` anything reported that does not come from the subject makes the run invalid.
+
+| Harness       | What `--isolated` adds                                                                                                                                                                                                                                           | What it cannot stop                                                                                                        |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `pi`          | Nothing. Every run already starts with `-ne -ns -np`, which switch off the discovery of extensions, skills and prompt templates.                                                                                                                                 | Pi does not report what it loaded, so the record shows null for every kind.                                                |
+| `claude-code` | `--setting-sources ""` (no user, project or local settings), `--strict-mcp-config` (no MCP servers, because none is given with `--mcp-config`), and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`. Never `--bare`, which also switches off the subject plugin's own hooks. | Organization-managed plugins and policy settings load under any flag. They show in the init event, and the run is invalid. |
+
+The CLI help for `claude` 2.1.330 says `--setting-sources <sources>` takes a comma-separated list of `user, project, local`, and `--strict-mcp-config` uses only the servers from `--mcp-config`. The help does not say that an empty list is accepted. The CLI source maps an empty string to no sources, so the empty list is used. This was read from the installed code, not run against a model.
+
+What counts as outside the subject, for the harness that reports it:
+
+- **Claude Code:** a reported plugin directory that is not the per-run copy of the subject plugin, and a skill listed as `plugin:skill` whose plugin is not the subject plugin. A skill listed with no prefix is a Claude Code built-in and is not outside the subject: user-level skills live in the throwaway home, and project and local settings are off. These built-in names were not confirmed against a real capture.
+- **Any other harness that starts to report:** every reported plugin directory, skill, agent, MCP server and hook that the subject does not own.

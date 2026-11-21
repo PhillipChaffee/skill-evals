@@ -1,11 +1,13 @@
 import path from "node:path";
-import type { Harness, ToolKind } from "./shared.js";
+import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
 import {
   ANTHROPIC_ENV,
+  foreignPaths,
   jsonLines,
   opt,
   placeSkills,
   pluginDir,
+  samePath,
   toolCall,
 } from "./shared.js";
 
@@ -29,8 +31,10 @@ type Event =
   | {
       type: "system";
       subtype: string;
-      plugins?: { path: string }[];
+      plugins?: { name: string; path: string }[];
       skills?: string[];
+      agents?: string[];
+      mcp_servers?: { name: string }[];
     }
   | {
       type: "assistant";
@@ -60,18 +64,19 @@ const claudeCode: Harness = {
     "childCalls",
     "loadedReport",
     "skillListing",
+    "isolated",
   ]),
   status: "real-model",
 
-  invocation({ subject, home, prompt, model, maxTurns }) {
+  invocation({ subject, home, prompt, model, maxTurns, isolated }) {
     const configDir = path.join(home, ".claude");
     const placed = placeSkills(subject, path.join(configDir, "skills"));
     return {
       placed,
-      // Never --bare: it switches off the hooks a plugin ships.
       args: [
         "-p",
         ...opt("--plugin-dir", pluginDir(subject)),
+        ...(isolated ? ISOLATION_ARGS : []),
         "--output-format",
         "stream-json",
         "--verbose",
@@ -82,7 +87,10 @@ const claudeCode: Harness = {
         "--",
         prompt,
       ],
-      env: { CLAUDE_CONFIG_DIR: configDir },
+      env: {
+        CLAUDE_CONFIG_DIR: configDir,
+        ...(isolated && { CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" }),
+      },
     };
   },
 
@@ -115,11 +123,56 @@ const claudeCode: Harness = {
         paths: init?.plugins ? init.plugins.map((plugin) => plugin.path) : null,
         // A plugin's skill is listed as `plugin:skill`.
         skills: init?.skills ? init.skills.map(lastSegment) : null,
+        rawSkills: init?.skills ?? null,
+        plugins: init?.plugins
+          ? init.plugins.map(({ name, path: dir }) => ({ name, path: dir }))
+          : null,
+        agents: init?.agents ?? null,
+        rules: null,
+        hooks: null,
+        mcpServers: init?.mcp_servers
+          ? init.mcp_servers.map((server) => server.name)
+          : null,
       },
       error: result ? failure : "no result event",
     };
   },
+
+  // Bare skill names are Claude Code's own and the throwaway home holds no user skills, so only a plugin path other
+  // than the subject's copy, and a skill of another plugin, are foreign.
+  foreign: foreignOfClaude,
 };
+
+// Never --bare: it switches off the hooks a plugin ships.
+// An empty list loads no user, project or local settings (the CLI maps "" to no sources). Managed policy settings
+// load regardless, and no flag stops an organization's plugins: `foreign` finds them.
+const ISOLATION_ARGS = ["--setting-sources", "", "--strict-mcp-config"];
+
+/**
+ * Names what Claude Code loaded that is not the subject's.
+ * @param loaded - What the init event reported.
+ * @param subject - What the run loaded.
+ * @returns The plugin paths other than the subject's copy, and the skills of any plugin but the subject's.
+ */
+function foreignOfClaude(
+  loaded: Loaded,
+  subject: LoadedSubject | null,
+): string[] {
+  const ownPlugins = (loaded.plugins ?? [])
+    .filter(
+      (plugin) =>
+        subject?.kind === "plugin" && samePath(plugin.path, subject.dir),
+    )
+    .map((plugin) => plugin.name);
+  const otherSkills = (loaded.rawSkills ?? []).filter((name) => {
+    const colon = name.lastIndexOf(":");
+    return colon >= 0 && !ownPlugins.includes(name.slice(0, colon));
+  });
+  return [
+    ...foreignPaths(loaded, subject),
+    ...otherSkills.map((name) => `skill ${name}`),
+  ];
+}
 
 /**
  * Drops the plugin prefix of a skill name.

@@ -112,6 +112,13 @@ export const FLAGS = {
       "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",
     default: "off: an unknown key is an error",
   },
+  isolated: {
+    boolean: true,
+    value: "",
+    description:
+      "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
+    default: "off: the harness loads what its settings say",
+  },
   out: {
     as: "outDir",
     value: "dir",

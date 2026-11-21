@@ -1,6 +1,13 @@
 import path from "node:path";
 import type { Harness, ToolCall, ToolKind } from "./shared.js";
-import { jsonLines, opt, placeSkills, pluginDir, toolCall } from "./shared.js";
+import {
+  NOT_REPORTED,
+  jsonLines,
+  opt,
+  placeSkills,
+  pluginDir,
+  toolCall,
+} from "./shared.js";
 
 const KINDS: Record<string, ToolKind> = {
   shell: "shell",
@@ -94,7 +101,7 @@ const cursor: Harness = {
         .map((e) => nativeCall(e.tool_call)),
       tokens: null,
       costUsd: null,
-      loaded: { paths: null, skills: null },
+      loaded: NOT_REPORTED,
       error: result ? failure : "no result event",
     };
   },

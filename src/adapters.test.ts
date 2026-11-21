@@ -6,9 +6,17 @@ import { lines, parse, parseText } from "./testing/streams.js";
 const plainWords =
   /^In plain words: it keeps fixing things until they match\.$/;
 const CLAUDE_CODE = "claude-code";
+const KIT_COPY = "/run/kit-1";
 const CODEX_STREAM = "codex.stream.jsonl";
 const CURSOR_STREAM = "cursor.stream.jsonl";
-const NOT_REPORTED = { paths: null, skills: null };
+const NOT_REPORTED = {
+  paths: null,
+  skills: null,
+  agents: null,
+  rules: null,
+  hooks: null,
+  mcpServers: null,
+};
 
 // Every stream below was captured from the real CLI, with ids and paths scrubbed. For pi, opencode, and codex the
 // CLI was driven by a scripted local model endpoint. cursor.stream.jsonl is the one exception: it is the example
@@ -32,8 +40,16 @@ const STREAMS = [
     tokens: { input: 4 + 73969 + 16918, output: 378 },
     costUsd: 0.00431269,
     loaded: {
+      ...NOT_REPORTED,
       paths: ["/work/kit-9fq1", "/tmp/home-4c1d/.claude/plugins/synced/design"],
-      skills: null,
+      rawSkills: null,
+      plugins: [
+        { name: "magic", path: "/work/kit-9fq1" },
+        {
+          name: "design",
+          path: "/tmp/home-4c1d/.claude/plugins/synced/design",
+        },
+      ],
     },
   },
   {
@@ -123,7 +139,33 @@ test("claude-code reports the skills it listed at startup, without a plugin pref
     skills: ["magic:bro", "greet"],
   };
   const { loaded } = parseText(CLAUDE_CODE, JSON.stringify(init));
-  expect(loaded).toEqual({ paths: [], skills: ["bro", "greet"] });
+  expect(loaded).toEqual({
+    ...NOT_REPORTED,
+    paths: [],
+    plugins: [],
+    skills: ["bro", "greet"],
+    rawSkills: ["magic:bro", "greet"],
+  });
+});
+
+test("claude-code reports its plugins with names, and the agents and MCP servers when the init event has them", () => {
+  const init = {
+    type: "system",
+    subtype: "init",
+    plugins: [{ name: "kit", path: KIT_COPY }],
+    skills: [],
+    agents: ["Explore", "kit:reviewer"],
+    mcp_servers: [{ name: "db", status: "connected" }],
+  };
+  const { loaded } = parseText(CLAUDE_CODE, JSON.stringify(init));
+  expect(loaded).toMatchObject({
+    paths: [KIT_COPY],
+    plugins: [{ name: "kit", path: KIT_COPY }],
+    agents: ["Explore", "kit:reviewer"],
+    mcpServers: ["db"],
+    rules: null,
+    hooks: null,
+  });
 });
 
 const FAILURES = [

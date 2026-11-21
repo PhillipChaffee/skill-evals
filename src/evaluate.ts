@@ -6,7 +6,7 @@ import { loadCases } from "./cases.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import type { Located } from "./harnesses/index.js";
-import { selectHarnesses } from "./harnesses/index.js";
+import { requireIsolation, selectHarnesses } from "./harnesses/index.js";
 import type { Config } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
@@ -53,6 +53,8 @@ export interface EvaluateOptions {
   decisionTimeout?: number | undefined;
   /** Drop a key that a case file does not take, and warn, instead of failing. Default: false. */
   lenient?: boolean | undefined;
+  /** Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false. */
+  isolated?: boolean | undefined;
   /** Called with a line of text for each key that `lenient` drops. */
   onWarning?: ((text: string) => void) | undefined;
   /** The pass bar for the suite score of the subject under test. */
@@ -204,6 +206,7 @@ interface Plan {
   reps: number;
   subjects: Subject[];
   model: string | undefined;
+  isolated: boolean;
   outDir: string;
   onRun: EvaluateOptions["onRun"];
 }
@@ -215,6 +218,7 @@ interface Plan {
  */
 async function runAll(plan: Plan): Promise<RunRecord[]> {
   const { reps, subjects, model, outDir, decision, pass } = plan;
+  const { isolated } = plan;
   const records: RunRecord[] = [];
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
@@ -230,6 +234,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
             judge,
             decision,
             pass,
+            isolated,
             outDir,
           };
           const record = await runOnce(run);
@@ -342,6 +347,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const { minScore, model } = options;
   const reps = requireUsable(options);
   const selection = selectHarnesses(options.harness);
+  if (options.isolated) requireIsolation(selection.chosen);
   const [judgeHarness] = options.judgeHarness
     ? selectHarnesses(options.judgeHarness).chosen
     : [];
@@ -368,6 +374,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       reps,
       subjects,
       model,
+      isolated: options.isolated ?? false,
       outDir,
       onRun,
     });

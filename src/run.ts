@@ -7,12 +7,12 @@ import type { DecisionService } from "./decision.js";
 import { decide } from "./decision.js";
 import type {
   Harness,
+  Loaded,
   LoadedSubject,
-  Parsed,
   Tokens,
   ToolCall,
 } from "./harnesses/shared.js";
-import { sumTokens } from "./harnesses/shared.js";
+import { foreignOf, samePath, sumTokens } from "./harnesses/shared.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
@@ -54,6 +54,12 @@ export interface RunRecord extends Usage {
   skillsLoaded: string[];
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
+  /** What the harness reported as loaded at startup; a kind it does not report is null. */
+  loaded: Loaded;
+  /** Whether the run was started with `--isolated`. */
+  isolated: boolean;
+  /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
+  unexpected: string[];
   /** Whether the run changed anything in its copy of the subject. Always false for "none". */
   subjectMutated: boolean;
   /** What the run created, modified and deleted in its copy of the subject; null for "none". */
@@ -83,6 +89,8 @@ export interface RunPlan {
   rep: number;
   model?: string | undefined;
   judge: Judge;
+  /** Start the harness with nothing loaded but the subject, and invalidate a run that reports anything else. */
+  isolated?: boolean | undefined;
   /** Names of variables the harness gets besides the allowlist: the config's `env`. */
   pass?: string[] | undefined;
   /** The model that scores decision checks; null when no case has one. */
@@ -134,11 +142,17 @@ export function skillsLoaded(toolCalls: ToolCall[]): string[] {
  * @returns Why the record must not be counted, or null when it is a valid run.
  */
 export function invalidReason(
-  record: Pick<RunRecord, "error" | "subjectLoaded" | "checks">,
+  record: Pick<
+    RunRecord,
+    "error" | "subjectLoaded" | "isolated" | "unexpected" | "checks"
+  >,
 ): string | null {
   if (record.error) return `run failed: ${record.error}`;
   if (record.subjectLoaded === false) {
     return "the harness did not load the subject: it is not among the plugins and skills it reported";
+  }
+  if (record.isolated && record.unexpected.length > 0) {
+    return `loaded outside the subject: ${record.unexpected.join(", ")}`;
   }
   const unscored = record.checks.find((check) => check.score === null);
   if (unscored) {
@@ -148,24 +162,6 @@ export function invalidReason(
   return null;
 }
 
-/**
- * Compares two paths that may reach one directory through different symlinks.
- * @param x - A path, which need not exist.
- * @param y - Another path.
- * @returns True when both resolve to the same real path.
- */
-function samePath(x: string, y: string): boolean {
-  const real = (p: string): string => {
-    try {
-      return fs.realpathSync(p);
-    } catch {
-      return path.resolve(p);
-    }
-  };
-  return real(x) === real(y);
-}
-
-type Loaded = Parsed["loaded"];
 // Subject kind -> whether the harness reported the subject as loaded, or null when it does not report that.
 // A plugin is found by its directory and a skills folder by the name of every skill in it.
 const REPORTED_LOADED = {
@@ -261,6 +257,31 @@ async function scoreChecks(
 }
 
 /**
+ * Judges what the harness reported as loaded.
+ * @param plan - The run that was made.
+ * @param loaded - What the harness reported.
+ * @param copy - The run's copy of the subject; null for "none".
+ * @returns Whether the subject is among what loaded (null when the harness reports no such thing, or nothing is
+ *   loaded), the report itself, whether the run was isolated, and the names of what does not come from the subject.
+ */
+function startupRecord(
+  plan: RunPlan,
+  loaded: Loaded,
+  copy: Copy | null,
+): Pick<RunRecord, "subjectLoaded" | "loaded" | "isolated" | "unexpected"> {
+  const reports = plan.harness.capabilities.has("loadedReport");
+  return {
+    subjectLoaded:
+      copy && reports
+        ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, loaded)
+        : null,
+    loaded,
+    isolated: plan.isolated ?? false,
+    unexpected: foreignOf(plan.harness, loaded, copy?.loaded ?? null),
+  };
+}
+
+/**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
  * @param ran - What the session produced; its workspace still exists.
@@ -297,9 +318,7 @@ async function record(
     finalText: parsed.finalText,
     toolCalls: parsed.toolCalls,
     skillsLoaded: loaded,
-    subjectLoaded: copy
-      ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, parsed.loaded)
-      : null,
+    ...startupRecord(plan, parsed.loaded, copy),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
     durationMs,
@@ -349,6 +368,7 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
         prompt,
         model,
         maxTurns,
+        isolated: plan.isolated,
         timeoutSeconds,
         workspaceDir,
         withhold: withheld(plan),

@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Harness, ToolKind } from "./shared.js";
 import {
+  NOT_REPORTED,
   ANTHROPIC_ENV,
   OPENAI_ENV,
   jsonLines,
@@ -102,7 +103,7 @@ const pi: Harness = {
       costUsd: usages.length
         ? usages.reduce((total, u) => total + (u.cost?.total ?? 0), 0)
         : null,
-      loaded: { paths: null, skills: null },
+      loaded: NOT_REPORTED,
       error: last ? failure : "no turn_end event",
     };
   },
