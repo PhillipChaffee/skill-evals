@@ -366,8 +366,7 @@ test("check shows, for each harness, that it is missing or what its adapter deli
 
 	const result = box.cli(["check", "--out", path.join(box.root, "probe")]);
 	assert.equal(result.status, 0, result.stderr);
-	assert.deepEqual(cells(result.stdout, "claude-code").slice(2, 5), ["yes", "yes", "yes"]);
-	assert.match(cells(result.stdout, "claude-code")[6], /^finalText, tokens$/);
+	assert.deepEqual(cells(result.stdout, "claude-code").slice(2, 7), ["yes", "yes", "yes", "greet", "finalText, toolCalls, tokens"]);
 	assert.match(cells(result.stdout, "pi")[2], /^no /);
 
 	// The fake speaks one harness's stream format, so behind another adapter the run must be reported as failed.

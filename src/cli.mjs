@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { HARNESSES, findBin, namedHarnesses, selectHarnesses } from "./harnesses/index.mjs";
 import { loadCases } from "./cases.mjs";
-import { findProject } from "./project.mjs";
+import { findProject, withConfig } from "./project.mjs";
 import { renderReport } from "./report.mjs";
 import { invalidReason, runOnce } from "./run.mjs";
 import { failedBars, isUnitScore, scoreSuites } from "./score.mjs";
@@ -35,32 +35,38 @@ const USAGE = `Usage: skill-evals <command> [options]
 
 A subject is what a run loads: a directory, a git ref of the project, or "none" for no skills at all.
 A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
-The project is the git repository that holds the working directory, or the working directory itself.`;
+The project is the git repository that holds the working directory, or the working directory itself.
+skill-evals.config.json in the project can set a default for cases, harness, reps, model, judgeHarness,
+judgeModel, and minScore.`;
 
-const OPTIONS = {
-	a: { type: "string", default: "main" },
-	b: { type: "string" },
-	subject: { type: "string" },
-	harness: { type: "string" },
-	case: { type: "string", default: "*" },
-	cases: { type: "string" },
-	reps: { type: "string", default: "3" },
-	model: { type: "string" },
-	"min-score": { type: "string" },
-	"judge-harness": { type: "string" },
-	"judge-model": { type: "string" },
-	out: { type: "string" },
+// Flag -> the option it sets (its own name when `as` is absent) and how its text is read.
+const FLAGS = {
+	a: {},
+	b: {},
+	subject: {},
+	harness: {},
+	case: { as: "caseGlob" },
+	cases: {},
+	reps: { read: Number },
+	model: {},
+	"min-score": { as: "minScore", read: Number },
+	"judge-harness": { as: "judgeHarness" },
+	"judge-model": { as: "judgeModel" },
+	out: { as: "outDir" },
 };
-const SUITE_OPTIONS = ["harness", "case", "cases", "reps", "model", "min-score", "judge-harness", "judge-model", "out"];
+const SUITE_FLAGS = ["harness", "case", "cases", "reps", "model", "min-score", "judge-harness", "judge-model", "out"];
 
-// The prompt names one small skill, so the adapter's skill-load signal shows up in the result.
-const PROBE = {
+/**
+ * The prompt names one skill of the subject, so the adapter's skill-load signal shows up in the result.
+ * @param {import("./subject.mjs").Subject} subject
+ */
+const probe = (subject) => ({
 	id: "hello",
-	prompt: 'Use the bro skill on this sentence: "The cache is cold."',
+	prompt: subject.skills.length ? `Use the ${subject.skills[0]} skill on this sentence: "The cache is cold."` : "Reply with the single word: pong",
 	checks: [],
 	timeoutSeconds: 300,
 	workspaceDir: null,
-};
+});
 
 function outputDir(requested) {
 	if (!requested) return fs.mkdtempSync(path.join(os.tmpdir(), "runs-"));
@@ -72,19 +78,19 @@ function outputDir(requested) {
  * Runs the suite on each subject and scores it. The last subject is the one under test.
  * @param {["a" | "b" | "subject", string][]} specs  label and spec of each subject
  */
-async function evaluate(options, specs, project) {
-	const reps = Number(options.reps);
-	if (!Number.isInteger(reps) || reps < 1) throw new UsageError("--reps must be a positive integer");
-	const minScore = options["min-score"] === undefined ? undefined : Number(options["min-score"]);
-	if (minScore !== undefined && !isUnitScore(minScore)) throw new UsageError("--min-score must be a number from 0 to 1");
+async function evaluate(given, specs, project) {
+	const options = withConfig(project, given);
+	const { reps = 3, minScore } = options;
+	if (!Number.isInteger(reps) || reps < 1) throw new UsageError("reps must be a positive integer");
+	if (minScore !== undefined && !isUnitScore(minScore)) throw new UsageError("minScore must be a number from 0 to 1");
 	const selection = selectHarnesses(options.harness);
-	const judgeHarness = options["judge-harness"] && selectHarnesses(options["judge-harness"]).chosen[0];
-	const judgeModel = options["judge-model"] ?? options.model;
-	const cases = loadCases(options.cases, options.case);
+	const judgeHarness = options.judgeHarness && selectHarnesses(options.judgeHarness).chosen[0];
+	const judgeModel = options.judgeModel ?? options.model;
+	const cases = loadCases(options.cases, options.caseGlob);
 	const subjects = [];
 	try {
 		for (const [label, spec] of specs) subjects.push(resolveSubject(label, spec, project));
-		const outDir = outputDir(options.out);
+		const outDir = outputDir(options.outDir);
 		const records = [];
 		for (const { harness, bin } of selection.chosen) {
 			const judge = { ...(judgeHarness ?? { harness, bin }), model: judgeModel };
@@ -129,11 +135,12 @@ const FILLABLE = {
 };
 const SUBJECT_LOADED = { true: "yes", false: "NO", null: "no evidence from this harness" };
 
-async function check(options, project) {
+async function check(given, project) {
+	const options = withConfig(project, given);
 	const located = namedHarnesses(options.harness).map((harness) => ({ harness, bin: findBin(harness) }));
-	const subject = resolveSubject("subject", options.subject, project);
+	const subject = resolveSubject("subject", options.subject ?? project.root, project);
 	try {
-		const outDir = located.some((entry) => entry.bin) ? outputDir(options.out) : "nothing ran";
+		const outDir = located.some((entry) => entry.bin) ? outputDir(options.outDir) : "nothing ran";
 		const rows = [];
 		let failed = false;
 		for (const { harness, bin } of located) {
@@ -141,7 +148,7 @@ async function check(options, project) {
 				rows.push([harness.id, `no ("${harness.bin}" not found)`, "", "", "", ""]);
 				continue;
 			}
-			const record = await runOnce({ harness, bin, subject, caseDef: PROBE, rep: 1, model: options.model, outDir });
+			const record = await runOnce({ harness, bin, subject, caseDef: probe(subject), rep: 1, model: options.model, outDir });
 			failed ||= invalidReason(record) !== null;
 			rows.push([
 				harness.id,
@@ -170,7 +177,8 @@ async function check(options, project) {
 	}
 }
 
-function list(options) {
+function list(given, project) {
+	const options = withConfig(project, given);
 	const installed = HARNESSES.map((harness) => ({ harness, bin: findBin(harness) }));
 	const first = installed.find((entry) => entry.bin);
 	const cases = fs.existsSync(options.cases)
@@ -193,23 +201,23 @@ function list(options) {
 
 const COMMANDS = {
 	run: {
-		handler: (options, project) =>
+		handler: ({ a = "main", b, ...options }, project) =>
 			evaluate(
 				options,
 				[
-					["a", options.a],
-					["b", options.b],
+					["a", a],
+					["b", b ?? project.root],
 				],
 				project,
 			),
-		options: ["a", "b", ...SUITE_OPTIONS],
+		flags: ["a", "b", ...SUITE_FLAGS],
 	},
 	score: {
-		handler: (options, project) => evaluate(options, [["subject", options.subject]], project),
-		options: ["subject", ...SUITE_OPTIONS],
+		handler: ({ subject, ...options }, project) => evaluate(options, [["subject", subject ?? project.root]], project),
+		flags: ["subject", ...SUITE_FLAGS],
 	},
-	check: { handler: check, options: ["subject", "harness", "model", "out"] },
-	list: { handler: list, options: ["cases"] },
+	check: { handler: check, flags: ["subject", "harness", "model", "out"] },
+	list: { handler: list, flags: ["cases"] },
 };
 
 /** @returns {Promise<number>} the exit code */
@@ -217,10 +225,11 @@ export async function main([name, ...args]) {
 	try {
 		const command = COMMANDS[name];
 		if (!command) throw new UsageError(`${name ? `unknown command "${name}"` : "missing command"}\n\n${USAGE}`);
-		const options = Object.fromEntries(command.options.map((key) => [key, OPTIONS[key]]));
-		const project = findProject(process.cwd());
-		const defaults = { b: project.root, subject: project.root, cases: path.join(project.root, "evals", "cases") };
-		return await command.handler({ ...defaults, ...parseArgs({ args, options }).values }, project);
+		const { values } = parseArgs({ args, options: Object.fromEntries(command.flags.map((flag) => [flag, { type: "string" }])) });
+		const options = Object.fromEntries(
+			Object.entries(values).map(([flag, text]) => [FLAGS[flag].as ?? flag, (FLAGS[flag].read ?? String)(text)]),
+		);
+		return await command.handler(options, findProject(process.cwd()));
 	} catch (error) {
 		if (!(error instanceof UsageError || error.code?.startsWith("ERR_PARSE_ARGS"))) throw error;
 		console.error(`skill-evals: ${error.message}`);

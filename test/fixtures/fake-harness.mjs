@@ -59,6 +59,7 @@ const seen = {
 	home: process.env.HOME,
 	cwd: process.cwd(),
 	prompt,
+	model: flag("--model"),
 	skills: Object.fromEntries(installed.map((name) => [name, fs.readFileSync(path.join(skillsDir, name, "SKILL.md"), "utf8")])),
 };
 finish(behavior.answer ?? JSON.stringify(seen), behavior.costUsd);
