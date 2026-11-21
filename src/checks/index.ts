@@ -2,11 +2,12 @@ import type { Capability, Need } from "../capabilities.js";
 import type { ToolCall, ToolKind } from "../harnesses/shared.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
+import type { ChangedFiles, Snapshot } from "../snapshot.js";
 import { UsageError } from "../scope.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
 import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
-import { describeCalls } from "./describe.js";
+import { describeCalls, describeFiles } from "./describe.js";
 import { extensionsOf } from "./extensions.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
@@ -35,6 +36,12 @@ interface CheckFields {
   name?: string;
   inputMatches?: string;
   flags?: string;
+  inputLinesMax?: number;
+  quantifier?: "any" | "all";
+  root?: "workspace" | "home";
+  created?: boolean;
+  allow?: string[];
+  ignore?: string[];
   rubric?: string;
   question?: string;
   expect?: "yes" | "no";
@@ -79,6 +86,16 @@ export interface Outcome {
   toolCalls: ToolCall[];
   skillsLoaded: string[];
   workspace: string;
+  /** The workspace as it was before the harness started: the hash of each file. */
+  seed: Snapshot;
+  /** What the run created, modified and deleted in the workspace, compared with `seed`. */
+  changed: ChangedFiles;
+  /** The run's throwaway home, for a check with `root: "home"`. */
+  home: string;
+  /** The home just before the harness's prompt ran: auth files and placed skills are in it, so they never read as the agent's. */
+  homeSeed: Snapshot;
+  /** What the run created, modified and deleted in the home, compared with `homeSeed`. */
+  homeChanged: ChangedFiles;
   /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. `observed` is false
    * when the copy the agent saw could not be watched, which no check may read as "unchanged". */
   subject: { dir: string | null; mutated: string[]; observed?: boolean };
@@ -303,6 +320,7 @@ export function describeCheck(check: Check): string {
     check.type,
     check.skill,
     check.path,
+    ...describeFiles(check),
     check.kind,
     ...quoted,
     ...answers,

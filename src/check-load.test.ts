@@ -17,9 +17,64 @@ const BAD: [string, unknown, RegExp][] = [
     /"by" is not yet supported/,
   ],
   [
-    "an inputLinesMax that is not supported yet",
-    { type: "first_tool", matches: { kind: "edit", inputLinesMax: 3 } },
-    /"inputLinesMax" is not yet supported/,
+    "an inputLinesMax that is not a whole number",
+    { type: "first_tool", matches: { kind: "edit", inputLinesMax: 1.5 } },
+    /inputLinesMax must be a positive integer/,
+  ],
+  [
+    "a matcher with only an inputLinesMax",
+    { type: "first_tool", matches: { inputLinesMax: 3 } },
+    /needs at least one of "kind", "name", "inputMatches"/,
+  ],
+  [
+    "a file_lines with neither min nor max",
+    { type: "file_lines", path: "a.txt" },
+    /file_lines needs at least one of "min", "max"/,
+  ],
+  [
+    "a file_count with min above max",
+    { type: "file_count", path: "a/*", min: 3, max: 2 },
+    /"min" 3 is above "max" 2/,
+  ],
+  [
+    "a quantifier that is neither any nor all",
+    { type: "file_matches", path: "a", pattern: "x", quantifier: "some" },
+    /"quantifier" must be "any" or "all"/,
+  ],
+  [
+    "a root that is neither workspace nor home",
+    { type: "file_absent", path: "a", root: "etc" },
+    /"root" must be "workspace" or "home"/,
+  ],
+  [
+    "a glob with an unclosed brace",
+    { type: "file_exists", path: "src/{a,b.ts" },
+    /unclosed "\{" in the glob src\/\{a,b.ts/,
+  ],
+  [
+    "a path that climbs out of the root",
+    { type: "file_absent", path: "../x/*" },
+    /path must stay inside the workspace/,
+  ],
+  [
+    "a files_changed_only with no allow",
+    { type: "files_changed_only" },
+    /files_changed_only needs a list "allow"|"allow" must be a non-empty list|needs a string "allow"/,
+  ],
+  [
+    "an allow glob that leaves the root",
+    { type: "files_changed_only", allow: ["../**"] },
+    /"allow" globs must stay inside the root: \.\.\/\*\*/,
+  ],
+  [
+    "an ignore glob that is not closed",
+    { type: "files_changed_only", allow: ["**"], ignore: ["{a"] },
+    /unclosed "\{" in the glob \{a/,
+  ],
+  [
+    "a created that is not a boolean",
+    { type: "file_exists", path: "a", created: "yes" },
+    /created must be true or false/,
   ],
   [
     "a min above max",
@@ -82,9 +137,9 @@ const BAD: [string, unknown, RegExp][] = [
     /"by" is not yet supported/,
   ],
   [
-    "a check-level inputLinesMax on tool_not_called",
-    { type: "tool_not_called", kind: "edit", inputLinesMax: 2 },
-    /"inputLinesMax" is not yet supported/,
+    "a check-level inputLinesMax of 0 on tool_not_called",
+    { type: "tool_not_called", kind: "edit", inputLinesMax: 0 },
+    /inputLinesMax must be a positive integer/,
   ],
   [
     "a matcher that names nothing",

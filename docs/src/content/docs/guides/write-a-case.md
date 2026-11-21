@@ -116,7 +116,7 @@ A skipped check changes what the case's score means on that harness, so the repo
 
 ### Count, order and first action
 
-A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. The keys `by` and `inputLinesMax` are reserved for later; a matcher that sets one is a load error (`"by" is not yet supported`), never ignored.
+A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. `inputLinesMax` limits a call's input to that many lines, counted in the longest string value found anywhere in it, so `{ "kind": "edit", "inputLinesMax": 20 }` fits only small edits. It is a matcher key, so it is also a field of `tool_called` and `tool_not_called`. The key `by` is reserved for later; a matcher that sets it is a load error (`"by" is not yet supported`), never ignored.
 
 `tool_called` takes `min` (default 1) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` requires every matching call to have been issued in one assistant turn, so `min` and `max` count calls that were launched together: two researchers in one message and a third one later fails it, and a matching call with no turn fails it unless it is the only match. It needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
 
@@ -175,6 +175,39 @@ A `sequence` is a list of matchers that must match calls in that order, with oth
 Until checks can tell agents apart, every one of these sees all the calls of the run, those of a subagent included. Claude Code flattens a subagent's calls into the list. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
 
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
+
+## File checks
+
+The tool hashes the workspace before the harness starts and again after the run, so a check can say what the agent left, and what it did not touch. `file_exists` and `file_matches` still take a plain path. Every file check's `path` is a glob when it holds `*`, `?` or `{`: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never goes through a link. A path that leads out of the root through a link counts as absent, so a link to `/etc` cannot make `etc/passwd` exist. A glob that matches more than 5000 paths scores 0, and the reason names the glob and the cap.
+
+| Check                | What it scores                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `file_exists`        | A file is at `path`. `created: true` needs one that the seed lacked.                       |
+| `file_absent`        | Nothing is at `path`.                                                                      |
+| `file_matches`       | A file at `path` matches `pattern`. With a glob, `quantifier` is `any` (default) or `all`. |
+| `file_lacks`         | No file at `path` matches `pattern`. `quantifier` is `all` (default) or `any`.             |
+| `file_unchanged`     | No file at `path` was created, modified or deleted. Write `dir/**` for a directory.        |
+| `file_changed`       | A file at `path` was created, modified or deleted.                                         |
+| `files_changed_only` | Every changed path matches a glob of `allow`, once the globs of `ignore` are left out.     |
+| `file_count`         | `path` matches from `min` (default 1) to `max` files.                                      |
+| `dir_exists`         | A directory is at `path`.                                                                  |
+| `file_lines`         | Every file at `path` has from `min` to `max` lines; give at least one.                     |
+
+A glob that matches no file scores 0 for `file_exists`, `file_matches`, `file_changed`, `file_lines` and `dir_exists`, and 1 for `file_lacks` and `file_absent`. `file_unchanged` scores 0 when the seed had matching files and they are gone, and 1 when neither the seed nor the workspace has one. Every check takes `root`, `"workspace"` (default) or `"home"`, the run's throwaway home, for a skill that writes user-level files. The home seed is taken just before the prompt runs, after the login files and the skill copies are in place, so those never count as the agent's. Files are read as UTF-8 with replacement characters, and a file over 5 MB scores 0 in a pattern or line check, with the reason `file is larger than the 5 MB pattern cap`. A failing check names the paths it is about, ten at most and then a count. The run record keeps `changedFiles`, with the created, modified and deleted paths of the workspace.
+
+```json
+{ "type": "file_lacks", "path": "src/**/*.ts", "pattern": "\\bas any\\b" }
+```
+
+```json
+{
+  "type": "files_changed_only",
+  "allow": ["src/**", "docs/**"],
+  "ignore": ["**/*.log"]
+}
+```
+
+The full cases are in `examples/cases/file-state`.
 
 ## Checks that a model scores
 

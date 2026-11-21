@@ -4,6 +4,7 @@ import { loadCases } from "./cases.js";
 import type { RuledCheck } from "./checks/index.js";
 import { checkScore, describeCheck } from "./checks/index.js";
 import type { ToolCall } from "./harnesses/shared.js";
+import { NO_FILES } from "./testing/outcome.js";
 
 const call = (name: string, input: unknown, turn?: number): ToolCall => ({
   name,
@@ -19,6 +20,7 @@ const score = (check: Omit<RuledCheck, "weight">, calls: ToolCall[]) =>
       finalText: "",
       skillsLoaded: [],
       workspace: "",
+      ...NO_FILES,
       subject: { dir: null, mutated: [] },
     },
   );
@@ -130,4 +132,17 @@ test("a check names the matchers, counts and options that tell it from another o
       first: true,
     }),
   ).toBe("tool_called edit min 2 max 3 sameTurn first");
+});
+
+test("tool_called and tool_not_called take inputLinesMax", () => {
+  const small = call("Edit", { new_string: "a\nb" });
+  const big = call("Edit", { new_string: "a\nb\nc\nd" });
+  const check = { kind: "shell", inputLinesMax: 2 } as const;
+  expect(score({ type: "tool_called", ...check }, [small, big]).score).toBe(1);
+  expect(score({ type: "tool_called", ...check }, [big]).score).toBe(0);
+  expect(score({ type: "tool_not_called", ...check }, [big]).score).toBe(1);
+  expect(score({ type: "tool_not_called", ...check }, [small]).score).toBe(0);
+  expect(describeCheck({ type: "tool_called", weight: 1, ...check })).toBe(
+    "tool_called shell inputLinesMax 2",
+  );
 });

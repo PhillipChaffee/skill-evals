@@ -59,7 +59,8 @@ export function globToRegExp(glob: string): RegExp {
 export const literalGlob = (relative: string): string =>
   relative.replace(/[*?{}\\]/g, "\\$&");
 
-const DEFAULT_LIMIT = 5000;
+/** The most paths that `expandGlob` returns before it throws. */
+export const GLOB_LIMIT = 5000;
 
 /**
  * Lists the paths under a directory that a glob matches. A link is listed when it matches, and never followed.
@@ -73,7 +74,7 @@ const DEFAULT_LIMIT = 5000;
 export function expandGlob(
   root: string,
   glob: string,
-  limit = DEFAULT_LIMIT,
+  limit = GLOB_LIMIT,
 ): string[] {
   const matcher = globToRegExp(glob);
   const found: string[] = [];

@@ -7,7 +7,8 @@ import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
-import type { ChangedFiles } from "./snapshot.js";
+import type { ChangedFiles, Snapshot } from "./snapshot.js";
+import { snapshot } from "./snapshot.js";
 
 /** One prompt for one harness. */
 export interface SessionInput {
@@ -45,8 +46,12 @@ export interface SessionResult {
    * subject; null when the adapter placed none.
    */
   placedChanges: ChangedFiles | null;
+  /** The workspace as the copy left it, before the harness started. */
+  seed: Snapshot;
   /** The run's throwaway home, which exists until the callback returns. */
   home: string;
+  /** The home just before the harness's prompt ran: the auth files, the placed skills, and what setup wrote. */
+  homeSeed: Snapshot;
   /** Where the adapter placed each skill: skill name to directory; absent when it placed none. */
   placed: Record<string, string> | undefined;
 }
@@ -92,6 +97,51 @@ function watchPlaced(
 }
 
 /**
+ * Makes the function that builds the harness's environment.
+ * @param session - Which harness, and what it may and may not get.
+ * @param home - The throwaway home.
+ * @param harnessEnv - What the adapter's invocation sets.
+ * @returns A function from the case's own variables to the whole environment.
+ */
+const environmentOf =
+  (session: SessionInput, home: string, harnessEnv: Record<string, string>) =>
+  (caseEnv: Record<string, string>) =>
+    childEnv({
+      home,
+      base: process.env,
+      harnessEnv,
+      authEnv: session.harness.authEnv,
+      pass: session.pass ?? [],
+      withhold: session.withhold ?? [],
+      caseEnv,
+    });
+
+/**
+ * Runs the harness's setup steps, in order, until one fails.
+ * @param bin - The harness's executable.
+ * @param steps - The argument lists of the steps.
+ * @param options - Where and how to run them.
+ * @param options.cwd - The workspace.
+ * @param options.env - The environment of the harness.
+ * @param options.timeoutSeconds - How long each step may take.
+ * @returns Why the first failing step failed, naming its first words; null when every step worked.
+ */
+async function setupFailure(
+  bin: string,
+  steps: string[][],
+  options: { cwd: string; env: Record<string, string>; timeoutSeconds: number },
+): Promise<string | null> {
+  for (const step of steps) {
+    const { failure } = await exec(bin, step, options);
+    if (failure) {
+      const command = step.slice(0, SHOWN_SETUP_WORDS).join(" ");
+      return `setup "${command}": ${failure}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Prepares the harness and runs the prompt.
  * @param session - Which harness, and how long it may take.
  * @param input - What the adapter builds the command line from.
@@ -106,6 +156,7 @@ async function attempt(
   durationMs: number;
   placedChanges: ChangedFiles | null;
   placed?: Record<string, string> | undefined;
+  homeSeed: Snapshot;
 }> {
   const { harness, bin, timeoutSeconds } = session;
   let invocation;
@@ -113,37 +164,34 @@ async function attempt(
     invocation = harness.invocation(input);
   } catch (error) {
     const failure = `could not prepare the run: ${messageOf(error)}`;
-    return { stdout: "", failure, durationMs: 0, placedChanges: null };
+    const homeSeed = snapshot(input.home);
+    return {
+      stdout: "",
+      failure,
+      durationMs: 0,
+      placedChanges: null,
+      homeSeed,
+    };
   }
   const placedChanges = watchPlaced(input.subject, invocation.placed);
-  const environment = (caseEnv: Record<string, string>) =>
-    childEnv({
-      home: input.home,
-      base: process.env,
-      harnessEnv: invocation.env,
-      authEnv: harness.authEnv,
-      pass: session.pass ?? [],
-      withhold: session.withhold ?? [],
-      caseEnv,
-    });
+  const environment = environmentOf(session, input.home, invocation.env);
   const options = {
     cwd: input.workspace,
     env: environment({}),
     timeoutSeconds,
   };
-  for (const step of invocation.setup ?? []) {
-    const { failure } = await exec(bin, step, options);
-    if (failure) {
-      const command = step.slice(0, SHOWN_SETUP_WORDS).join(" ");
-      return {
-        stdout: "",
-        failure: `setup "${command}": ${failure}`,
-        durationMs: 0,
-        placedChanges: placedChanges(),
-        placed: invocation.placed,
-      };
-    }
+  const failure = await setupFailure(bin, invocation.setup ?? [], options);
+  if (failure) {
+    return {
+      stdout: "",
+      failure,
+      durationMs: 0,
+      placedChanges: placedChanges(),
+      placed: invocation.placed,
+      homeSeed: snapshot(input.home),
+    };
   }
+  const homeSeed = snapshot(input.home);
   const started = Date.now();
   const result = await exec(bin, invocation.args, {
     ...options,
@@ -155,6 +203,7 @@ async function attempt(
     durationMs: Date.now() - started,
     placedChanges: placedChanges(),
     placed: invocation.placed,
+    homeSeed,
   };
 }
 
@@ -198,6 +247,7 @@ export async function session<T>(
     if (workspaceDir) {
       fs.cpSync(workspaceDir, workspace.dir, { recursive: true });
     }
+    const seed = snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
     const input = {
       subject,
@@ -208,7 +258,7 @@ export async function session<T>(
       maxTurns,
       isolated,
     };
-    const { stdout, failure, durationMs, placedChanges, placed } =
+    const { stdout, failure, durationMs, placedChanges, placed, homeSeed } =
       await attempt(run, input);
     const parsed = parseStream(harness, stdout);
     // The harness's own message is the most specific one, but only when it produced a stream at all.
@@ -220,8 +270,10 @@ export async function session<T>(
       error,
       durationMs,
       workspace: workspace.dir,
+      seed,
       placedChanges,
       home: home.dir,
+      homeSeed,
       placed,
     });
   } finally {

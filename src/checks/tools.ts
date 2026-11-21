@@ -7,12 +7,12 @@ import {
   matches,
   quoteCalls,
 } from "../matchers.js";
-import { UsageError } from "../scope.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import { checkBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
 
 const TOOL_FIELDS = {
-  optional: ["kind", "name", "inputMatches", "flags"],
+  optional: ["kind", "name", "inputMatches", "flags", "inputLinesMax"],
   oneOf: ["kind", "name"],
 } satisfies Partial<Spec>;
 
@@ -25,11 +25,13 @@ const ownMatcher = ({
   name,
   inputMatches,
   flags,
+  inputLinesMax,
 }: RuledCheck): ToolMatcher => ({
   ...(kind !== undefined && { kind }),
   ...(name !== undefined && { name }),
   ...(inputMatches !== undefined && { inputMatches }),
   ...(flags !== undefined && { flags }),
+  ...(inputLinesMax !== undefined && { inputLinesMax }),
 });
 
 /**
@@ -115,21 +117,6 @@ function counted(
   };
 }
 
-/**
- * Checks the fields of a count together.
- * @param given - The fields that are set.
- * @param where - Names the file and the check in an error message.
- * @throws {UsageError} When `min` is above `max`.
- */
-function checkBounds(given: Record<string, unknown>, where: string): void {
-  const { min, max } = given;
-  if (typeof min === "number" && typeof max === "number" && min > max) {
-    throw new UsageError(
-      `${where}: "min" ${String(min)} is above "max" ${String(max)}`,
-    );
-  }
-}
-
 // The checks of the tool calls the agent made.
 export const TOOL_CHECKS = {
   tool_called: {
@@ -140,7 +127,7 @@ export const TOOL_CHECKS = {
       "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn.",
     note: "A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
     needs: (check) => (check.sameTurn ? ["turnGrouping"] : []),
-    notYet: ["by", "inputLinesMax"],
+    notYet: ["by"],
     validate: checkBounds,
     rule: (check, outcome) =>
       counted(check, outcome, {
@@ -151,7 +138,7 @@ export const TOOL_CHECKS = {
   tool_not_called: {
     fields: [],
     ...TOOL_FIELDS,
-    notYet: ["by", "inputLinesMax"],
+    notYet: ["by"],
     scores: "The agent made no tool call that fits every given field.",
     rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
   },

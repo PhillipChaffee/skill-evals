@@ -17,6 +17,7 @@ import type { ChangedFiles } from "./snapshot.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
+import { fileState } from "./run-files.js";
 import type { Subject } from "./subject.js";
 
 /** What a session cost. A number the harness does not report is null. */
@@ -64,6 +65,8 @@ export interface RunRecord extends Usage {
   subjectMutated: boolean;
   /** What the run created, modified and deleted in its copy of the subject; null for "none". */
   subjectChanges: ChangedFiles | null;
+  /** What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started. */
+  changedFiles: ChangedFiles;
   checks: CheckResult[];
   /** The run score, null when the run is invalid. */
   score: number | null;
@@ -254,6 +257,7 @@ async function record(
   fs.writeFileSync(`${stem}.stream.jsonl`, stdout);
   fs.writeFileSync(`${stem}.final.md`, parsed.finalText);
 
+  const files = fileState(ran);
   const base = {
     harness: harness.id,
     subject: subject.label,
@@ -267,6 +271,7 @@ async function record(
     ...startupRecord(plan, ran, copy),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
+    changedFiles: files.changed,
     durationMs,
     tokens: parsed.tokens,
     costUsd: parsed.costUsd,
@@ -276,7 +281,7 @@ async function record(
     {
       ...parsed,
       skillsLoaded: loaded,
-      workspace: ran.workspace,
+      ...files,
       subject: {
         dir: copy?.loaded.dir ?? null,
         mutated: changes ? allChanged(changes) : [],

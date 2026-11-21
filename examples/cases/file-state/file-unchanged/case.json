@@ -1,0 +1,19 @@
+{
+  "description": "Leave the tests alone.",
+  "tags": ["files"],
+  "checks": [
+    {
+      "type": "file_unchanged",
+      "path": "tests/**"
+    },
+    {
+      "type": "file_changed",
+      "path": "src/parse.py"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
+    }
+  ],
+  "timeoutSeconds": 300
+}

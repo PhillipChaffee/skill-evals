@@ -364,6 +364,7 @@ Everything kept about one run.
 | `judgeProblem`   | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. |
 | `subjectMutated` | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                           |
 | `subjectChanges` | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                         |
+| `changedFiles`   | `ChangedFiles`                         | What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started.           |
 | `checks`         | `CheckResult[]`                        |                                                                                                                                 |
 | `score`          | `number \| null`                       | The run score, null when the run is invalid.                                                                                    |
 | `judge`          | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                     |

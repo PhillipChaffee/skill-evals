@@ -2,6 +2,7 @@ import type { FieldDef, FieldParser } from "./checks/fields.js";
 import { FIELDS, readField, registerParser } from "./checks/fields.js";
 import { regex } from "./checks/rules.js";
 import type { ToolCall, ToolKind } from "./harnesses/shared.js";
+import { countLines, longestString } from "./lines.js";
 import { UsageError } from "./scope.js";
 
 /** Who made a call. The shape lands with subagent attribution; until then no matcher may name it. */
@@ -18,16 +19,16 @@ export interface ToolMatcher {
   /** A regular expression for the call's input, written as JSON. */
   inputMatches?: string;
   flags?: string;
-  /** Not yet supported: a load error. */
+  /** The most lines the call's input may have, counted in its longest string value, found at any depth. */
   inputLinesMax?: number;
   /** Not yet supported: a load error. */
   by?: By;
 }
 
 // The keys a matcher takes today, with the definitions of the check fields of the same name.
-const KEYS = ["kind", "name", "inputMatches", "flags"];
+const KEYS = ["kind", "name", "inputMatches", "flags", "inputLinesMax"];
 // The keys of the matcher shape that no check can use yet.
-const NOT_YET = ["by", "inputLinesMax"];
+const NOT_YET = ["by"];
 const SUBJECT_KEYS = ["kind", "name", "inputMatches"];
 
 /** The keys of a matcher that load, each with its definition. The JSON Schema is written from this. */
@@ -129,10 +130,13 @@ const tester = (
 function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
   const name = tester(matcher.name, matcher.flags);
   const input = tester(matcher.inputMatches, matcher.flags);
+  const { inputLinesMax } = matcher;
   return (call) =>
     (matcher.kind === undefined || call.kind === matcher.kind) &&
     name(call.name) &&
-    input(inputJson(call));
+    input(inputJson(call)) &&
+    (inputLinesMax === undefined ||
+      countLines(longestString(call.input)) <= inputLinesMax);
 }
 
 /**

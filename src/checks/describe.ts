@@ -29,5 +29,23 @@ export function describeCalls(check: Check): string[] {
     ...(check.max === undefined ? [] : [`max ${String(check.max)}`]),
     ...(check.sameTurn ? ["sameTurn"] : []),
     ...(check.first ? ["first"] : []),
+    ...(check.inputLinesMax === undefined
+      ? []
+      : [`inputLinesMax ${String(check.inputLinesMax)}`]),
+  ];
+}
+
+/**
+ * Names what distinguishes a check that looks at files, beyond its type and path.
+ * @param check - Any check of a case.
+ * @returns The words for its quantifier, root, `created`, `allow` and `ignore`; none for a check without them.
+ */
+export function describeFiles(check: Check): string[] {
+  return [
+    ...(check.quantifier ? [`quantifier ${check.quantifier}`] : []),
+    ...(check.root ? [`root ${check.root}`] : []),
+    ...(check.created ? ["created"] : []),
+    ...(check.allow ? [`allow ${check.allow.join(", ")}`] : []),
+    ...(check.ignore ? [`ignore ${check.ignore.join(", ")}`] : []),
   ];
 }

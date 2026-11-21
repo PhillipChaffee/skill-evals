@@ -1,7 +1,8 @@
-import path from "node:path";
 import { readNeeds } from "../capabilities.js";
 import { caseEnvProblem } from "../env.js";
 import { CALL_FIELDS } from "./call-fields.js";
+import { FILE_FIELDS } from "./file-fields.js";
+import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { UsageError, messageOf } from "../scope.js";
@@ -79,7 +80,6 @@ export const FIELDS: Record<string, FieldDef> = {
     type: "text",
     meaning: "Text to look for. The match is exact and case-sensitive.",
   },
-  path: { type: "path", meaning: "A file path inside the workspace." },
   kind: {
     type: "kind",
     meaning: "What the tool does, with the same word in every harness.",
@@ -97,6 +97,7 @@ export const FIELDS: Record<string, FieldDef> = {
     meaning: "The flags of the check's regular expressions.",
   },
   ...CALL_FIELDS,
+  ...FILE_FIELDS,
   rubric: {
     type: "text",
     meaning: "Plain text that says what a good answer does.",
@@ -225,9 +226,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
   },
   path: (value, at) => {
     const file = text(value, at);
-    if (path.isAbsolute(file) || file.split(/[\\/]/).includes("..")) {
-      throw failure(at, `path must stay inside the workspace: ${file}`);
-    }
+    const problem = pathProblem(file);
+    if (problem) throw failure(at, problem);
     return file;
   },
   glob: (value, at) => text(value, at),

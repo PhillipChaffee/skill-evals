@@ -84,7 +84,7 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
  * Makes the schema of a matcher.
  * @param extras - The keys of the field besides the matcher keys.
  * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name` and `inputMatches`.
- *   `by` and `inputLinesMax` are left out, because the loader rejects them.
+ *   `by` is left out, because the loader rejects it.
  */
 function matcherSchema(extras: Record<string, FieldDef> = {}): Schema {
   return {

@@ -1,0 +1,19 @@
+{
+  "description": "Remove the legacy price formatter.",
+  "tags": ["files"],
+  "checks": [
+    {
+      "type": "file_absent",
+      "path": "src/legacy/formatPrice.ts"
+    },
+    {
+      "type": "file_unchanged",
+      "path": "tests/**"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
+    }
+  ],
+  "timeoutSeconds": 300
+}

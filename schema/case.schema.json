@@ -144,6 +144,14 @@
           { "$ref": "#/$defs/check-output_not_contains" },
           { "$ref": "#/$defs/check-file_exists" },
           { "$ref": "#/$defs/check-file_matches" },
+          { "$ref": "#/$defs/check-file_lacks" },
+          { "$ref": "#/$defs/check-file_lines" },
+          { "$ref": "#/$defs/check-file_absent" },
+          { "$ref": "#/$defs/check-file_unchanged" },
+          { "$ref": "#/$defs/check-file_changed" },
+          { "$ref": "#/$defs/check-files_changed_only" },
+          { "$ref": "#/$defs/check-file_count" },
+          { "$ref": "#/$defs/check-dir_exists" },
           { "$ref": "#/$defs/check-tool_called" },
           { "$ref": "#/$defs/check-tool_not_called" },
           { "$ref": "#/$defs/check-first_tool" },
@@ -280,6 +288,12 @@
                 "description": "The flags of the check's regular expressions.",
                 "type": "string",
                 "minLength": 1
+              },
+              "inputLinesMax": {
+                "title": "inputLinesMax",
+                "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "anyOf": [
@@ -525,7 +539,7 @@
     },
     "check-file_exists": {
       "title": "file_exists",
-      "description": "That file exists in the workspace after the run.",
+      "description": "A file exists at `path`; with `created`, one that the workspace did not hold before the run. A glob needs one matching file. A directory is not a file.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -540,10 +554,21 @@
         },
         "path": {
           "title": "path",
-          "description": "A file path inside the workspace.",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "created": {
+          "title": "created",
+          "description": "True to require that the agent created the file: no file at that path was in the workspace before the run. Default: false.",
+          "type": "boolean"
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
         },
         "requires": {
           "title": "requires",
@@ -566,7 +591,7 @@
     },
     "check-file_matches": {
       "title": "file_matches",
-      "description": "That file exists and matches the regular expression.",
+      "description": "A file at `path` matches the regular expression. With a glob, one matching file is enough unless `quantifier` is `all`. No match for the path scores 0. A file is read as UTF-8, with replacement characters for bytes that are not, and a file over 5 MB scores 0.",
       "type": "object",
       "required": ["type", "path", "pattern"],
       "properties": {
@@ -581,7 +606,7 @@
         },
         "path": {
           "title": "path",
-          "description": "A file path inside the workspace.",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
@@ -597,6 +622,444 @@
           "description": "The flags of the check's regular expressions.",
           "type": "string",
           "minLength": 1
+        },
+        "quantifier": {
+          "title": "quantifier",
+          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one. Default: \"any\" for `file_matches`, \"all\" for `file_lacks`.",
+          "type": "string",
+          "enum": ["any", "all"]
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_lacks": {
+      "title": "file_lacks",
+      "description": "No file at `path` matches the regular expression. With a glob, every matching file must lack it unless `quantifier` is `any`. A path that matches no file scores 1. A file over 5 MB, or one that cannot be read, cannot be shown to lack the pattern, so it scores 0.",
+      "type": "object",
+      "required": ["type", "path", "pattern"],
+      "properties": {
+        "type": { "const": "file_lacks" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "quantifier": {
+          "title": "quantifier",
+          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one. Default: \"any\" for `file_matches`, \"all\" for `file_lacks`.",
+          "type": "string",
+          "enum": ["any", "all"]
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_lines": {
+      "title": "file_lines",
+      "description": "Every file at `path` has from `min` to `max` lines. A path that matches no file scores 0. A file over 5 MB scores 0.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_lines" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "min": {
+          "title": "min",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max": {
+          "title": "max",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "anyOf": [{ "required": ["min"] }, { "required": ["max"] }],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_absent": {
+      "title": "file_absent",
+      "description": "Nothing exists at `path`, whether a file, a directory or a link. A path that matches nothing scores 1.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_absent" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_unchanged": {
+      "title": "file_unchanged",
+      "description": "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory is not a file, so write `dir/**` to cover what is under it.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_unchanged" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_changed": {
+      "title": "file_changed",
+      "description": "A file at `path` was created, modified or deleted by the run. A path that matches no file scores 0.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_changed" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-files_changed_only": {
+      "title": "files_changed_only",
+      "description": "Every path the run created, modified or deleted, except the ones `ignore` names, matches a glob of `allow`.",
+      "type": "object",
+      "required": ["type", "allow"],
+      "properties": {
+        "type": { "const": "files_changed_only" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "allow": {
+          "title": "allow",
+          "description": "A non-empty list of globs. Every path the run created, modified or deleted must match one of them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "ignore": {
+          "title": "ignore",
+          "description": "A list of globs for changed paths to leave out before `allow` is applied, such as a log file the harness writes.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_count": {
+      "title": "file_count",
+      "description": "The number of files that `path` matches is from `min` (default 1) to `max`. Directories are not counted.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_count" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "min": {
+          "title": "min",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max": {
+          "title": "max",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-dir_exists": {
+      "title": "dir_exists",
+      "description": "A directory exists at `path`. A file or a link to one does not count.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "dir_exists" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "path": {
+          "title": "path",
+          "description": "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "root": {
+          "title": "root",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "type": "string",
+          "enum": ["workspace", "home"]
         },
         "requires": {
           "title": "requires",
@@ -666,15 +1129,21 @@
           "type": "string",
           "minLength": 1
         },
+        "inputLinesMax": {
+          "title": "inputLinesMax",
+          "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+          "type": "integer",
+          "minimum": 1
+        },
         "min": {
           "title": "min",
-          "description": "The fewest matching calls that pass: a whole number, 0 or more. Default: 1.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most matching calls that pass: a whole number, 0 or more. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -757,6 +1226,12 @@
           "type": "string",
           "minLength": 1
         },
+        "inputLinesMax": {
+          "title": "inputLinesMax",
+          "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+          "type": "integer",
+          "minimum": 1
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -830,6 +1305,12 @@
               "description": "The flags of the check's regular expressions.",
               "type": "string",
               "minLength": 1
+            },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
             }
           },
           "anyOf": [
@@ -880,6 +1361,12 @@
                 "description": "The flags of the check's regular expressions.",
                 "type": "string",
                 "minLength": 1
+              },
+              "inputLinesMax": {
+                "title": "inputLinesMax",
+                "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "anyOf": [
@@ -963,6 +1450,12 @@
               "type": "string",
               "minLength": 1
             },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
+            },
             "which": {
               "title": "which",
               "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
@@ -1015,6 +1508,12 @@
               "description": "The flags of the check's regular expressions.",
               "type": "string",
               "minLength": 1
+            },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
             },
             "which": {
               "title": "which",
@@ -1071,6 +1570,12 @@
                 "description": "The flags of the check's regular expressions.",
                 "type": "string",
                 "minLength": 1
+              },
+              "inputLinesMax": {
+                "title": "inputLinesMax",
+                "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "anyOf": [

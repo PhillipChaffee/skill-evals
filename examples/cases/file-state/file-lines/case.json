@@ -1,0 +1,17 @@
+{
+  "description": "Keep the summary short.",
+  "tags": ["files"],
+  "checks": [
+    {
+      "type": "file_lines",
+      "path": "SUMMARY.md",
+      "min": 1,
+      "max": 20
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
+    }
+  ],
+  "timeoutSeconds": 300
+}

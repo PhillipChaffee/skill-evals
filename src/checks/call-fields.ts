@@ -11,6 +11,11 @@ const WHICH: Record<string, FieldDef> = {
 
 // The fields of the checks that count, order and pick tool calls, in the order the docs list them.
 export const CALL_FIELDS: Record<string, FieldDef> = {
+  inputLinesMax: {
+    type: "int",
+    meaning:
+      "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+  },
   anyOf: {
     type: "texts",
     meaning:
@@ -19,12 +24,12 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   min: {
     type: "count",
     meaning:
-      "The fewest matching calls that pass: a whole number, 0 or more. Default: 1.",
+      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
   },
   max: {
     type: "count",
     meaning:
-      "The most matching calls that pass: a whole number, 0 or more. Default: no limit.",
+      "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
   },
   sameTurn: {
     type: "bool",

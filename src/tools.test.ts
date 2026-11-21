@@ -3,6 +3,7 @@ import type { RuledCheck } from "./checks/index.js";
 import { checkScore } from "./checks/index.js";
 import { skillsLoaded } from "./skill-loads.js";
 import { lines, parse, parseText } from "./testing/streams.js";
+import { NO_FILES } from "./testing/outcome.js";
 
 const CODEX_STREAM = "codex.stream.jsonl";
 
@@ -48,6 +49,7 @@ const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
       finalText: "",
       skillsLoaded: [],
       workspace: "",
+      ...NO_FILES,
       subject: { dir: null, mutated: [] },
     },
   ).score;

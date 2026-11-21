@@ -42,7 +42,14 @@ test.each([
     { by: { agent: "x" }, kind: "shell" },
     /case.json.*"by" is not yet supported/,
   ],
-  [{ inputLinesMax: 3, kind: "shell" }, /"inputLinesMax" is not yet supported/],
+  [
+    { inputLinesMax: 3 },
+    /needs at least one of "kind", "name", "inputMatches"/,
+  ],
+  [
+    { inputLinesMax: "3", kind: "shell" },
+    /inputLinesMax must be a positive integer/,
+  ],
 ])("a matcher %j is a load error", (raw, message) => {
   expect(() => parseMatcher(raw, WHERE)).toThrow(UsageError);
   expect(() => parseMatcher(raw, WHERE)).toThrow(message);
@@ -136,4 +143,36 @@ test("a quote of no anchor shows the start of the list, and says what it left ou
   expect(shown[12]).toBe("... 3 more");
   expect(quoteCalls([], [])).toBe("(no tool calls)");
   expect(quoteCalls(calls, [], 2).split("\n")).toHaveLength(3);
+});
+
+test("inputLinesMax counts the lines of the longest string in the input, at any depth", () => {
+  const matcher = { kind: "edit", inputLinesMax: 2 } as const;
+  const edit = (input: unknown) => call("Edit", "edit", input);
+  expect(
+    matches(matcher, edit({ file_path: "a.ts", new_string: "a\nb" })),
+  ).toBe(true);
+  expect(matches(matcher, edit({ new_string: "a\nb\nc" }))).toBe(false);
+  expect(
+    matches(matcher, edit({ edits: [{ old: "x", new: "a\nb\nc\n" }] })),
+  ).toBe(false);
+  expect(matches(matcher, edit({ deep: { list: ["short", "p\nq"] } }))).toBe(
+    true,
+  );
+  expect(
+    matches(matcher, edit({ path: "a/very/long/path.ts", body: "a\nb\n" })),
+  ).toBe(true);
+  expect(matches(matcher, edit({ count: 7 }))).toBe(true);
+  expect(matches(matcher, edit(null))).toBe(true);
+  expect(matches(matcher, edit("one\ntwo\nthree"))).toBe(false);
+  expect(matches({ ...matcher, inputLinesMax: 0 }, edit({ text: "" }))).toBe(
+    true,
+  );
+  expect(matches({ kind: "edit" }, edit({ text: "a\nb\nc\nd" }))).toBe(true);
+});
+
+test("inputLinesMax reads with its type, beside the other keys", () => {
+  expect(parseMatcher({ kind: "edit", inputLinesMax: 3 }, WHERE)).toEqual({
+    kind: "edit",
+    inputLinesMax: 3,
+  });
 });

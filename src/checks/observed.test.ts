@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { checkScore } from "./index.js";
+import { NO_FILES } from "../testing/outcome.js";
 
 const score = (mutated: string[], observed?: boolean) =>
   checkScore(
@@ -9,6 +10,7 @@ const score = (mutated: string[], observed?: boolean) =>
       toolCalls: [],
       skillsLoaded: [],
       workspace: "",
+      ...NO_FILES,
       subject: {
         dir: "/copy",
         mutated,
