@@ -60,11 +60,17 @@ type Event =
 // `.claude/` is not read.
 const ISOLATION: NonNullable<Harness["isolation"]> = {
   args: ["--setting-sources", "user", "--strict-mcp-config"],
-  env: { CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" },
+  env: {
+    CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+    // Both are read by the compiled CLI: the first skips the managed policy skills directory, the second the sync of
+    // organization memory.
+    CLAUDE_CODE_DISABLE_POLICY_SKILLS: "1",
+    CLAUDE_CODE_DISABLE_ORG_MEMORY: "1",
+  },
   proves:
     "Every plugin directory, plugin-prefixed skill and agent, and MCP server in the init event is the subject's. The report must list plugins and skills, or the run is invalid.",
   notProven:
-    "Managed policy settings (hooks, environment, permissions), managed memory and CLAUDE.md files, rules and hooks, and bare-named skills and agents, which are Claude Code's built-ins or the organization's managed ones: no switch removes them and the init event does not tell them apart.",
+    "Managed policy settings (hooks, environment, permissions), a managed CLAUDE.md file, rules and hooks, and the organization's managed agents, which the init event does not tell from built-in agents.",
 };
 
 const claudeCode: Harness = {
@@ -148,7 +154,7 @@ const claudeCode: Harness = {
     };
   },
 
-  // A bare skill or agent name is a built-in or a managed-policy one, which no switch removes; see `isolation`.
+  // A bare skill name is a built-in, because policy skills are switched off; a bare agent name may also be managed.
   foreign: foreignOfClaude,
   isolation: ISOLATION,
 };

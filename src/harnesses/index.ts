@@ -120,9 +120,10 @@ export function selectHarnesses(
 /**
  * Refuses `--isolated` for a harness that cannot start isolated and prove from its report what it loaded.
  * @param chosen - The harnesses that will run.
+ * @param role - What they do, put before their names in the message; empty for the harnesses under test.
  * @throws {UsageError} Naming each harness that lacks the `isolated` or the `loadedReport` capability.
  */
-export function requireIsolation(chosen: Located[]): void {
+export function requireIsolation(chosen: Located[], role = ""): void {
   const lacking = chosen
     .map(({ harness }) => harness)
     .filter(
@@ -135,7 +136,21 @@ export function requireIsolation(chosen: Located[]): void {
     .map((harness) => harness.id);
   if (lacking.length > 0) {
     throw new UsageError(
-      `--isolated cannot run with ${lacking.join(", ")}: the harness must start with nothing loaded but the subject and prove from its own report what it loaded`,
+      `--isolated cannot run with ${role ? `${role} ` : ""}${lacking.join(", ")}: the harness must start with nothing loaded but the subject and prove from its own report what it loaded`,
     );
   }
+}
+
+/**
+ * Refuses `--isolated` unless the harnesses under test and the judge harness can both isolate and prove it.
+ * @param chosen - The harnesses that will run.
+ * @param judge - The harness that scores judged checks; absent when it is the harness under test.
+ * @throws {UsageError} Naming the harnesses that cannot.
+ */
+export function requireIsolatedRun(
+  chosen: Located[],
+  judge: Located | undefined,
+): void {
+  requireIsolation(chosen);
+  requireIsolation(judge ? [judge] : [], "the judge harness");
 }

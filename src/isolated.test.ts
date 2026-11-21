@@ -238,6 +238,29 @@ test("--isolated with a harness that cannot isolate is a usage error that names 
   expect(fs.existsSync(box.started)).toBe(false);
 });
 
+test("--isolated with a judge harness that cannot isolate is a usage error that names it, before any harness starts", async () => {
+  const box = sandbox();
+  const cases = plantCase(box, [{ type: "judge", rubric: "Says done." }]);
+  const result = await box.cli(
+    [
+      "score",
+      "--subject",
+      NONE,
+      "--cases",
+      cases,
+      ISOLATED,
+      "--judge-harness",
+      "codex",
+    ],
+    { SKILL_EVALS_BIN_CODEX: box.pi },
+  );
+  expect(result.status).toBe(2);
+  expect(result.stderr).toMatch(
+    /--isolated cannot run with the judge harness codex:/,
+  );
+  expect(fs.existsSync(box.started)).toBe(false);
+});
+
 test("a harness needs both isolated and loadedReport to run under --isolated", () => {
   const harness = (...caps: string[]) => ({
     harness: { id: "x", capabilities: new Set(caps) } as never,

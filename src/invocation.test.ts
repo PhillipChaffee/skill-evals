@@ -236,10 +236,16 @@ test("the invocation uses the adapter's own isolation description", () => {
   const claude = HARNESSES.find((h) => h.id === CLAUDE_CODE);
   const { args, env } = invoke(CLAUDE_CODE, null, { isolated: true });
   expect(claude?.isolation?.args.every((a) => args.includes(a))).toBe(true);
-  expect(claude?.isolation?.env).toEqual({
+  const switches = {
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
-  });
-  expect(env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
+    CLAUDE_CODE_DISABLE_POLICY_SKILLS: "1",
+    CLAUDE_CODE_DISABLE_ORG_MEMORY: "1",
+  };
+  expect(claude?.isolation?.env).toEqual(switches);
+  expect(env).toMatchObject(switches);
+  expect(invoke(CLAUDE_CODE, null).env).not.toHaveProperty(
+    "CLAUDE_CODE_DISABLE_POLICY_SKILLS",
+  );
 });
 
 test("a harness with the isolated capability describes its isolation", () => {

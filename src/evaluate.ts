@@ -6,7 +6,7 @@ import { loadCases } from "./cases.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import type { Located } from "./harnesses/index.js";
-import { requireIsolation, selectHarnesses } from "./harnesses/index.js";
+import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { Config } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
@@ -347,10 +347,10 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const { minScore, model } = options;
   const reps = requireUsable(options);
   const selection = selectHarnesses(options.harness);
-  if (options.isolated) requireIsolation(selection.chosen);
   const [judgeHarness] = options.judgeHarness
     ? selectHarnesses(options.judgeHarness).chosen
     : [];
+  if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
   const judgeModel = options.judgeModel ?? model;
   const cases = casesOf(options);
   const decision = decisionFor(cases, options);
