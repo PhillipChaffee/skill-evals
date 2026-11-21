@@ -1,0 +1,6 @@
+{
+  // A case's prompt.md is sent to the agent byte for byte, so it is a prompt
+  // and not a document: it has no heading to open with. Every other rule
+  // still applies to it.
+  "MD041": false,
+}

@@ -1,0 +1,14 @@
+# Generated code is reported, never formatted: `coverage/` is vitest's report
+# output and `node_modules` is prettier's own default ignore, restated here so
+# the fence is visible but there is one list of fences, not two.
+node_modules/
+coverage/
+# Deviation from the full-lint template, which stops at the two lines above.
+# Both entries exist because prettier and another gate disagree about a file:
+# - The workflows are gated by yamllint, whose default asks for two spaces
+#   before a comment where prettier writes one. ci.yml is also a byte-for-byte
+#   copy of full-lint's template, and stays one.
+# - .markdownlint-cli2.jsonc is a byte-for-byte copy of full-lint's template
+#   too. Prettier would add trailing commas to it.
+.github/workflows/
+.markdownlint-cli2.jsonc

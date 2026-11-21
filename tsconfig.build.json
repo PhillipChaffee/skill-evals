@@ -1,0 +1,18 @@
+// The emit config, a deviation the full-lint template does not carry: the
+// template only type-checks, and this package is published. Node refuses to
+// strip types from files under node_modules, so what ships is compiled
+// JavaScript plus declarations in dist/. Every strictness flag is inherited
+// from tsconfig.json; only what emit needs is set here.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "nodenext", // the output runs in Node with no bundler, so the compiler checks that every relative import names its .js file
+    "moduleResolution": "nodenext", // required by module nodenext
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true // consumers of `import "skill-evals"` get the types
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/testing"] // tests and their helpers are not shipped
+}

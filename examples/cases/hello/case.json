@@ -1,0 +1,16 @@
+{
+  "checks": [
+    { "type": "file_exists", "path": "haiku.txt" },
+    {
+      "type": "file_matches",
+      "path": "haiku.txt",
+      "pattern": "^\\s*\\S.*\\n\\s*\\S.*\\n\\s*\\S.*\\s*$"
+    },
+    {
+      "type": "judge",
+      "rubric": "The answer says that a haiku was saved to haiku.txt. It asks the user no question.",
+      "weight": 2
+    }
+  ],
+  "timeoutSeconds": 300
+}

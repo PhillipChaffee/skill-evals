@@ -1,0 +1,11 @@
+# typescript/.typos.toml: the trimmed subset a typescript bootstrap can
+# hit. retruns is the deliberate mistyped-tag example the jsdoc rule
+# catches; Pn is GNU grep's PCRE flag in the bidi-hygiene step (grep -rPn),
+# which typos reads as a misspelling of "On".
+[default.extend-identifiers]
+recieve = "recieve"
+calender = "calender"
+retruns = "retruns"
+
+[default.extend-words]
+Pn = "Pn"
