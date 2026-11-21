@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { expect, test } from "vitest";
 import { exec, play, scoreSubject, writeCase } from "./testing/runs.js";
 import { sandbox } from "./testing/sandbox.js";
@@ -254,4 +255,36 @@ test("a changed seed does not leak between two reps", async () => {
     reps: 2,
   });
   expect(done.records.map((record) => record.checks[0]?.score)).toEqual([1, 1]);
+});
+
+test("a relative link in the workspace fixture stays inside the workspace and scores as in 0.0.1", async () => {
+  const box = sandbox();
+  writeCase(box, "cases", {
+    id: "links",
+    checks: [
+      { type: "file_exists", path: "alias.md" },
+      { type: "file_matches", path: "alias.md", pattern: "^fixture$" },
+      { type: "file_exists", path: "docs/alias/in.md" },
+    ],
+  });
+  box.write("cases/links/workspace/real.md", "fixture");
+  box.write("cases/links/workspace/docs/real/in.md", "inner");
+  const fixture = `${box.root}/cases/links/workspace`;
+  fs.symlinkSync("real.md", `${fixture}/alias.md`);
+  fs.symlinkSync("real", `${fixture}/docs/alias`);
+  play(box, {
+    name: "links",
+    id: "links",
+    steps: [exec("echo changed >> alias.md")],
+  });
+  const done = await scoreSubject(box, {
+    subject: "none",
+    cases: `${box.root}/cases`,
+  });
+  expect(done.status, done.stderr).toBe(0);
+  const [record] = done.records;
+  expect(record?.checks.map((check) => check.score)).toEqual([1, 0, 1]);
+  // The write went through the link inside the copy and never reached the fixture.
+  expect(fs.readFileSync(`${fixture}/real.md`, "utf8")).toBe("fixture");
+  expect(record?.changedFiles.modified).toContain("real.md");
 });

@@ -146,3 +146,39 @@ test("tool_called and tool_not_called take inputLinesMax", () => {
     "tool_called shell inputLinesMax 2",
   );
 });
+
+test("tool_not_called with inputLinesMin says that no single write was that long", () => {
+  const lines = (n: number) => Array.from({ length: n }, () => "x").join("\n");
+  const write = (n: number) => ({
+    ...call("Write", { file_path: "a.ts", content: lines(n) }),
+    kind: "write" as const,
+  });
+  const none = {
+    type: "tool_not_called",
+    kind: "write",
+    inputLinesMin: 1001,
+  } as const;
+  expect(score(none, [write(1000), write(10)]).score).toBe(1);
+  expect(score(none, [write(10), write(1001)]).score).toBe(0);
+  expect(
+    score({ type: "tool_called", kind: "write", inputLinesMin: 1001 }, [
+      write(1500),
+    ]).score,
+  ).toBe(1);
+  expect(
+    score({ type: "tool_called", kind: "write", inputLinesMin: 1001 }, [
+      write(5),
+    ]).score,
+  ).toBe(0);
+  expect(describeCheck({ ...none, weight: 1 })).toBe(
+    "tool_not_called write inputLinesMin 1001",
+  );
+  // The other key reads the other way round: it matches the small calls.
+  const small = {
+    type: "tool_not_called",
+    kind: "write",
+    inputLinesMax: 1000,
+  } as const;
+  expect(score(small, [write(1500)]).score).toBe(1);
+  expect(score(small, [write(10)]).score).toBe(0);
+});

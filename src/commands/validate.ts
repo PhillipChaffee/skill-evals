@@ -1,5 +1,6 @@
 import { applicability, hostCapabilities } from "../applicability.js";
 import type { Case } from "../cases.js";
+import { scopeTest } from "../checks/tree.js";
 import { exclusionsOf } from "../exclusions.js";
 import { installedOf } from "../harnesses/index.js";
 import type { Located } from "../harnesses/index.js";
@@ -7,6 +8,7 @@ import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
 import { loadSelection, selectionOf } from "../select.js";
 import { UsageError } from "../scope.js";
+import { snapshot } from "../snapshot.js";
 import { resolveSubject } from "../subject.js";
 import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
@@ -111,9 +113,36 @@ function notApplicable(cases: Case[], context: LintContext): Lint[] {
 }
 
 /**
+ * Warns about `file_unchanged` checks that protect nothing.
+ * @param cases - The loaded cases.
+ * @returns One warning for each `file_unchanged` check on the workspace whose path or glob matches no file of the
+ *   case's `workspace/` folder: it can only fail when the agent creates a file there. A case with no `workspace/` is
+ *   left out, because a later setup step may fill it.
+ */
+function vacuousUnchanged(cases: Case[]): Lint[] {
+  return cases.flatMap((one) => {
+    if (one.workspaceDir === null) return [];
+    const seed = snapshot(one.workspaceDir);
+    return one.checks.flatMap((check): Lint[] => {
+      if (check.type !== "file_unchanged" || check.root === "home") return [];
+      const test = scopeTest(check.path ?? "", seed);
+      return [...seed.keys()].some(test)
+        ? []
+        : [
+            {
+              level: "warning",
+              caseId: one.id,
+              text: `a file_unchanged check on "${check.path ?? ""}" matches no file of the case's workspace, so it protects nothing: it fails only if the agent creates a file there`,
+            },
+          ];
+    });
+  });
+}
+
+/**
  * Every lint, in the order its lines are written. A later task adds a lint by appending a function here.
  */
-export const LINTS: LintRule[] = [skillNames, notApplicable];
+export const LINTS: LintRule[] = [skillNames, notApplicable, vacuousUnchanged];
 
 const line = ({ level, caseId, text }: Lint): string =>
   `${level} ${caseId}: ${text}`;

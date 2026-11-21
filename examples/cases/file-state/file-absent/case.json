@@ -8,7 +8,7 @@
     },
     {
       "type": "file_unchanged",
-      "path": "tests/**"
+      "path": "vendor/**"
     },
     {
       "type": "output_contains",

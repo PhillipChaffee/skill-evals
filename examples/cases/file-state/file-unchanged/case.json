@@ -4,7 +4,7 @@
   "checks": [
     {
       "type": "file_unchanged",
-      "path": "tests/**"
+      "path": "vendor/**"
     },
     {
       "type": "file_changed",

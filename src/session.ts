@@ -245,7 +245,10 @@ export async function session<T>(
   const workspace = tempDir("proj-");
   try {
     if (workspaceDir) {
-      fs.cpSync(workspaceDir, workspace.dir, { recursive: true });
+      fs.cpSync(workspaceDir, workspace.dir, {
+        recursive: true,
+        verbatimSymlinks: true,
+      });
     }
     const seed = snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);

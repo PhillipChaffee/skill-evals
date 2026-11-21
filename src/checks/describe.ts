@@ -32,6 +32,9 @@ export function describeCalls(check: Check): string[] {
     ...(check.inputLinesMax === undefined
       ? []
       : [`inputLinesMax ${String(check.inputLinesMax)}`]),
+    ...(check.inputLinesMin === undefined
+      ? []
+      : [`inputLinesMin ${String(check.inputLinesMin)}`]),
   ];
 }
 

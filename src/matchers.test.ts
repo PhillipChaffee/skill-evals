@@ -176,3 +176,21 @@ test("inputLinesMax reads with its type, beside the other keys", () => {
     inputLinesMax: 3,
   });
 });
+
+test("inputLinesMin matches a call whose longest string has at least that many lines", () => {
+  const matcher = { kind: "write", inputLinesMin: 3 } as const;
+  const write = (input: unknown) => call("Write", "write", input);
+  expect(matches(matcher, write({ content: "a\nb\nc" }))).toBe(true);
+  expect(matches(matcher, write({ content: "a\nb" }))).toBe(false);
+  expect(matches(matcher, write({ x: { y: ["a\nb\nc\nd\n"] } }))).toBe(true);
+  expect(
+    matches({ ...matcher, inputLinesMax: 3 }, write({ content: "a\nb\nc" })),
+  ).toBe(true);
+  expect(
+    matches({ ...matcher, inputLinesMax: 3 }, write({ content: "a\nb\nc\nd" })),
+  ).toBe(false);
+  expect(parseMatcher({ kind: "write", inputLinesMin: 3 }, WHERE)).toEqual({
+    kind: "write",
+    inputLinesMin: 3,
+  });
+});

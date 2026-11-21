@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   baseGlobOf,
   expandGlob,
@@ -66,8 +66,8 @@ test("expandGlob past its limit throws a usage error that names the glob", () =>
   const box = sandbox();
   for (const name of ["a", "b", "c"]) box.write(`tree/${name}.txt`, "");
   const tree = path.join(box.root, "tree");
-  expect(expandGlob(tree, "*.txt", 3)).toHaveLength(3);
-  expect(() => expandGlob(tree, "*.txt", 2)).toThrow(
+  expect(expandGlob(tree, "*.txt", { limit: 3 })).toHaveLength(3);
+  expect(() => expandGlob(tree, "*.txt", { limit: 2 })).toThrow(
     'the glob "*.txt" matches more than 2 paths',
   );
 });
@@ -96,4 +96,71 @@ test("baseGlobOf keeps the part before the first @ unless it is empty or splits 
   expect(baseGlobOf("plain")).toBe("plain");
   expect(baseGlobOf("@v")).toBe("**");
   expect(baseGlobOf("{a@x,b}")).toBe("**");
+});
+
+test("expandGlob starts at the deepest literal directory, so a sibling it never needs stays unread", () => {
+  const box = sandbox();
+  box.write("tree/a/b/x.ts", "");
+  box.write("tree/other/y.ts", "");
+  const tree = path.join(box.root, "tree");
+  const list = fs.readdirSync.bind(fs);
+  const spy = vi.spyOn(fs, "readdirSync").mockImplementation(((
+    dir: string,
+    options: unknown,
+  ) => {
+    if (dir.endsWith("/other")) throw new Error("EACCES");
+    return (list as (...args: unknown[]) => unknown)(dir, options);
+  }) as unknown as typeof fs.readdirSync);
+  try {
+    const unreadable: string[] = [];
+    expect(
+      expandGlob(tree, "a/b/*.ts", {
+        onUnreadable: (dir) => unreadable.push(dir),
+      }),
+    ).toEqual(["a/b/x.ts"]);
+    expect(unreadable).toEqual([]);
+    expect(
+      expandGlob(tree, "**/*.ts", {
+        onUnreadable: (dir) => unreadable.push(dir),
+      }),
+    ).toEqual(["a/b/x.ts"]);
+    expect(unreadable).toEqual(["other"]);
+    expect(expandGlob(tree, "a/missing/*.ts")).toEqual([]);
+    expect(expandGlob(tree, "a/b/x.ts/*")).toEqual([]);
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("a glob never starts its walk inside a link, and reports a base that cannot be looked at", () => {
+  const box = sandbox();
+  box.write("outside/secret.ts", "");
+  box.write("tree/real/in.ts", "");
+  fs.symlinkSync(
+    path.join(box.root, "outside"),
+    path.join(box.root, "tree/link"),
+  );
+  const tree = path.join(box.root, "tree");
+  expect(expandGlob(tree, "link/*.ts")).toEqual([]);
+  const stat = fs.lstatSync.bind(fs) as typeof fs.lstatSync;
+  const spy = vi.spyOn(fs, "lstatSync").mockImplementation(((
+    file: string,
+    ...rest: unknown[]
+  ) => {
+    if (file.endsWith("/real")) {
+      throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+    }
+    return (stat as (...args: unknown[]) => unknown)(file, ...rest);
+  }) as unknown as typeof fs.lstatSync);
+  try {
+    const unreadable: string[] = [];
+    expect(
+      expandGlob(tree, "real/*.ts", {
+        onUnreadable: (dir) => unreadable.push(dir),
+      }),
+    ).toEqual([]);
+    expect(unreadable).toEqual(["real"]);
+  } finally {
+    spy.mockRestore();
+  }
 });

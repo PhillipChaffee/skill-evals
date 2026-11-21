@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { UsageError } from "./scope.js";
 import { walkTree } from "./walk.js";
 
@@ -62,29 +64,71 @@ export const literalGlob = (relative: string): string =>
 /** The most paths that `expandGlob` returns before it throws. */
 export const GLOB_LIMIT = 5000;
 
+/** What `expandGlob` throws when a glob matches more than the limit. */
+export class GlobCapError extends UsageError {}
+
+/**
+ * Tells a glob from a plain path.
+ * @param pattern - A path or glob.
+ * @returns True when it holds `*`, `?` or `{`.
+ */
+export const isGlob = (pattern: string): boolean => /[*?{]/.test(pattern);
+
+/**
+ * Finds the directory a glob's walk can start in: the literal directories before its first wildcard.
+ * @param glob - A glob.
+ * @returns A relative posix path with no trailing slash, "" when the walk must start at the root.
+ */
+const startOf = (glob: string): string =>
+  literalPrefix(glob).split("/").slice(0, -1).join("/");
+
+/**
+ * Tells an error for a path that is not there from one that is something else.
+ * @param error - What a file system call threw.
+ * @returns True for ENOENT and ENOTDIR.
+ */
+export const isMissing = (error: unknown): boolean =>
+  ["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "");
+
 /**
  * Lists the paths under a directory that a glob matches. A link is listed when it matches, and never followed.
  * @param root - The directory to look in.
  * @param glob - Matched against each path relative to root, with `/` as the separator.
- * @param limit - The most paths to return.
- * @returns The matching files, directories and links, as sorted relative posix paths. A directory that cannot be read
- *   is skipped.
- * @throws {UsageError} When more than `limit` paths match, naming the glob.
+ * @param options - How far to go.
+ * @param options.limit - The most paths to return. Default: 5000.
+ * @param options.onUnreadable - Called with the relative path of each directory that cannot be listed ("" for the
+ *   root); it is skipped. Default: skipped silently.
+ * @returns The matching files, directories and links, as sorted relative posix paths. The walk starts at the deepest
+ *   literal directory of the glob, and never goes through a link.
+ * @throws {GlobCapError} When more than `limit` paths match, naming the glob.
  */
 export function expandGlob(
   root: string,
   glob: string,
-  limit = GLOB_LIMIT,
+  options: { limit?: number; onUnreadable?: (relative: string) => void } = {},
 ): string[] {
+  const { limit = GLOB_LIMIT, onUnreadable = () => undefined } = options;
   const matcher = globToRegExp(glob);
   const found: string[] = [];
+  const from = startOf(glob);
+  let at = root;
+  for (const part of from === "" ? [] : from.split("/")) {
+    at = path.join(at, part);
+    try {
+      if (!fs.lstatSync(at).isDirectory()) return [];
+    } catch (error) {
+      if (!isMissing(error)) onUnreadable(from);
+      return [];
+    }
+  }
   walkTree(root, {
-    unreadable: () => undefined,
+    from,
+    unreadable: onUnreadable,
     visit: ({ relative }) => {
       if (!matcher.test(relative)) return undefined;
       found.push(relative);
       if (found.length > limit) {
-        throw new UsageError(
+        throw new GlobCapError(
           `the glob "${glob}" matches more than ${String(limit)} paths in ${root}`,
         );
       }
@@ -114,7 +158,7 @@ export function baseGlobOf(glob: string): string {
  * @returns True for a glob with a wildcard and no literal `@`, such as `to*lite`, which matches `tool@lite`.
  */
 export const mayNameVariant = (glob: string): boolean =>
-  !glob.includes("@") && /[*?{]/.test(glob);
+  !glob.includes("@") && isGlob(glob);
 
 /**
  * Takes the characters that every match of a glob starts with.

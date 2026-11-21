@@ -22,6 +22,11 @@ const BAD: [string, unknown, RegExp][] = [
     /inputLinesMax must be a positive integer/,
   ],
   [
+    "an inputLinesMin that is zero",
+    { type: "tool_not_called", kind: "write", inputLinesMin: 0 },
+    /inputLinesMin must be a positive integer/,
+  ],
+  [
     "a matcher with only an inputLinesMax",
     { type: "first_tool", matches: { inputLinesMax: 3 } },
     /needs at least one of "kind", "name", "inputMatches"/,
@@ -64,7 +69,7 @@ const BAD: [string, unknown, RegExp][] = [
   [
     "an allow glob that leaves the root",
     { type: "files_changed_only", allow: ["../**"] },
-    /"allow" globs must stay inside the root: \.\.\/\*\*/,
+    /"allow": path must stay inside the workspace: \.\.\/\*\*/,
   ],
   [
     "an ignore glob that is not closed",

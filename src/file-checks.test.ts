@@ -40,7 +40,7 @@ test("file_exists with created needs a file that the seed lacked", () => {
   expect(created("*.md").score).toBe(1);
   const old = created("notes.txt");
   expect(old.score).toBe(0);
-  expect(old.reason).toMatch(/notes.txt.*already in the seed/);
+  expect(old.reason).toMatch(/notes.txt was in the seed/);
   expect(created("missing.md").score).toBe(0);
 });
 
@@ -164,7 +164,9 @@ test("file_count counts files, with min 1 by default", () => {
     reason: '2 files match "src/*", fewer than min 3: src/a.ts, src/b.ts',
   });
   expect(count({ max: 1 }).reason).toMatch(/more than max 1/);
-  expect(score({ type: "file_count", path: "src" }, out).score).toBe(0);
+  expect(
+    score({ type: "file_count", path: "src", min: 2, max: 2 }, out).score,
+  ).toBe(1);
   expect(
     score({ type: "file_count", path: "src/*", min: 2, max: 2 }, out).score,
   ).toBe(1);

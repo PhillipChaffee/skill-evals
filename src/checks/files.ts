@@ -1,9 +1,17 @@
+import fs from "node:fs";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { CHANGE_CHECKS } from "./file-changes.js";
 import { TEXT_CHECKS } from "./file-text.js";
 import { checkBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
-import { find, pathsOf, shown, treeOf } from "./tree.js";
+import {
+  find,
+  pathsOf,
+  shown,
+  treeOf,
+  unlisted,
+  withUnlisted,
+} from "./tree.js";
 import type { Found, Tree } from "./tree.js";
 
 const where = (check: RuledCheck): string => `"${check.path ?? ""}"`;
@@ -12,33 +20,59 @@ const where = (check: RuledCheck): string => `"${check.path ?? ""}"`;
  * Looks up what a check's path names.
  * @param check - A check with `path`, and perhaps `root`.
  * @param outcome - What the run left behind.
+ * @param covered - Whether a plain path that names a directory means everything under it.
  * @returns The tree and what is at the path now.
  */
 function lookup(
   check: RuledCheck,
   outcome: Outcome,
+  covered = false,
 ): { tree: Tree; found: Found } {
   const tree = treeOf(check, outcome);
-  return { tree, found: find(tree, check.path ?? "") };
+  return { tree, found: find(tree, check.path ?? "", covered) };
+}
+
+/**
+ * Tells whether a file can be opened for reading.
+ * @param real - Its real path.
+ * @returns False when opening it fails.
+ */
+function readable(real: string): boolean {
+  try {
+    fs.closeSync(fs.openSync(real, "r"));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const fileExists = (check: RuledCheck, outcome: Outcome): Verdict => {
   const { tree, found } = lookup(check, outcome);
   if (found.capped !== null) return { score: 0, reason: found.capped };
-  const files = pathsOf(found, "file");
+  const files = found.entries.filter((entry) => entry.kind === "file");
   if (files.length === 0) {
+    return withUnlisted(
+      {
+        score: 0,
+        reason: `no file matches ${where(check)} in the ${tree.name}`,
+      },
+      found,
+    );
+  }
+  const open = files.filter((file) => readable(file.real));
+  if (open.length === 0) {
     return {
       score: 0,
-      reason: `no file matches ${where(check)} in the ${tree.name}`,
+      reason: `${shown(files.map(({ path }) => path))} exists but cannot be read`,
     };
   }
   if (!check.created) return PASS;
-  const fresh = files.filter((file) => !tree.seed.has(file));
+  const fresh = open.filter((file) => !tree.seed.has(file.path));
   return fresh.length > 0
     ? PASS
     : {
         score: 0,
-        reason: `${shown(files)} already in the seed, so the agent did not create ${files.length === 1 ? "it" : "any of them"}`,
+        reason: `${shown(open.map(({ path }) => path))} was in the seed, so the agent did not create ${open.length === 1 ? "it" : "any of them"}`,
       };
 };
 
@@ -46,13 +80,22 @@ const fileAbsent = (check: RuledCheck, outcome: Outcome): Verdict => {
   const { found } = lookup(check, outcome);
   if (found.capped !== null) return { score: 0, reason: found.capped };
   const there = found.entries.map(({ path }) => path);
-  return there.length === 0
+  if (there.length > 0) {
+    return {
+      score: 0,
+      reason: `present: ${shown(there)} matches ${where(check)}${unlisted(found)}`,
+    };
+  }
+  return found.unreadable.length === 0
     ? PASS
-    : { score: 0, reason: `present: ${shown(there)} matches ${where(check)}` };
+    : {
+        score: 0,
+        reason: `cannot be shown absent${unlisted(found)}`,
+      };
 };
 
 const fileCount = (check: RuledCheck, outcome: Outcome): Verdict => {
-  const { found } = lookup(check, outcome);
+  const { found } = lookup(check, outcome, true);
   if (found.capped !== null) return { score: 0, reason: found.capped };
   const files = pathsOf(found, "file");
   const { min = 1, max = Infinity } = check;
@@ -62,10 +105,13 @@ const fileCount = (check: RuledCheck, outcome: Outcome): Verdict => {
       ? `fewer than min ${String(min)}`
       : `more than max ${String(max)}`;
   const list = files.length === 0 ? "" : `: ${shown(files)}`;
-  return {
-    score: 0,
-    reason: `${String(files.length)} ${files.length === 1 ? "file matches" : "files match"} ${where(check)}, ${bound}${list}`,
-  };
+  return withUnlisted(
+    {
+      score: 0,
+      reason: `${String(files.length)} ${files.length === 1 ? "file matches" : "files match"} ${where(check)}, ${bound}${list}`,
+    },
+    found,
+  );
 };
 
 const dirExists = (check: RuledCheck, outcome: Outcome): Verdict => {
@@ -73,10 +119,13 @@ const dirExists = (check: RuledCheck, outcome: Outcome): Verdict => {
   if (found.capped !== null) return { score: 0, reason: found.capped };
   return pathsOf(found, "dir").length > 0
     ? PASS
-    : {
-        score: 0,
-        reason: `no directory matches ${where(check)} in the ${tree.name}`,
-      };
+    : withUnlisted(
+        {
+          score: 0,
+          reason: `no directory matches ${where(check)} in the ${tree.name}`,
+        },
+        found,
+      );
 };
 
 const ROOT = ["root"];
@@ -87,7 +136,7 @@ export const FILE_CHECKS = {
     fields: ["path"],
     optional: ["created", ...ROOT],
     scores:
-      "A file exists at `path`; with `created`, one that the workspace did not hold before the run. A glob needs one matching file. A directory is not a file.",
+      "A file exists at `path` and can be read; with `created`, one that the root did not hold before the run. A glob needs one matching file. A directory is not a file.",
     rule: fileExists,
   },
   ...TEXT_CHECKS,
@@ -95,7 +144,7 @@ export const FILE_CHECKS = {
     fields: ["path"],
     optional: ROOT,
     scores:
-      "Nothing exists at `path`, whether a file, a directory or a link. A path that matches nothing scores 1.",
+      "Nothing exists at `path`, whether a file, a directory or a link. A path that matches nothing scores 1, and so does one that leads nowhere: a dangling link, or a link that leaves the root. A directory that cannot be listed scores 0.",
     rule: fileAbsent,
   },
   ...CHANGE_CHECKS,
@@ -103,7 +152,7 @@ export const FILE_CHECKS = {
     fields: ["path"],
     optional: ["min", "max", ...ROOT],
     scores:
-      "The number of files that `path` matches is from `min` (default 1) to `max`. Directories are not counted.",
+      "The number of files that `path` matches is from `min` (default 1) to `max`. Directories are not counted. A plain path that names a directory, or ends in `/`, means every file under it.",
     validate: checkBounds,
     rule: fileCount,
   },

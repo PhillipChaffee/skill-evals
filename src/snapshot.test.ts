@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -48,11 +49,14 @@ test("a file that cannot be read is hashed as unreadable, and a skipped path is 
   box.write("d/locked.txt", "secret");
   box.write("d/open.txt", "fine");
   box.write("d/skipped/a.txt", "a");
-  const read = fs.readFileSync.bind(fs);
-  vi.spyOn(fs, "readFileSync").mockImplementation(((file: string) => {
+  const open = fs.openSync.bind(fs);
+  vi.spyOn(fs, "openSync").mockImplementation(((
+    file: string,
+    flags: string,
+  ) => {
     if (file.endsWith(LOCKED)) throw new Error("EACCES");
-    return read(file);
-  }) as typeof fs.readFileSync);
+    return open(file, flags);
+  }) as typeof fs.openSync);
   const taken = snapshot(path.join(box.root, "d"), (rel) => rel === "skipped");
   vi.restoreAllMocks();
   expect([...taken.keys()].sort()).toEqual([LOCKED, "open.txt"]);
@@ -84,4 +88,18 @@ test("a socket is hashed as unreadable and never opened", async () => {
   server.close();
   expect(taken.get("sock")).toBe("unreadable");
   expect(taken.get("a.txt")).toMatch(/^[0-9a-f]{64}$/);
+});
+
+test("a file is hashed in chunks and gives the SHA-256 of its bytes, whatever its size", () => {
+  const box = sandbox();
+  const big = Buffer.alloc(3 * 1_048_576 + 17, "ab");
+  box.write("d/small.txt", "hello");
+  fs.writeFileSync(path.join(box.root, "d/big.bin"), big);
+  fs.writeFileSync(path.join(box.root, "d/empty.txt"), "");
+  const taken = snapshot(path.join(box.root, "d"));
+  const sha = (data: string | Buffer) =>
+    createHash("sha256").update(data).digest("hex");
+  expect(taken.get("big.bin")).toBe(sha(big));
+  expect(taken.get("small.txt")).toBe(sha("hello"));
+  expect(taken.get("empty.txt")).toBe(sha(""));
 });

@@ -3,7 +3,7 @@ import { countLines } from "../lines.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS, regex } from "./rules.js";
 import { checkBounds } from "./bounds.js";
-import { find, shown, treeOf } from "./tree.js";
+import { find, shown, treeOf, unlisted, withUnlisted } from "./tree.js";
 
 // Five mebibytes.
 const PATTERN_CAP = 5_242_880;
@@ -18,6 +18,10 @@ interface Result {
 
 /** How a check looks at the text of the files that its path names. */
 interface TextRule {
+  /** Whether a plain path that names a directory means every file under it. */
+  cover: boolean;
+  /** Whether a directory that cannot be listed scores 0: the check says that nothing is there. */
+  closed: boolean;
   /** What the check does when the path matches no file. */
   none: (check: RuledCheck, where: string) => Verdict;
   /** The quantifier when the check names none; `file_lines` has no quantifier and always needs every file. */
@@ -58,10 +62,18 @@ const absent = (check: RuledCheck, where: string): Verdict => ({
  */
 function overText(how: TextRule, check: RuledCheck, outcome: Outcome): Verdict {
   const tree = treeOf(check, outcome);
-  const found = find(tree, check.path ?? "");
+  const found = find(tree, check.path ?? "", how.cover);
   if (found.capped !== null) return { score: 0, reason: found.capped };
+  if (how.closed && found.unreadable.length > 0) {
+    return {
+      score: 0,
+      reason: `files under directories that cannot be listed cannot be shown to lack ${shownPattern(check)}${unlisted(found)}`,
+    };
+  }
   const files = found.entries.filter((entry) => entry.kind === "file");
-  if (files.length === 0) return how.none(check, tree.name);
+  if (files.length === 0) {
+    return withUnlisted(how.none(check, tree.name), found);
+  }
   const test = how.test(check);
   const results = files.map((file): Result => {
     const read = readText(file.real);
@@ -83,10 +95,13 @@ function overText(how: TextRule, check: RuledCheck, outcome: Outcome): Verdict {
   const listed = failing.map(({ path: file, note }) =>
     note === undefined ? file : `${file} (${note})`,
   );
-  return {
-    score: 0,
-    reason: `${how.failed(check, quantifier)}: ${shown(listed)}`,
-  };
+  return withUnlisted(
+    {
+      score: 0,
+      reason: `${how.failed(check, quantifier)}: ${shown(listed)}`,
+    },
+    found,
+  );
 }
 
 // The compiled pattern of a check, tested without the position a `g` or `y` flag would carry between files.
@@ -101,6 +116,8 @@ const shownPattern = (check: RuledCheck): string =>
   `/${check.pattern ?? ""}/${check.flags ?? ""}`;
 
 const MATCHES: TextRule = {
+  cover: false,
+  closed: false,
   none: absent,
   quantifier: (check) => check.quantifier ?? "any",
   test: (check) => {
@@ -114,6 +131,8 @@ const MATCHES: TextRule = {
 };
 
 const LACKS: TextRule = {
+  cover: true,
+  closed: true,
   none: () => PASS,
   quantifier: (check) => check.quantifier ?? "all",
   test: (check) => {
@@ -125,6 +144,8 @@ const LACKS: TextRule = {
 };
 
 const LINES: TextRule = {
+  cover: true,
+  closed: false,
   none: absent,
   quantifier: () => "all",
   test: (check) => (text) => {
@@ -155,8 +176,8 @@ export const TEXT_CHECKS = {
   file_lacks: {
     ...PATTERN_FIELDS,
     scores:
-      "No file at `path` matches the regular expression. With a glob, every matching file must lack it unless `quantifier` is `any`. A path that matches no file scores 1.",
-    note: "A file over 5 MB, or one that cannot be read, cannot be shown to lack the pattern, so it scores 0.",
+      "No file at `path` matches the regular expression. With a glob, every matching file must lack it unless `quantifier` is `any`. A path that matches no file scores 1. A plain path that names a directory, or ends in `/`, means every file under it.",
+    note: "A file over 5 MB, or one that cannot be read, and a directory that cannot be listed, cannot be shown to lack the pattern, so each scores 0.",
     rule: (check, outcome) => overText(LACKS, check, outcome),
   },
   file_lines: {
@@ -164,7 +185,7 @@ export const TEXT_CHECKS = {
     optional: ["min", "max", "root"],
     oneOf: ["min", "max"],
     scores:
-      "Every file at `path` has from `min` to `max` lines. A path that matches no file scores 0.",
+      "Every file at `path` has from `min` to `max` lines. A path that matches no file scores 0. A plain path that names a directory, or ends in `/`, means every file under it.",
     note: "A file over 5 MB scores 0.",
     validate: checkBounds,
     rule: (check, outcome) => overText(LINES, check, outcome),

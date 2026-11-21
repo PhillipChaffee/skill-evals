@@ -16,6 +16,8 @@ interface Walk {
   skip?: (relative: string) => boolean;
   /** Called for every entry that is not skipped, before the entry's contents. Returning false keeps a directory closed. */
   visit: (entry: TreeEntry) => boolean | undefined;
+  /** A relative directory to start in instead of the root; the paths it reports still start at the root. */
+  from?: string;
   /** Called with the relative path of a directory that cannot be listed ("" for the root). Default: the error is thrown. */
   unreadable?: (relative: string) => void;
 }
@@ -43,5 +45,6 @@ export function walkTree(root: string, options: Walk): void {
       if (enter !== false && dirent.isDirectory()) walk(file, `${relative}/`);
     }
   };
-  walk(root, "");
+  const from = options.from ?? "";
+  walk(path.join(root, from), from === "" ? "" : `${from}/`);
 }

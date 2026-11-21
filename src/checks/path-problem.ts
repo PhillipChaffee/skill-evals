@@ -1,5 +1,5 @@
 import path from "node:path";
-import { globToRegExp } from "../glob.js";
+import { globToRegExp, isGlob } from "../glob.js";
 import { messageOf } from "../scope.js";
 
 /**
@@ -12,7 +12,7 @@ export function pathProblem(file: string): string | null {
   if (path.isAbsolute(file) || file.split(/[\\/]/).includes("..")) {
     return `path must stay inside the workspace: ${file}`;
   }
-  if (!/[*?{]/.test(file)) return null;
+  if (!isGlob(file)) return null;
   try {
     globToRegExp(file);
     return null;

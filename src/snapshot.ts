@@ -13,8 +13,30 @@ export interface ChangedFiles {
 }
 
 const UNREADABLE = "unreadable";
-const sha256 = (data: string | Buffer): string =>
+const CHUNK = 1_048_576;
+const sha256 = (data: string): string =>
   createHash("sha256").update(data).digest("hex");
+
+/**
+ * Hashes a file in chunks, so that a file of any size is read without being held whole.
+ * @param file - Its path.
+ * @returns The SHA-256 of its bytes.
+ */
+function hashFile(file: string): string {
+  const hash = createHash("sha256");
+  const buffer = Buffer.alloc(CHUNK);
+  const fd = fs.openSync(file, "r");
+  try {
+    for (;;) {
+      const read = fs.readSync(fd, buffer, 0, CHUNK, null);
+      if (read === 0) break;
+      hash.update(buffer.subarray(0, read));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest("hex");
+}
 
 /**
  * Hashes one entry that is not a directory.
@@ -25,7 +47,7 @@ const sha256 = (data: string | Buffer): string =>
 function hashOf(file: string, entry: fs.Dirent): string {
   try {
     if (entry.isSymbolicLink()) return sha256(fs.readlinkSync(file));
-    return entry.isFile() ? sha256(fs.readFileSync(file)) : UNREADABLE;
+    return entry.isFile() ? hashFile(file) : UNREADABLE;
   } catch {
     return UNREADABLE;
   }

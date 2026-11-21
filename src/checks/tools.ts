@@ -12,7 +12,14 @@ import { checkBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
 
 const TOOL_FIELDS = {
-  optional: ["kind", "name", "inputMatches", "flags", "inputLinesMax"],
+  optional: [
+    "kind",
+    "name",
+    "inputMatches",
+    "flags",
+    "inputLinesMax",
+    "inputLinesMin",
+  ],
   oneOf: ["kind", "name"],
 } satisfies Partial<Spec>;
 
@@ -26,12 +33,14 @@ const ownMatcher = ({
   inputMatches,
   flags,
   inputLinesMax,
+  inputLinesMin,
 }: RuledCheck): ToolMatcher => ({
   ...(kind !== undefined && { kind }),
   ...(name !== undefined && { name }),
   ...(inputMatches !== undefined && { inputMatches }),
   ...(flags !== undefined && { flags }),
   ...(inputLinesMax !== undefined && { inputLinesMax }),
+  ...(inputLinesMin !== undefined && { inputLinesMin }),
 });
 
 /**

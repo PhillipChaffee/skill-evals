@@ -294,6 +294,12 @@
                 "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
                 "type": "integer",
                 "minimum": 1
+              },
+              "inputLinesMin": {
+                "title": "inputLinesMin",
+                "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "anyOf": [
@@ -539,7 +545,7 @@
     },
     "check-file_exists": {
       "title": "file_exists",
-      "description": "A file exists at `path`; with `created`, one that the workspace did not hold before the run. A glob needs one matching file. A directory is not a file.",
+      "description": "A file exists at `path` and can be read; with `created`, one that the root did not hold before the run. A glob needs one matching file. A directory is not a file.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -561,7 +567,7 @@
         },
         "created": {
           "title": "created",
-          "description": "True to require that the agent created the file: no file at that path was in the workspace before the run. Default: false.",
+          "description": "True to require that the agent created the file: no file at that path was in the root before the run. Default: false.",
           "type": "boolean"
         },
         "root": {
@@ -656,7 +662,7 @@
     },
     "check-file_lacks": {
       "title": "file_lacks",
-      "description": "No file at `path` matches the regular expression. With a glob, every matching file must lack it unless `quantifier` is `any`. A path that matches no file scores 1. A file over 5 MB, or one that cannot be read, cannot be shown to lack the pattern, so it scores 0.",
+      "description": "No file at `path` matches the regular expression. With a glob, every matching file must lack it unless `quantifier` is `any`. A path that matches no file scores 1. A plain path that names a directory, or ends in `/`, means every file under it. A file over 5 MB, or one that cannot be read, and a directory that cannot be listed, cannot be shown to lack the pattern, so each scores 0.",
       "type": "object",
       "required": ["type", "path", "pattern"],
       "properties": {
@@ -721,7 +727,7 @@
     },
     "check-file_lines": {
       "title": "file_lines",
-      "description": "Every file at `path` has from `min` to `max` lines. A path that matches no file scores 0. A file over 5 MB scores 0.",
+      "description": "Every file at `path` has from `min` to `max` lines. A path that matches no file scores 0. A plain path that names a directory, or ends in `/`, means every file under it. A file over 5 MB scores 0.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -781,7 +787,7 @@
     },
     "check-file_absent": {
       "title": "file_absent",
-      "description": "Nothing exists at `path`, whether a file, a directory or a link. A path that matches nothing scores 1.",
+      "description": "Nothing exists at `path`, whether a file, a directory or a link. A path that matches nothing scores 1, and so does one that leads nowhere: a dangling link, or a link that leaves the root. A directory that cannot be listed scores 0.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -828,7 +834,7 @@
     },
     "check-file_unchanged": {
       "title": "file_unchanged",
-      "description": "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory is not a file, so write `dir/**` to cover what is under it.",
+      "description": "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed after the run scores 0. A plain path that names a directory, or ends in `/`, covers every file under it. A mode-only change is not a change, and a link is matched by its own path, never followed.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -922,7 +928,7 @@
     },
     "check-files_changed_only": {
       "title": "files_changed_only",
-      "description": "Every path the run created, modified or deleted, except the ones `ignore` names, matches a glob of `allow`.",
+      "description": "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it.",
       "type": "object",
       "required": ["type", "allow"],
       "properties": {
@@ -976,7 +982,7 @@
     },
     "check-file_count": {
       "title": "file_count",
-      "description": "The number of files that `path` matches is from `min` (default 1) to `max`. Directories are not counted.",
+      "description": "The number of files that `path` matches is from `min` (default 1) to `max`. Directories are not counted. A plain path that names a directory, or ends in `/`, means every file under it.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -1135,6 +1141,12 @@
           "type": "integer",
           "minimum": 1
         },
+        "inputLinesMin": {
+          "title": "inputLinesMin",
+          "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+          "type": "integer",
+          "minimum": 1
+        },
         "min": {
           "title": "min",
           "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
@@ -1232,6 +1244,12 @@
           "type": "integer",
           "minimum": 1
         },
+        "inputLinesMin": {
+          "title": "inputLinesMin",
+          "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+          "type": "integer",
+          "minimum": 1
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -1311,6 +1329,12 @@
               "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
               "type": "integer",
               "minimum": 1
+            },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
             }
           },
           "anyOf": [
@@ -1365,6 +1389,12 @@
               "inputLinesMax": {
                 "title": "inputLinesMax",
                 "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "inputLinesMin": {
+                "title": "inputLinesMin",
+                "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
                 "type": "integer",
                 "minimum": 1
               }
@@ -1456,6 +1486,12 @@
               "type": "integer",
               "minimum": 1
             },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
+            },
             "which": {
               "title": "which",
               "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
@@ -1512,6 +1548,12 @@
             "inputLinesMax": {
               "title": "inputLinesMax",
               "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
               "type": "integer",
               "minimum": 1
             },
@@ -1574,6 +1616,12 @@
               "inputLinesMax": {
                 "title": "inputLinesMax",
                 "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "inputLinesMin": {
+                "title": "inputLinesMin",
+                "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
                 "type": "integer",
                 "minimum": 1
               }

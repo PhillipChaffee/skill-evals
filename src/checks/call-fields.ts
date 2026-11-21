@@ -16,6 +16,11 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
     meaning:
       "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
   },
+  inputLinesMin: {
+    type: "int",
+    meaning:
+      "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+  },
   anyOf: {
     type: "texts",
     meaning:

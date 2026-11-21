@@ -50,7 +50,7 @@ test("the checks page has every check type and every field", () => {
   for (const key of Object.keys(CASE_KEYS))
     expect(checks).toContain(`| \`${key}\` | \``);
   expect(checks).toMatch(
-    /`tool_called` \| at least one of `kind`, `name`, optional `inputMatches`, optional `flags`, optional `inputLinesMax`, optional `min`, optional `max`, optional `sameTurn`, optional `first`\./,
+    /`tool_called` \| at least one of `kind`, `name`, optional `inputMatches`, optional `flags`, optional `inputLinesMax`, optional `inputLinesMin`, optional `min`, optional `max`, optional `sameTurn`, optional `first`\./,
   );
   expect(checks).toMatch(
     /`file_matches` \| `path`, `pattern`, optional `flags`, optional `quantifier`, optional `root`/,

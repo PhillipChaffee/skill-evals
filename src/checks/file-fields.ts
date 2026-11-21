@@ -22,7 +22,7 @@ export const FILE_FIELDS: Record<string, FieldDef> = {
   created: {
     type: "bool",
     meaning:
-      "True to require that the agent created the file: no file at that path was in the workspace before the run. Default: false.",
+      "True to require that the agent created the file: no file at that path was in the root before the run. Default: false.",
   },
   allow: {
     type: "texts",

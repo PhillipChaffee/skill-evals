@@ -1,9 +1,10 @@
 import type { ChangedFiles } from "../snapshot.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
-import { pathTest, shown, treeOf } from "./tree.js";
+import { pathProblem } from "./path-problem.js";
+import type { Tree } from "./tree.js";
+import { shown, treeOf, treeScope } from "./tree.js";
 import { UsageError } from "../scope.js";
-import { globToRegExp } from "../glob.js";
 
 /** A changed path with how it changed. */
 interface Change {
@@ -34,9 +35,9 @@ const named = (changes: Change[]): string =>
 function changesIn(
   check: RuledCheck,
   outcome: Outcome,
-): { changes: Change[]; where: string } {
+): { changes: Change[]; tree: Tree } {
   const tree = treeOf(check, outcome);
-  return { changes: changesOf(tree.changed), where: tree.name };
+  return { changes: changesOf(tree.changed), tree };
 }
 
 /**
@@ -47,8 +48,8 @@ function changesIn(
  *   seed and the tree both lack a match.
  */
 function unchanged(check: RuledCheck, outcome: Outcome): Verdict {
-  const test = pathTest(check.path ?? "");
-  const { changes } = changesIn(check, outcome);
+  const { changes, tree } = changesIn(check, outcome);
+  const test = treeScope(tree, check.path ?? "");
   const hit = changes.filter(({ path }) => test(path));
   return hit.length === 0
     ? PASS
@@ -62,8 +63,8 @@ function unchanged(check: RuledCheck, outcome: Outcome): Verdict {
  * @returns 1 when a path that the glob matches was created, modified or deleted.
  */
 function changed(check: RuledCheck, outcome: Outcome): Verdict {
-  const test = pathTest(check.path ?? "");
-  const { changes } = changesIn(check, outcome);
+  const { changes, tree } = changesIn(check, outcome);
+  const test = treeScope(tree, check.path ?? "");
   return changes.some(({ path }) => test(path))
     ? PASS
     : {
@@ -79,9 +80,9 @@ function changed(check: RuledCheck, outcome: Outcome): Verdict {
  * @returns 1 when each created, modified or deleted path, once the ignored ones are left out, matches `allow`.
  */
 function changedOnly(check: RuledCheck, outcome: Outcome): Verdict {
-  const allowed = (check.allow ?? []).map(pathTest);
-  const ignored = (check.ignore ?? []).map(pathTest);
-  const { changes } = changesIn(check, outcome);
+  const { changes, tree } = changesIn(check, outcome);
+  const allowed = (check.allow ?? []).map((glob) => treeScope(tree, glob));
+  const ignored = (check.ignore ?? []).map((glob) => treeScope(tree, glob));
   const outside = changes.filter(
     ({ path }) =>
       !ignored.some((test) => test(path)) &&
@@ -93,20 +94,16 @@ function changedOnly(check: RuledCheck, outcome: Outcome): Verdict {
 }
 
 /**
- * Checks that every glob of `allow` and `ignore` compiles and stays inside the tree.
+ * Checks that every path of `allow` and `ignore` is usable as a `path` is.
  * @param given - The fields that are set.
  * @param where - Names the file and the check in an error message.
- * @throws {UsageError} For a glob that is absolute, climbs with `..`, or has an unclosed `{`.
+ * @throws {UsageError} For a path that is absolute, climbs with `..`, or is a glob with an unclosed `{`.
  */
 function checkGlobs(given: Record<string, unknown>, where: string): void {
   for (const key of ["allow", "ignore"]) {
     for (const glob of (given[key] as string[] | undefined) ?? []) {
-      if (glob.startsWith("/") || glob.split("/").includes("..")) {
-        throw new UsageError(
-          `${where}: "${key}" globs must stay inside the root: ${glob}`,
-        );
-      }
-      globToRegExp(glob);
+      const problem = pathProblem(glob);
+      if (problem) throw new UsageError(`${where}: "${key}": ${problem}`);
     }
   }
 }
@@ -117,8 +114,8 @@ export const CHANGE_CHECKS = {
     fields: ["path"],
     optional: ["root"],
     scores:
-      "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1.",
-    note: "A directory is not a file, so write `dir/**` to cover what is under it.",
+      "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed after the run scores 0.",
+    note: "A plain path that names a directory, or ends in `/`, covers every file under it. A mode-only change is not a change, and a link is matched by its own path, never followed.",
     rule: unchanged,
   },
   file_changed: {
@@ -132,7 +129,7 @@ export const CHANGE_CHECKS = {
     fields: ["allow"],
     optional: ["ignore", "root"],
     scores:
-      "Every path the run created, modified or deleted, except the ones `ignore` names, matches a glob of `allow`.",
+      "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it.",
     validate: checkGlobs,
     rule: changedOnly,
   },

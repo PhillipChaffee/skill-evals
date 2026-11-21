@@ -21,12 +21,21 @@ export interface ToolMatcher {
   flags?: string;
   /** The most lines the call's input may have, counted in its longest string value, found at any depth. */
   inputLinesMax?: number;
+  /** The fewest lines the call's input may have, counted in the same way: `inputLinesMin: 1001` fits a call with a value of more than 1000 lines. */
+  inputLinesMin?: number;
   /** Not yet supported: a load error. */
   by?: By;
 }
 
 // The keys a matcher takes today, with the definitions of the check fields of the same name.
-const KEYS = ["kind", "name", "inputMatches", "flags", "inputLinesMax"];
+const KEYS = [
+  "kind",
+  "name",
+  "inputMatches",
+  "flags",
+  "inputLinesMax",
+  "inputLinesMin",
+];
 // The keys of the matcher shape that no check can use yet.
 const NOT_YET = ["by"];
 const SUBJECT_KEYS = ["kind", "name", "inputMatches"];
@@ -130,13 +139,15 @@ const tester = (
 function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
   const name = tester(matcher.name, matcher.flags);
   const input = tester(matcher.inputMatches, matcher.flags);
-  const { inputLinesMax } = matcher;
+  const { inputLinesMax, inputLinesMin } = matcher;
+  const longest = (call: ToolCall): number =>
+    countLines(longestString(call.input));
   return (call) =>
     (matcher.kind === undefined || call.kind === matcher.kind) &&
     name(call.name) &&
     input(inputJson(call)) &&
-    (inputLinesMax === undefined ||
-      countLines(longestString(call.input)) <= inputLinesMax);
+    (inputLinesMax === undefined || longest(call) <= inputLinesMax) &&
+    (inputLinesMin === undefined || longest(call) >= inputLinesMin);
 }
 
 /**

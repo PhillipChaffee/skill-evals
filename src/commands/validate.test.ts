@@ -257,3 +257,31 @@ test("a plugin-prefixed skill in a check is a warning that says so", async () =>
     '"plug:alpha" is plugin-prefixed; checks name skills without the plugin prefix',
   );
 });
+
+test("validate warns about a file_unchanged that matches nothing in the case's workspace", async () => {
+  const box = sandbox();
+  plant(box, "guarded", {
+    checks: [
+      { type: "file_unchanged", path: "vendor/**" },
+      { type: "file_unchanged", path: "src" },
+      { type: "file_unchanged", path: "lib/" },
+      { type: "file_unchanged", path: "notes.txt" },
+      { type: "file_unchanged", path: ".cache/**", root: "home" },
+      { type: "file_unchanged", path: "missing.txt" },
+    ],
+  });
+  box.write("cases/guarded/workspace/src/a.ts", "");
+  box.write("cases/guarded/workspace/notes.txt", "");
+  plant(box, "bare", { checks: [{ type: "file_unchanged", path: "src/**" }] });
+  const result = await box.cli(["validate", ...flags(box)]);
+  const warnings = result.stdout
+    .split("\n")
+    .filter((line) => line.includes("file_unchanged"));
+  expect(warnings).toHaveLength(3);
+  expect(warnings.join("\n")).toMatch(
+    /guarded: a file_unchanged check on "vendor\/\*\*" matches no file/,
+  );
+  expect(warnings.join("\n")).toMatch(/"lib\/"/);
+  expect(warnings.join("\n")).toMatch(/"missing.txt"/);
+  expect(result.status).toBe(0);
+});

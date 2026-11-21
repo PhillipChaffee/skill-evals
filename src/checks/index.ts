@@ -37,6 +37,7 @@ interface CheckFields {
   inputMatches?: string;
   flags?: string;
   inputLinesMax?: number;
+  inputLinesMin?: number;
   quantifier?: "any" | "all";
   root?: "workspace" | "home";
   created?: boolean;

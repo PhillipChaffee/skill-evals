@@ -31,6 +31,7 @@ export default defineConfig(
       "coverage/",
       "docs/dist/",
       "docs/.astro/",
+      "examples/cases/**/workspace/",
     ],
   },
   {
