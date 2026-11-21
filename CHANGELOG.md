@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Releases are guarded. `scripts/release-plan.sh` refuses a version tag that does not match `package.json`, is not on `main`, has no changelog entry, or is not above the latest version on npm, and the `Release check` workflow runs the same guards on every pull request. The publish workflow also makes the GitHub release.
+
 ## 0.0.1
 
 The first release. The runner comes from the `evals/` folder of [magic](https://github.com/PhillipChaffee/magic), where it scored that one set of skills.

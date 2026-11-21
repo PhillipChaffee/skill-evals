@@ -1,5 +1,7 @@
-# Publishes the package to npm when a version tag is pushed. It runs the same
-# gates as ci.yml first, so a tag on a commit that CI never saw cannot ship.
+# Publishes the package to npm when a version tag is pushed. Nothing on main
+# makes a tag or publishes: a person pushes the tag, and this workflow decides
+# whether that tag may ship. scripts/release-plan.sh holds the guards, and the
+# same gates as ci.yml run first.
 name: Publish
 
 on:
@@ -7,13 +9,22 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read  # least privilege: no step in this workflow writes to the repo
-  id-token: write  # npm provenance: lets npm prove which workflow run built the tarball
+  contents: read  # least privilege by default; the job asks for more
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 20  # bounds a hung network step; GitHub's default is 360
+    # Give this environment required reviewers in the repository settings and
+    # every release waits for a person's approval.
+    environment: npm
+    # One release at a time, and a later tag never cancels one in flight.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
+    permissions:
+      contents: write  # makes the GitHub release for the tag
+      id-token: write  # npm provenance: lets npm prove which workflow run built the tarball
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
@@ -21,8 +32,11 @@ jobs:
           node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
-      - name: The tag is the version in package.json
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      # The guard asks whether the tagged commit is on main.
+      - run: git fetch --no-tags origin main:refs/remotes/origin/main
+      - name: Check that this tag may be released
+        id: plan
+        run: bash scripts/release-plan.sh release >> "$GITHUB_OUTPUT"
       - run: npm ci
       - run: npm run format:check
       - run: npm run typecheck
@@ -31,8 +45,18 @@ jobs:
       - run: npm run knip
       - run: npm run lint:lockfile
       - run: npm run lint:graph
-      - run: npm run build
-      # The prepack script builds again, so the tarball cannot hold a stale dist/.
-      - run: npm publish --provenance --access public
+      # The prepack script builds, so the tarball cannot hold a stale dist/.
+      # Skipped when the version is already on npm, so a rerun never publishes twice.
+      - name: Publish to npm
+        if: steps.plan.outputs.publish == 'true'
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Make the GitHub release
+        run: |
+          awk -v heading="## $VERSION" '$0 == heading { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release view "v$VERSION" > /dev/null 2>&1 ||
+            gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.plan.outputs.version }}

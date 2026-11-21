@@ -1,0 +1,21 @@
+# Runs the release guards on every pull request, so a version that could not
+# ship (no changelog entry, not above the published one, a malformed number)
+# fails before it reaches main, where release.yml would act on it.
+name: Release check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read  # least privilege: this workflow only reads
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # bounds a hung registry call; GitHub's default is 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 24
+      - run: bash scripts/release-plan.sh
