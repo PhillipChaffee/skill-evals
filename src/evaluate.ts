@@ -1,0 +1,260 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { Case } from "./cases.js";
+import { loadCases } from "./cases.js";
+import type { Located } from "./harnesses/index.js";
+import { selectHarnesses } from "./harnesses/index.js";
+import type { Config } from "./project.js";
+import { findProject, withConfig } from "./project.js";
+import type { Judge, RunRecord } from "./run.js";
+import { invalidReason, runOnce } from "./run.js";
+import type { SuiteScore } from "./score.js";
+import { failedBars, isUnitScore, scoreSuites } from "./score.js";
+import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
+import type { Label, Subject, SubjectSummary } from "./subject.js";
+import { resolveSubject } from "./subject.js";
+
+/** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
+export interface EvaluateOptions {
+  /** The working directory, which sets the project and what relative paths resolve against. Default: the process's. */
+  cwd?: string;
+  /** One or two of a directory, a git ref of the project, or "none". */
+  subjects: string[];
+  /** Comma-separated harness ids, or "all". Default: the first installed harness. */
+  harness?: string | undefined;
+  /** The directory that holds the cases. Default: `evals/cases` in the project. */
+  cases?: string | undefined;
+  /** Case ids to run; only `*` is special. Default: every case. */
+  caseGlob?: string | undefined;
+  /** Runs for each subject and case. Default: 3. */
+  reps?: number | undefined;
+  /** Passed to the harness. Default: the harness's own default. */
+  model?: string | undefined;
+  /** The harness that scores judged checks. Default: the harness under test. */
+  judgeHarness?: string | undefined;
+  /** The model that scores judged checks. Default: `model`. */
+  judgeModel?: string | undefined;
+  /** The pass bar for the suite score of the subject under test. */
+  minScore?: number | undefined;
+  /** Where results go. Default: a new temp directory. */
+  outDir?: string | undefined;
+  /** Called with each run's record as soon as the run ends. */
+  onRun?: ((record: RunRecord) => void) | undefined;
+}
+
+/** What `evaluate` writes to `results.json`. */
+export interface Results {
+  subjects: SubjectSummary[];
+  harnesses: string[];
+  harnessReason: string;
+  model: string | null;
+  /** The harness and model that scored the judged checks, in words. */
+  judge: string;
+  reps: number;
+  suites: SuiteScore[];
+  /** The pass bars that were not reached. */
+  belowBar: string[];
+  /** The runs that do not count, each with its reason. */
+  invalid: string[];
+  records: RunRecord[];
+}
+
+/** What `evaluate` returns. The evaluation succeeded when `belowBar` and `invalid` are both empty. */
+export interface Evaluation extends Results {
+  cases: Case[];
+  outDir: string;
+}
+
+const DEFAULT_REPS = 3;
+
+/**
+ * Pairs each subject with its label.
+ * @param specs - What the caller passed as `subjects`.
+ * @returns "subject" for one; "a" for the baseline and "b" for the subject under test for two.
+ * @throws {UsageError} When there are not one or two.
+ */
+function labelled(specs: string[]): { label: Label; spec: string }[] {
+  const [first, second, ...more] = Array.isArray(specs) ? specs : [];
+  if (first === undefined || more.length > 0) {
+    throw new UsageError("subjects must hold one or two subjects");
+  }
+  return second === undefined
+    ? [{ label: "subject", spec: first }]
+    : [
+        { label: "a", spec: first },
+        { label: "b", spec: second },
+      ];
+}
+
+/**
+ * Rejects option values that no run could use, before any harness starts.
+ * @param options - The options after the config file was applied.
+ * @returns The number of runs for each subject and case.
+ * @throws {UsageError} When `reps` or `minScore` is out of range.
+ */
+function requireUsable(options: Config): number {
+  const { reps = DEFAULT_REPS, minScore } = options;
+  if (!Number.isInteger(reps) || reps < 1) {
+    throw new UsageError("reps must be a positive integer");
+  }
+  if (minScore !== undefined && !isUnitScore(minScore)) {
+    throw new UsageError("minScore must be a number from 0 to 1");
+  }
+  return reps;
+}
+
+/** The runs to make, in order: for each harness, each case, each rep, each subject. */
+interface Plan {
+  chosen: Located[];
+  judgeOf: (located: Located) => Judge;
+  cases: Case[];
+  reps: number;
+  subjects: Subject[];
+  model: string | undefined;
+  outDir: string;
+  onRun: EvaluateOptions["onRun"];
+}
+
+/**
+ * Makes every run of a plan, one at a time.
+ * @param plan - What to run.
+ * @returns The records in the order the runs were made.
+ */
+async function runAll(plan: Plan): Promise<RunRecord[]> {
+  const { cases, reps, subjects, model, outDir } = plan;
+  const records: RunRecord[] = [];
+  for (const located of plan.chosen) {
+    const judge = plan.judgeOf(located);
+    for (const caseDef of cases) {
+      for (let rep = 1; rep <= reps; rep++) {
+        for (const subject of subjects) {
+          const run = {
+            ...located,
+            subject,
+            caseDef,
+            rep,
+            model,
+            judge,
+            outDir,
+          };
+          const record = await runOnce(run);
+          records.push(record);
+          plan.onRun?.(record);
+        }
+      }
+    }
+  }
+  return records;
+}
+
+/** What a finished evaluation is summed up from. */
+interface Finished {
+  subjects: Subject[];
+  selection: { chosen: Located[]; reason: string };
+  judgeHarness: Located | undefined;
+  judgeModel: string | undefined;
+  model: string | undefined;
+  minScore: number | undefined;
+  reps: number;
+  cases: Case[];
+  records: RunRecord[];
+}
+
+/**
+ * Scores the runs and sums up what ran.
+ * @param finished - The runs and what they were made with.
+ * @returns What goes into `results.json`. The pass bars apply to the last subject, which is the one under test.
+ */
+function summarize(finished: Finished): Results {
+  const { subjects, selection, judgeHarness, judgeModel, model } = finished;
+  const { cases, records } = finished;
+  const labels = subjects.map(({ label }) => label);
+  const harnesses = selection.chosen.map(({ harness }) => harness.id);
+  const suites = scoreSuites({ harnesses, cases, records, labels });
+  return {
+    subjects: subjects.map(({ label, spec, kind, dir, skills, commit }) => ({
+      label,
+      spec,
+      kind,
+      dir,
+      skills,
+      commit,
+    })),
+    harnesses,
+    harnessReason: selection.reason,
+    model: model ?? null,
+    judge: `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`,
+    reps: finished.reps,
+    suites,
+    belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
+    invalid: records.flatMap((record) => {
+      const reason = invalidReason(record);
+      const run = `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`;
+      return reason === null ? [] : [`${run}: ${reason}`];
+    }),
+    records,
+  };
+}
+
+/**
+ * Runs every case against each subject, scores the runs, and writes `results.json` and each run's files to the
+ * output directory. One subject is scored on its own. With two, the first is the baseline and the second is the one
+ * under test, which the pass bars apply to. It prints nothing and never calls process.exit. While it runs, SIGINT
+ * and SIGTERM end the process with exit code 130 after the cleanup.
+ * @param given - What to evaluate and how. An option that is not set takes its value from the project's config file.
+ * @returns The scores, every run record, and where the files are.
+ * @throws {UsageError} For a wrong option, case file, or config file, before any harness starts.
+ */
+export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
+  const { cwd = process.cwd(), subjects: specs, onRun, ...rest } = given;
+  requireSupportedPlatform();
+  const pairs = labelled(specs);
+  const project = findProject(cwd);
+  const options = withConfig(project, rest);
+  const { minScore, model } = options;
+  const reps = requireUsable(options);
+  const selection = selectHarnesses(options.harness);
+  const [judgeHarness] = options.judgeHarness
+    ? selectHarnesses(options.judgeHarness).chosen
+    : [];
+  const judgeModel = options.judgeModel ?? model;
+  const cases = loadCases(options.cases, options.caseGlob);
+  const subjects: Subject[] = [];
+  try {
+    for (const { label, spec } of pairs) {
+      subjects.push(resolveSubject(label, spec, project));
+    }
+    const outDir = outputDir(options.outDir, cwd);
+    const records = await runAll({
+      chosen: selection.chosen,
+      judgeOf: (located) => ({
+        ...(judgeHarness ?? located),
+        model: judgeModel,
+      }),
+      cases,
+      reps,
+      subjects,
+      model,
+      outDir,
+      onRun,
+    });
+    const results = summarize({
+      subjects,
+      selection,
+      judgeHarness,
+      judgeModel,
+      model,
+      minScore,
+      reps,
+      cases,
+      records,
+    });
+    fs.writeFileSync(
+      path.join(outDir, "results.json"),
+      JSON.stringify(results, null, "\t"),
+    );
+    return { ...results, cases, outDir };
+  } finally {
+    for (const subject of subjects) subject.dispose();
+  }
+}
