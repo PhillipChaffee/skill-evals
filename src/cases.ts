@@ -7,8 +7,8 @@ import { WEIGHT, readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
-import { discover } from "./discover.js";
-import { baseGlobOf, globToRegExp } from "./glob.js";
+import { declaresVariants, discover } from "./discover.js";
+import { baseGlobOf, globToRegExp, mayNameVariant } from "./glob.js";
 import { HARNESSES } from "./harnesses/index.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -332,14 +332,14 @@ export interface LoadOptions {
 /**
  * Loads the cases whose ids a test accepts. A case that the test rejects is never read, so a fault in it is no error.
  * @param casesDir - The directory to search at any depth.
- * @param keep - Decides from a case's id whether to load it.
+ * @param keep - Decides from a case's id and directory whether to load it.
  * @param options - How to treat unknown keys.
  * @returns The cases, sorted by id.
  * @throws {UsageError} When the directory cannot be read, or a case is invalid.
  */
 export function loadWhere(
   casesDir: string,
-  keep: (id: string) => boolean,
+  keep: (id: string, dir: string) => boolean,
   options: LoadOptions,
 ): Case[] {
   const mode: Mode = {
@@ -351,7 +351,7 @@ export function loadWhere(
       }),
   };
   return discover(casesDir)
-    .filter(({ id }) => keep(id))
+    .filter(({ id, dir }) => keep(id, dir))
     .flatMap((found) => loadCase(found, mode))
     .sort((x, y) => x.id.localeCompare(y.id));
 }
@@ -379,9 +379,12 @@ export function loadCases(
   const matcher = globToRegExp(glob);
   // A glob that names a variant is tried on the case's path by its part before the `@`.
   const bases = globToRegExp(baseGlobOf(glob));
-  const cases = loadWhere(casesDir, (id) => bases.test(id), options).filter(
-    (one) => matcher.test(one.id) || matcher.test(one.base),
-  );
+  const cases = loadWhere(
+    casesDir,
+    (id, dir) =>
+      bases.test(id) || (mayNameVariant(glob) && declaresVariants(dir)),
+    options,
+  ).filter((one) => matcher.test(one.id) || matcher.test(one.base));
   if (cases.length === 0) {
     throw new UsageError(`no case in ${casesDir} matches "${glob}"`);
   }

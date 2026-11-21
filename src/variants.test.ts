@@ -265,3 +265,28 @@ test("a variant run writes its files under <out>/<harness>/<case>@<variant>/", a
   ).toBe(true);
   expect(fs.existsSync(path.join(outDir, "claude-code/tone"))).toBe(false);
 });
+
+test("a wildcard glob that only a variant id matches still selects it, and reads variant cases it must", async () => {
+  const box = sandbox();
+  plant(box, "tool", { variants: [{ id: "lite", prompt: "a" }] });
+  plant(box, "other");
+  box.write("cases/broken/prompt.md", "x\n");
+  box.write("cases/broken/case.json", { checks: [] });
+  const found = await cli(box, "list", "--case", "to*lite");
+  expect(found.status, found.stderr).toBe(0);
+  expect(listed(found.stdout)).toEqual(["tool@lite"]);
+  box.write("cases/risky/prompt.md", "x\n");
+  box.write("cases/risky/case.json", {
+    checks: [],
+    variants: [{ id: "q", prompt: "p" }],
+  });
+  const failed = await cli(box, "list", "--case", "to*lite");
+  expect(failed.status).toBe(USAGE_ERROR);
+  expect(failed.stderr).toContain(
+    'risky/case.json: "checks" must be a non-empty array',
+  );
+  box.write("cases/risky/case.json", "{ not json");
+  const unparsed = await cli(box, "list", "--case", "to*lite");
+  expect(unparsed.status).toBe(USAGE_ERROR);
+  expect(unparsed.stderr).toContain("case risky:");
+});

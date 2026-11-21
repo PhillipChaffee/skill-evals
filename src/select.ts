@@ -1,6 +1,7 @@
 import type { Case, LoadOptions } from "./cases.js";
 import { loadWhere } from "./cases.js";
-import { baseGlobOf, globToRegExp } from "./glob.js";
+import { baseGlobOf, globToRegExp, mayNameVariant } from "./glob.js";
+import { declaresVariants } from "./discover.js";
 import { UsageError } from "./scope.js";
 
 /** Which cases a command works on. Every part that is set must hold; a part that is absent holds for every case. */
@@ -80,7 +81,7 @@ export function selectionOf(options: SelectionOptions): Selection {
 /** What the id parts of a selection say, as two tests. */
 interface IdTests {
   /** Decides from a case's path, before the case is read, whether it may be chosen. */
-  mayLoad: (base: string) => boolean;
+  mayLoad: (base: string, dir: string) => boolean;
   /** Decides whether a loaded case or variant is chosen: a glob matches its full id or its case's path. */
   chooses: (one: Pick<Case, "id" | "base">) => boolean;
 }
@@ -89,7 +90,8 @@ interface IdTests {
  * Tells which ids a selection lets through.
  * @param by - The selection; its tag parts are not looked at.
  * @returns The two tests. A glob that names a variant is tried on the case's path by its part before the `@`, so a
- *   case that part does not reach is never read.
+ *   case that part does not reach is never read, unless a wildcard glob could match one of its variants' ids and
+ *   its case file declares variants.
  * @throws {UsageError} When a glob has a `{` that is never closed.
  */
 function idTests(by: Selection): IdTests {
@@ -98,9 +100,12 @@ function idTests(by: Selection): IdTests {
   const unwanted = (by.notIds ?? []).map(globToRegExp);
   const anyOf = (globs: RegExp[], ...ids: string[]) =>
     globs.some((glob) => ids.some((id) => glob.test(id)));
+  const loose = wantedText.some(mayNameVariant);
   const wantedBases = wantedText.map((glob) => globToRegExp(baseGlobOf(glob)));
   return {
-    mayLoad: (base) => anyOf(wantedBases, base) && !anyOf(unwanted, base),
+    mayLoad: (base, dir) =>
+      !anyOf(unwanted, base) &&
+      (anyOf(wantedBases, base) || (loose && declaresVariants(dir))),
     chooses: ({ id, base }) =>
       anyOf(wanted, id, base) && !anyOf(unwanted, id, base),
   };

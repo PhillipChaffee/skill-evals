@@ -197,6 +197,10 @@ test("the schema is looser than the loader for a whitespace-only prompt, and the
       ],
     },
     { checks: [{ type: "output_matches", pattern: "(" }] },
+    { checks: [{ type: "output_matches", pattern: "a", flags: "zz" }] },
+    {
+      checks: [{ type: "decision", question: "q", options: { "": 1, b: 0 } }],
+    },
   ];
   for (const body of gaps) {
     expect(problems(body), JSON.stringify(body)).toEqual([]);
@@ -208,4 +212,16 @@ test("case and check weights accept null but not a negative number", () => {
   expect(problems({ checks: [check], weight: null })).toEqual([]);
   expect(problems({ checks: [{ ...check, weight: null }] })).toEqual([]);
   expect(problems({ checks: [check], weight: -1 })).not.toEqual([]);
+});
+
+test("building the check schemas throws when a check spec names a field that FIELDS lacks", () => {
+  CHECKS["ghost"] = { fields: ["nothing"], scores: "x" };
+  try {
+    expect(() => caseSchema()).toThrow(
+      "check ghost: field nothing is not in FIELDS",
+    );
+  } finally {
+    delete CHECKS["ghost"];
+  }
+  expect(() => caseSchema()).not.toThrow();
 });

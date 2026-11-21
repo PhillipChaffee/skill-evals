@@ -106,3 +106,11 @@ export function baseGlobOf(glob: string): string {
   const braces = (char: string) => part.split(char).length;
   return part === "" || braces("{") !== braces("}") ? "**" : part;
 }
+
+/**
+ * Tells whether a case glob could match a variant's id without matching its case's path.
+ * @param glob - A glob over case ids.
+ * @returns True for a glob with a wildcard and no literal `@`, such as `to*lite`, which matches `tool@lite`.
+ */
+export const mayNameVariant = (glob: string): boolean =>
+  !glob.includes("@") && /[*?{]/.test(glob);

@@ -48,3 +48,22 @@ export function discover(dir: string, prefix: string[] = []): Found[] {
     return [{ id, dir: where }];
   });
 }
+
+/**
+ * Tells whether a case's file declares variants, without reading the case in full.
+ * @param dir - The case's directory.
+ * @returns True when `case.json` has a `variants` key. A file that is missing declares none. A file that cannot be read or parsed counts as true, so that
+ *   loading the case reports the fault and no variant is dropped without a word.
+ */
+export function declaresVariants(dir: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(dir, "case.json"), "utf8"),
+    );
+    return (
+      typeof parsed === "object" && parsed !== null && "variants" in parsed
+    );
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+}
