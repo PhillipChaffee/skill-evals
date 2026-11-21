@@ -116,7 +116,13 @@ h3 {
   color: var(--se-text-bright);
 }
 
-.sl-markdown-content td code:not(:where(.not-content *)) {
+/* The first column names the row. It keeps a width that reads, and a name in
+   it stays on one line. */
+.sl-markdown-content td:first-child:not(:where(.not-content *)) {
+  min-width: 9rem;
+}
+
+.sl-markdown-content td:first-child code:not(:where(.not-content *)) {
   white-space: nowrap;
 }
 
