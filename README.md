@@ -47,13 +47,13 @@ npx skill-evals run --a none --model <model-id>    # A = no skills, B = your ski
 
 The report shows how often the agent loaded the skill without your skills (0 of 3) and with them. [`examples/cases/hello`](examples/cases/hello) in the repository is one more case you can copy.
 
-Each run starts in a new, empty home directory, so your own settings and default model are not there. Pass `--model`, or set `model` in the [config file](docs/commands.md#config-file). Without it each harness uses its built-in default, which may be a provider you have no key for.
+Each run starts in a new, empty home directory, so your own settings and default model are not there. Pass `--model`, or set `model` in the [config file](docs/src/content/docs/reference/config.md). Without it each harness uses its built-in default, which may be a provider you have no key for.
 
 From here:
 
-- `--a` and `--b` each take a directory, a git ref of the project, or `none`. The defaults compare `main` (A) with the project folder and its uncommitted changes (B). See [Subjects](docs/commands.md#subjects).
+- `--a` and `--b` each take a directory, a git ref of the project, or `none`. The defaults compare `main` (A) with the project folder and its uncommitted changes (B). See [Subjects](docs/src/content/docs/concepts/subjects.md).
 - `skill-evals score` scores one set of skills with no comparison.
-- `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, so it can gate a pull request. See [Scores](docs/commands.md#scores).
+- `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, so it can gate a pull request. See [Scores](docs/src/content/docs/guides/pass-bars.md).
 
 ## How it works
 
@@ -61,7 +61,7 @@ From here:
 2. **Each case runs on both sides.** A run starts the harness in a new, empty home directory and a new workspace, with only the subject loaded: your skills, a plugin, or nothing. Your login is copied in. Your settings and the skills you installed globally are not. Each side runs three times unless you set `--reps`.
 3. **Checks become scores.** Every check scores a run from 0 to 1. The checks of a run give a run score, the runs give a case score, and the cases give a suite score. Weights and pass bars are yours to set.
 
-A run that failed or is invalid does not count. It is listed under the table and makes the command exit 1. [What one run does](docs/commands.md#what-one-run-does) has every step.
+A run that failed or is invalid does not count. It is listed under the table and makes the command exit 1. [What one run does](docs/src/content/docs/concepts/one-run.md) has every step.
 
 ## Three kinds of check
 
@@ -90,7 +90,7 @@ A run that failed or is invalid does not count. It is listed under the table and
 }
 ```
 
-[Cases and checks](docs/cases-and-checks.md) lists all twelve check types and their fields.
+[Checks](docs/src/content/docs/reference/checks.md) lists every check type and its fields.
 
 ## Harnesses
 
@@ -106,17 +106,20 @@ One case format works in all five.
 
 `run` and `score` use the first installed harness in that order. Name others with `--harness <ids|all>`. `skill-evals check` runs one small prompt in each installed harness and reports what worked.
 
-The harnesses are not equally proven. Only Claude Code ran a real model while the adapters were written, and the Cursor adapter has not run past the login check. [Harnesses](docs/harnesses.md) says what was confirmed for each one, and how.
+The harnesses are not equally proven. Only Claude Code ran a real model while the adapters were written, and the Cursor adapter has not run past the login check. [What was verified](docs/src/content/docs/agents/verified.md) says what was confirmed for each one, and how.
 
 ## Documentation
 
-| Document                                     | What it holds                                                                                                              |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| [Cases and checks](docs/cases-and-checks.md) | The case format, every check type, tool kinds, judged checks, and decision checks.                                         |
-| [Commands and reports](docs/commands.md)     | Commands, options, exit codes, subjects, what one run does, scores, how to read the report, and the config file.           |
-| [Harnesses](docs/harnesses.md)               | How each harness is started, what was verified for each, and how to add one.                                               |
-| [Use it from code](docs/api.md)              | `evaluate`, `loadCases`, and `HARNESSES`.                                                                                  |
-| [Develop and release](docs/developing.md)    | The gates, the release steps, and the website in `site/`, which needs GitHub Pages switched on in the repository settings. |
+The docs are a website, built from [`docs/`](docs/src/content/docs/index.md) and deployed with the landing page. The same pages read as Markdown here:
+
+| Document                                                                                          | What it holds                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Quick start](docs/src/content/docs/quick-start.md) and [Safety](docs/src/content/docs/safety.md) | A first score, and what a run may do on your machine.                                                                                                                                                   |
+| [Write a case](docs/src/content/docs/guides/write-a-case.md)                                      | The case format, tool checks, [judged checks](docs/src/content/docs/guides/judged-checks.md), and [decision checks](docs/src/content/docs/guides/decision-checks.md).                                   |
+| [Read the report](docs/src/content/docs/guides/read-the-report.md)                                | The report, the output files, [pass bars](docs/src/content/docs/guides/pass-bars.md), and [CI](docs/src/content/docs/guides/ci.md).                                                                     |
+| [Commands and flags](docs/src/content/docs/reference/commands.md)                                 | Generated from the code, like [Checks](docs/src/content/docs/reference/checks.md), the [config file](docs/src/content/docs/reference/config.md), and the [API](docs/src/content/docs/reference/api.md). |
+| [Harnesses](docs/src/content/docs/agents/harnesses.md)                                            | The five harnesses, [what was verified](docs/src/content/docs/agents/verified.md) for each, and how to [add one](docs/src/content/docs/agents/add-a-harness.md).                                        |
+| [Developing](docs/src/content/docs/project/developing.md)                                         | The gates, the website, and [releasing](docs/src/content/docs/project/releasing.md).                                                                                                                    |
 
 ## License
 

@@ -19,6 +19,25 @@ interface CheckFields {
 /** The name of a field a check may carry. */
 export type Field = keyof CheckFields;
 
+// What each field holds, in one sentence. `options` is here too: only a decision check takes it, and it is the one
+// field that is not text. The docs list the fields from this table.
+export const FIELD_MEANINGS: Record<Field | "options", string> = {
+  skill: "The name of a skill.",
+  pattern: "A regular expression.",
+  text: "Text to look for. The match is exact and case-sensitive.",
+  path: "A file path inside the workspace.",
+  kind: "What the tool does, with the same word in every harness.",
+  name: "A regular expression for the harness's own tool name.",
+  inputMatches:
+    "A regular expression for the tool call's input, written as JSON.",
+  flags: "The flags of the check's regular expressions.",
+  rubric: "Plain text that says what a good answer does.",
+  question: "A question about the final answer.",
+  expect: 'The answer that scores 1 for a yes or no question: "yes" or "no".',
+  options:
+    "An object of at least two answers, each with a number from 0 to 1 that says what the answer is worth.",
+};
+
 /** A check that a rule scores from what the run left behind. */
 export type RuledCheck = CheckFields & { type: RuledType; weight: number };
 /** A check that a model scores against a rubric. */
@@ -56,8 +75,13 @@ type Rule = (check: RuledCheck, outcome: Outcome) => number;
 export interface Spec {
   fields: Field[];
   optional?: Field[];
+  /** At least one of these must be set. */
   oneOf?: Field[];
   rule?: Rule;
+  /** What the check scores, in one sentence for the docs. A rule's sentence says when the score is 1. */
+  scores: string;
+  /** One more sentence about the fields, for what the lists above cannot say. */
+  note?: string;
 }
 type With<F extends Field> = RuledCheck & Required<Pick<CheckFields, F>>;
 type Test<F extends Field> = (check: With<F>, outcome: Outcome) => boolean;
@@ -102,7 +126,7 @@ const toolCalled: Test<never> = (check, outcome) =>
 const holds = <F extends Field>(
   fields: F[],
   test: Test<F>,
-  more: Omit<Spec, "fields" | "rule"> = {},
+  more: Omit<Spec, "fields" | "rule">,
 ): Spec & { rule: Rule } => ({
   fields,
   ...more,
@@ -111,7 +135,7 @@ const holds = <F extends Field>(
 const fails = <F extends Field>(
   fields: F[],
   test: Test<F>,
-  more?: Omit<Spec, "fields" | "rule">,
+  more: Omit<Spec, "fields" | "rule">,
 ): Spec & { rule: Rule } =>
   holds(fields, (check, outcome) => !test(check, outcome), more);
 
@@ -128,15 +152,30 @@ const outputContains: Test<"text"> = (check, outcome) =>
   outcome.finalText.includes(check.text);
 
 const RULED = {
-  skill_loaded: holds(["skill"], skillLoaded),
-  skill_not_loaded: fails(["skill"], skillLoaded),
-  output_matches: holds(["pattern"], outputMatches, FLAGS),
-  output_lacks: fails(["pattern"], outputMatches, FLAGS),
-  output_contains: holds(["text"], outputContains),
-  output_not_contains: fails(["text"], outputContains),
+  skill_loaded: holds(["skill"], skillLoaded, {
+    scores: "The agent loaded that skill.",
+  }),
+  skill_not_loaded: fails(["skill"], skillLoaded, {
+    scores: "The agent did not load that skill.",
+  }),
+  output_matches: holds(["pattern"], outputMatches, {
+    ...FLAGS,
+    scores: "The final answer matches the regular expression.",
+  }),
+  output_lacks: fails(["pattern"], outputMatches, {
+    ...FLAGS,
+    scores: "The final answer does not match the regular expression.",
+  }),
+  output_contains: holds(["text"], outputContains, {
+    scores: "The final answer contains that text.",
+  }),
+  output_not_contains: fails(["text"], outputContains, {
+    scores: "The final answer does not contain that text.",
+  }),
   file_exists: holds(
     ["path"],
     (check, outcome) => fileText(check, outcome) !== null,
+    { scores: "That file exists in the workspace after the run." },
   ),
   file_matches: holds(
     ["path", "pattern"],
@@ -144,18 +183,36 @@ const RULED = {
       const text = fileText(check, outcome);
       return text !== null && regex(check.pattern, check.flags).test(text);
     },
-    FLAGS,
+    {
+      ...FLAGS,
+      scores: "That file exists and matches the regular expression.",
+    },
   ),
-  tool_called: holds([], toolCalled, TOOL_FIELDS),
-  tool_not_called: fails([], toolCalled, TOOL_FIELDS),
+  tool_called: holds([], toolCalled, {
+    ...TOOL_FIELDS,
+    scores: "The agent made a tool call that fits every given field.",
+  }),
+  tool_not_called: fails([], toolCalled, {
+    ...TOOL_FIELDS,
+    scores: "The agent made no tool call that fits every given field.",
+  }),
 };
 type RuledType = keyof typeof RULED;
 
 // Every check type. A type with no rule is scored by a model instead (see judge.ts and decision.ts).
 export const CHECKS: Record<string, Spec> = {
   ...RULED,
-  judge: { fields: ["rubric"] },
-  decision: { fields: ["question"], optional: ["expect"] },
+  judge: {
+    fields: ["rubric"],
+    scores: "Not 0 or 1. A model scores the final answer against the rubric.",
+  },
+  decision: {
+    fields: ["question"],
+    optional: ["expect"],
+    scores:
+      "Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value.",
+    note: "It takes exactly one of `expect` and `options`.",
+  },
 };
 
 /**

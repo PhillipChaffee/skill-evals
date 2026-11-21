@@ -4,7 +4,6 @@ import { loadCases } from "./cases.js";
 import type { EvaluateOptions } from "./evaluate.js";
 import { evaluate } from "./evaluate.js";
 import { HARNESSES, findBin } from "./harnesses/index.js";
-import type { ProbeOptions } from "./probe.js";
 import { check } from "./probe.js";
 import type { Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
@@ -13,85 +12,10 @@ import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { formatScore } from "./score.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
-
-const USAGE = `Usage: skill-evals <command> [options]
-
-  run    Run every case against subject A and subject B, score both, and print a comparison.
-           --a <subject>          the baseline (default: main)
-           --b <subject>          the change (default: the project, uncommitted changes included)
-  score  Run every case against one subject and print its scores.
-           --subject <subject>    (default: the project, uncommitted changes included)
-  run and score also take:
-           --harness <ids|all>    comma-separated harness ids (default: the first installed one)
-           --case <glob>          case ids to run (default: *)
-           --cases <dir>          directory that holds the cases (default: evals/cases in the project)
-           --reps <n>             runs for each subject and case (default: 3)
-           --model <id>           passed to the harness (default: the harness's own default)
-           --min-score <0..1>     exit 1 when the suite score of the subject (B for run) is lower
-           --judge-harness <id>   harness that scores judged checks (default: the harness under test)
-           --judge-model <id>     model that scores judged checks (default: --model)
-           --decision-model <id>  decision model that scores decision checks (no default)
-           --decision-url <url>   base URL of the decision model's API (default: the provider's own)
-           --decision-timeout <s> seconds one request to the decision model may take (default: 60)
-           --out <dir>            where results go (default: a new temp directory)
-  check  Run one small prompt in each installed harness and show what its adapter reports.
-           --subject <subject>  --harness <ids|all>  (default: all)   --model <id>   --out <dir>
-  list   Show harnesses in default-preference order, and the cases.
-           --cases <dir>
-
-A subject is what a run loads: a directory, a git ref of the project, or "none" for no skills at all.
-A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
-The project is the git repository that holds the working directory, or the working directory itself.
-skill-evals.config.json in the project can set a default for cases, harness, reps, model, judgeHarness,
-judgeModel, decisionModel, decisionUrl, decisionTimeout, and minScore.`;
+import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
+import { FLAGS, usageText } from "./usage.js";
 
 const USAGE_EXIT_CODE = 2;
-
-/** Every option a command line can set, under the name the code uses for it. */
-type Options = Omit<EvaluateOptions, "cwd" | "subjects" | "onRun"> &
-  ProbeOptions & { a?: string; b?: string };
-
-/** How a flag's text becomes an option. */
-interface FlagSpec {
-  /** The option the flag sets; its own name when absent. */
-  as?: keyof Options;
-  /** Converts the text; it stays text when absent. */
-  read?: (text: string) => number;
-}
-
-const FLAGS = {
-  a: {},
-  b: {},
-  subject: {},
-  harness: {},
-  case: { as: "caseGlob" },
-  cases: {},
-  reps: { read: Number },
-  model: {},
-  "min-score": { as: "minScore", read: Number },
-  "judge-harness": { as: "judgeHarness" },
-  "judge-model": { as: "judgeModel" },
-  "decision-model": { as: "decisionModel" },
-  "decision-url": { as: "decisionUrl" },
-  "decision-timeout": { as: "decisionTimeout", read: Number },
-  out: { as: "outDir" },
-} satisfies Record<string, FlagSpec>;
-type Flag = keyof typeof FLAGS;
-
-const SUITE_FLAGS: Flag[] = [
-  "harness",
-  "case",
-  "cases",
-  "reps",
-  "model",
-  "min-score",
-  "judge-harness",
-  "judge-model",
-  "decision-model",
-  "decision-url",
-  "decision-timeout",
-  "out",
-];
 
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
@@ -145,26 +69,56 @@ function list(given: Options, project: Project): number {
   return 0;
 }
 
-/** A command: what it does with its options, and the flags it takes. */
-interface Command {
+const SUITE_FLAGS: Flag[] = [
+  "harness",
+  "case",
+  "cases",
+  "reps",
+  "model",
+  "min-score",
+  "judge-harness",
+  "judge-model",
+  "decision-model",
+  "decision-url",
+  "decision-timeout",
+  "out",
+];
+
+/** A command: what it does with its options, the flags it takes, and what the help text says about it. */
+interface Command extends CommandDoc {
   handler: (options: Options, project: Project) => number | Promise<number>;
-  flags: Flag[];
 }
 
-const COMMANDS: Record<string, Command> = {
+// Every command. The help text and the docs are written from this table and from FLAGS.
+export const COMMANDS: Record<string, Command> = {
   run: {
+    description:
+      "Run every case against subject A and subject B, score both, and print a comparison.",
     handler: ({ a = "main", b, ...options }, project) =>
       suite({ ...options, subjects: [a, b ?? project.root] }),
     flags: ["a", "b", ...SUITE_FLAGS],
   },
   score: {
+    description: "Run every case against one subject and print its scores.",
     handler: ({ subject, ...options }, project) =>
       suite({ ...options, subjects: [subject ?? project.root] }),
     flags: ["subject", ...SUITE_FLAGS],
   },
-  check: { handler: check, flags: ["subject", "harness", "model", "out"] },
-  list: { handler: list, flags: ["cases"] },
+  check: {
+    description:
+      "Run one small prompt in each installed harness and show what its adapter reports.",
+    handler: check,
+    flags: ["subject", "harness", "model", "out"],
+  },
+  list: {
+    description:
+      "Show the harnesses in default-preference order, and the cases.",
+    handler: list,
+    flags: ["cases"],
+  },
 };
+
+const USAGE = usageText(COMMANDS);
 
 /**
  * Reads the flags of a command.

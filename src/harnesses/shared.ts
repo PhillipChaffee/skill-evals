@@ -2,20 +2,24 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Subject } from "../subject.js";
 
-export const TOOL_KINDS = [
-  "shell",
-  "read",
-  "write",
-  "edit",
-  "search",
-  "web",
-  "skill",
-  "subagent",
-  "other",
-] as const;
+// Every tool kind with what it means. The docs list the kinds from this table.
+export const TOOL_KIND_MEANINGS = {
+  shell: "Ran a command.",
+  read: "Read a file.",
+  write: "Created or replaced a file.",
+  edit: "Changed part of a file, or deleted one.",
+  search: "Searched or listed files.",
+  web: "Fetched a page or searched the web.",
+  skill: "Called the harness's skill tool.",
+  subagent: "Started another agent.",
+  other: "Any tool the harness's adapter has no kind for, such as an MCP tool.",
+} as const;
 
 /** What a tool does, the same word in every harness. */
-export type ToolKind = (typeof TOOL_KINDS)[number];
+export type ToolKind = keyof typeof TOOL_KIND_MEANINGS;
+
+// The table's keys are exactly the kinds, so the cast only names them.
+export const TOOL_KINDS = Object.keys(TOOL_KIND_MEANINGS) as ToolKind[];
 
 /** One tool call of the agent. */
 export interface ToolCall {

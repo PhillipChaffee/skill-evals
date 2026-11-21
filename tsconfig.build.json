@@ -14,5 +14,5 @@
     "declaration": true // consumers of `import "skill-evals"` get the types
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/testing"] // tests and their helpers are not shipped
+  "exclude": ["src/**/*.test.ts", "src/testing", "src/docs"] // tests and their helpers are not shipped, and neither is the code that writes the reference pages of the docs
 }

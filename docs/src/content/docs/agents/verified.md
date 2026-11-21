@@ -1,18 +1,7 @@
-# Harnesses
-
-`run` and `score` use the first installed harness in this order when you do not name one: `pi`, `claude-code`, `cursor`, `opencode`, `codex`. Pi leads because it has the smallest measured install (Pi 204 MB, OpenCode 412 MB, Codex 424 MB, Cursor 538 MB), starts in about a second, and reports tokens and cost.
-
-| Harness       | Executable     | How a plugin is loaded                                                        | How the prompt is passed | Reports                                 |
-| ------------- | -------------- | ----------------------------------------------------------------------------- | ------------------------ | --------------------------------------- |
-| `pi`          | `pi`           | `-e <dir>` with discovery switched off (`-ne -ns -np`)                        | on standard input        | tokens, cost                            |
-| `claude-code` | `claude`       | `--plugin-dir <dir>`                                                          | after `--`               | tokens, cost, loaded plugins and skills |
-| `cursor`      | `cursor-agent` | `--plugin-dir <dir>`                                                          | after `--`               | neither tokens nor cost                 |
-| `opencode`    | `opencode`     | a `plugin` entry in the new home's `opencode.json`                            | after `--`               | tokens, cost                            |
-| `codex`       | `codex`        | `codex plugin marketplace add <dir>` and `codex plugin add` into the new home | after `--`               | tokens                                  |
-
-To use a different executable, set `SKILL_EVALS_BIN_<ID>` (for example `SKILL_EVALS_BIN_CLAUDE_CODE=/opt/bin/claude`). Use it when a version-manager shim needs your real home directory to find the binary.
-
-## What was verified
+---
+title: What was verified
+description: What was confirmed for each harness adapter, how, and what was not.
+---
 
 `skill-evals check` is how you confirm an adapter on your own machine. These tables say what was confirmed when the adapters were written, and how. Only Claude Code ran a real model. "Scripted endpoint" means that the real CLI ran through this runner against a local model endpoint that replays a fixed tool call and a fixed answer, with every request it received logged.
 
@@ -54,15 +43,4 @@ The decision model:
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Baseten System One client | Written from the [System One API reference](https://docs.baseten.co/reference/inference-api/system-one) and the [decision models guide](https://docs.baseten.co/inference/model-apis/decision-models) as they were on 2026-11-21. The tests run the client against a local HTTP server that answers in the documented response shape: the request body, the `Authorization` header, the scoring, the retry, and every unusable reply. The client was also run against bison-1, self-hosted on Modal with the runtime that Baseten publishes for its sibling models. Yes, no, and options checks scored, the options with labels that hold spaces. The reply reported token usage. A warm request took about 1.2 seconds. Repeated gradings of a fixed answer gave identical scores. | Baseten's hosted API itself, including its auth scheme. No request from this client has reached it. |
 
-Two limits apply across harnesses. A login stored in the operating system's keychain may not follow the new home. If `check` reports a login error, set the harness's API key variable. Only Claude Code reports what it loaded, as [What one run does](commands.md#what-one-run-does) says.
-
-## Add a harness
-
-Adapters live in this package. Loading one from your own code is not supported yet.
-
-1. Add `src/harnesses/<id>.ts` whose default export has the five fields of the `Harness` type in `src/harnesses/shared.ts`: `id`, `bin`, `authFiles`, `invocation`, `parse`. Declare the stream events that `parse` reads as a type in the same file.
-2. In `invocation`, load a plugin subject the way the harness loads a local plugin (`pluginDir`), copy a skills subject to where the harness discovers a user's skills (`placeSkills`), and point the harness's own config variables into `home`. Return `setup` commands when the harness has to install the plugin before it runs. When `subject` is `null`, load nothing. The judge and the `none` baseline run that way.
-3. Pass the prompt so that a leading dash cannot be read as a flag: after a `--` separator, or in `stdin` when the CLI has no separator. Confirm it against the real CLI.
-4. In `parse`, normalize the stream and nothing more. Return `null` for a field the harness does not report. Put only a tool call's input in `toolCalls`, never its output, or file contents will count as skill loads. Build each tool call with `toolCall` and a table from the harness's tool names to the kinds under [Tool checks](cases-and-checks.md#tool-checks).
-5. Add the adapter to `HARNESSES` in `src/harnesses/index.ts` at its place in the preference order.
-6. Capture one real stream into `test/fixtures/` and add it to `src/adapters.test.ts`. Add the harness to the table of skill locations in `src/invocation.test.ts`, and add a row to every table above and to the table of skill locations under [Subjects](commands.md#subjects).
+Two limits apply across harnesses. A login stored in the operating system's keychain may not follow the new home. If `check` reports a login error, set the harness's API key variable. Only Claude Code reports what it loaded, as [What one run does](../concepts/one-run.md) says.
