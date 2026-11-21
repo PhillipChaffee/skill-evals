@@ -1,13 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { childEnv } from "./env.js";
+import { childEnv, envNameFault, requireEnvNames } from "./env.js";
+import { evaluate } from "./evaluate.js";
 import { CONFIG_FILE } from "./project.js";
 import { plantCase, script, skillsFolder } from "./testing/plant.js";
 import { sandbox } from "./testing/sandbox.js";
 
 const USAGE_ERROR = 2;
 const NONE = { harnessEnv: {}, authEnv: [], pass: [], withhold: [] };
+
+/** The part of a stream event that carries a tool result. */
+interface StreamEvent {
+  type: string;
+  message?: { content?: { content?: string }[] };
+}
 
 /**
  * Scores one case whose agent runs `env`, and reads what the harness process received.
@@ -48,16 +55,15 @@ async function seenNames(extra: {
     path.join(outDir, "claude-code/restate/subject1.stream.jsonl"),
     "utf8",
   );
-  const output = stream
+  return stream
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line) as { type: string; message?: unknown })
+    .map((line) => JSON.parse(line) as StreamEvent)
     .filter((event) => event.type === "user")
-    .map((event) => JSON.stringify(event.message))
-    .join("\n");
-  return [...output.matchAll(/(?:\\n|^|")([A-Za-z_][A-Za-z0-9_]*)=/g)].map(
-    (match) => match[1] ?? "",
-  );
+    .flatMap((event) => event.message?.content ?? [])
+    .flatMap((block) => (block.content ?? "").split("\n"))
+    .filter((line) => line.includes("="))
+    .map((line) => line.slice(0, line.indexOf("=")));
 }
 
 test("a variable outside the allowlist does not reach the harness", async () => {
@@ -77,14 +83,29 @@ test("a name in config env passes", async () => {
 });
 
 test("a name in config env that names this tool is a config error", async () => {
-  for (const name of ["SKILL_EVALS_X", "npm_config_y"]) {
+  for (const name of ["SKILL_EVALS_X", "npm_config_y", "_", "", "A=B"]) {
     const box = sandbox();
     box.write(CONFIG_FILE, { env: [name] });
     const result = await box.cli(["list"]);
     expect(result.status).toBe(USAGE_ERROR);
     expect(result.stderr).toContain(`"env"`);
-    expect(result.stderr).toContain(name);
+    expect(result.stderr).toContain(`cannot name "${name}"`);
   }
+});
+
+test("evaluate refuses the same names, before any harness starts", async () => {
+  const box = sandbox();
+  for (const name of ["SKILL_EVALS_X", "npm_y", "_", "", "A=B"]) {
+    await expect(
+      evaluate({ cwd: box.root, subjects: ["none"], env: [name] }),
+    ).rejects.toMatchObject({
+      message: `env cannot name "${name}": ${envNameFault(name) ?? ""}`,
+    });
+  }
+  expect(envNameFault("AWS_ENDPOINT_URL")).toBeNull();
+  expect(() => {
+    requireEnvNames(["OK_ONE", "_"], "x");
+  }).toThrow('x cannot name "_"');
 });
 
 test("config env must be a list of strings", async () => {
@@ -200,4 +221,20 @@ test("the adapter's own variables are added", () => {
     harnessEnv: { CLAUDE_CONFIG_DIR: "/h/.claude" },
   });
   expect(env["CLAUDE_CONFIG_DIR"]).toBe("/h/.claude");
+});
+
+test("a variable set to the empty string is kept, an unset listed name is skipped, and duplicates collapse", () => {
+  const env = childEnv({
+    home: "/h",
+    base: { EMPTY_THING: "", TZ: "" },
+    ...NONE,
+    authEnv: ["EMPTY_THING", "NOT_SET_ANYWHERE"],
+    pass: ["EMPTY_THING", "EMPTY_THING", "TZ"],
+  });
+  expect(env["EMPTY_THING"]).toBe("");
+  expect(env["TZ"]).toBe("");
+  expect(Object.keys(env)).not.toContain("NOT_SET_ANYWHERE");
+  expect(
+    Object.keys(env).filter((name) => name === "EMPTY_THING"),
+  ).toHaveLength(1);
 });

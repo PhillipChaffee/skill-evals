@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { requireEnvNames } from "./env.js";
 import { UsageError, messageOf } from "./scope.js";
 
 /** The project a command works on. Relative paths on a command line resolve against cwd. */
@@ -28,8 +29,6 @@ export function findProject(cwd: string): Project {
   }
 }
 
-// Variables of this tool, and the ones npm sets that name the command that is running; the harness never gets them.
-const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_)/;
 export const CONFIG_FILE = "skill-evals.config.json";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
 export const CONFIG_KEYS: Record<
@@ -85,14 +84,7 @@ function checkValue(file: string, key: string, value: unknown): void {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new UsageError(`${file}: "${key}" must be a list of strings`);
   }
-  const reserved = (value as string[]).find((name) =>
-    NAMES_THIS_TOOL.test(name),
-  );
-  if (reserved !== undefined) {
-    throw new UsageError(
-      `${file}: "${key}" cannot name "${reserved}", because it names this tool or the command that runs it`,
-    );
-  }
+  requireEnvNames(value as string[], `${file}: "${key}"`);
 }
 
 /**

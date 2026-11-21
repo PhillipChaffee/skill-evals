@@ -2,9 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { parseVerdict } from "./judge.js";
+import { CONFIG_FILE } from "./project.js";
+import { decisionServer, yesNo } from "./testing/decision-server.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { readResults, sandbox, tableRow } from "./testing/sandbox.js";
 
+const REPLIES_FILE = "fake/judge/replies.json";
+const PROMPTS_FILE = "fake/judge/prompts.jsonl";
 const RUBRIC = "Says the word fixed and nothing about weather.";
 const ANSWER = "It is fixed now.";
 const JUDGE_MODEL = "judge-model";
@@ -15,6 +19,8 @@ interface Asked {
   prompt: string;
   model: string | null;
   pluginDir: string | null;
+  /** The names of the environment variables the judge process had. */
+  env: string[];
 }
 
 /**
@@ -34,7 +40,7 @@ async function judgedRun(replies: string[], ...extra: string[]) {
     { type: "judge", rubric: RUBRIC, weight: 3 },
     { type: "output_contains", text: "broken" },
   ]);
-  box.write("fake/judge/replies.json", replies);
+  box.write(REPLIES_FILE, replies);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--out", outDir, ...extra];
   const result = await box.cli(
@@ -44,7 +50,7 @@ async function judgedRun(replies: string[], ...extra: string[]) {
     },
   );
   const asked = fs
-    .readFileSync(path.join(box.root, "fake/judge/prompts.jsonl"), "utf8")
+    .readFileSync(path.join(box.root, PROMPTS_FILE), "utf8")
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as Asked);
@@ -158,7 +164,7 @@ test("a judged check of an invalid run is not sent to the judge", async () => {
   const box = sandbox();
   const ghost = plugin(box, "plugin-ghost", { ghost: true, answer: ANSWER });
   const cases = plantCase(box, [{ type: "judge", rubric: RUBRIC }]);
-  box.write("fake/judge/replies.json", [YES]);
+  box.write(REPLIES_FILE, [YES]);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--reps", "1", "--out", outDir];
 
@@ -168,9 +174,7 @@ test("a judged check of an invalid run is not sent to the judge", async () => {
     score: null,
     reason: "not judged, because the run is invalid",
   });
-  expect(fs.existsSync(path.join(box.root, "fake/judge/prompts.jsonl"))).toBe(
-    false,
-  );
+  expect(fs.existsSync(path.join(box.root, PROMPTS_FILE))).toBe(false);
 });
 
 test("a verdict needs no reason, and a reason that is not text is kept as JSON", () => {
@@ -183,4 +187,38 @@ test("a verdict needs no reason, and a reason that is not text is kept as JSON",
     "the score must be a number from 0 to 1, got undefined",
   );
   expect(() => parseVerdict("null")).toThrow('no JSON object in "null"');
+});
+
+test("the judge gets the same scrubbed environment: no stray variable, the config's names, and not the decision key", async () => {
+  const box = sandbox();
+  const server = await decisionServer([{ answers: { q1: yesNo(1) } }]);
+  const owned = plugin(box, "plugin-owned", { answer: ANSWER });
+  const cases = plantCase(box, [
+    { type: "judge", rubric: RUBRIC },
+    { type: "decision", question: "Is it plain?", expect: "yes" },
+  ]);
+  box.write(REPLIES_FILE, [YES]);
+  box.write(CONFIG_FILE, { env: ["LISTED_THING", "BASETEN_API_KEY"] });
+  const result = await box.cli(
+    [
+      ...["score", "--subject", owned, "--cases", cases, "--reps", "1"],
+      ...["--out", path.join(box.root, "results")],
+      ...["--decision-model", "decider", "--decision-url", server.url],
+    ],
+    {
+      STRAY_THING: "1",
+      LISTED_THING: "2",
+      BASETEN_API_KEY: "the-decision-key",
+    },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  const [asked] = fs
+    .readFileSync(path.join(box.root, PROMPTS_FILE), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Asked);
+  expect(asked?.env).toContain("LISTED_THING");
+  expect(asked?.env).toContain("PATH");
+  expect(asked?.env).not.toContain("STRAY_THING");
+  expect(asked?.env).not.toContain("BASETEN_API_KEY");
 });

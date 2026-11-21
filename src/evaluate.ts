@@ -10,6 +10,7 @@ import { selectHarnesses } from "./harnesses/index.js";
 import type { Config } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
+import { requireEnvNames } from "./env.js";
 import { invalidReason, runOnce } from "./run.js";
 import type { SuiteScore } from "./score.js";
 import { failedBars, isUnitScore, scoreSuites } from "./score.js";
@@ -27,6 +28,8 @@ export interface EvaluateOptions {
   harness?: string | undefined;
   /** The directory that holds the cases. Default: `evals/cases` in the project. */
   cases?: string | undefined;
+  /** Names of variables the harness gets besides the allowlist. Default: `env` of the config file. */
+  env?: string[] | undefined;
   /** Case ids to run; only `*` is special. Default: every case. */
   caseGlob?: string | undefined;
   /** Runs for each subject and case. Default: 3. */
@@ -114,6 +117,7 @@ function labelled(specs: string[]): { label: Label; spec: string }[] {
  */
 function requireUsable(options: Config): number {
   const { reps = DEFAULT_REPS, minScore, decisionTimeout: seconds } = options;
+  requireEnvNames(options.env ?? [], "env");
   if (!Number.isInteger(reps) || reps < 1) {
     throw new UsageError("reps must be a positive integer");
   }

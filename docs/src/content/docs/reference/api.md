@@ -124,6 +124,7 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `subjects`         | `string[]`                                   | One or two of a directory, a git ref of the project, or "none".                                                |
 | `harness?`         | `string \| undefined`                        | Comma-separated harness ids, or "all". Default: the first installed harness.                                   |
 | `cases?`           | `string \| undefined`                        | The directory that holds the cases. Default: `evals/cases` in the project.                                     |
+| `env?`             | `string[] \| undefined`                      | Names of variables the harness gets besides the allowlist. Default: `env` of the config file.                  |
 | `caseGlob?`        | `string \| undefined`                        | Case ids to run; only `*` is special. Default: every case.                                                     |
 | `reps?`            | `number \| undefined`                        | Runs for each subject and case. Default: 3.                                                                    |
 | `model?`           | `string \| undefined`                        | Passed to the harness. Default: the harness's own default.                                                     |

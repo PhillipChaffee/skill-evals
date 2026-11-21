@@ -1,4 +1,5 @@
 import path from "node:path";
+import { UsageError } from "./scope.js";
 
 // What a harness needs to run at all, to reach the network through a proxy, and to trust the same certificates as the
 // user's shell. Nothing else of this process's environment is inherited.
@@ -24,6 +25,39 @@ const ALLOWED = new Set([
   "GIT_SSL_CAINFO",
 ]);
 const LOCALE = /^LC_/;
+// This tool's own variables, and the ones npm and the shell set that name the command that is running.
+const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_|_$)/;
+
+/** The rule for a name in the `env` option, in words. The reference page quotes it. */
+export const ENV_NAME_RULE =
+  "An exact variable name: not empty, without `=`, not `_`, and not starting with `SKILL_EVALS_` or `npm_`.";
+
+/**
+ * Judges a name of the `env` option.
+ * @param name - What the user listed.
+ * @returns Why the harness may not get a variable of that name, or null when it may.
+ */
+export function envNameFault(name: string): string | null {
+  if (name === "") return "is empty";
+  if (name.includes("=")) return "has an `=`, so it is not a variable name";
+  if (NAMES_THIS_TOOL.test(name)) {
+    return "names this tool or the command that runs it";
+  }
+  return null;
+}
+
+/**
+ * Checks every name of the `env` option. Both the config file and `evaluate` go through it.
+ * @param names - What the user listed.
+ * @param where - Names the option in the message, such as the config file and key.
+ * @throws {UsageError} At the first name that `envNameFault` refuses.
+ */
+export function requireEnvNames(names: string[], where: string): void {
+  for (const name of names) {
+    const fault = envNameFault(name);
+    if (fault) throw new UsageError(`${where} cannot name "${name}": ${fault}`);
+  }
+}
 
 /** What decides the environment of a harness process. */
 export interface ChildEnvInput {

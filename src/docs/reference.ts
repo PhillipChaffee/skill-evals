@@ -5,6 +5,7 @@ import { CHECKS } from "../checks/index.js";
 import { COMMANDS } from "../cli.js";
 import { HARNESSES, overrideVar } from "../harnesses/index.js";
 import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
+import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import type { Flag, FlagSpec } from "../usage.js";
 import { FLAGS, commandsTaking, defaultText, flagSyntax } from "../usage.js";
@@ -213,7 +214,7 @@ const flagsOf = (key: string): Flag[] =>
 
 // Keys that no flag sets.
 const CONFIG_ONLY: Record<string, string> = {
-  env: "Exact names of environment variables the harness gets besides the allowlist. A name that starts with `SKILL_EVALS_` or `npm_` is an error.",
+  env: `Names of environment variables the harness gets besides the allowlist. ${ENV_NAME_RULE} Anything else is an error.`,
 };
 
 const configPage = (): ReferencePage => ({

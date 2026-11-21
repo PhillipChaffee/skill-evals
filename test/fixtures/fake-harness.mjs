@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stands in for a harness binary behind the Claude Code adapter: no model, and a Claude Code shaped stream.
-// - Given the judge's prompt, it is the judge: it appends its prompt and model to `prompts.jsonl` in `judge/` of $FAKE_DIR
+// - Given the judge's prompt, it is the judge: it appends its prompt and model, and the names of its environment variables, to `prompts.jsonl` in `judge/` of $FAKE_DIR
 //   and replies with the next unused entry of `replies.json` there.
 // - Given --plugin-dir, it behaves as `behavior.json` in that directory says (a plugin without one is plain).
 // - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
@@ -45,7 +45,7 @@ if (prompt.startsWith("Grade one answer")) {
     : 0;
   fs.appendFileSync(
     log,
-    `${JSON.stringify({ prompt, model: flag("--model"), pluginDir })}\n`,
+    `${JSON.stringify({ prompt, model: flag("--model"), pluginDir, env: Object.keys(process.env) })}\n`,
   );
   emit({ type: "system", subtype: "init", plugins: [], skills: [] });
   finish(replies[asked], 0.002);
