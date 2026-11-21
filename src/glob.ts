@@ -1,6 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
 import { UsageError } from "./scope.js";
+import { walkTree } from "./walk.js";
 
 /**
  * Translates the star at a position of a glob.
@@ -78,26 +77,18 @@ export function expandGlob(
 ): string[] {
   const matcher = globToRegExp(glob);
   const found: string[] = [];
-  const walk = (dir: string, prefix: string): void => {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const relative = `${prefix}${entry.name}`;
-      if (matcher.test(relative)) {
-        found.push(relative);
-        if (found.length > limit) {
-          throw new UsageError(
-            `the glob "${glob}" matches more than ${String(limit)} paths in ${root}`,
-          );
-        }
+  walkTree(root, {
+    unreadable: () => undefined,
+    visit: ({ relative }) => {
+      if (!matcher.test(relative)) return undefined;
+      found.push(relative);
+      if (found.length > limit) {
+        throw new UsageError(
+          `the glob "${glob}" matches more than ${String(limit)} paths in ${root}`,
+        );
       }
-      if (entry.isDirectory()) walk(path.join(dir, entry.name), `${relative}/`);
-    }
-  };
-  walk(root, "");
+      return undefined;
+    },
+  });
   return found.sort();
 }

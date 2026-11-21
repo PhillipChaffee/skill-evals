@@ -76,9 +76,10 @@ const codex: Harness = {
   invocation({ subject, home, workspace, prompt, model }) {
     const codexHome = path.join(home, ".codex");
     fs.mkdirSync(codexHome, { recursive: true });
-    placeSkills(subject, path.join(home, ".agents", "skills"));
+    const placed = placeSkills(subject, path.join(home, ".agents", "skills"));
     const plugin = pluginDir(subject);
     return {
+      placed,
       setup: plugin ? installPlugin(plugin) : [],
       args: [
         "exec",

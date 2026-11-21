@@ -1,3 +1,4 @@
+import { exclusionsOf } from "./exclusions.js";
 import type { Case } from "./cases.js";
 import { findBin, namedHarnesses } from "./harnesses/index.js";
 import type { Project } from "./project.js";
@@ -10,7 +11,6 @@ import {
   SUBJECT_CHANGED_EXIT_CODE,
   changedAtSource,
   describeSubject,
-  exclusionsOf,
   resolveSubject,
   sourceChangedMessage,
 } from "./subject.js";

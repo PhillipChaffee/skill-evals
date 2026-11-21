@@ -16,7 +16,8 @@ import type { SuiteScore } from "./score.js";
 import { failedBars, isUnitScore, scoreSuites } from "./score.js";
 import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject, SubjectSummary } from "./subject.js";
-import { changedAtSource, exclusionsOf, resolveSubject } from "./subject.js";
+import { changedAtSource, resolveSubject } from "./subject.js";
+import { exclusionsOf } from "./exclusions.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions {

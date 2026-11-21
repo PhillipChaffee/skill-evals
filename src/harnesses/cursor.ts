@@ -56,8 +56,9 @@ const cursor: Harness = {
   authEnv: ["CURSOR_API_KEY"],
 
   invocation({ subject, home, workspace, prompt, model }) {
-    placeSkills(subject, path.join(home, ".cursor", "skills"));
+    const placed = placeSkills(subject, path.join(home, ".cursor", "skills"));
     return {
+      placed,
       args: [
         "-p",
         "--output-format",

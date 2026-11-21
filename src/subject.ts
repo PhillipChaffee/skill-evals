@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { literalGlob } from "./glob.js";
+import { NO_EXCLUSIONS, globsFor } from "./exclusions.js";
+import type { Exclusions } from "./exclusions.js";
 import { exportSubject, leaveOut } from "./isolate.js";
 import type { Project } from "./project.js";
 import { UsageError } from "./scope.js";
@@ -34,18 +35,12 @@ export interface Subject extends SubjectSummary {
   skillDirs: Record<string, string>;
   /** The export that every run copies; null for "none". It has left out what the subject excludes. */
   exported: string | null;
+  /** Lists what a run edited in the export, which would reach later runs; none unless one did. */
+  exportChanged: () => string[];
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
   sourceChanges: () => string[];
   /** Removes the export. */
   dispose: () => void;
-}
-
-/** What an export leaves out, besides `.git` and `node_modules`. */
-export interface Exclusions {
-  /** Globs relative to the root of the subject, from the config key `subjectExclude`. */
-  globs: string[];
-  /** Directories that are left out when they are inside the subject: the cases and the output directory. */
-  dirs: string[];
 }
 
 /** What only a subject that is not "none" has. */
@@ -172,67 +167,6 @@ function locate(label: Label, spec: string, project: Project): Located {
   return { dir: project.root, commit };
 }
 
-/**
- * Resolves the links in a path, even when its last parts do not exist yet.
- * @param target - A path.
- * @returns The real path of its deepest existing ancestor, with the rest appended.
- */
-function realish(target: string): string {
-  try {
-    return fs.realpathSync(target);
-  } catch {
-    const parent = path.dirname(path.resolve(target));
-    return parent === target
-      ? target
-      : path.join(realish(parent), path.basename(target));
-  }
-}
-
-/**
- * Turns a directory that an export leaves out into a glob.
- * @param root - The root of the subject.
- * @param dir - A directory that may be inside it.
- * @returns The glob of its path relative to root; nothing when it is root itself or is outside.
- */
-function insideGlob(root: string, dir: string): string[] {
-  const relative = path.relative(realish(root), realish(dir));
-  if (
-    relative === "" ||
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
-    return [];
-  }
-  return [literalGlob(relative.split(path.sep).join("/"))];
-}
-
-/**
- * Gathers what the export of every subject of a command leaves out.
- * @param options - The command's options after the config file was applied.
- * @param options.cases - The absolute path of the cases directory.
- * @param options.subjectExclude - The config key of the same name.
- * @param options.outDir - The output directory as the user gave it; absent for a temp directory.
- * @param cwd - What a relative output directory resolves against.
- * @returns The globs of the config, and the cases and output directories, which are left out when inside a subject.
- */
-export function exclusionsOf(
-  options: {
-    cases: string;
-    subjectExclude?: string[] | undefined;
-    outDir?: string | undefined;
-  },
-  cwd: string,
-): Exclusions {
-  return {
-    globs: options.subjectExclude ?? [],
-    dirs: [
-      options.cases,
-      ...(options.outDir ? [path.resolve(cwd, options.outDir)] : []),
-    ],
-  };
-}
-
 /** Where a command's subjects are looked up, and what their exports leave out. */
 export interface SubjectScope extends Project {
   /** Default: nothing besides `.git` and `node_modules`. */
@@ -274,6 +208,7 @@ const baseline = (label: Label): Subject => ({
   skillDirs: {},
   commit: null,
   exported: null,
+  exportChanged: () => [],
   sourceChanges: () => [],
   dispose: () => undefined,
 });
@@ -296,16 +231,12 @@ export function resolveSubject(
 ): Subject {
   if (spec === "none") return baseline(label);
   const source = locate(label, spec, scope);
-  const { globs = [], dirs = [] } = scope.left ?? {};
-  const left = [
-    ...globs,
-    ...dirs.flatMap((dir) => insideGlob(source.dir, dir)),
-  ];
-  const exported = exportNamed(
-    `--${label} ${spec}`,
-    { ...source, repoRoot: scope.root },
-    left,
+  const flag = `--${label} ${spec}`;
+  const left = globsFor(
+    { flag, root: source.dir, project: scope.root },
+    scope.left ?? NO_EXCLUSIONS,
   );
+  const exported = exportNamed(flag, { ...source, repoRoot: scope.root }, left);
   try {
     // A ref's own skill takes the name of the project folder it was exported from.
     const found = findSkills(
@@ -334,6 +265,7 @@ export function resolveSubject(
       skillDirs,
       commit: source.commit,
       exported: exported.dir,
+      exportChanged: exported.changed,
       sourceChanges: watchSource(source, left),
       dispose: exported.dispose,
     };

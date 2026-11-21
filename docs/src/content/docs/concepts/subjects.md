@@ -26,17 +26,22 @@ The export always leaves out:
 - `.git` and `node_modules`, at any depth.
 - The cases directory, when it is inside the subject. A project that keeps its cases in `evals/cases` does not show them to the agent.
 - The output directory, when it is inside the subject.
+- The project's config file, `skill-evals.config.json`, when it is inside the subject.
 - Every glob in the `subjectExclude` key of the [config file](../reference/config.md). `*` matches within one directory, `**` matches any depth, `?` matches one character, and `{a,b}` matches either. A glob matches a whole path relative to the subject, and a directory that matches goes with everything in it.
 
-A link in the subject that points outside it is a load error, because a link would let the agent read a file the export left out. A link with an absolute target counts as outside. Links that stay inside the subject are kept as links.
+A directory that is empty only because of these exclusions is left out as well, so the agent does not see the path of an excluded directory. A directory that was already empty in the source stays.
 
-What the agent edits in its copy never reaches the source, or the next run. The tool hashes the copy before and after each run. The run record keeps `subjectMutated`, and `subjectChanges` with the created, modified, and deleted paths. The check `subject_unchanged` scores 1 when the agent changed nothing:
+A link in the subject that points outside it is a load error, because a link would let the agent read a file the export left out. The tool follows every link on the way, so a chain of links cannot lead out. A link with an absolute target counts as outside. Links that stay inside the subject are kept as links. A socket, a pipe, or a device in the subject is a load error that names it.
+
+Two settings are usage errors, because they would show every case to the agent: a cases directory that is the subject directory or contains it, and an output directory that is the subject directory.
+
+What the agent edits in its copy never reaches the source, or the next run. The tool hashes the copy before and after each run. The run record keeps `subjectMutated`, and `subjectChanges` with the created, modified, and deleted paths. For a skills folder, the agent sees the copies that the harness's adapter places in the run's home, so the tool watches those too and reports their changes as paths inside the subject. The check `subject_unchanged` scores 1 when the agent changed nothing, and 0 with the reason `the subject copy could not be observed` when nothing could be watched:
 
 ```json
 { "type": "subject_unchanged" }
 ```
 
-The tool also hashes the source directory, with the same exclusions, before the first run and after the last one. When it differs, the command prints `the subject directory changed during the run` with the paths, and exits 1. A git ref has no source directory to hash, because a commit cannot change.
+The export itself is hashed too, before each run copies it. A run that edited it fails the command, because every later run would load the edit. The tool also hashes the source directory, with the same exclusions, before the first run and after the last one. When it differs, the command prints `the subject directory changed during the run` with the paths, and exits 1. A git ref has no source directory to hash, because a commit cannot change.
 
 A hook or script in the subject that depends on its absolute path, or on `.git`, sees the copy and not the source. A hook that finds its files relative to the plugin root works. A copy of a large subject takes disk space and time for each run.
 

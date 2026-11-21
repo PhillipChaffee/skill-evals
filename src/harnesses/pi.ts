@@ -52,6 +52,7 @@ const pi: Harness = {
     const agentDir = path.join(home, ".pi", "agent");
     const skills = placeSkills(subject, path.join(agentDir, "skills"));
     return {
+      placed: skills,
       args: [
         "-p",
         "--mode",
@@ -62,7 +63,7 @@ const pi: Harness = {
         "-ns",
         "-np",
         ...opt("-e", pluginDir(subject)),
-        ...skills.flatMap((dir) => ["--skill", dir]),
+        ...Object.values(skills).flatMap((dir) => ["--skill", dir]),
         ...opt("--model", model),
       ],
       // Pi has no `--` separator and reads a leading `-` or `@` in a message argument as a flag or a file.

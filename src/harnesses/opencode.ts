@@ -61,8 +61,9 @@ const opencode: Harness = {
       path.join(configDir, "opencode.json"),
       JSON.stringify({ plugin: plugins, plugins }),
     );
-    placeSkills(subject, path.join(home, ".agents", "skills"));
+    const placed = placeSkills(subject, path.join(home, ".agents", "skills"));
     return {
+      placed,
       args: [
         "run",
         "--format",

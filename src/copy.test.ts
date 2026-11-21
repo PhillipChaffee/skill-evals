@@ -18,6 +18,7 @@ test("a run cannot read cases committed inside the subject", async () => {
     checks: [
       { type: "file_matches", path: "found.txt", pattern: "^$" },
       { type: "file_matches", path: "listing.txt", pattern: "skills" },
+      { type: "file_matches", path: "evals.txt", pattern: "^0\\s*$" },
     ],
   });
   box.write("kit/evals/cases/restate/grader/secret.txt", "answer");
@@ -26,7 +27,7 @@ test("a run cannot read cases committed inside the subject", async () => {
     id: "restate",
     steps: [
       exec(
-        'cd "$PLUGIN_DIR" && find . -name case.json > "$OLDPWD/found.txt"; ls > "$OLDPWD/listing.txt"',
+        'cd "$PLUGIN_DIR" && find . -name case.json > "$OLDPWD/found.txt"; ls > "$OLDPWD/listing.txt"; ls -A | grep -c evals > "$OLDPWD/evals.txt"',
       ),
     ],
   });
@@ -37,7 +38,7 @@ test("a run cannot read cases committed inside the subject", async () => {
     cases,
   });
   expect(status, stderr).toBe(0);
-  expect(records[0]?.checks.map((check) => check.score)).toEqual([1, 1]);
+  expect(records[0]?.checks.map((check) => check.score)).toEqual([1, 1, 1]);
 });
 
 test("every run copy lives under a name that gives the agent no hint", async () => {

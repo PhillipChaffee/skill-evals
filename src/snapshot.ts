@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import path from "node:path";
+import { walkTree } from "./walk.js";
 
 /** Relative posix path to the SHA-256 of what is there. A link is hashed by its target text. */
 export type Snapshot = Map<string, string>;
@@ -42,23 +42,16 @@ export function snapshot(
   skip: (relative: string) => boolean = () => false,
 ): Snapshot {
   const taken: Snapshot = new Map();
-  const walk = (current: string, prefix: string): void => {
-    let entries;
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      if (prefix) taken.set(prefix.slice(0, -1), UNREADABLE);
-      return;
-    }
-    for (const entry of entries) {
-      const relative = `${prefix}${entry.name}`;
-      if (skip(relative)) continue;
-      const file = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(file, `${relative}/`);
-      else taken.set(relative, hashOf(file, entry));
-    }
-  };
-  walk(dir, "");
+  walkTree(dir, {
+    skip,
+    unreadable: (relative) => {
+      if (relative) taken.set(relative, UNREADABLE);
+    },
+    visit: ({ relative, file, dirent }) => {
+      if (!dirent.isDirectory()) taken.set(relative, hashOf(file, dirent));
+      return undefined;
+    },
+  });
   return taken;
 }
 
@@ -84,6 +77,21 @@ export function diffSnapshots(before: Snapshot, after: Snapshot): ChangedFiles {
     deleted: deleted.sort(),
   };
 }
+
+/**
+ * Puts two lists of changes together.
+ * @param first - One change.
+ * @param second - Another.
+ * @returns The created, modified and deleted paths of both, each list sorted.
+ */
+export const mergeChanges = (
+  first: ChangedFiles,
+  second: ChangedFiles,
+): ChangedFiles => ({
+  created: [...first.created, ...second.created].sort(),
+  modified: [...first.modified, ...second.modified].sort(),
+  deleted: [...first.deleted, ...second.deleted].sort(),
+});
 
 /**
  * Lists every path of a change in one list.

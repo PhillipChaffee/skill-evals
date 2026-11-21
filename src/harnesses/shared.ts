@@ -54,6 +54,8 @@ export interface Invocation {
   setup?: string[][];
   /** Written to the harness's standard input, for a harness that takes its prompt there. */
   stdin?: string;
+  /** Where the adapter placed each skill of a skills subject: skill name to directory. The run watches them. */
+  placed?: Record<string, string>;
 }
 
 /** A plugin or a skills folder: a subject that puts something into the harness. */
@@ -154,22 +156,24 @@ const NOT_SKILL_CONTENT = new Set([".git", "node_modules"]);
  * Copies each skill of a skills subject to `<dir>/<name>/`, so the path the agent sees is inside the throwaway home.
  * @param subject - What the run loads. Nothing is copied for a plugin or for null.
  * @param dir - Where the harness discovers the skills of its user.
- * @returns The copies, one directory for each skill.
+ * @returns The copies: skill name to the directory of its copy. The adapter reports them as `placed`.
  */
 export function placeSkills(
   subject: LoadedSubject | null,
   dir: string,
-): string[] {
-  if (subject?.kind !== "skills") return [];
-  return Object.entries(subject.skillDirs).map(([name, source]) => {
-    const target = path.join(dir, name);
-    fs.cpSync(source, target, {
-      recursive: true,
-      dereference: true,
-      filter: (file) => !NOT_SKILL_CONTENT.has(path.basename(file)),
-    });
-    return target;
-  });
+): Record<string, string> {
+  if (subject?.kind !== "skills") return {};
+  return Object.fromEntries(
+    Object.entries(subject.skillDirs).map(([name, source]) => {
+      const target = path.join(dir, name);
+      fs.cpSync(source, target, {
+        recursive: true,
+        dereference: true,
+        filter: (file) => !NOT_SKILL_CONTENT.has(path.basename(file)),
+      });
+      return [name, target];
+    }),
+  );
 }
 
 /**

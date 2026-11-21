@@ -62,8 +62,9 @@ export interface Outcome {
   toolCalls: ToolCall[];
   skillsLoaded: string[];
   workspace: string;
-  /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. */
-  subject: { dir: string | null; mutated: string[] };
+  /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. `observed` is false
+   * when the copy the agent saw could not be watched, which no check may read as "unchanged". */
+  subject: { dir: string | null; mutated: string[]; observed?: boolean };
 }
 
 /** What a rule says of one run: a score from 0 to 1, and optionally why. */

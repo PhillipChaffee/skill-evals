@@ -4,7 +4,9 @@ import path from "node:path";
 import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
+import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
+import type { ChangedFiles } from "./snapshot.js";
 
 /** One prompt for one harness. */
 export interface SessionInput {
@@ -33,6 +35,11 @@ export interface SessionResult {
   error: string | null;
   durationMs: number;
   workspace: string;
+  /**
+   * What the run changed in the copies of the skills that the adapter placed in the home, as paths inside the
+   * subject; null when the adapter placed none.
+   */
+  placedChanges: ChangedFiles | null;
 }
 
 // Login files hold secrets, so only the owner may read the copies.
@@ -56,6 +63,26 @@ function copyAuthFiles(authFiles: string[], home: string): void {
 }
 
 /**
+ * Starts watching the copies of skills that an adapter placed in the home.
+ * @param subject - What the run loads.
+ * @param placed - Skill name to the directory of its copy, as the adapter reported it.
+ * @returns A function that lists what changed in them since now, or null when the adapter placed none.
+ */
+function watchPlaced(
+  subject: RunInput["subject"],
+  placed: Record<string, string> | undefined,
+): () => ChangedFiles | null {
+  const dirs = Object.entries(placed ?? {}).map(([name, dir]) => ({
+    dir,
+    prefix: path
+      .relative(subject?.dir ?? "", subject?.skillDirs[name] ?? "")
+      .split(path.sep)
+      .join("/"),
+  }));
+  return dirs.length === 0 ? () => null : watchDirs(dirs);
+}
+
+/**
  * Prepares the harness and runs the prompt.
  * @param session - Which harness, and how long it may take.
  * @param input - What the adapter builds the command line from.
@@ -64,15 +91,21 @@ function copyAuthFiles(authFiles: string[], home: string): void {
 async function attempt(
   session: SessionInput,
   input: RunInput,
-): Promise<{ stdout: string; failure: string | null; durationMs: number }> {
+): Promise<{
+  stdout: string;
+  failure: string | null;
+  durationMs: number;
+  placedChanges: ChangedFiles | null;
+}> {
   const { harness, bin, timeoutSeconds } = session;
   let invocation;
   try {
     invocation = harness.invocation(input);
   } catch (error) {
     const failure = `could not prepare the run: ${messageOf(error)}`;
-    return { stdout: "", failure, durationMs: 0 };
+    return { stdout: "", failure, durationMs: 0, placedChanges: null };
   }
+  const placedChanges = watchPlaced(input.subject, invocation.placed);
   const options = {
     cwd: input.workspace,
     env: childEnv({
@@ -93,6 +126,7 @@ async function attempt(
         stdout: "",
         failure: `setup "${command}": ${failure}`,
         durationMs: 0,
+        placedChanges: placedChanges(),
       };
     }
   }
@@ -101,7 +135,11 @@ async function attempt(
     ...options,
     stdin: invocation.stdin,
   });
-  return { ...result, durationMs: Date.now() - started };
+  return {
+    ...result,
+    durationMs: Date.now() - started,
+    placedChanges: placedChanges(),
+  };
 }
 
 /**
@@ -151,7 +189,10 @@ export async function session<T>(
       model,
       maxTurns,
     };
-    const { stdout, failure, durationMs } = await attempt(run, input);
+    const { stdout, failure, durationMs, placedChanges } = await attempt(
+      run,
+      input,
+    );
     const parsed = parseStream(harness, stdout);
     // The harness's own message is the most specific one, but only when it produced a stream at all.
     const error =
@@ -162,6 +203,7 @@ export async function session<T>(
       error,
       durationMs,
       workspace: workspace.dir,
+      placedChanges,
     });
   } finally {
     home.dispose();

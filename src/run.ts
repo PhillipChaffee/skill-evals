@@ -13,16 +13,15 @@ import type {
   ToolCall,
 } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
-import type { RunCopy } from "./isolate.js";
-import { copyForRun } from "./isolate.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
 import type { ChangedFiles } from "./snapshot.js";
 import { allChanged } from "./snapshot.js";
+import type { Copy } from "./run-copy.js";
+import { copyOf, observe } from "./run-copy.js";
 import type { Subject } from "./subject.js";
-import { hasContent } from "./subject.js";
 
 /** What a session cost. A number the harness does not report is null. */
 export interface Usage {
@@ -261,30 +260,6 @@ async function scoreChecks(
   return { checks, replies, requests: decided?.calls ?? [] };
 }
 
-/** The copy of a subject that one run loads. */
-interface Copy extends RunCopy {
-  /** What the harness is given: the subject with every path in the copy. */
-  loaded: LoadedSubject;
-}
-
-/**
- * Copies a subject's export for one run.
- * @param subject - What the run loads.
- * @returns The copy; null for "none", which has no files.
- */
-function copyOf(subject: Subject): Copy | null {
-  if (!hasContent(subject) || subject.exported === null) return null;
-  const copy = copyForRun(subject.exported);
-  const { kind, skills } = subject;
-  const skillDirs = Object.fromEntries(
-    Object.entries(subject.skillDirs).map(([name, dir]) => [
-      name,
-      path.join(copy.dir, path.relative(subject.dir, dir)),
-    ]),
-  );
-  return { ...copy, loaded: { kind, dir: copy.dir, skills, skillDirs } };
-}
-
 /**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
@@ -298,8 +273,8 @@ async function record(
   copy: Copy | null,
 ): Promise<RunRecord> {
   const { harness, subject, caseDef, rep } = plan;
-  const changes = copy?.changes() ?? null;
   const { stdout, parsed, error, durationMs } = ran;
+  const { changes, observed } = observe(copy, ran);
   const loaded = skillsLoaded(parsed.toolCalls);
 
   const stem = path.join(
@@ -340,6 +315,7 @@ async function record(
       subject: {
         dir: copy?.loaded.dir ?? null,
         mutated: changes ? allChanged(changes) : [],
+        observed,
       },
     },
     invalidReason({ ...base, checks: [] }) === null,

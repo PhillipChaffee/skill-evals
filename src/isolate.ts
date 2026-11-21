@@ -3,8 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { globToRegExp } from "./glob.js";
 import { UsageError, tempDir } from "./scope.js";
-import type { ChangedFiles } from "./snapshot.js";
-import { diffSnapshots, snapshot } from "./snapshot.js";
+import type { ChangedFiles, Snapshot } from "./snapshot.js";
+import {
+  allChanged,
+  diffSnapshots,
+  mergeChanges,
+  snapshot,
+} from "./snapshot.js";
+import { walkTree } from "./walk.js";
 
 // Never part of a subject, at any depth.
 const ALWAYS_LEFT_OUT = new Set([".git", "node_modules"]);
@@ -71,52 +77,127 @@ function extractCommit(repoRoot: string, commit: string, into: string): void {
   }
 }
 
+const parentOf = (relative: string): string =>
+  relative.includes("/") ? relative.slice(0, relative.lastIndexOf("/")) : "";
+
 /**
  * Removes what an export leaves out from a tree that was extracted whole.
  * @param root - The tree.
  * @param left - Tells a relative posix path that goes.
  */
 function prune(root: string, left: (relative: string) => boolean): void {
-  const walk = (dir: string, prefix: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const relative = `${prefix}${entry.name}`;
-      const file = path.join(dir, entry.name);
-      if (left(relative)) fs.rmSync(file, { recursive: true, force: true });
-      else if (entry.isDirectory()) walk(file, `${relative}/`);
-    }
-  };
-  walk(root, "");
+  walkTree(root, {
+    visit: ({ relative, file }) => {
+      if (!left(relative)) return undefined;
+      fs.rmSync(file, { recursive: true, force: true });
+      return false;
+    },
+  });
 }
 
 /**
- * Makes sure that no link of a tree leads out of it. A link that is absolute would reach the source directory from
- * a copy, so it counts as outside, too.
+ * Finds the directories of a tree that have something in them.
  * @param root - The tree.
- * @throws {UsageError} Naming the first link whose target is absolute, or is relative and leaves the tree.
+ * @returns The relative paths of those directories; the root is "".
+ */
+function nonEmptyDirs(root: string): Set<string> {
+  const found = new Set<string>();
+  walkTree(root, {
+    visit: ({ relative }) => {
+      found.add(parentOf(relative));
+      return undefined;
+    },
+  });
+  return found;
+}
+
+/**
+ * Removes the directories that an export left empty only because it left something out, so that the path of an
+ * excluded directory does not show. A directory that was empty at the source stays.
+ * @param root - The export.
+ * @param hadEntries - Tells whether a directory, by relative path, had something in it at the source.
+ */
+function removeEmptied(
+  root: string,
+  hadEntries: (relative: string) => boolean,
+): void {
+  const dirs: string[] = [];
+  walkTree(root, {
+    visit: ({ relative, dirent }) => {
+      if (dirent.isDirectory()) dirs.push(relative);
+      return undefined;
+    },
+  });
+  // Children come after their parent in the list, so walking it backwards empties a parent before it is looked at.
+  for (const relative of dirs.reverse()) {
+    const dir = path.join(root, relative);
+    if (fs.readdirSync(dir).length === 0 && hadEntries(relative)) {
+      fs.rmdirSync(dir);
+    }
+  }
+}
+
+/**
+ * Finds where a link really leads, following every link on the way, even when the end does not exist.
+ * @param link - The path of the link, in a tree whose own directories are not links.
+ * @param target - What the link says.
+ * @returns The real path, or for a path that does not exist the real path of its deepest existing part and the rest.
+ */
+function leadsTo(link: string, target: string): string {
+  const parts = `${path.dirname(link)}/${target}`.split("/");
+  for (let used = parts.length; used > 0; used--) {
+    try {
+      // The native call follows a link before it applies `..`, as the operating system does; the other one does not.
+      const real = fs.realpathSync.native(
+        parts.slice(0, used).join("/") || "/",
+      );
+      return path.resolve(real, ...parts.slice(used));
+    } catch {
+      // A part that does not exist, or a loop of links: try the part before it.
+    }
+  }
+  return path.resolve(target);
+}
+
+/**
+ * Makes sure that no link of a tree leads out of it, however many links it goes through. A link that is absolute
+ * would reach the source directory from a copy, so it counts as outside, too.
+ * @param root - The tree.
+ * @throws {UsageError} Naming the first link whose target is absolute, or leads outside the tree.
  */
 function requireLinksInside(root: string): void {
-  const walk = (dir: string, prefix: string): void => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const relative = `${prefix}${entry.name}`;
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(file, `${relative}/`);
-      } else if (entry.isSymbolicLink()) {
-        const target = fs.readlinkSync(file);
-        const leaves = path.relative(root, path.resolve(dir, target));
-        if (
-          path.isAbsolute(target) ||
-          leaves === ".." ||
-          leaves.startsWith(`..${path.sep}`)
-        ) {
-          throw new UsageError(
-            `${relative} is a link to ${target}${path.isAbsolute(target) ? ", an absolute path" : ""}; links outside the subject are not allowed`,
-          );
-        }
+  const real = fs.realpathSync.native(root);
+  walkTree(root, {
+    visit: ({ relative, file, dirent }) => {
+      if (!dirent.isSymbolicLink()) return undefined;
+      const target = fs.readlinkSync(file);
+      const leaves = path.relative(real, leadsTo(file, target));
+      if (
+        path.isAbsolute(target) ||
+        leaves === ".." ||
+        leaves.startsWith(`..${path.sep}`)
+      ) {
+        throw new UsageError(
+          `${relative} is a link to ${target}${path.isAbsolute(target) ? ", an absolute path" : ""}; links outside the subject are not allowed`,
+        );
       }
-    }
-  };
-  walk(root, "");
+      return undefined;
+    },
+  });
+}
+
+/**
+ * Refuses an entry that is no file, directory or link, which a copy cannot hold.
+ * @param file - The path in the source.
+ * @throws {UsageError} Naming the path, for a socket, a FIFO or a device.
+ */
+function requireRegular(file: string): void {
+  const entry = fs.lstatSync(file);
+  if (!entry.isFile() && !entry.isDirectory() && !entry.isSymbolicLink()) {
+    throw new UsageError(
+      `${file} is a socket, a pipe or a device, which a subject cannot hold; remove it or list it in subjectExclude`,
+    );
+  }
 }
 
 /** Where a subject's files are. */
@@ -128,44 +209,81 @@ interface Source {
   repoRoot: string;
 }
 
+/** What an export is. */
+export interface Export {
+  dir: string;
+  /** Hashes the export again and lists what differs from when it was made; nothing, unless a run edited it. */
+  changed: () => string[];
+  dispose: () => void;
+}
+
+/**
+ * Copies a directory as it is on disk.
+ * @param source - The directory to copy.
+ * @param into - An empty directory.
+ * @param left - Tells a relative posix path that is left out.
+ * @throws {UsageError} When an entry cannot be copied, naming it.
+ */
+function copyDirectory(
+  source: string,
+  into: string,
+  left: (relative: string) => boolean,
+): void {
+  try {
+    fs.cpSync(source, into, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: (file) => {
+        const relative = path.relative(source, file).split(path.sep).join("/");
+        if (relative !== "" && left(relative)) return false;
+        requireRegular(file);
+        return true;
+      },
+    });
+    removeEmptied(
+      into,
+      (relative) => fs.readdirSync(path.join(source, relative)).length > 0,
+    );
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    throw new UsageError(
+      `cannot copy the subject ${source}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 /**
  * Exports a subject to a temp directory, so that nothing loads from the source in place.
  * A directory is copied, with links kept as links. A commit is written with `git archive` and `tar`, which honours
- * `export-ignore`.
+ * `export-ignore`. A directory that is empty only because of what was left out is removed.
  * @param source - What to export.
  * @param exclude - Globs, relative to the root of the subject, of what to leave out besides `.git` and `node_modules`.
- * @returns The export's directory, and a `dispose` that removes it; it also runs at process exit.
- * @throws {UsageError} When `git` or `tar` is missing, or a link of the subject leads outside it.
+ * @returns The export; its `dispose` also runs at process exit.
+ * @throws {UsageError} When `git` or `tar` is missing, an entry cannot be copied, or a link of the subject leads
+ *   outside it.
  */
-export function exportSubject(
-  source: Source,
-  exclude: string[],
-): { dir: string; dispose: () => void } {
+export function exportSubject(source: Source, exclude: string[]): Export {
   const left = leaveOut(exclude);
   const out = tempDir("kit-");
   try {
     if (source.commit) {
       extractCommit(source.repoRoot, source.commit, out.dir);
+      const had = nonEmptyDirs(out.dir);
       prune(out.dir, left);
+      removeEmptied(out.dir, (relative) => had.has(relative));
     } else {
-      fs.cpSync(source.dir, out.dir, {
-        recursive: true,
-        verbatimSymlinks: true,
-        filter: (file) => {
-          const relative = path
-            .relative(source.dir, file)
-            .split(path.sep)
-            .join("/");
-          return relative === "" || !left(relative);
-        },
-      });
+      copyDirectory(source.dir, out.dir, left);
     }
     requireLinksInside(out.dir);
   } catch (error) {
     out.dispose();
     throw error;
   }
-  return out;
+  const before = snapshot(out.dir);
+  return {
+    ...out,
+    changed: () => allChanged(diffSnapshots(before, snapshot(out.dir))),
+  };
 }
 
 /** One run's copy of an export, which the run may edit. */
@@ -194,4 +312,32 @@ export function copyForRun(exported: string): RunCopy {
     ...copy,
     changes: () => diffSnapshots(before, snapshot(copy.dir)),
   };
+}
+
+/**
+ * Hashes directories now, for a comparison after the harness has run.
+ * @param dirs - Each directory, and the path that its contents have inside the subject.
+ * @returns A function that hashes them again and lists what changed, with every path put under its directory's prefix.
+ */
+export function watchDirs(
+  dirs: { dir: string; prefix: string }[],
+): () => ChangedFiles {
+  const before = dirs.map(({ dir }) => snapshot(dir));
+  return () =>
+    dirs.reduce<ChangedFiles>(
+      (all, { dir, prefix }, index) => {
+        const one = diffSnapshots(
+          before[index] ?? (new Map() as Snapshot),
+          snapshot(dir),
+        );
+        const under = (files: string[]): string[] =>
+          files.map((file) => (prefix ? `${prefix}/${file}` : file));
+        return mergeChanges(all, {
+          created: under(one.created),
+          modified: under(one.modified),
+          deleted: under(one.deleted),
+        });
+      },
+      { created: [], modified: [], deleted: [] },
+    );
 }

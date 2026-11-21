@@ -58,8 +58,9 @@ const claudeCode: Harness = {
 
   invocation({ subject, home, prompt, model, maxTurns }) {
     const configDir = path.join(home, ".claude");
-    placeSkills(subject, path.join(configDir, "skills"));
+    const placed = placeSkills(subject, path.join(configDir, "skills"));
     return {
+      placed,
       // Never --bare: it switches off the hooks a plugin ships.
       args: [
         "-p",
