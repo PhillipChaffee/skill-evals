@@ -23,8 +23,8 @@ interface Connection {
   url?: string | undefined;
   /** Where the API key is read from. */
   env: Record<string, string | undefined>;
-  /** How long one request may take. */
-  timeoutMs?: number;
+  /** How long one request may take. Default: 60 seconds. */
+  timeoutMs?: number | undefined;
 }
 
 /** A question as the API takes it. A null description makes the API use the option's name alone. */

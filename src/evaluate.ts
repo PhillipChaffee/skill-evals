@@ -41,6 +41,8 @@ export interface EvaluateOptions {
   decisionModel?: string | undefined;
   /** The base URL of the decision model's API. Default: the provider's own. */
   decisionUrl?: string | undefined;
+  /** The seconds one request to the decision model may take, a positive integer. Default: 60. */
+  decisionTimeout?: number | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
   /** Where results go. Default: a new temp directory. */
@@ -75,6 +77,9 @@ export interface Evaluation extends Results {
 }
 
 const DEFAULT_REPS = 3;
+const MS_PER_SECOND = 1000;
+// The longest time limit a timer takes is 2^32 - 1 milliseconds.
+const MAX_TIMEOUT_SECONDS = 4_294_967;
 
 /**
  * Pairs each subject with its label.
@@ -99,15 +104,27 @@ function labelled(specs: string[]): { label: Label; spec: string }[] {
  * Rejects option values that no run could use, before any harness starts.
  * @param options - The options after the config file was applied.
  * @returns The number of runs for each subject and case.
- * @throws {UsageError} When `reps` or `minScore` is out of range.
+ * @throws {UsageError} When `reps`, `minScore`, or `decisionTimeout` is out of range.
  */
 function requireUsable(options: Config): number {
-  const { reps = DEFAULT_REPS, minScore } = options;
+  const { reps = DEFAULT_REPS, minScore, decisionTimeout: seconds } = options;
   if (!Number.isInteger(reps) || reps < 1) {
     throw new UsageError("reps must be a positive integer");
   }
   if (minScore !== undefined && !isUnitScore(minScore)) {
     throw new UsageError("minScore must be a number from 0 to 1");
+  }
+  if (
+    seconds !== undefined &&
+    !(
+      Number.isInteger(seconds) &&
+      seconds >= 1 &&
+      seconds <= MAX_TIMEOUT_SECONDS
+    )
+  ) {
+    throw new UsageError(
+      `decisionTimeout must be a positive integer of seconds, at most ${String(MAX_TIMEOUT_SECONDS)}`,
+    );
   }
   return reps;
 }
@@ -122,12 +139,14 @@ function requireUsable(options: Config): number {
 function decisionFor(cases: Case[], options: Config): DecisionService | null {
   if (!cases.some((caseDef) => caseDef.checks.some(isDecision))) return null;
   const { decisionModel: model, decisionUrl: url } = options;
+  const { decisionTimeout: seconds } = options;
   if (!model) {
     throw new UsageError(
       "a case has a decision check, but no decision model is set: pass --decision-model or set decisionModel in the config file",
     );
   }
-  return connect({ model, url, env: process.env });
+  const timeoutMs = seconds === undefined ? undefined : seconds * MS_PER_SECOND;
+  return connect({ model, url, env: process.env, timeoutMs });
 }
 
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */

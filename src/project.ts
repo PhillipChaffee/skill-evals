@@ -39,6 +39,7 @@ const CONFIG_KEYS: Record<string, "string" | "number"> = {
   judgeModel: "string",
   decisionModel: "string",
   decisionUrl: "string",
+  decisionTimeout: "number",
   minScore: "number",
 };
 
@@ -52,6 +53,7 @@ export interface Config {
   judgeModel?: string;
   decisionModel?: string;
   decisionUrl?: string;
+  decisionTimeout?: number;
   minScore?: number;
 }
 
