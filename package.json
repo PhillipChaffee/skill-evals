@@ -1,8 +1,10 @@
 {
 	"name": "skill-evals",
 	"version": "0.1.0",
+	"description": "Score how agent skills change agent behavior, from 0 to 1, in Claude Code, Codex, Cursor, OpenCode, and Pi",
 	"type": "module",
 	"license": "MIT",
+	"repository": { "type": "git", "url": "git+https://github.com/PhillipChaffee/skill-evals.git" },
 	"engines": { "node": ">=22" },
 	"bin": { "skill-evals": "bin/skill-evals.mjs" },
 	"exports": { ".": "./src/index.mjs" },
