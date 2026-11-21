@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A `decision` check asks a decision model a question about the final answer. The case sets what each allowed answer is worth, the model returns a probability for each answer, and the check's score is the expected value. All decision checks of a case go out in one request for each run.
+- `--decision-model` and `--decision-url`, and `decisionModel` and `decisionUrl` in the config file, set the model and its endpoint. The client speaks Baseten's System One API and reads its key from `BASETEN_API_KEY`. It was written from the API's documentation and has not yet called the real API.
+
 ## 0.1.0
 
 The first release. The runner comes from the `evals/` folder of [magic](https://github.com/PhillipChaffee/magic), where it scored that one set of skills.

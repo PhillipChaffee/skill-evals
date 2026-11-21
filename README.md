@@ -67,31 +67,33 @@ With `none`, and with every other subject, the harness still loads what it ships
 | `check` | Runs one small prompt in each installed harness. Reports whether the harness ran, whether it reported the subject as loaded, which skills the agent loaded, and which record fields the adapter filled. A harness that fails, for example because it has no login, gets its own error message in its row, and the next harness still runs. |
 | `list`  | Lists the harnesses in default-preference order with their install state, and the cases.                                                                                                                                                                                                                                                   |
 
-| Option                 | Commands                | Default                                         | Meaning                                                    |
-| ---------------------- | ----------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| `--a <subject>`        | `run`                   | `main`                                          | The baseline.                                              |
-| `--b <subject>`        | `run`                   | the project                                     | The change.                                                |
-| `--subject <subject>`  | `score`, `check`        | the project                                     | The subject to score or to probe.                          |
-| `--harness <ids\|all>` | `run`, `score`, `check` | first installed (`run`, `score`), all (`check`) | Comma-separated harness ids.                               |
-| `--case <glob>`        | `run`, `score`          | `*`                                             | Which case ids to run. Only `*` is special.                |
-| `--cases <dir>`        | `run`, `score`, `list`  | `evals/cases` in the project                    | Where the cases are.                                       |
-| `--reps <n>`           | `run`, `score`          | `3`                                             | Runs for each subject and case.                            |
-| `--model <id>`         | `run`, `score`, `check` | the harness's own default                       | Passed to the harness unchanged.                           |
-| `--min-score <0..1>`   | `run`, `score`          | no bar                                          | The lowest suite score that passes. See [Scores](#scores). |
-| `--judge-harness <id>` | `run`, `score`          | the harness under test                          | The harness that scores judged checks.                     |
-| `--judge-model <id>`   | `run`, `score`          | the value of `--model`                          | The model that scores judged checks.                       |
-| `--out <dir>`          | `run`, `score`, `check` | a new temp directory                            | Where results go.                                          |
+| Option                  | Commands                | Default                                         | Meaning                                                                                  |
+| ----------------------- | ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `--a <subject>`         | `run`                   | `main`                                          | The baseline.                                                                            |
+| `--b <subject>`         | `run`                   | the project                                     | The change.                                                                              |
+| `--subject <subject>`   | `score`, `check`        | the project                                     | The subject to score or to probe.                                                        |
+| `--harness <ids\|all>`  | `run`, `score`, `check` | first installed (`run`, `score`), all (`check`) | Comma-separated harness ids.                                                             |
+| `--case <glob>`         | `run`, `score`          | `*`                                             | Which case ids to run. Only `*` is special.                                              |
+| `--cases <dir>`         | `run`, `score`, `list`  | `evals/cases` in the project                    | Where the cases are.                                                                     |
+| `--reps <n>`            | `run`, `score`          | `3`                                             | Runs for each subject and case.                                                          |
+| `--model <id>`          | `run`, `score`, `check` | the harness's own default                       | Passed to the harness unchanged.                                                         |
+| `--min-score <0..1>`    | `run`, `score`          | no bar                                          | The lowest suite score that passes. See [Scores](#scores).                               |
+| `--judge-harness <id>`  | `run`, `score`          | the harness under test                          | The harness that scores judged checks.                                                   |
+| `--judge-model <id>`    | `run`, `score`          | the value of `--model`                          | The model that scores judged checks.                                                     |
+| `--decision-model <id>` | `run`, `score`          | none                                            | The decision model that scores decision checks. See [Decision checks](#decision-checks). |
+| `--decision-url <url>`  | `run`, `score`          | the provider's own                              | The base URL of the decision model's API.                                                |
+| `--out <dir>`           | `run`, `score`, `check` | a new temp directory                            | Where results go.                                                                        |
 
-| Exit code | Meaning                                                                                         |
-| --------- | ----------------------------------------------------------------------------------------------- |
-| 0         | Every run is valid and every pass bar is reached.                                               |
-| 1         | A run failed or is invalid, or a score is under its bar.                                        |
-| 2         | A wrong command line, case file, config file, or subject. Also Windows, which is not supported. |
+| Exit code | Meaning                                                                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0         | Every run is valid and every pass bar is reached.                                                                                                      |
+| 1         | A run failed or is invalid, or a score is under its bar.                                                                                               |
+| 2         | A wrong command line, case file, config file, or subject. A decision check with no decision model or no API key. Also Windows, which is not supported. |
 
 `run` and `score` print a Markdown report and the path of an output directory. Read the report first, then open the final answers of a case:
 
 ```text
-<out>/results.json                          every run record, with check scores and judge reasons
+<out>/results.json                          every run record, with check scores, judge reasons, and probabilities
 <out>/<harness>/<case>/a1.final.md          final answer of subject A, repetition 1
 <out>/<harness>/<case>/b1.final.md          final answer of subject B, repetition 1
 <out>/<harness>/<case>/a1.stream.jsonl      the harness's raw event stream for that run
@@ -104,11 +106,11 @@ With `none`, and with every other subject, the harness still loads what it ships
 1. Creates a new, empty home directory and a new workspace directory. Their names (`home-*`, `proj-*`, `kit-*`) say nothing about why they exist.
 2. Copies the case's `workspace/` folder into the workspace.
 3. Copies the harness's credential files from your real home into the new home, so a login keeps working. Nothing else is copied.
-4. Starts the harness with `HOME` and the XDG directories pointed at the new home, and with the subject loaded as [Subjects](#subjects) describes. The harness does not get the environment variables that name this tool: the ones that start with `SKILL_EVALS_` or `npm_`, and `_`.
-5. Turns the harness's event stream into one run record and scores the case's checks. A judged check starts one more harness run, described under [Judged checks](#judged-checks).
+4. Starts the harness with `HOME` and the XDG directories pointed at the new home, and with the subject loaded as [Subjects](#subjects) describes. The harness does not get the environment variables that name this tool: the ones that start with `SKILL_EVALS_` or `npm_`, and `_`. When the suite has a decision check, the harness does not get the decision model's API key either.
+5. Turns the harness's event stream into one run record and scores the case's checks. A judged check starts one more harness run, described under [Judged checks](#judged-checks). The decision checks of the case go to the decision model in one request, described under [Decision checks](#decision-checks).
 6. Deletes both directories.
 
-A run counts only when it is valid. A run is invalid when it failed (harness error, time limit), when the harness reported what it loaded and the subject was not in it, or when a judged check got no usable score. Invalid runs are listed under the table, left out of every number, and make the command exit 1.
+A run counts only when it is valid. A run is invalid when it failed (harness error, time limit), when the harness reported what it loaded and the subject was not in it, or when a judged check or a decision check got no usable score. Invalid runs are listed under the table, left out of every number, and make the command exit 1.
 
 "The subject was not in it" means that a plugin's directory is not among the loaded plugins, or that a skill of a skills folder is not among the listed skills. Only Claude Code reports either. In the other four harnesses a subject that did not load shows up as missing skill loads, not as an invalid run.
 
@@ -124,19 +126,20 @@ A case is a directory under `evals/cases/`. Its name is the case id.
 
 Every check takes an optional `weight`, a positive number that defaults to 1.
 
-| Check                 | Fields                                                              | Scores 1 when                                                               |
-| --------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `skill_loaded`        | `skill`                                                             | The agent loaded that skill.                                                |
-| `skill_not_loaded`    | `skill`                                                             | The agent did not load it.                                                  |
-| `output_contains`     | `text`                                                              | The final answer contains that text. The match is exact and case-sensitive. |
-| `output_not_contains` | `text`                                                              | The final answer does not contain it.                                       |
-| `output_matches`      | `pattern`, optional `flags`                                         | The final answer matches the regular expression.                            |
-| `output_lacks`        | `pattern`, optional `flags`                                         | The final answer does not match it.                                         |
-| `file_exists`         | `path`                                                              | That file exists in the workspace after the run.                            |
-| `file_matches`        | `path`, `pattern`, optional `flags`                                 | That file exists and matches.                                               |
-| `tool_called`         | `kind` or `name` or both, optional `inputMatches`, optional `flags` | The agent made a tool call that fits every given field.                     |
-| `tool_not_called`     | the same                                                            | The agent made no such call.                                                |
-| `judge`               | `rubric`                                                            | Not 0 or 1. A model scores the final answer against the rubric.             |
+| Check                 | Fields                                                              | Scores 1 when                                                                                              |
+| --------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `skill_loaded`        | `skill`                                                             | The agent loaded that skill.                                                                               |
+| `skill_not_loaded`    | `skill`                                                             | The agent did not load it.                                                                                 |
+| `output_contains`     | `text`                                                              | The final answer contains that text. The match is exact and case-sensitive.                                |
+| `output_not_contains` | `text`                                                              | The final answer does not contain it.                                                                      |
+| `output_matches`      | `pattern`, optional `flags`                                         | The final answer matches the regular expression.                                                           |
+| `output_lacks`        | `pattern`, optional `flags`                                         | The final answer does not match it.                                                                        |
+| `file_exists`         | `path`                                                              | That file exists in the workspace after the run.                                                           |
+| `file_matches`        | `path`, `pattern`, optional `flags`                                 | That file exists and matches.                                                                              |
+| `tool_called`         | `kind` or `name` or both, optional `inputMatches`, optional `flags` | The agent made a tool call that fits every given field.                                                    |
+| `tool_not_called`     | the same                                                            | The agent made no such call.                                                                               |
+| `judge`               | `rubric`                                                            | Not 0 or 1. A model scores the final answer against the rubric.                                            |
+| `decision`            | `question`, and `expect` or `options`                               | Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value. |
 
 In every harness, "loaded a skill" means that the agent called the harness's skill tool with that skill's name, or that any tool call pointed at `skills/<name>/SKILL.md`.
 
@@ -182,13 +185,45 @@ A `judge` check asks a model how well the final answer meets the `rubric`, which
 
 A judge is a model, so its score moves. Measured with one small model as agent and judge on one case of the [magic](https://github.com/PhillipChaffee/magic) skills: six runs of an unchanged subject gave judged scores from 0.6 to 0.9, and four scorings of one fixed answer differed by 0.10 to 0.25. Use at least three reps, write a rubric with separate countable points, and name a stronger model with `--judge-model` when the differences you look for are small.
 
+### Decision checks
+
+A `decision` check asks a decision model a question about the final answer. A decision model writes no text. It returns a calibrated probability for each answer you allow, so you set what each answer is worth and the score is computed from the probabilities. Use it, like a `judge` check, for a quality that no pattern can find. The difference is that no model writes the score.
+
+```json
+{ "type": "decision", "question": "Does the answer avoid engineering jargon?", "expect": "yes" }
+{ "type": "decision", "question": "Did the agent ask before deleting files?", "expect": "no" }
+{
+  "type": "decision",
+  "question": "How well does the answer keep the original meaning?",
+  "options": { "fully": 1, "mostly": 0.7, "partly": 0.3, "not at all": 0 }
+}
+```
+
+A check takes exactly one of `expect` and `options`.
+
+| Field     | Value                                                              | Check score                                             |
+| --------- | ------------------------------------------------------------------ | ------------------------------------------------------- |
+| `expect`  | `"yes"`                                                            | P(yes)                                                  |
+| `expect`  | `"no"`                                                             | 1 - P(yes)                                              |
+| `options` | An object of at least two answers, each with a number from 0 to 1. | The sum, over the answers, of probability times number. |
+
+An example: the model returns P(yes) = 0.9 for the first check above, so its score is 0.90. For the third check it returns `fully` 0.5, `mostly` 0.3, `partly` 0.1, and `not at all` 0.1, so its score is 0.5 × 1 + 0.3 × 0.7 + 0.1 × 0.3 + 0.1 × 0 = 0.74.
+
+- **Configuration.** Name the model with `--decision-model <id>` or `decisionModel` in the [config file](#config-file). There is no default model. The API key comes from the `BASETEN_API_KEY` environment variable and from nowhere else. It is never read from the config file and never printed or written to the output directory. A suite that has a decision check and no model or no key stops with exit code 2 before any run starts.
+- **Provider.** The client speaks Baseten's System One API, which serves [bison-1](https://huggingface.co/baselabs/bison-1) as `decision-models/baseten-bison-latest` and the other models in Baseten's [decision models](https://docs.baseten.co/inference/model-apis/decision-models) list. `--decision-url <url>` or `decisionUrl` names the base URL of another endpoint that speaks the same API, such as a deployment of your own. The request goes to `<url>/v1/systemone`.
+- **One request for each run.** Every decision check of a case is one question of the same request. An `expect` check is sent as a yes/no question, and an `options` check as a choice among the option names. Write option names that say what they mean, because the model sees only the name.
+- **What the model sees.** The request holds the case's prompt and the final answer, in `<task>` and `<answer>` tags, and the questions. It does not hold the subject, the ref, a path, or the harness that produced the answer, so the model cannot favor A or B.
+- **Unusable replies.** A probability that is missing or is not a number from 0 to 1 is a failure of the model, and so are probabilities that do not add up to 1 over the allowed answers. Nothing is filled in or scaled. A failed request, a response that is not 2xx, and a request that takes more than 60 seconds count the same. The request is sent once more. After two failures no decision check of the run has a score, and the run is invalid.
+- **Records.** `results.json` holds each decision check's score and `probabilities`, and for each run the number of requests with their duration and tokens, apart from the run's own. The API reports tokens and no cost, so the report shows no cost for the decision model.
+- **The agent and the key.** When the suite has a decision check, `BASETEN_API_KEY` is removed from the environment of every harness process. An agent whose own model provider reads that variable cannot run in the same suite.
+
 ## Scores
 
 Every score is a number from 0 to 1.
 
 | Score       | What it is                                                                                                                                                    |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Check score | What one check gave one run. A deterministic check gives 0 or 1. A judged check gives any value from 0 to 1.                                                  |
+| Check score | What one check gave one run. A deterministic check gives 0 or 1. A judged check or a decision check gives any value from 0 to 1.                              |
 | Run score   | The weighted mean of the run's check scores. A check's `weight` defaults to 1. An invalid run has no score.                                                   |
 | Case score  | The mean of the run scores of the valid runs, for one harness and one subject.                                                                                |
 | Suite score | The weighted mean of the case scores, for one harness and one subject. A case's `weight` defaults to 1. A suite has no score while one of its cases has none. |
@@ -209,10 +244,11 @@ The suite score is (1 × 0.50 + 2 × 0.65) / 3 = 0.60. With `--min-score 0.7` th
 The report has one section per harness and one row per case. `run` shows each value as `A / B (B - A)`. `score` shows one value.
 
 - **Score** is the case score.
-- **Checks** shows each check. A deterministic check shows how many valid runs passed it, for example `2/3`. A judged check shows its mean score, for example `0.67`.
+- **Checks** shows each check. A deterministic check shows how many valid runs passed it, for example `2/3`. A judged check or a decision check shows its mean score, for example `0.67`. A decision check starts with the word `decision` and ends with the answer it expects or its options.
 - **Duration, input tokens, output tokens, cost** show the median over valid runs. Input tokens include cached tokens. `n/a` means the harness does not report that number.
 - **Suite score** is under the table.
 - **Judge** is one line under the suite score with the number of judge calls and their total duration, tokens, and cost. These are not part of the table's numbers.
+- **Decision model** is one more line of the same kind, with the number of requests to the decision model and their total duration and tokens.
 - The first lines name each subject, the harness that ran, and why that harness was chosen.
 
 One repetition tells you little. A check that passes 3 of 3 times on A and 1 of 3 on B is a signal. A check that passes 1 of 1 on A and 0 of 1 on B is not. Judged scores move between runs of the same subject, so read a difference in a judged check against that spread.
@@ -229,6 +265,8 @@ An optional `skill-evals.config.json` in the project root sets defaults. A flag 
   "model": "<model-id>",
   "judgeHarness": "claude-code",
   "judgeModel": "<model-id>",
+  "decisionModel": "<decision-model-id>",
+  "decisionUrl": "<base-url>",
   "minScore": 0.8
 }
 ```
@@ -252,13 +290,13 @@ if (evaluation.belowBar.length || evaluation.invalid.length)
   process.exitCode = 1;
 ```
 
-| Export                 | What it is                                                                                                                                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `evaluate(options)`    | Does what `run` and `score` do, without the report. The options are `cwd`, `subjects`, `harness`, `cases`, `caseGlob`, `reps`, `model`, `judgeHarness`, `judgeModel`, `minScore`, `outDir`, and `onRun`. Unset options take their value from the config file. |
-| `loadCases(dir, glob)` | Reads and validates the cases in a directory.                                                                                                                                                                                                                 |
-| `HARNESSES`            | The harness adapters, in default-preference order.                                                                                                                                                                                                            |
+| Export                 | What it is                                                                                                                                                                                                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evaluate(options)`    | Does what `run` and `score` do, without the report. The options are `cwd`, `subjects`, `harness`, `cases`, `caseGlob`, `reps`, `model`, `judgeHarness`, `judgeModel`, `decisionModel`, `decisionUrl`, `minScore`, `outDir`, and `onRun`. Unset options take their value from the config file. |
+| `loadCases(dir, glob)` | Reads and validates the cases in a directory.                                                                                                                                                                                                                                                 |
+| `HARNESSES`            | The harness adapters, in default-preference order.                                                                                                                                                                                                                                            |
 
-`evaluate` resolves to `{ records, suites, belowBar, invalid, outDir, subjects, cases, harnesses, harnessReason, judge, reps, model }`. `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
+`evaluate` resolves to `{ records, suites, belowBar, invalid, outDir, subjects, cases, harnesses, harnessReason, judge, decisionModel, reps, model }`. `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
 
 The package ships type declarations, so `evaluate`'s options and what it resolves to are typed in TypeScript.
 
@@ -313,6 +351,12 @@ Tool kinds and the judge:
 | `opencode`    | The names come from the installed binary (1.19.6). `skill` and `read` were seen in a stream.                                                                                                                                                                      | As for Pi.                                                                                                        |
 | `codex`       | The item types come from the Codex source for `exec --json` events. `command_execution` was seen in a captured stream.                                                                                                                                            | As for Pi.                                                                                                        |
 | `cursor`      | The names come from the installed bundle (2026.11.19). `read` and `write` are in the documented example stream. No run confirmed them.                                                                                                                            | Not run.                                                                                                          |
+
+The decision model:
+
+| Part                      | Confirmed                                                                                                                                                                                                                                                                                                                                                                                                                             | Not confirmed                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Baseten System One client | Written from the [System One API reference](https://docs.baseten.co/reference/inference-api/system-one) and the [decision models guide](https://docs.baseten.co/inference/model-apis/decision-models) as they were on 2026-11-21. The tests run the client against a local HTTP server that answers in the documented response shape: the request body, the `Authorization` header, the scoring, the retry, and every unusable reply. | Any call to the real API. No request from this client has reached Baseten, so the endpoint, the header, the field names, and a response with real probabilities are all unconfirmed. |
 
 Two limits apply across harnesses. A login stored in the operating system's keychain may not follow the new home. If `check` reports a login error, set the harness's API key variable. Only Claude Code reports what it loaded, as [What one run does](#what-one-run-does) says.
 
