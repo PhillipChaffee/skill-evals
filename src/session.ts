@@ -19,6 +19,8 @@ export interface SessionInput {
   timeoutSeconds: number;
   /** Copied into the workspace before the harness starts. */
   workspaceDir?: string | null;
+  /** Environment variables the harness must not get, such as the key of the model that scores its answer. */
+  withhold?: string[] | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -41,15 +43,19 @@ const SHOWN_SETUP_WORDS = 2;
  * Builds the environment of the harness process.
  * @param home - The throwaway home.
  * @param extra - What the adapter adds.
- * @returns This process's environment, with the home and the XDG directories moved under `home`, and without any
- *   variable that names this tool.
+ * @param withhold - Variables of this process that the harness must not get.
+ * @returns This process's environment, with the home and the XDG directories moved under `home`, and without the
+ *   withheld variables or any variable that names this tool.
  */
 function childEnv(
   home: string,
   extra: Record<string, string>,
+  withhold: string[],
 ): ExecOptions["env"] {
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !NAMES_THIS_TOOL.test(key)),
+    Object.entries(process.env).filter(
+      ([key]) => !NAMES_THIS_TOOL.test(key) && !withhold.includes(key),
+    ),
   );
   return {
     ...inherited,
@@ -98,7 +104,7 @@ async function attempt(
   }
   const options = {
     cwd: input.workspace,
-    env: childEnv(input.home, invocation.env),
+    env: childEnv(input.home, invocation.env, session.withhold ?? []),
     timeoutSeconds,
   };
   for (const step of invocation.setup ?? []) {
