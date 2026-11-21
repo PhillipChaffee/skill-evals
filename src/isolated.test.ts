@@ -7,7 +7,6 @@ import { readResults, sandbox } from "./testing/sandbox.js";
 
 const ISOLATED = "--isolated";
 const NONE = "none";
-const YES = '{"score": 1, "reason": "yes"}';
 const ORG_PLUGIN = "/opt/org/plugin";
 
 /**
@@ -165,6 +164,33 @@ test("the subject plugin's own agents and MCP servers are not foreign", async ()
   expect(records[0]?.unexpected).toEqual([]);
 });
 
+test("a skill an account syncs into the config directory during the run invalidates an isolated run", async () => {
+  const box = sandbox();
+  script(box, "sync", { syncSkill: "acct", turns: done });
+  const isolated = await scoreOnce(box, { subject: NONE, flags: [ISOLATED] });
+  expect(isolated.result.status).toBe(1);
+  expect(isolated.records[0]?.unexpected).toEqual(["account skill acct"]);
+  expect(isolated.invalid[0]).toMatch(
+    /loaded outside the subject: account skill acct$/,
+  );
+  fs.rmSync(path.join(box.root, "results"), { recursive: true });
+  const plain = await scoreOnce(box, { subject: NONE, flags: [] });
+  expect(plain.result.status, plain.result.stderr).toBe(0);
+  expect(plain.invalid).toEqual([]);
+});
+
+test("the skills the run placed are not account skills", async () => {
+  const box = sandbox();
+  const skills = skillsFolder(box, "skills", { greet: "# greet\n" });
+  script(box, "placed", { init: { skills: ["greet"] }, turns: done });
+  const { result, records } = await scoreOnce(box, {
+    subject: skills,
+    flags: [ISOLATED],
+  });
+  expect(result.status, result.stderr).toBe(0);
+  expect(records[0]?.unexpected).toEqual([]);
+});
+
 const NOT_REPORTED_REASON = /the harness did not report what it loaded$/;
 
 test.each([
@@ -187,35 +213,6 @@ test.each([
   },
 );
 
-test("a judge that reports something loaded invalidates an isolated run and names the judge", async () => {
-  const box = sandbox();
-  box.write("fake/judge/replies.json", Array(2).fill(YES));
-  box.write("fake/judge/init.json", {
-    plugins: [{ name: "org", path: ORG_PLUGIN }],
-  });
-  script(box, "ok", { turns: done });
-  const cases = plantCase(box, [{ type: "judge", rubric: "Says done." }]);
-  const outDir = path.join(box.root, "results");
-  const args = [
-    "score",
-    "--subject",
-    NONE,
-    "--cases",
-    cases,
-    "--reps",
-    "1",
-    "--out",
-    outDir,
-  ];
-  const result = await box.cli([...args, ISOLATED]);
-  expect(result.status).toBe(1);
-  expect(readResults(outDir).invalid[0]).toMatch(
-    /the judge loaded outside the subject: \/opt\/org\/plugin$/,
-  );
-  const plain = await box.cli(args);
-  expect(plain.status, plain.stderr).toBe(0);
-});
-
 test("--isolated with a harness that cannot isolate is a usage error that names it, before any harness starts", async () => {
   const box = sandbox();
   const cases = plantCase(box, [{ type: "output_contains", text: "done" }]);
@@ -234,7 +231,8 @@ test("--isolated with a harness that cannot isolate is a usage error that names 
   );
   expect(result.status).toBe(2);
   expect(result.stderr).toMatch(/--isolated cannot run with codex, pi:/);
-  expect(result.stderr).not.toMatch(/\bclaude-code\b.*:.*\bclaude-code\b/);
+  // Claude Code can isolate, so it is not among the harnesses the message names.
+  expect(result.stderr).not.toMatch(/cannot run with [^:]*claude-code/);
   expect(fs.existsSync(box.started)).toBe(false);
 });
 

@@ -220,7 +220,13 @@ test("the claude-code invocation carries its isolation switches only when isolat
   const plain = invoke(CLAUDE_CODE, null);
   expect(plain.args).not.toContain("--setting-sources");
   expect(plain.args).not.toContain("--strict-mcp-config");
-  expect(plain.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
+  for (const name of [
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+    "CLAUDE_CODE_DISABLE_POLICY_SKILLS",
+    "CLAUDE_CODE_DISABLE_ORG_MEMORY",
+  ]) {
+    expect(plain.env).not.toHaveProperty(name);
+  }
   const plugin: LoadedSubject = { ...skillsSubject(), kind: "plugin" };
   const { args, env } = invoke(CLAUDE_CODE, plugin, { isolated: true });
   // Only the user source, which is the throwaway home. Never --bare, which switches off the plugin's own hooks.

@@ -148,10 +148,20 @@ export interface Harness {
    * `args` and `env` when the run is isolated.
    */
   isolation?: Isolation;
+  /** Why a harness without `isolation` cannot run `--isolated`, for the docs. */
+  isolationGap?: string;
+  /**
+   * Names what a finished run left in the run's home that the run did not place, such as skills the account synced
+   * there. The report of what loaded does not show them. Called while the home still exists.
+   */
+  strays?: (run: {
+    home: string;
+    placed: Record<string, string> | undefined;
+  }) => string[];
 }
 
 /** The switches that make a harness load nothing but the subject, and what the run record proves of that. */
-interface Isolation {
+export interface Isolation {
   /** Command-line arguments added when the run is isolated. */
   args: string[];
   /** Environment variables added when the run is isolated. */
@@ -160,6 +170,8 @@ interface Isolation {
   proves: string;
   /** What no switch removes and the report does not show. */
   notProven: string;
+  /** Markdown bullet list of what the switches do and what was read in the CLI, for the docs. */
+  notes: string;
 }
 
 /**

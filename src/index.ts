@@ -7,6 +7,7 @@ export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";
 export { HARNESSES } from "./harnesses/index.js";
 export type {
   Harness,
+  Isolation,
   Loaded,
   LoadedSubject,
   Parsed,

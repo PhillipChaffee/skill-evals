@@ -68,3 +68,16 @@ test("claude-code reads agents and MCP servers: only the subject plugin's are it
     "MCP server plugin:kit:db",
   );
 });
+
+test("claude-code finds a plugin an account synced into the config directory by its path", () => {
+  const synced = "/run/home-1/.claude/plugins/synced/design";
+  const loaded: Loaded = {
+    ...NOT_REPORTED,
+    paths: [KIT_COPY, synced],
+    plugins: [
+      { name: "kit", path: KIT_COPY },
+      { name: "design", path: synced },
+    ],
+  };
+  expect(foreignOf(claudeCode, loaded, copy("plugin"))).toEqual([synced]);
+});

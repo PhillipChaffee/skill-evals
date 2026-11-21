@@ -289,7 +289,7 @@ async function record(
     finalText: parsed.finalText,
     toolCalls: parsed.toolCalls,
     skillsLoaded: loaded,
-    ...startupRecord(plan, parsed.loaded, copy),
+    ...startupRecord(plan, ran, copy),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
     durationMs,

@@ -1,6 +1,7 @@
 import type { Harness, Loaded, LoadedSubject } from "./harnesses/shared.js";
 import { foreignOf, reportMissing, samePath } from "./harnesses/shared.js";
 import type { Copy } from "./run-copy.js";
+import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
 
 // A judge answers in one message. The second turn is room for one stray tool call before the answer.
@@ -32,15 +33,17 @@ export interface StartupRecord {
  * @param run - The run's harness, and whether it was isolated.
  * @param run.harness - The adapter that ran.
  * @param run.isolated - Whether the run was started with `--isolated`.
- * @param loaded - What the harness reported.
+
+ * @param ran - What the session produced: the report, and the home and placed skills that the adapter inspects.
  * @param copy - The run's copy of the subject; null for "none".
  * @returns The part of the run record that comes from the report.
  */
 export function startupRecord(
   run: { harness: Harness; isolated?: boolean | undefined },
-  loaded: Loaded,
+  ran: Pick<SessionResult, "home" | "placed"> & { parsed: { loaded: Loaded } },
   copy: Copy | null,
 ): StartupRecord {
+  const { loaded } = ran.parsed;
   const reports = run.harness.capabilities.has("loadedReport");
   return {
     subjectLoaded:
@@ -50,7 +53,10 @@ export function startupRecord(
     loaded,
     isolated: run.isolated ?? false,
     reportMissing: reportMissing(run.harness, loaded),
-    unexpected: foreignOf(run.harness, loaded, copy?.loaded ?? null),
+    unexpected: [
+      ...foreignOf(run.harness, loaded, copy?.loaded ?? null),
+      ...(run.harness.strays?.(ran) ?? []),
+    ],
   };
 }
 
@@ -94,8 +100,11 @@ export function judgeAsker(
         withhold: options.withhold,
         pass: options.pass,
       },
-      ({ parsed, error, durationMs }) => {
-        const foreign = foreignOf(harness, parsed.loaded, null);
+      ({ parsed, error, durationMs, home, placed }) => {
+        const foreign = [
+          ...foreignOf(harness, parsed.loaded, null),
+          ...(harness.strays?.({ home, placed }) ?? []),
+        ];
         if (isolated && reportMissing(harness, parsed.loaded)) {
           problems.push("the judge harness did not report what it loaded");
         } else if (isolated && foreign.length > 0) {

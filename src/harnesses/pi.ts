@@ -50,6 +50,8 @@ const pi: Harness = {
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
   capabilities: new Set([]),
   status: "scripted",
+  isolationGap:
+    "It is always started with discovery switched off (`-ne -ns -np`), whatever the flag says, and that stays its default. It reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded.",
 
   invocation({ subject, home, prompt, model }) {
     const agentDir = path.join(home, ".pi", "agent");

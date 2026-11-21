@@ -114,6 +114,8 @@ export interface FakeScript {
   initOmit?: (keyof InitEvent)[];
   /** Leaves the init event out of the stream. */
   noInit?: boolean;
+  /** A skill that an account syncs into the config directory during the run, as `synced/org/<name>`. */
+  syncSkill?: string;
   /** The steps of each turn; turn n answers the n-th prompt of a session. */
   turns: FakeStep[][];
 }

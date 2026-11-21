@@ -218,29 +218,6 @@ ${FENCE}
 
 const ISOLATED = code("--isolated");
 
-/**
- * Names the harnesses that cannot run with `--isolated`, and why.
- * @returns A sentence; the harnesses are the registry's, so it changes with their capabilities.
- */
-const isolatable = (): string => {
-  const lacking = HARNESSES.filter(
-    (harness) =>
-      !harness.isolation || !harness.capabilities.has("loadedReport"),
-  ).map((harness) => code(harness.id));
-  return `Today ${lacking.join(", ")} cannot run with it. Pi is started with discovery switched off (${code("-ne -ns -np")}) whatever the flag says, and that stays its default, but it reports nothing it loaded, so it cannot run ${ISOLATED} until an adapter can prove what it loaded.`;
-};
-
-// What was read in the code of Claude Code 2.1.330, which is not in its help text.
-const CLAUDE_NOTES = `### What Claude Code does with these switches
-
-- ${code("--setting-sources user")}: the CLI loads ${code("CLAUDE_CONFIG_DIR/skills")}, the user's settings and the user's plugins only for the ${code("user")} source, and the workspace's ${code(".claude/")} skills and settings only for ${code("project")} and ${code("local")}. User level is the throwaway home, which holds only what the run puts there, such as the skills of a skills subject. An empty list (${code('""')}) is accepted by the parser, but it would leave a skills subject unloaded.
-- ${code("--strict-mcp-config")}: only the servers of ${code("--mcp-config")}. The CLI has a check that refuses ${code("--strict-mcp-config")} with the message "You cannot use --strict-mcp-config when an enterprise MCP config is present". Where it exits the process was not confirmed, so the foreign-server rule covers the case where the run starts anyway. A plugin's own MCP server is named ${code("plugin:<plugin>:<server>")} in the init event; every other server is outside the subject. Whether the flag also drops a plugin's own servers was not confirmed.
-- ${code("CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")}, ${code("CLAUDE_CODE_DISABLE_POLICY_SKILLS=1")} and ${code("CLAUDE_CODE_DISABLE_ORG_MEMORY=1")} switch off auto memory, the organization's managed policy skills, and the sync of organization memory. All three names are read by the compiled CLI.
-- Never ${code("--bare")}: it also switches off the subject plugin's own hooks.
-- A bare skill name that is not one of the subject's own counts as a Claude Code built-in, which is not outside the subject. Policy skills are switched off, so no managed skill appears as one. The built-in names were not confirmed against a real capture. A bare agent name is not judged, because the init event does not tell a built-in agent from a managed one. A plugin directory, a ${code("plugin:")}-prefixed skill or agent of another plugin, and an MCP server that is not the subject's are outside the subject.
-- Organization-managed plugins load under every flag. The init event lists them, so the run is invalid.
-- Not proven by the record: managed policy settings (hooks, environment, permissions), a managed ${code("CLAUDE.md")} file, rules, hooks, and managed agents. The report does not list them.`;
-
 const harnessesPage = (): ReferencePage => ({
   file: "agents/harnesses.md",
   markdown: `${header(
@@ -268,7 +245,7 @@ ${table(
 
 ## Isolation
 
-${ISOLATED} starts the harness with nothing loaded but the subject, and invalidates a run whose own report of what it loaded shows anything else. The ${code("isolated")} capability means that the adapter does the first and proves the second from its report, so ${ISOLATED} needs ${code("loadedReport")} too. A harness without both is a usage error that names it, raised before a run starts. ${isolatable()} Flags are never trusted, and a harness that should report its plugins and skills but does not makes the run invalid with ${code("the harness did not report what it loaded")}. Under ${ISOLATED} the judge, which loads nothing, gets the same switches when its harness can take them, and what it reports is held to the same rule.
+${ISOLATED} starts the harness with nothing loaded but the subject, and invalidates a run whose own report of what it loaded shows anything else. The ${code("isolated")} capability means that the adapter does the first and proves the second from its report, so ${ISOLATED} needs ${code("loadedReport")} too. A harness without both is a usage error that names it, raised before a run starts. Flags are never trusted, and a harness that should report its plugins and skills but does not makes the run invalid with ${code("the harness did not report what it loaded")}. Under ${ISOLATED} the judge, which loads nothing, must have both capabilities too, gets the same switches, and what it reports is held to the same rule.
 
 ${table(
   [
@@ -296,7 +273,15 @@ ${table(
   ),
 )}
 
-${CLAUDE_NOTES}
+${HARNESSES.flatMap((harness) =>
+  harness.isolation
+    ? [
+        `### What ${code(harness.id)} does with these switches\n\n${harness.isolation.notes}`,
+      ]
+    : [
+        `### ${code(harness.id)}\n\nCannot run with ${ISOLATED}. ${harness.isolationGap ?? "It has not been proven to load nothing but the subject."}`,
+      ],
+).join("\n\n")}
 `,
 });
 

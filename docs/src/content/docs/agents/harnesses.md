@@ -22,18 +22,36 @@ A harness is a coding agent's command-line program. `run` and `score` use the fi
 
 ## Isolation
 
-`--isolated` starts the harness with nothing loaded but the subject, and invalidates a run whose own report of what it loaded shows anything else. The `isolated` capability means that the adapter does the first and proves the second from its report, so `--isolated` needs `loadedReport` too. A harness without both is a usage error that names it, raised before a run starts. Today `pi`, `cursor`, `opencode`, `codex` cannot run with it. Pi is started with discovery switched off (`-ne -ns -np`) whatever the flag says, and that stays its default, but it reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded. Flags are never trusted, and a harness that should report its plugins and skills but does not makes the run invalid with `the harness did not report what it loaded`. Under `--isolated` the judge, which loads nothing, gets the same switches when its harness can take them, and what it reports is held to the same rule.
+`--isolated` starts the harness with nothing loaded but the subject, and invalidates a run whose own report of what it loaded shows anything else. The `isolated` capability means that the adapter does the first and proves the second from its report, so `--isolated` needs `loadedReport` too. A harness without both is a usage error that names it, raised before a run starts. Flags are never trusted, and a harness that should report its plugins and skills but does not makes the run invalid with `the harness did not report what it loaded`. Under `--isolated` the judge, which loads nothing, must have both capabilities too, gets the same switches, and what it reports is held to the same rule.
 
 | Harness       | Switches added by --isolated                                                                                                                              | What the report proves                                                                                                                                                      | Not proven                                                                                                                                                                                            |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `claude-code` | `--setting-sources user --strict-mcp-config` `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` `CLAUDE_CODE_DISABLE_POLICY_SKILLS=1` `CLAUDE_CODE_DISABLE_ORG_MEMORY=1` | Every plugin directory, plugin-prefixed skill and agent, and MCP server in the init event is the subject's. The report must list plugins and skills, or the run is invalid. | Managed policy settings (hooks, environment, permissions), a managed CLAUDE.md file, rules and hooks, and the organization's managed agents, which the init event does not tell from built-in agents. |
 
-### What Claude Code does with these switches
+### `pi`
 
-- `--setting-sources user`: the CLI loads `CLAUDE_CONFIG_DIR/skills`, the user's settings and the user's plugins only for the `user` source, and the workspace's `.claude/` skills and settings only for `project` and `local`. User level is the throwaway home, which holds only what the run puts there, such as the skills of a skills subject. An empty list (`""`) is accepted by the parser, but it would leave a skills subject unloaded.
-- `--strict-mcp-config`: only the servers of `--mcp-config`. The CLI has a check that refuses `--strict-mcp-config` with the message "You cannot use --strict-mcp-config when an enterprise MCP config is present". Where it exits the process was not confirmed, so the foreign-server rule covers the case where the run starts anyway. A plugin's own MCP server is named `plugin:<plugin>:<server>` in the init event; every other server is outside the subject. Whether the flag also drops a plugin's own servers was not confirmed.
+Cannot run with `--isolated`. It is always started with discovery switched off (`-ne -ns -np`), whatever the flag says, and that stays its default. It reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded.
+
+### What `claude-code` does with these switches
+
+- `--setting-sources user`: the CLI loads `CLAUDE_CONFIG_DIR/skills`, the user's settings and the user's plugins only for the `user` source, and the workspace's `.claude/` skills and settings only for `project` and `local`. User level is the throwaway home plus anything the account syncs into it: the run puts only its own skills there, and a skills subject needs the `user` source to load. An empty list (`""`) is accepted by the parser, but it would leave a skills subject unloaded.
+- Skills and plugins that a claude.ai login syncs into the home are loaded under the `user` source, and no switch turns that off. They are detected from the files they leave: every skill directory under `<config dir>/skills` and `<config dir>/synced` that the run did not place is outside the subject (`account skill <name>`), and a synced plugin is a reported plugin path that is not the subject's copy. The exact location of the synced root was read from a minified binary and is searched under both roots.
+- `--model`: the `user` source also lets the organization's default model apply when `--model` is not given. Pass `--model` in CI.
+- `--strict-mcp-config`: only the servers of `--mcp-config`. The CLI has a check that refuses it with the message "You cannot use --strict-mcp-config when an enterprise MCP config is present". Where it exits the process was not confirmed, so the foreign-server rule covers the case where the run starts anyway. A plugin's own MCP server is named `plugin:<plugin>:<server>` in the init event; every other server is outside the subject. Whether the flag also drops a plugin's own servers was not confirmed.
 - `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `CLAUDE_CODE_DISABLE_POLICY_SKILLS=1` and `CLAUDE_CODE_DISABLE_ORG_MEMORY=1` switch off auto memory, the organization's managed policy skills, and the sync of organization memory. All three names are read by the compiled CLI.
 - Never `--bare`: it also switches off the subject plugin's own hooks.
 - A bare skill name that is not one of the subject's own counts as a Claude Code built-in, which is not outside the subject. Policy skills are switched off, so no managed skill appears as one. The built-in names were not confirmed against a real capture. A bare agent name is not judged, because the init event does not tell a built-in agent from a managed one. A plugin directory, a `plugin:`-prefixed skill or agent of another plugin, and an MCP server that is not the subject's are outside the subject.
 - Organization-managed plugins load under every flag. The init event lists them, so the run is invalid.
 - Not proven by the record: managed policy settings (hooks, environment, permissions), a managed `CLAUDE.md` file, rules, hooks, and managed agents. The report does not list them.
+
+### `cursor`
+
+Cannot run with `--isolated`. It has not been proven to load nothing but the subject.
+
+### `opencode`
+
+Cannot run with `--isolated`. It has not been proven to load nothing but the subject.
+
+### `codex`
+
+Cannot run with `--isolated`. It has not been proven to load nothing but the subject.

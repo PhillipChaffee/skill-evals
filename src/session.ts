@@ -43,6 +43,10 @@ export interface SessionResult {
    * subject; null when the adapter placed none.
    */
   placedChanges: ChangedFiles | null;
+  /** The run's throwaway home, which exists until the callback returns. */
+  home: string;
+  /** Where the adapter placed each skill: skill name to directory; absent when it placed none. */
+  placed: Record<string, string> | undefined;
 }
 
 // Login files hold secrets, so only the owner may read the copies.
@@ -99,6 +103,7 @@ async function attempt(
   failure: string | null;
   durationMs: number;
   placedChanges: ChangedFiles | null;
+  placed?: Record<string, string> | undefined;
 }> {
   const { harness, bin, timeoutSeconds } = session;
   let invocation;
@@ -130,6 +135,7 @@ async function attempt(
         failure: `setup "${command}": ${failure}`,
         durationMs: 0,
         placedChanges: placedChanges(),
+        placed: invocation.placed,
       };
     }
   }
@@ -142,6 +148,7 @@ async function attempt(
     ...result,
     durationMs: Date.now() - started,
     placedChanges: placedChanges(),
+    placed: invocation.placed,
   };
 }
 
@@ -194,10 +201,8 @@ export async function session<T>(
       maxTurns,
       isolated,
     };
-    const { stdout, failure, durationMs, placedChanges } = await attempt(
-      run,
-      input,
-    );
+    const { stdout, failure, durationMs, placedChanges, placed } =
+      await attempt(run, input);
     const parsed = parseStream(harness, stdout);
     // The harness's own message is the most specific one, but only when it produced a stream at all.
     const error =
@@ -209,6 +214,8 @@ export async function session<T>(
       durationMs,
       workspace: workspace.dir,
       placedChanges,
+      home: home.dir,
+      placed,
     });
   } finally {
     home.dispose();

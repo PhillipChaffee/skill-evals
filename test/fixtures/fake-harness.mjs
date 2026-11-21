@@ -58,19 +58,22 @@ if (!piMode && prompt.startsWith("Grade one answer")) {
     : 0;
   fs.appendFileSync(
     log,
-    `${JSON.stringify({ prompt, model: flag("--model"), pluginDir, env: Object.keys(process.env) })}\n`,
+    `${JSON.stringify({ prompt, model: flag("--model"), pluginDir, argv: process.argv.slice(2), env: Object.keys(process.env) })}\n`,
   );
-  // `judge/init.json` replaces fields of the judge's init event.
+  // `judge/init.json` replaces fields of the judge's init event, and its `omit` lists fields to leave out.
   const initFile = path.join(dir, "init.json");
-  emit({
+  const { omit = [], ...more } = fs.existsSync(initFile)
+    ? JSON.parse(fs.readFileSync(initFile, "utf8"))
+    : {};
+  const judgeInit = {
     type: "system",
     subtype: "init",
     plugins: [],
     skills: [],
-    ...(fs.existsSync(initFile)
-      ? JSON.parse(fs.readFileSync(initFile, "utf8"))
-      : {}),
-  });
+    ...more,
+  };
+  for (const key of omit) delete judgeInit[key];
+  emit(judgeInit);
   finish(replies[asked], 0.002);
   process.exit(0);
 }
@@ -331,6 +334,17 @@ const init = {
 // A script can leave fields out of the init event, or the whole event.
 for (const key of played?.found.initOmit ?? []) delete init[key];
 if (!played?.found.noInit) emit(init);
+// A script's `syncSkill` is a skill that an account syncs into the config directory during the run.
+if (played?.found.syncSkill) {
+  const dir = path.join(
+    process.env.CLAUDE_CONFIG_DIR,
+    "synced",
+    "org",
+    played.found.syncSkill,
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "SKILL.md"), "synced\n");
+}
 if (played) {
   const turn = turnIndex(played.file);
   play(played.found.turns[turn] ?? [], turn);

@@ -125,3 +125,15 @@ test("the harnesses page lists the registry in its order of preference", () => {
   for (const row of rows) expect(harnesses).toContain(row);
   expect(harnesses).toContain("`SKILL_EVALS_BIN_CLAUDE_CODE`");
 });
+
+test("the harnesses page shows every isolation switch and variable of every adapter", () => {
+  const harnesses = page("agents/harnesses.md");
+  for (const { isolation } of HARNESSES) {
+    if (!isolation) continue;
+    for (const arg of isolation.args) expect(harnesses).toContain(arg);
+    for (const name of Object.keys(isolation.env)) {
+      expect(harnesses).toContain(name);
+    }
+    expect(harnesses).toContain(isolation.notes.split("\n")[0] ?? "x");
+  }
+});
