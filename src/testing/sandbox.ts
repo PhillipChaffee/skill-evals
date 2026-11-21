@@ -99,6 +99,11 @@ export interface Sandbox {
   ) => Promise<CliResult>;
   /** The environment `cli` runs with. */
   env: Record<string, string>;
+  /**
+   * A launcher for the fake harness that a test passes as `SKILL_EVALS_BIN_PI`. The fake answers in Pi's stream
+   * format when it is started with Pi's arguments. It stays out of `env`, which would make Pi the default harness.
+   */
+  pi: string;
 }
 
 /**
@@ -140,6 +145,11 @@ export function sandbox(): Sandbox {
     `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; await import(${JSON.stringify(fakeHarness)});\n`,
   );
   fs.chmodSync(launcher, EXECUTABLE);
+  const pi = write(
+    "bin/fake-pi.mjs",
+    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; await import(${JSON.stringify(fakeHarness)});\n`,
+  );
+  fs.chmodSync(pi, EXECUTABLE);
   const env = {
     PATH: tools,
     HOME: root,
@@ -151,7 +161,7 @@ export function sandbox(): Sandbox {
     const ran = await asProcess(setting, () => main(args));
     return { status: ran.value, stdout: ran.stdout, stderr: ran.stderr };
   };
-  return { root, write, cli, env };
+  return { root, write, cli, env, pi };
 }
 
 /**

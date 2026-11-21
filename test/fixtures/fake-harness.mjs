@@ -6,6 +6,9 @@
 // - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
 //   that transcript instead of the behaviour below. Turn n of the script answers the n-th prompt of a session.
 // - A script's `exec` command sees the plugin directory as $PLUGIN_DIR, and a `write` path may start with it.
+// - Started with `--mode json` (the arguments of the Pi adapter) it is Pi-shaped instead: the prompt comes from standard
+//   input, the plugin directory from `-e`, and the stream is Pi's (`tool_execution_start`, `turn_end`). It plays the
+//   same scripts, for `text`, `final`, `call`, and `parallel` steps; it has no judge, no agents, and no hooks.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -32,10 +35,13 @@ const finish = (result, costUsd) =>
     },
   });
 
-const prompt = process.argv[process.argv.indexOf("--") + 1];
-const pluginDir = flag("--plugin-dir");
+const piMode = flag("--mode") === "json";
+const prompt = piMode
+  ? fs.readFileSync(0, "utf8")
+  : process.argv[process.argv.indexOf("--") + 1];
+const pluginDir = piMode ? flag("-e") : flag("--plugin-dir");
 
-if (prompt.startsWith("Grade one answer")) {
+if (!piMode && prompt.startsWith("Grade one answer")) {
   const dir = path.join(process.env.FAKE_DIR ?? "", "judge");
   const replies = JSON.parse(
     fs.readFileSync(path.join(dir, "replies.json"), "utf8"),
@@ -88,7 +94,7 @@ function matchingScript() {
  * @returns The index of this prompt, from 0.
  */
 function turnIndex(file) {
-  const dir = process.env.CLAUDE_CONFIG_DIR;
+  const dir = process.env.CLAUDE_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR;
   fs.mkdirSync(dir, { recursive: true });
   const counter = path.join(dir, `.fake-turn-${file}`);
   const turn = fs.existsSync(counter)
@@ -97,6 +103,31 @@ function turnIndex(file) {
   fs.writeFileSync(counter, String(turn + 1));
   return turn;
 }
+
+/**
+ * Does what a scripted call asks for in the workspace.
+ * @param call - The call step's fields: its input, and what it executes or writes.
+ * @returns What the tool reports: its output text, and whether it failed.
+ */
+const perform = ({ input, output = "", exec, write }) => {
+  if (write) {
+    // $PLUGIN_DIR stands for the --plugin-dir this run was given, so a script can write into the plugin.
+    const target = write.path.replaceAll("$PLUGIN_DIR", pluginDir ?? "");
+    fs.mkdirSync(path.dirname(path.resolve(target)), { recursive: true });
+    fs.writeFileSync(target, write.content);
+  }
+  if (!exec) return { content: output, isError: false };
+  // The sandbox's PATH holds node and git only, so a command also gets the system's.
+  const ran = spawnSync("sh", ["-c", `(${input.command}\n) 2>&1`], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PLUGIN_DIR: pluginDir ?? "",
+      PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin`,
+    },
+  });
+  return { content: ran.stdout, isError: ran.status !== 0 };
+};
 
 /**
  * Plays one turn of a script as a stream.
@@ -130,30 +161,13 @@ function play(steps, turn) {
       parent_tool_use_id: parent,
     });
   // Makes a call's tool_use block, and returns what to do once it has been announced: run it, and report the result.
-  const prepare = ({ name, input, output = "", exec, write }) => {
+  const prepare = (call) => {
     const use = id("toolu");
     return {
-      block: { type: "tool_use", id: use, name, input },
+      block: { type: "tool_use", id: use, name: call.name, input: call.input },
       settle: (parent) => {
-        if (write) {
-          // $PLUGIN_DIR stands for the --plugin-dir this run was given, so a script can write into the plugin.
-          const target = write.path.replaceAll("$PLUGIN_DIR", pluginDir ?? "");
-          fs.mkdirSync(path.dirname(path.resolve(target)), {
-            recursive: true,
-          });
-          fs.writeFileSync(target, write.content);
-        }
-        if (!exec) return toolResult(use, output, false, parent);
-        // The sandbox's PATH holds node and git only, so a command also gets the system's.
-        const ran = spawnSync("sh", ["-c", `(${input.command}\n) 2>&1`], {
-          encoding: "utf8",
-          env: {
-            ...process.env,
-            PLUGIN_DIR: pluginDir ?? "",
-            PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin`,
-          },
-        });
-        return toolResult(use, ran.stdout, ran.status !== 0, parent);
+        const { content, isError } = perform(call);
+        toolResult(use, content, isError, parent);
       },
     };
   };
@@ -219,7 +233,64 @@ function play(steps, turn) {
   finish(final);
 }
 
+/**
+ * Plays one turn of a script as Pi's stream: each call is announced and run, and one `turn_end` closes the turn.
+ * @param steps - The turn's steps.
+ */
+function playPi(steps) {
+  let final = "";
+  const call = (one) => {
+    emit({
+      type: "tool_execution_start",
+      toolName: one.name,
+      args: one.input,
+    });
+    perform(one);
+  };
+  const turnEnd = (message) => emit({ type: "turn_end", message });
+  try {
+    for (const one of steps) {
+      if ("text" in one) final = one.text;
+      else if ("call" in one) call(one.call);
+      else if ("parallel" in one)
+        one.parallel.forEach((each) => call(each.call));
+      else if ("final" in one) final = one.final;
+      else if ("fail" in one) throw new Error(one.fail);
+      else throw new Error(`pi mode does not play ${Object.keys(one)[0]}`);
+    }
+  } catch (error) {
+    turnEnd({
+      role: "assistant",
+      content: [],
+      stopReason: "error",
+      errorMessage: error.message,
+    });
+    return;
+  }
+  turnEnd({
+    role: "assistant",
+    content: [{ type: "text", text: final }],
+    stopReason: "stop",
+    usage: {
+      input: 100,
+      output: 50,
+      cacheRead: 900,
+      cacheWrite: 0,
+      cost: { total: 0.001 },
+    },
+  });
+}
+
 const played = matchingScript();
+if (piMode) {
+  if (played) {
+    playPi(played.found.turns[turnIndex(played.file)] ?? []);
+  } else {
+    const seen = { prompt, cwd: process.cwd(), model: flag("--model") };
+    playPi([{ final: JSON.stringify(seen) }]);
+  }
+  process.exit(0);
+}
 const behaviorFile = pluginDir && path.join(pluginDir, "behavior.json");
 const behavior =
   behaviorFile && fs.existsSync(behaviorFile)
