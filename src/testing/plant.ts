@@ -72,23 +72,26 @@ interface InitEvent {
   tools: string[];
 }
 
+/** A tool call of the scripted agent. */
+type FakeCall = {
+  call: {
+    name: string;
+    input: unknown;
+    /** The tool result; empty when absent. */
+    output?: string;
+    /** Runs `input.command` in the workspace and uses its real combined output and exit status as the result. */
+    exec?: boolean;
+    /** A file to create in the workspace. */
+    write?: { path: string; content: string };
+  };
+};
+
 /** One thing the scripted agent does. */
 type FakeStep =
   | { text: string }
-  | {
-      call: {
-        name: string;
-        input: unknown;
-        /** The tool result; empty when absent. */
-        output?: string;
-        /** Runs `input.command` in the workspace and uses its real combined output and exit status as the result. */
-        exec?: boolean;
-        /** A file to create in the workspace. */
-        write?: { path: string; content: string };
-      };
-    }
+  | FakeCall
   /** Calls that share one assistant message. */
-  | { parallel: FakeStep[] }
+  | { parallel: FakeCall[] }
   /** An `Agent` call, then its steps, each marked as the child of that call. */
   | { agent: { type: string; prompt: string; steps: FakeStep[] } }
   | {

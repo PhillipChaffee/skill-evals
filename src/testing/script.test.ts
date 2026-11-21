@@ -97,9 +97,10 @@ test("an exec call runs the command in the workspace", async () => {
       ],
     ],
   });
-  const { outDir } = await scored(box, [
+  const { outDir, records } = await scored(box, [
     { type: "file_exists", path: "made.txt" },
   ]);
+  expect(records[0]?.checks[0]?.score).toBe(1);
   const events = eventsOf(outDir);
   const results = events
     .filter((event) => event.type === "user")
@@ -218,4 +219,74 @@ test("match.plugin selects the arm", async () => {
   expect(readResults(outDir).records.map((record) => record.finalText)).toEqual(
     ["plain arm", "plugin arm"],
   );
+});
+
+test("a failing exec call reports an error result, even after a trailing comment", async () => {
+  const box = sandbox();
+  script(box, "exec", {
+    turns: [
+      [
+        {
+          call: {
+            name: "Bash",
+            input: { command: "echo oops; exit 3 # a comment" },
+            exec: true,
+          },
+        },
+      ],
+    ],
+  });
+  const { outDir } = await scored(box, [
+    { type: "output_contains", text: "x" },
+  ]);
+  const result = JSON.stringify(
+    eventsOf(outDir).find((event) => event.type === "user"),
+  );
+  expect(result).toContain("oops");
+  expect(result).toContain('"is_error":true');
+});
+
+test("every rep plays the script's first turn", async () => {
+  const box = sandbox();
+  script(box, "turns", {
+    turns: [[{ final: "first" }], [{ final: "second" }]],
+  });
+  const cases = plantCase(box, [{ type: "output_contains", text: "first" }]);
+  const outDir = path.join(box.root, "results");
+  const subject = skillsFolder(box, "skills", { bro: "# bro\n" });
+  const result = await box.cli([
+    "score",
+    "--subject",
+    subject,
+    "--cases",
+    cases,
+    "--reps",
+    "2",
+    "--out",
+    outDir,
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  expect(readResults(outDir).records.map((record) => record.finalText)).toEqual(
+    ["first", "first"],
+  );
+});
+
+test("a parallel step that is not a call ends the run with an error naming it", async () => {
+  const box = sandbox();
+  script(box, "bad", {
+    turns: [[{ parallel: [{ text: "no" } as never] }]],
+  });
+  const cases = plantCase(box, [{ type: "output_contains", text: "x" }]);
+  const outDir = path.join(box.root, "results");
+  const subject = skillsFolder(box, "skills", { bro: "# bro\n" });
+  await box.cli([
+    "score",
+    "--subject",
+    subject,
+    "--cases",
+    cases,
+    "--out",
+    outDir,
+  ]);
+  expect(readResults(outDir).records[0]?.error).toContain("call steps only");
 });

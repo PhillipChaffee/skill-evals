@@ -8,7 +8,6 @@
 // - It lists the skills installed in its config directory at startup, unless $FAKE_HIDE_SKILLS is set, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -64,7 +63,14 @@ function matchingScript() {
     process.env.FAKE_DIR && path.join(process.env.FAKE_DIR, "scripts");
   if (!dir || !fs.existsSync(dir)) return null;
   for (const file of fs.readdirSync(dir).sort()) {
-    const found = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+    let found;
+    try {
+      found = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
+    } catch (error) {
+      throw new Error(`fake script ${file}: ${error.message}`, {
+        cause: error,
+      });
+    }
     const { prompt: wanted, plugin } = found.match ?? {};
     if (
       (wanted === undefined || prompt.includes(wanted)) &&
@@ -77,15 +83,15 @@ function matchingScript() {
 }
 
 /**
- * Counts the prompts this session has had, by the workspace it runs in.
+ * Counts the prompts this session has had. The count lives in the run's own config directory, which a run's turns
+ * share and no other run sees.
  * @param file - The script's file name.
  * @returns The index of this prompt, from 0.
  */
 function turnIndex(file) {
-  const dir = path.join(process.env.FAKE_DIR, "state");
+  const dir = process.env.CLAUDE_CONFIG_DIR;
   fs.mkdirSync(dir, { recursive: true });
-  const key = crypto.createHash("sha1").update(process.cwd()).digest("hex");
-  const counter = path.join(dir, `${file}-${key}`);
+  const counter = path.join(dir, `.fake-turn-${file}`);
   const turn = fs.existsSync(counter)
     ? Number(fs.readFileSync(counter, "utf8"))
     : 0;
@@ -138,7 +144,7 @@ function play(steps, turn) {
         }
         if (!exec) return toolResult(use, output, false, parent);
         // The sandbox's PATH holds node and git only, so a command also gets the system's.
-        const ran = spawnSync("sh", ["-c", `(${input.command}) 2>&1`], {
+        const ran = spawnSync("sh", ["-c", `(${input.command}\n) 2>&1`], {
           encoding: "utf8",
           env: {
             ...process.env,
@@ -158,7 +164,14 @@ function play(steps, turn) {
       assistant([block], parent);
       settle(parent);
     } else if ("parallel" in one) {
-      const prepared = one.parallel.map((each) => prepare(each.call));
+      const prepared = one.parallel.map((each) => {
+        if (!("call" in each)) {
+          throw new Error(
+            `parallel takes call steps only, got ${JSON.stringify(each)}`,
+          );
+        }
+        return prepare(each.call);
+      });
       assistant(
         prepared.map(({ block }) => block),
         parent,
