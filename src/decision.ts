@@ -3,8 +3,22 @@ import type { Tokens } from "./harnesses/shared.js";
 import { messageOf } from "./scope.js";
 
 const ATTEMPTS = 2;
-// Float error in a sum of probabilities that add up to 1.
-const SUM_TOLERANCE = 1e-6;
+// A provider may round each probability before it sends it; the published runtime keeps 6 decimals.
+const ROUNDING_STEP = 1e-6;
+// Rounding moves a number by half a step at most.
+const WORST_ROUNDING = 0.5;
+// Float error in a sum of a few numbers near 1, far below one rounding step.
+const FLOAT_ERROR = 1e-9;
+
+/**
+ * Says how far from 1 the probabilities of the allowed answers may add up.
+ * @param count - The number of allowed answers.
+ * @returns What rounding alone can explain: half a rounding step for each answer, and float error. It grows with the
+ *   count because three honest probabilities can add up to 0.999999 or 1.000001. It stays far below any probability
+ *   a model keeps back on purpose, for example for an "I don't know" answer, so such a reply is still rejected.
+ */
+const sumTolerance = (count: number): number =>
+  count * WORST_ROUNDING * ROUNDING_STEP + FLOAT_ERROR;
 
 /** One question to a decision model: a yes or no question, or a choice among named options. */
 export type DecisionQuestion =
@@ -83,7 +97,8 @@ const decisionState = (task: string, answer: string): string =>
  * @param returned - What the model returned for the question.
  * @returns The expected value, which is the sum of probability times value, and the probabilities it was computed from.
  * @throws {Error} When an allowed answer has no probability, a probability is not a number from 0 to 1, or the
- *   probabilities of the allowed answers do not add up to 1. Nothing is filled in or scaled.
+ *   probabilities of the allowed answers do not add up to 1 within what rounding explains. Nothing is filled in or
+ *   scaled.
  */
 function expectedValue(
   values: Record<string, number>,
@@ -109,12 +124,13 @@ function expectedValue(
     sum += probability;
     score += probability * value;
   }
-  if (Math.abs(sum - 1) > SUM_TOLERANCE) {
+  if (Math.abs(sum - 1) > sumTolerance(Object.keys(values).length)) {
     throw new Error(
       `the probabilities of ${Object.keys(values).join(", ")} add up to ${String(sum)}, not 1`,
     );
   }
-  // The sum may pass 1 by float error only, which the tolerance above bounds.
+  // No probability is below 0 and no value is outside 0 to 1, so the score is from 0 to the sum, and the sum may
+  // pass 1 by the tolerance above.
   return { score: Math.min(score, 1), probabilities };
 }
 
