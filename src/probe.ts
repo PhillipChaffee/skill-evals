@@ -38,6 +38,9 @@ const SHOWN_ERROR_LENGTH = 200;
  */
 const probe = (subject: Subject): Case => ({
   id: "hello",
+  base: "hello",
+  variant: null,
+  heldout: false,
   prompt: subject.skills[0]
     ? `Use the ${subject.skills[0]} skill on this sentence: "The cache is cold."`
     : "Reply with the single word: pong",

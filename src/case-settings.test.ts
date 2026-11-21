@@ -136,6 +136,9 @@ test("results.json records each case's metadata and overrides", async () => {
   plant(box, "g/two");
   const { results } = await scored(box, "--reps", "2");
   expect(results.caseMeta["g/one"]).toEqual({
+    base: "g/one",
+    variant: null,
+    heldout: false,
     extensions: { "x-owner": "ops" },
     tags: ["smoke"],
     targets: ["bro"],
@@ -148,6 +151,9 @@ test("results.json records each case's metadata and overrides", async () => {
     env: { CASE_A: "1" },
   });
   expect(results.caseMeta["g/two"]).toEqual({
+    base: "g/two",
+    variant: null,
+    heldout: false,
     extensions: {},
     tags: [],
     targets: [],

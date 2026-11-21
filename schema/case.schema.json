@@ -1,0 +1,798 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phillipchaffee.github.io/skill-evals/schema/case.schema.json",
+  "title": "skill-evals case",
+  "description": "The case.json of a skill-evals case: the checks that a run of its prompt must pass.",
+  "type": "object",
+  "required": ["checks"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this schema, for editors."
+    },
+    "weight": {
+      "title": "weight",
+      "description": "How much the case counts in its suite. Default: 1.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "minScore": {
+      "title": "minScore",
+      "description": "The lowest score the case may get and still pass.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "maxTurns": {
+      "title": "maxTurns",
+      "description": "The most turns the agent may take. Only Claude Code applies it.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "timeoutSeconds": {
+      "title": "timeoutSeconds",
+      "description": "The seconds a run may take. Default: 600.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "requires": {
+      "title": "requires",
+      "description": "A list of capabilities the case needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one reports the case as not applicable.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+      }
+    },
+    "harnesses": {
+      "title": "harnesses",
+      "description": "The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "enum": ["pi", "claude-code", "cursor", "opencode", "codex"] }
+    },
+    "note": {
+      "title": "note",
+      "description": "Why the case is limited to `harnesses`. The report shows it.",
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "title": "tags",
+      "description": "Labels for selecting cases with `--tag`, `--tag-all` and `--not-tag`. Each is lowercase letters, digits and hyphens.",
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+    },
+    "description": {
+      "title": "description",
+      "description": "What the case shows, in a sentence.",
+      "type": "string",
+      "minLength": 1
+    },
+    "targets": {
+      "title": "targets",
+      "description": "The names of the skills the case is about. The report counts the cases of each in its coverage table.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "kind": {
+      "title": "kind",
+      "description": "The kind of case, such as `trigger` or `negative`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "expected": {
+      "title": "expected",
+      "description": "What a good run does, in a sentence. It is for readers; no check reads it.",
+      "type": "string",
+      "minLength": 1
+    },
+    "guard": {
+      "title": "guard",
+      "description": "True for a case that must keep passing. The report lists it in its own table. Its score counts in the suite score like any other. Default: false.",
+      "type": "boolean"
+    },
+    "reps": {
+      "title": "reps",
+      "description": "Runs for each subject in this case, in place of `--reps`.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "model": {
+      "title": "model",
+      "description": "The model of the agent in this case, in place of `--model`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "judgeModel": {
+      "title": "judgeModel",
+      "description": "The model that scores the judged checks of this case, in place of `--judge-model`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "env": {
+      "title": "env",
+      "description": "Variables the agent's process gets, with the values given here. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`.",
+      "type": "object",
+      "patternProperties": {
+        "^(CASE_[^=]*|TZ|LANG|LC_ALL)$": {
+          "type": "string",
+          "pattern": "^[^\\u0000]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "minDelta": {
+      "title": "minDelta",
+      "description": "The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.",
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "checks": {
+      "title": "checks",
+      "description": "A non-empty list of checks.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/check-skill_loaded" },
+          { "$ref": "#/$defs/check-skill_not_loaded" },
+          { "$ref": "#/$defs/check-output_matches" },
+          { "$ref": "#/$defs/check-output_lacks" },
+          { "$ref": "#/$defs/check-output_contains" },
+          { "$ref": "#/$defs/check-output_not_contains" },
+          { "$ref": "#/$defs/check-file_exists" },
+          { "$ref": "#/$defs/check-file_matches" },
+          { "$ref": "#/$defs/check-tool_called" },
+          { "$ref": "#/$defs/check-tool_not_called" },
+          { "$ref": "#/$defs/check-subject_unchanged" },
+          { "$ref": "#/$defs/check-judge" },
+          { "$ref": "#/$defs/check-decision" }
+        ]
+      }
+    },
+    "variants": {
+      "title": "variants",
+      "description": "A non-empty list of variants: the same case put differently, such as a paraphrase or a pressure. Each runs as `<case id>@<variant id>`, and the case never runs bare. See the variant keys below.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/variant" }
+    }
+  },
+  "dependentRequired": { "harnesses": ["note"] },
+  "patternProperties": { "^x-": {} },
+  "additionalProperties": false,
+  "$defs": {
+    "variant": {
+      "title": "variant",
+      "description": "The same case put differently. It runs as `<case id>@<variant id>`.",
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "title": "id",
+          "description": "The variant's name: lowercase letters, digits and hyphens, unique within the case. The case runs as `<case id>@<id>`.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "prompt": {
+          "title": "prompt",
+          "description": "The whole prompt of the variant, in place of `prompt.md`. Give this or `promptAppend`, not both.",
+          "type": "string",
+          "minLength": 1
+        },
+        "promptAppend": {
+          "title": "promptAppend",
+          "description": "Text added to the case's `prompt.md` after a blank line. Needs a `prompt.md`. Give this or `prompt`, not both.",
+          "type": "string",
+          "minLength": 1
+        },
+        "heldout": {
+          "title": "heldout",
+          "description": "True for a variant that runs only with `--heldout`, so that tuning a skill does not see it. Default: false.",
+          "type": "boolean"
+        },
+        "tags": {
+          "title": "tags",
+          "description": "Tags added to the case's tags for this variant.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+        }
+      },
+      "oneOf": [{ "required": ["prompt"] }, { "required": ["promptAppend"] }],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-skill_loaded": {
+      "title": "skill_loaded",
+      "description": "The agent loaded that skill.",
+      "type": "object",
+      "required": ["type", "skill"],
+      "properties": {
+        "type": { "const": "skill_loaded" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "skill": {
+          "title": "skill",
+          "description": "The name of a skill.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-skill_not_loaded": {
+      "title": "skill_not_loaded",
+      "description": "The agent did not load that skill.",
+      "type": "object",
+      "required": ["type", "skill"],
+      "properties": {
+        "type": { "const": "skill_not_loaded" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "skill": {
+          "title": "skill",
+          "description": "The name of a skill.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-output_matches": {
+      "title": "output_matches",
+      "description": "The final answer matches the regular expression.",
+      "type": "object",
+      "required": ["type", "pattern"],
+      "properties": {
+        "type": { "const": "output_matches" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-output_lacks": {
+      "title": "output_lacks",
+      "description": "The final answer does not match the regular expression.",
+      "type": "object",
+      "required": ["type", "pattern"],
+      "properties": {
+        "type": { "const": "output_lacks" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-output_contains": {
+      "title": "output_contains",
+      "description": "The final answer contains that text.",
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "output_contains" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "text": {
+          "title": "text",
+          "description": "Text to look for. The match is exact and case-sensitive.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-output_not_contains": {
+      "title": "output_not_contains",
+      "description": "The final answer does not contain that text.",
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "output_not_contains" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "text": {
+          "title": "text",
+          "description": "Text to look for. The match is exact and case-sensitive.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_exists": {
+      "title": "file_exists",
+      "description": "That file exists in the workspace after the run.",
+      "type": "object",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "file_exists" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "path": {
+          "title": "path",
+          "description": "A file path inside the workspace.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-file_matches": {
+      "title": "file_matches",
+      "description": "That file exists and matches the regular expression.",
+      "type": "object",
+      "required": ["type", "path", "pattern"],
+      "properties": {
+        "type": { "const": "file_matches" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "path": {
+          "title": "path",
+          "description": "A file path inside the workspace.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![\\\\/])(?!(.*[\\\\/])?\\.\\.([\\\\/]|$)).+$"
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-tool_called": {
+      "title": "tool_called",
+      "description": "The agent made a tool call that fits every given field.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "tool_called" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "kind": {
+          "title": "kind",
+          "description": "What the tool does, with the same word in every harness.",
+          "type": "string",
+          "enum": [
+            "shell",
+            "read",
+            "write",
+            "edit",
+            "search",
+            "web",
+            "skill",
+            "subagent",
+            "other"
+          ]
+        },
+        "name": {
+          "title": "name",
+          "description": "A regular expression for the harness's own tool name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "inputMatches": {
+          "title": "inputMatches",
+          "description": "A regular expression for the tool call's input, written as JSON.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "anyOf": [{ "required": ["kind"] }, { "required": ["name"] }],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-tool_not_called": {
+      "title": "tool_not_called",
+      "description": "The agent made no tool call that fits every given field.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "tool_not_called" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "kind": {
+          "title": "kind",
+          "description": "What the tool does, with the same word in every harness.",
+          "type": "string",
+          "enum": [
+            "shell",
+            "read",
+            "write",
+            "edit",
+            "search",
+            "web",
+            "skill",
+            "subagent",
+            "other"
+          ]
+        },
+        "name": {
+          "title": "name",
+          "description": "A regular expression for the harness's own tool name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "inputMatches": {
+          "title": "inputMatches",
+          "description": "A regular expression for the tool call's input, written as JSON.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "anyOf": [{ "required": ["kind"] }, { "required": ["name"] }],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-subject_unchanged": {
+      "title": "subject_unchanged",
+      "description": "The agent changed nothing in the copy of the subject that the run loaded.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "subject_unchanged" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-judge": {
+      "title": "judge",
+      "description": "Not 0 or 1. A model scores the final answer against the rubric.",
+      "type": "object",
+      "required": ["type", "rubric"],
+      "properties": {
+        "type": { "const": "judge" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rubric": {
+          "title": "rubric",
+          "description": "Plain text that says what a good answer does.",
+          "type": "string",
+          "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-decision": {
+      "title": "decision",
+      "description": "Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value. It takes exactly one of `expect` and `options`.",
+      "type": "object",
+      "required": ["type", "question"],
+      "properties": {
+        "type": { "const": "decision" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "question": {
+          "title": "question",
+          "description": "A question about the final answer.",
+          "type": "string",
+          "minLength": 1
+        },
+        "expect": {
+          "title": "expect",
+          "description": "The answer that scores 1 for a yes or no question: \"yes\" or \"no\".",
+          "type": "string",
+          "enum": ["yes", "no"]
+        },
+        "options": {
+          "title": "options",
+          "description": "An object of at least two answers, each with a number from 0 to 1 that says what the answer is worth.",
+          "type": "object",
+          "minProperties": 2,
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    }
+  }
+}

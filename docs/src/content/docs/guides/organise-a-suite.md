@@ -93,7 +93,7 @@ The report ends with a table of the target skills, and `list --targets` prints t
 | commit-message | 12    | 9   | 0        | 3      |
 ```
 
-There is one row for each name in the `targets` of a selected case. `dev` counts the cases that are not guards, and `guards` the guard cases. `held-out` is 0 until held-out cases exist.
+There is one row for each name in the `targets` of a selected case. `dev` counts the cases that are not guards, and `guards` the guard cases. `held-out` counts the held-out variants that are not guards (see below), and `dev` counts the rest.
 
 ## Give a case its own settings
 
@@ -107,3 +107,49 @@ There is one row for each name in the `targets` of a selected case. `dev` counts
 A name outside that set is a load error, so a case cannot set the key of the decision model, which stays out of every harness's environment. A value may not hold a NUL character. A model set in a case does not change the judge's default: the judge still falls back to `--model`, unless the case also sets `judgeModel`. `results.json` records each case's overrides, tags and targets under `caseMeta`.
 
 `env` applies to the agent only. `minDelta`, a number from -1 to 1, is read and kept for the comparison bar that a later release adds. A negative value means that B may score lower than A by at most that much.
+
+## Variants
+
+A skill should answer to what a person means, not to one wording. A variant puts a case's prompt a different way, with the same fixture, checks and settings, so you do not copy the directory. Add a `variants` list to `case.json`:
+
+```json
+{
+  "tags": ["routing"],
+  "targets": ["commit-message"],
+  "checks": [{ "type": "skill_loaded", "skill": "commit-message" }],
+  "variants": [
+    {
+      "id": "paraphrase",
+      "prompt": "Could you draft a message for the commit I am about to make?"
+    },
+    {
+      "id": "hurry",
+      "promptAppend": "I am in a hurry, so do not ask me anything.",
+      "tags": ["pressure"]
+    }
+  ]
+}
+```
+
+Each variant runs as its own case, with the id `<case id>@<variant id>`, such as `routing/commit-help@hurry`. A case with variants never runs bare.
+
+- A variant has an `id`: lowercase letters, digits and hyphens, unique within the case.
+- A variant has exactly one of `prompt` and `promptAppend`. `prompt` is the whole prompt. `promptAppend` is added to the case's `prompt.md`, after a blank line, so the case needs a `prompt.md`. A case whose variants all have a `prompt` needs none.
+- A variant's `tags` are added to the case's tags for that variant, and `--tag`, `--tag-all` and `--not-tag` see the merged tags.
+- A `--case` or `--not-case` glob matches a variant by its full id or by the case's id, so `--case routing/commit-help` selects every variant and `--case "**@hurry"` selects one kind.
+- Keys of a variant other than `id`, `prompt`, `promptAppend`, `heldout` and `tags` are load errors, unless they start with `x-`.
+
+The same rule about words applies as for any prompt: keep `eval`, `test`, `judge`, `benchmark` and the others from [Write a case](write-a-case.md) out of a variant's prompt.
+
+`results.json` keys `caseMeta` by the full id, and each entry also has `base` (the case's id), `variant` (the variant's id, or null) and `heldout`.
+
+## Held-out variants
+
+When you tune a skill against a suite, the suite stops being a fair test of the skill. Mark a variant `"heldout": true` to keep it out of that loop. A held-out variant is left out of `run`, `score` and `list` until you pass `--heldout`, and then it runs in addition to the others:
+
+```sh
+skill-evals run                 # tuning: the dev variants only
+skill-evals run --heldout       # the check you do not tune against
+```
+
+A case whose variants are all held out is neither listed nor run without `--heldout`. If you select only such a case, the command fails with the usual "no case matches" error, and says that held-out variants need the flag. The coverage table counts held-out variants in its `held-out` column, and the other cases that are not guards in `dev`.

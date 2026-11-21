@@ -7,6 +7,7 @@ import { HARNESSES, overrideVar } from "../harnesses/index.js";
 import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
 import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
+import { VARIANT_KEYS } from "../variants.js";
 import type { Flag, FlagSpec } from "../usage.js";
 import { FLAGS, commandsTaking, defaultText, flagSyntax } from "../usage.js";
 import { apiReference } from "./api.js";
@@ -72,11 +73,24 @@ ${table(
 
 ## Case file keys
 
-The keys of a ${code("case.json")}. Any other key is a load error, except a key that starts with ${code("x-")}.
+The keys of a ${code("case.json")}. Any other key is a load error, except a key that starts with ${code("x-")} and ${code("$schema")}, a string that points an editor at [the schema](config.md#json-schemas).
 
 ${table(
   ["Key", "Type", "Holds"],
   Object.entries(CASE_KEYS).map(([key, { type, meaning }]) => [
+    code(key),
+    code(type),
+    meaning,
+  ]),
+)}
+
+## Variant keys
+
+The keys of an object in the ${code("variants")} list. A variant needs ${code("id")} and exactly one of ${code("prompt")} and ${code("promptAppend")}. Any other key is a load error, except a key that starts with ${code("x-")}. See [Organise a suite](../guides/organise-a-suite.md#variants).
+
+${table(
+  ["Key", "Type", "Holds"],
+  Object.entries(VARIANT_KEYS).map(([key, { type, meaning }]) => [
     code(key),
     code(type),
     meaning,
@@ -179,6 +193,17 @@ const CONFIG_ONLY: Record<string, string> = {
   subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,
 };
 
+/**
+ * Says what a config key does.
+ * @param key - A key of the config file.
+ * @returns The sentence the config page shows for it: its own text, or the description of the flag it is the default of.
+ */
+export const configMeaning = (key: string): string =>
+  CONFIG_ONLY[key] ??
+  flagsOf(key)
+    .map((flag) => FLAGS[flag].description)
+    .join(" ");
+
 const configPage = (): ReferencePage => ({
   file: "reference/config.md",
   markdown: `${header(
@@ -199,10 +224,7 @@ ${table(
     flagsOf(key)
       .map((flag) => code(flagSyntax(flag)))
       .join(", ") || "none",
-    CONFIG_ONLY[key] ??
-      flagsOf(key)
-        .map((flag) => FLAGS[flag].description)
-        .join(" "),
+    configMeaning(key),
   ]),
 )}
 
@@ -213,6 +235,21 @@ A file that sets every key:
 ${FENCE}json
 ${JSON.stringify(EXAMPLE_CONFIG, null, JSON_INDENT)}
 ${FENCE}
+
+## JSON Schemas
+
+The package ships a JSON Schema for the config file and one for ${code("case.json")}, so that an editor can check a file as you type and offer its keys. They are JSON Schema 2020-12, and they are written from the same tables as this page and [Checks](checks.md), so they cannot drift from what the tool accepts. Point an editor at one with a ${code("$schema")} key, which the tool allows, and ignores, in both files and which must be a string:
+
+${FENCE}json
+{
+  "$schema": "./node_modules/skill-evals/schema/config.schema.json",
+  "reps": 3
+}
+${FENCE}
+
+In a ${code("case.json")}, use ${code("schema/case.schema.json")} of the same package, with a path relative to the case file, such as ${code("../../../node_modules/skill-evals/schema/case.schema.json")}. The ${code("$id")} of each schema is under ${code("https://phillipchaffee.github.io/skill-evals/schema/")}.
+
+The schemas check what one value can show. They do not check that a decision check has exactly one of ${code("expect")} and ${code("options")}, that a regular expression compiles, that a variant id is unique within its case, that a variant's ${code("promptAppend")} has a ${code("prompt.md")} to append to, or that a case has a prompt source. ${code("skill-evals list")} checks these.
 `,
 });
 

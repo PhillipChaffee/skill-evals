@@ -21,6 +21,8 @@ export type FieldType =
   | "enum"
   | "texts"
   | "tags"
+  | "slug"
+  | "variants"
   | "envvars"
   | "needs"
   | "matcher"
@@ -150,8 +152,11 @@ function text(value: unknown, at: FieldAt & { name: string }): string {
   return value;
 }
 
-// A tag: lowercase letters, digits and hyphens, and it does not start with a hyphen.
-const TAG = /^[a-z0-9][a-z0-9-]*$/;
+/** A tag or a variant id: lowercase letters, digits and hyphens, and it does not start with a hyphen. */
+export const SLUG_PATTERN = "^[a-z0-9][a-z0-9-]*$";
+const TAG = new RegExp(SLUG_PATTERN);
+const SLUG_RULE =
+  "lowercase letters, digits and hyphens, starting with a letter or digit";
 
 const failure = (at: FieldAt, problem: string): UsageError =>
   new UsageError(`${at.where}: ${problem}`);
@@ -256,12 +261,21 @@ const PARSERS: Record<FieldType, FieldParser> = {
       !Array.isArray(value) ||
       !value.every((tag) => typeof tag === "string" && TAG.test(tag))
     ) {
-      throw failure(
-        at,
-        `"${at.name}" must be a list of tags, each made of lowercase letters, digits and hyphens, starting with a letter or digit`,
-      );
+      throw failure(at, `"${at.name}" must be a list of tags: ${SLUG_RULE}`);
     }
     return value as string[];
+  },
+  slug: (value, at) => {
+    if (typeof value !== "string" || !TAG.test(value)) {
+      throw failure(at, `"${at.name}" must be a slug: ${SLUG_RULE}`);
+    }
+    return value;
+  },
+  variants: (value, at) => {
+    if (Array.isArray(value) && value.length === 0) {
+      throw failure(at, `"${at.name}" must not be empty`);
+    }
+    return PARSERS.matchers(value, at);
   },
   envvars: (value, at) => {
     if (!isPlainObject(value)) {
@@ -329,35 +343,4 @@ export function readField(
   const def = Object.hasOwn(defs, name) ? defs[name] : undefined;
   if (!def) throw failure(at, `unknown key "${name}"`);
   return PARSERS[def.type](at.siblings[name], { ...at, name, def });
-}
-
-/**
- * Finds the keys of an object that a case author may not use.
- * @param allowed - The keys the object may have.
- * @param at - Where the object is; its `siblings` are the object.
- * @param mode - Whether to fail or to drop the key and warn.
- * @returns The keys that start with `x-` and their values, which belong to the author. In lenient mode an unknown key
- *   is dropped from the result, and `mode.warn` hears of it.
- * @throws {UsageError} In strict mode, for a key that is not allowed and does not start with `x-`.
- */
-export function extensionsOf(
-  allowed: string[],
-  at: FieldAt,
-  mode: Mode,
-): Record<string, unknown> {
-  const extensions: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(at.siblings)) {
-    if (allowed.includes(key)) continue;
-    if (key.startsWith("x-")) {
-      extensions[key] = value;
-    } else if (mode.lenient) {
-      mode.warn?.(`${at.where}: ignored unknown key "${key}"`);
-    } else {
-      throw failure(
-        at,
-        `unknown key "${key}" for ${at.owner}; allowed: ${allowed.join(", ")}`,
-      );
-    }
-  }
-  return extensions;
 }

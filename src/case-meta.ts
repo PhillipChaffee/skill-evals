@@ -2,6 +2,12 @@ import type { Case } from "./cases.js";
 
 /** What `results.json` keeps of a case file besides its checks. A key the file leaves out is null, or empty for a list. */
 export interface CaseMeta {
+  /** The case's path: the id of the case, which a variant shares. Equal to the key for a case without variants. */
+  base: string;
+  /** The variant's id, or null for a case without variants. */
+  variant: string | null;
+  /** True for a held-out variant. */
+  heldout: boolean;
   /** The keys that start with `x-`, which belong to the case's author. */
   extensions: Record<string, unknown>;
   tags: string[];
@@ -23,6 +29,9 @@ export interface CaseMeta {
  * @returns Its metadata.
  */
 export const metaOf = (caseDef: Case): CaseMeta => ({
+  base: caseDef.base,
+  variant: caseDef.variant,
+  heldout: caseDef.heldout,
   extensions: caseDef.extensions,
   tags: caseDef.tags,
   targets: caseDef.targets,

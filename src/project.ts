@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { requireEnvNames } from "./env.js";
 import { globToRegExp } from "./glob.js";
+import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
 
 /** The project a command works on. Relative paths on a command line resolve against cwd. */
@@ -121,6 +122,10 @@ function loadConfig(root: string): Config {
     throw new UsageError(`${file}: must hold one JSON object`);
   }
   for (const [key, value] of Object.entries(parsed)) {
+    if (key === SCHEMA_KEY) {
+      checkSchemaKey(file, { [key]: value as unknown });
+      continue;
+    }
     if (!Object.hasOwn(CONFIG_KEYS, key)) {
       throw new UsageError(
         `${file}: unknown key "${key}"; known: ${Object.keys(CONFIG_KEYS).join(", ")}`,
@@ -129,7 +134,9 @@ function loadConfig(root: string): Config {
     checkValue(file, key, value);
   }
   // Every key and value type was checked above.
-  const config = parsed as Config;
+  const config = Object.fromEntries(
+    Object.entries(parsed).filter(([key]) => key !== SCHEMA_KEY),
+  ) as Config;
   return config.cases === undefined
     ? config
     : { ...config, cases: path.resolve(root, config.cases) };

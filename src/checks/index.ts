@@ -4,13 +4,8 @@ import { isUnitScore } from "../score.js";
 import { UsageError } from "../scope.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
-import {
-  FIELDS,
-  REGEX_FIELDS,
-  WEIGHT,
-  extensionsOf,
-  readField,
-} from "./fields.js";
+import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
+import { extensionsOf } from "./extensions.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
 import { SKILL_CHECKS } from "./skills.js";

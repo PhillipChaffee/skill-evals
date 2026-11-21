@@ -82,6 +82,13 @@ export const FLAGS = {
     description: "Leave out the cases that have any of these tags.",
     default: "none",
   },
+  heldout: {
+    kind: "switch",
+    value: "",
+    description:
+      "Also run the held-out variants, the ones a case marks with heldout: true. Without it they are left out.",
+    default: "off",
+  },
   targets: {
     kind: "switch",
     value: "",

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phillipchaffee.github.io/skill-evals/schema/config.schema.json",
+  "title": "skill-evals config",
+  "description": "The skill-evals.config.json of a project: defaults for the options of the commands.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "The address of this schema, for editors."
+    },
+    "cases": {
+      "title": "cases",
+      "description": "The directory that holds the cases.",
+      "type": "string"
+    },
+    "harness": {
+      "title": "harness",
+      "description": "Comma-separated harness ids.",
+      "type": "string"
+    },
+    "reps": {
+      "title": "reps",
+      "description": "Runs for each subject and case.",
+      "type": "number"
+    },
+    "model": {
+      "title": "model",
+      "description": "Passed to the harness unchanged.",
+      "type": "string"
+    },
+    "judgeHarness": {
+      "title": "judgeHarness",
+      "description": "The harness that scores judged checks.",
+      "type": "string"
+    },
+    "judgeModel": {
+      "title": "judgeModel",
+      "description": "The model that scores judged checks.",
+      "type": "string"
+    },
+    "decisionModel": {
+      "title": "decisionModel",
+      "description": "The decision model that scores decision checks.",
+      "type": "string"
+    },
+    "decisionUrl": {
+      "title": "decisionUrl",
+      "description": "The base URL of the decision model's API.",
+      "type": "string"
+    },
+    "decisionTimeout": {
+      "title": "decisionTimeout",
+      "description": "How long one request to the decision model may take. A positive integer.",
+      "type": "number"
+    },
+    "minScore": {
+      "title": "minScore",
+      "description": "The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.",
+      "type": "number"
+    },
+    "lenient": {
+      "title": "lenient",
+      "description": "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",
+      "type": "boolean"
+    },
+    "isolated": {
+      "title": "isolated",
+      "description": "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
+      "type": "boolean"
+    },
+    "env": {
+      "title": "env",
+      "description": "Names of environment variables the harness gets besides the allowlist. An exact variable name: not empty, without `=`, not `_`, and not starting with `SKILL_EVALS_` or `npm_`. Anything else is an error.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!(?:SKILL_EVALS_|npm_|_$))[^=]+$"
+      }
+    },
+    "subjectExclude": {
+      "title": "subjectExclude",
+      "description": "Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides `.git`, `node_modules`, the cases directory and the output directory. `*` matches within one directory, `**` matches any depth, `?` one character, and `{a,b}` either. See [Subjects](../concepts/subjects.md).",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}

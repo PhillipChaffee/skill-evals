@@ -36,7 +36,7 @@ Loads the cases of a suite.
 | `options.lenient`   | Drop unknown keys instead of failing. Default: false.                                                                                                        |
 | `options.onWarning` | Called with a line of text for each key that `lenient` drops.                                                                                                |
 
-**Returns.** Every matching case, sorted by id.
+**Returns.** Every matching case, sorted by id: a case with variants comes as one case for each variant, held-out ones included (`heldout` is true on them), under the id `<case id>@<variant id>`. A glob matches a variant by that id or by the case's id.
 
 **Throws `UsageError`.** When the directory cannot be read, a case is invalid, or no case matches.
 
@@ -88,7 +88,10 @@ One prompt and what a good run of it does.
 
 | Property         | Type                      | Description                                                                                                     |
 | ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `id`             | `string`                  |                                                                                                                 |
+| `id`             | `string`                  | What `--case` selects and results are keyed by: the case's path, or `<path>@<variant>` for a variant.           |
+| `base`           | `string`                  | The case's path, which a variant shares with its case. Equal to `id` for a case without variants.               |
+| `variant`        | `string \| null`          | The variant's id, or null for a case without variants.                                                          |
+| `heldout`        | `boolean`                 | True for a variant that runs only with `--heldout`.                                                             |
 | `prompt`         | `string`                  |                                                                                                                 |
 | `checks`         | `Check[]`                 |                                                                                                                 |
 | `weight`         | `number`                  |                                                                                                                 |
@@ -125,18 +128,21 @@ What loading cases takes besides the directory.
 
 What `results.json` keeps of a case file besides its checks. A key the file leaves out is null, or empty for a list.
 
-| Property      | Type                      | Description                                                                    |
-| ------------- | ------------------------- | ------------------------------------------------------------------------------ |
-| `extensions`  | `Record<string, unknown>` | The keys that start with `x-`, which belong to the case's author.              |
-| `tags`        | `string[]`                |                                                                                |
-| `targets`     | `string[]`                |                                                                                |
-| `guard`       | `boolean`                 |                                                                                |
-| `kind`        | `string \| null`          |                                                                                |
-| `description` | `string \| null`          |                                                                                |
-| `reps`        | `number \| null`          | The case's own `reps`, `model` and `judgeModel`, which win over the command's. |
-| `model`       | `string \| null`          |                                                                                |
-| `judgeModel`  | `string \| null`          |                                                                                |
-| `env`         | `Record<string, string>`  | The variables the case sets for the agent.                                     |
+| Property      | Type                      | Description                                                                                                |
+| ------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `base`        | `string`                  | The case's path: the id of the case, which a variant shares. Equal to the key for a case without variants. |
+| `variant`     | `string \| null`          | The variant's id, or null for a case without variants.                                                     |
+| `heldout`     | `boolean`                 | True for a held-out variant.                                                                               |
+| `extensions`  | `Record<string, unknown>` | The keys that start with `x-`, which belong to the case's author.                                          |
+| `tags`        | `string[]`                |                                                                                                            |
+| `targets`     | `string[]`                |                                                                                                            |
+| `guard`       | `boolean`                 |                                                                                                            |
+| `kind`        | `string \| null`          |                                                                                                            |
+| `description` | `string \| null`          |                                                                                                            |
+| `reps`        | `number \| null`          | The case's own `reps`, `model` and `judgeModel`, which win over the command's.                             |
+| `model`       | `string \| null`          |                                                                                                            |
+| `judgeModel`  | `string \| null`          |                                                                                                            |
+| `env`         | `Record<string, string>`  | The variables the case sets for the agent.                                                                 |
 
 ### Check
 
@@ -202,6 +208,7 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `tag?`             | `string[] \| undefined`                      | Run a case that has any of these tags.                                                                         |
 | `tagAll?`          | `string[] \| undefined`                      | Run a case that has all of these tags.                                                                         |
 | `notTag?`          | `string[] \| undefined`                      | Leave out a case that has any of these tags.                                                                   |
+| `heldout?`         | `boolean \| undefined`                       | Also run the held-out variants.                                                                                |
 
 ### Results
 
@@ -405,3 +412,15 @@ The part of a subject that goes into `results.json` and the report.
 | `dir`    | `string \| null`                 | Null for "none". What the user named; for a git ref, the project. A run loads a copy of it, never this.                                                                                                                 |
 | `skills` | `string[]`                       | The names of the skills found in dir, sorted.                                                                                                                                                                           |
 | `commit` | `string \| null`                 | Set when spec is a git ref.                                                                                                                                                                                             |
+
+### Variant
+
+One way to put a case to the agent: a paraphrase, a pressure, a held-out check. It shares everything else with its case.
+
+| Property        | Type                    | Description                                                                                       |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `id`            | `string`                | Lowercase letters, digits and hyphens; unique within the case. The case runs as `<case id>@<id>`. |
+| `promptAppend?` | `string \| undefined`   | Text appended to the case's `prompt.md`, after a blank line.                                      |
+| `prompt?`       | `string \| undefined`   | The whole prompt, in place of `prompt.md`.                                                        |
+| `heldout?`      | `boolean \| undefined`  | True for a variant that runs only with `--heldout`.                                               |
+| `tags?`         | `string[] \| undefined` | Tags added to the case's tags for this variant.                                                   |

@@ -26,7 +26,10 @@ const ALLOWED = new Set([
 ]);
 const LOCALE = /^LC_/;
 // This tool's own variables, and the ones npm and the shell set that name the command that is running.
-const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_|_$)/;
+const TOOL_NAMES = "SKILL_EVALS_|npm_|_$";
+const NAMES_THIS_TOOL = new RegExp(`^(${TOOL_NAMES})`);
+/** `ENV_NAME_RULE` as a regular expression, for the JSON Schema of the config file. */
+export const ENV_NAME_PATTERN = `^(?!(?:${TOOL_NAMES}))[^=]+$`;
 
 /** The rule for a name in the `env` option, in words. The reference page quotes it. */
 export const ENV_NAME_RULE =
@@ -112,6 +115,8 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
 const CASE_ENV_RULE =
   "A name must start with `CASE_`, or be `TZ`, `LANG` or `LC_ALL`.";
 const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL"]);
+/** The rule for a name in the `env` key of a case, as a regular expression, for the JSON Schema of the case file. */
+export const CASE_ENV_PATTERN = `^(CASE_[^=]*|${[...CASE_ENV_NAMES].join("|")})$`;
 
 /**
  * Judges a name of the `env` key of a case.

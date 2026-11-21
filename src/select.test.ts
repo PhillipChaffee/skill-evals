@@ -181,7 +181,7 @@ test("splitList splits on commas outside braces and drops empty items", () => {
 
 test("selectCases combines every part, and no part selects everything", () => {
   const make = (id: string, tags: string[]): Case =>
-    ({ id, tags }) as unknown as Case;
+    ({ id, base: id, heldout: false, tags }) as unknown as Case;
   const cases = [make("a/x", ["p"]), make("a/y", ["p", "q"]), make("b", [])];
   expect(selectCases(cases, {}).map((c) => c.id)).toEqual(["a/x", "a/y", "b"]);
   expect(

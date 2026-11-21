@@ -49,3 +49,18 @@ A file that sets every key:
   "subjectExclude": ["evals/cases/**", "notes/**"]
 }
 ```
+
+## JSON Schemas
+
+The package ships a JSON Schema for the config file and one for `case.json`, so that an editor can check a file as you type and offer its keys. They are JSON Schema 2020-12, and they are written from the same tables as this page and [Checks](checks.md), so they cannot drift from what the tool accepts. Point an editor at one with a `$schema` key, which the tool allows, and ignores, in both files and which must be a string:
+
+```json
+{
+  "$schema": "./node_modules/skill-evals/schema/config.schema.json",
+  "reps": 3
+}
+```
+
+In a `case.json`, use `schema/case.schema.json` of the same package, with a path relative to the case file, such as `../../../node_modules/skill-evals/schema/case.schema.json`. The `$id` of each schema is under `https://phillipchaffee.github.io/skill-evals/schema/`.
+
+The schemas check what one value can show. They do not check that a decision check has exactly one of `expect` and `options`, that a regular expression compiles, that a variant id is unique within its case, that a variant's `promptAppend` has a `prompt.md` to append to, or that a case has a prompt source. `skill-evals list` checks these.

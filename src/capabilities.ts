@@ -56,6 +56,8 @@ export type Need = Capability | `bin:${string}`;
 
 // The shape of a host capability. The name stays out of the shell and out of a path.
 const BIN = /^bin:[A-Za-z0-9._+-]+$/;
+/** What a need looks like, as a regular expression, for the JSON Schema of the case file. */
+export const NEED_PATTERN = `^(${Object.keys(CAPABILITIES).join("|")}|${BIN.source.slice(1, -1)})$`;
 
 /**
  * Tells whether a word is a capability name.

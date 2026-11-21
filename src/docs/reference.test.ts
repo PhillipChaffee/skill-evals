@@ -10,6 +10,7 @@ import { CONFIG_KEYS } from "../project.js";
 import { sandbox } from "../testing/sandbox.js";
 import { FLAGS } from "../usage.js";
 import { EXAMPLE_CONFIG, referencePages } from "./reference.js";
+import { schemaFiles } from "./schema.js";
 
 const contentDir = path.resolve(
   import.meta.dirname,
@@ -26,6 +27,17 @@ test.each(referencePages())(
   async ({ file, markdown }) => {
     const formatted = await format(markdown, { parser: "markdown" });
     await expect(formatted).toMatchFileSnapshot(path.join(contentDir, file));
+  },
+);
+
+// The schemas ship in the package, so they are committed. "npm run docs:reference" writes them too.
+test.each(schemaFiles())(
+  "the committed $file is what the code says",
+  async ({ file, schema }) => {
+    const formatted = await format(JSON.stringify(schema), { parser: "json" });
+    await expect(formatted).toMatchFileSnapshot(
+      path.resolve(import.meta.dirname, "../..", file),
+    );
   },
 );
 

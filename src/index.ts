@@ -18,3 +18,4 @@ export type {
 export type { CheckResult, RunRecord } from "./run.js";
 export type { CaseScore, CommonSet, SuiteScore } from "./score.js";
 export type { SubjectSummary } from "./subject.js";
+export type { Variant } from "./variants.js";

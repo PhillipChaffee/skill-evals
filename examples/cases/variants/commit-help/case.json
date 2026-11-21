@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../../schema/case.schema.json",
+  "description": "A request for a commit message, put three ways. The commit-message skill should load in each.",
+  "tags": ["routing"],
+  "targets": ["commit-message"],
+  "kind": "trigger",
+  "checks": [{ "type": "skill_loaded", "skill": "commit-message" }],
+  "variants": [
+    {
+      "id": "paraphrase",
+      "prompt": "Could you draft a message for the commit I am about to make? The changes are staged."
+    },
+    {
+      "id": "hurry",
+      "promptAppend": "I am in a hurry, so do not ask me anything. Just write it.",
+      "tags": ["pressure"]
+    },
+    {
+      "id": "plain-words",
+      "prompt": "what should I say in the commit for my staged changes",
+      "heldout": true
+    }
+  ]
+}

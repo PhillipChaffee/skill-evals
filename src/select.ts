@@ -15,6 +15,8 @@ export interface Selection {
   tagsAll?: string[];
   /** A case is dropped when it has any of these tags. */
   notTags?: string[];
+  /** Also choose the held-out variants. Without it they are left out. */
+  heldout?: boolean;
 }
 
 /** The options that make a `Selection`, under the names the code uses for the flags. */
@@ -29,6 +31,8 @@ export interface SelectionOptions {
   tagAll?: string[] | undefined;
   /** Leave out a case that has any of these tags. */
   notTag?: string[] | undefined;
+  /** Also run the held-out variants. */
+  heldout?: boolean | undefined;
 }
 
 /**
@@ -62,45 +66,64 @@ export function splitList(values: string[]): string[] {
  * @returns The same request as a selection.
  */
 export function selectionOf(options: SelectionOptions): Selection {
-  const { caseGlob, notCase, tag, tagAll, notTag } = options;
+  const { caseGlob, notCase, tag, tagAll, notTag, heldout } = options;
   return {
     ...(caseGlob !== undefined && { ids: [caseGlob].flat() }),
     ...(notCase && { notIds: notCase }),
     ...(tag && { tagsAny: tag }),
     ...(tagAll && { tagsAll: tagAll }),
     ...(notTag && { notTags: notTag }),
+    ...(heldout && { heldout }),
   };
 }
 
+/** What the id parts of a selection say, as two tests. */
+interface IdTests {
+  /** Decides from a case's path, before the case is read, whether it may be chosen. */
+  mayLoad: (base: string) => boolean;
+  /** Decides whether a loaded case or variant is chosen: a glob matches its full id or its case's path. */
+  chooses: (one: Pick<Case, "id" | "base">) => boolean;
+}
+
 /**
- * Tells which ids a selection lets through, by id alone.
+ * Tells which ids a selection lets through.
  * @param by - The selection; its tag parts are not looked at.
- * @returns A test for a case id.
+ * @returns The two tests. A glob with an `@` can name a variant, which the case's path cannot tell, so such a glob
+ *   lets every case be read.
  * @throws {UsageError} When a glob has a `{` that is never closed.
  */
-function idTest(by: Selection): (id: string) => boolean {
-  const wanted = (by.ids ?? ["**"]).map(globToRegExp);
+function idTests(by: Selection): IdTests {
+  const wantedText = by.ids ?? ["**"];
+  const wanted = wantedText.map(globToRegExp);
   const unwanted = (by.notIds ?? []).map(globToRegExp);
-  return (id) =>
-    wanted.some((glob) => glob.test(id)) &&
-    !unwanted.some((glob) => glob.test(id));
+  const anyOf = (globs: RegExp[], ...ids: string[]) =>
+    globs.some((glob) => ids.some((id) => glob.test(id)));
+  const varied = wantedText.some((glob) => glob.includes("@"));
+  return {
+    mayLoad: (base) =>
+      (varied || anyOf(wanted, base)) && !anyOf(unwanted, base),
+    chooses: ({ id, base }) =>
+      anyOf(wanted, id, base) && !anyOf(unwanted, id, base),
+  };
 }
 
 /**
  * Chooses cases.
  * @param cases - The loaded cases.
  * @param by - The selection.
- * @returns The cases that match every part of the selection, in their order.
+ * @returns The cases that match every part of the selection, in their order. A held-out variant is left out unless
+ *   `by.heldout` is set. A tag filter looks at the tags of the variant, which include its case's.
  */
 export function selectCases(cases: Case[], by: Selection): Case[] {
-  const byId = idTest(by);
+  const { chooses } = idTests(by);
   const { tagsAny = [], tagsAll = [], notTags = [] } = by;
   return cases.filter(
-    ({ id, tags }) =>
-      byId(id) &&
-      (tagsAny.length === 0 || tagsAny.some((tag) => tags.includes(tag))) &&
-      tagsAll.every((tag) => tags.includes(tag)) &&
-      !notTags.some((tag) => tags.includes(tag)),
+    (one) =>
+      chooses(one) &&
+      (by.heldout === true || !one.heldout) &&
+      (tagsAny.length === 0 || tagsAny.some((tag) => one.tags.includes(tag))) &&
+      tagsAll.every((tag) => one.tags.includes(tag)) &&
+      !notTags.some((tag) => one.tags.includes(tag)),
   );
 }
 
@@ -147,11 +170,16 @@ export function loadSelection(
   by: Selection,
   options: LoadOptions,
 ): Case[] {
-  const chosen = selectCases(loadWhere(casesDir, idTest(by), options), by);
+  const loaded = loadWhere(casesDir, idTests(by).mayLoad, options);
+  const chosen = selectCases(loaded, by);
   if (chosen.length === 0) {
     const asked = describe(by);
+    const hidden =
+      selectCases(loaded, { ...by, heldout: true }).length > 0
+        ? "; held-out variants run only with --heldout"
+        : "";
     throw new UsageError(
-      `no case in ${casesDir}${asked && ` matches ${asked}`}`,
+      `no case in ${casesDir}${asked && ` matches ${asked}`}${hidden}`,
     );
   }
   return chosen;
@@ -164,7 +192,7 @@ export interface Coverage {
   cases: number;
   /** The ones that are not guards. */
   dev: number;
-  /** The held-out ones; none until held-out variants exist. */
+  /** The held-out variants that are not guards. */
   heldout: number;
   /** The guard cases. */
   guards: number;
@@ -173,18 +201,20 @@ export interface Coverage {
 /**
  * Counts the cases of each target skill.
  * @param cases - The chosen cases.
- * @returns One row for each name in the `targets` of any case, sorted by name.
+ * @returns One row for each name in the `targets` of any case, sorted by name. A guard counts as a guard, a held-out
+ *   variant that is no guard as held-out, and the rest as dev.
  */
 export function coverageOf(cases: Case[]): Coverage[] {
   const skills = [...new Set(cases.flatMap(({ targets }) => targets))].sort();
   return skills.map((skill) => {
     const named = cases.filter(({ targets }) => targets.includes(skill));
     const guards = named.filter(({ guard }) => guard).length;
+    const heldout = named.filter((one) => one.heldout && !one.guard).length;
     return {
       skill,
       cases: named.length,
-      dev: named.length - guards,
-      heldout: 0,
+      dev: named.length - guards - heldout,
+      heldout,
       guards,
     };
   });

@@ -52,6 +52,8 @@ test(
     const { project, files, run } = installed();
     expect(files).toContain("dist/bin.js");
     expect(files).toContain("dist/index.d.ts");
+    expect(files).toContain("schema/case.schema.json");
+    expect(files).toContain("schema/config.schema.json");
     const unshipped = /^src\/|\.test\.|testing|^dist\/docs\/|\.ts$(?<!\.d\.ts)/;
     expect(files.filter((file) => unshipped.test(file))).toEqual([]);
 

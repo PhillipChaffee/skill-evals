@@ -2,18 +2,29 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Need } from "./capabilities.js";
 import type { FieldDef, Mode } from "./checks/fields.js";
-import { WEIGHT, extensionsOf, readField } from "./checks/fields.js";
+import { extensionsOf } from "./checks/extensions.js";
+import { WEIGHT, readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { discover } from "./discover.js";
 import { globToRegExp } from "./glob.js";
 import { HARNESSES } from "./harnesses/index.js";
+import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
+import { readVariants } from "./variants.js";
+import type { Resolved } from "./variants.js";
 
 /** One prompt and what a good run of it does. */
 export interface Case {
+  /** What `--case` selects and results are keyed by: the case's path, or `<path>@<variant>` for a variant. */
   id: string;
+  /** The case's path, which a variant shares with its case. Equal to `id` for a case without variants. */
+  base: string;
+  /** The variant's id, or null for a case without variants. */
+  variant: string | null;
+  /** True for a variant that runs only with `--heldout`. */
+  heldout: boolean;
   prompt: string;
   checks: Check[];
   weight: number;
@@ -135,6 +146,11 @@ export const CASE_KEYS: Record<string, FieldDef> = {
     meaning:
       "The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.",
   },
+  variants: {
+    type: "variants",
+    meaning:
+      "A non-empty list of variants: the same case put differently, such as a paraphrase or a pressure. Each runs as `<case id>@<variant id>`, and the case never runs bare. See the variant keys below.",
+  },
 };
 
 const DEFAULT_TIMEOUT_SECONDS = 600;
@@ -189,42 +205,98 @@ const settingsOf = (read: Read) => ({
 });
 
 /**
- * Loads one case from its directory.
- * @param found - The case's id and its directory, which holds `prompt.md`, `case.json`, and an optional `workspace/`.
- * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
- * @returns The case, read and checked against the tables of keys and checks.
- * @throws {UsageError} When a file is missing or does not hold a valid case.
+ * Reads the files of a case directory.
+ * @param found - The case's id and its directory.
+ * @returns What `prompt.md` holds, or null when the case has no such file, and the parsed case file.
+ * @throws {UsageError} When a file cannot be read, is not JSON, or `prompt.md` is empty; when no prompt source exists.
  */
-function loadCase(found: Found, mode: Mode): Case {
+function readFiles(found: Found) {
   const { id, dir } = found;
-  const file = path.join(dir, "case.json");
-  let prompt;
-  let raw: Record<string, unknown> | null | undefined;
-  if (!fs.existsSync(path.join(dir, "prompt.md"))) {
-    throw new UsageError(`case ${id}: no prompt source; add a prompt.md`);
-  }
+  const promptFile = path.join(dir, "prompt.md");
   try {
-    prompt = fs.readFileSync(path.join(dir, "prompt.md"), "utf8").trim();
-    raw = JSON.parse(fs.readFileSync(file, "utf8")) as typeof raw;
+    const prompt = fs.existsSync(promptFile)
+      ? fs.readFileSync(promptFile, "utf8").trim()
+      : null;
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(dir, "case.json"), "utf8"),
+    ) as Record<string, unknown> | null | undefined;
+    return { prompt, raw };
   } catch (error) {
     throw new UsageError(`case ${id}: ${messageOf(error)}`);
   }
-  if (!prompt) throw new UsageError(`case ${id}: prompt.md is empty`);
+}
+
+/** What every variant of a case shares, and the case's own id. */
+type Shared = Omit<
+  Case,
+  "id" | "base" | "variant" | "heldout" | "prompt" | "extensions"
+>;
+
+/**
+ * Makes the cases of one case file.
+ * @param whole - The case's id, the keys that start with `x-`, and what all its variants share.
+ * @param whole.id - The case's path.
+ * @param whole.extensions - The keys of the case file that start with `x-`.
+ * @param whole.shared - Everything but the prompt, the id and what a variant decides.
+ * @param variants - The variants with their whole prompts, or undefined for a case that has none.
+ * @param prompt - What `prompt.md` holds; set when there are no variants.
+ * @returns One case, or one case for each variant.
+ */
+function expand(
+  whole: { id: string; extensions: Record<string, unknown>; shared: Shared },
+  variants: Resolved[] | undefined,
+  prompt: string | null,
+): Case[] {
+  const { id, extensions, shared } = whole;
+  if (variants === undefined) {
+    const bare = { id, base: id, variant: null, heldout: false };
+    return [{ ...shared, ...bare, prompt: prompt ?? "", extensions }];
+  }
+  return variants.map((variant) => ({
+    ...shared,
+    id: `${id}@${variant.id}`,
+    base: id,
+    variant: variant.id,
+    heldout: variant.heldout,
+    prompt: variant.prompt,
+    tags: [...new Set([...shared.tags, ...variant.tags])],
+    extensions: { ...extensions, ...variant.extensions },
+  }));
+}
+
+/**
+ * Loads one case from its directory.
+ * @param found - The case's id and its directory, which holds `prompt.md`, `case.json`, and an optional `workspace/`.
+ * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
+ * @returns The case, read and checked against the tables of keys and checks: one case, or one for each of its variants.
+ * @throws {UsageError} When a file is missing or does not hold a valid case.
+ */
+function loadCase(found: Found, mode: Mode): Case[] {
+  const { id, dir } = found;
+  const file = path.join(dir, "case.json");
+  const { prompt, raw } = readFiles(found);
+  if (prompt === "") throw new UsageError(`case ${id}: prompt.md is empty`);
+  if (prompt === null && !Array.isArray(raw?.["variants"])) {
+    throw new UsageError(`case ${id}: no prompt source; add a prompt.md`);
+  }
   const checks = raw?.["checks"];
   if (!Array.isArray(checks) || checks.length === 0) {
     throw new UsageError(`${file}: "checks" must be a non-empty array`);
   }
   const at = { where: file, owner: "a case", siblings: raw ?? {} };
-  const extensions = extensionsOf(Object.keys(CASE_KEYS), at, mode);
+  checkSchemaKey(file, at.siblings);
+  const extensions = extensionsOf(
+    [...Object.keys(CASE_KEYS), SCHEMA_KEY],
+    at,
+    mode,
+  );
   // A null weight counts as none, as it did before keys were typed.
   const read: Read = (key) =>
     raw?.[key] === undefined || (key === "weight" && raw[key] === null)
       ? undefined
       : readField(CASE_KEYS, key, at);
   const workspaceDir = path.join(dir, "workspace");
-  return {
-    id,
-    prompt,
+  const shared = {
     checks: checks.map((check: unknown, index) =>
       readCheck(check, `${file} checks[${String(index)}]`, mode),
     ),
@@ -237,8 +309,13 @@ function loadCase(found: Found, mode: Mode): Case {
       (read("timeoutSeconds") as number | undefined) ?? DEFAULT_TIMEOUT_SECONDS,
     ...settingsOf(read),
     workspaceDir: fs.existsSync(workspaceDir) ? workspaceDir : null,
-    extensions,
   };
+  const variants = read("variants") as Record<string, unknown>[] | undefined;
+  return expand(
+    { id, extensions, shared },
+    variants && readVariants(variants, prompt, { file, mode }),
+    prompt,
+  );
 }
 
 /** What loading cases takes besides the directory. */
@@ -272,7 +349,7 @@ export function loadWhere(
   };
   return discover(casesDir)
     .filter(({ id }) => keep(id))
-    .map((found) => loadCase(found, mode))
+    .flatMap((found) => loadCase(found, mode))
     .sort((x, y) => x.id.localeCompare(y.id));
 }
 
@@ -286,7 +363,9 @@ export function loadWhere(
  *   each one.
  * @param options.lenient - Drop unknown keys instead of failing. Default: false.
  * @param options.onWarning - Called with a line of text for each key that `lenient` drops.
- * @returns Every matching case, sorted by id.
+ * @returns Every matching case, sorted by id: a case with variants comes as one case for each variant, held-out ones
+ *   included (`heldout` is true on them), under the id `<case id>@<variant id>`. A glob matches a variant by that
+ *   id or by the case's id.
  * @throws {UsageError} When the directory cannot be read, a case is invalid, or no case matches.
  */
 export function loadCases(
@@ -295,7 +374,12 @@ export function loadCases(
   options: LoadOptions = {},
 ): Case[] {
   const matcher = globToRegExp(glob);
-  const cases = loadWhere(casesDir, (id) => matcher.test(id), options);
+  // A glob with an `@` can name a variant, which the case's own id cannot tell.
+  const cases = loadWhere(
+    casesDir,
+    (id) => glob.includes("@") || matcher.test(id),
+    options,
+  ).filter((one) => matcher.test(one.id) || matcher.test(one.base));
   if (cases.length === 0) {
     throw new UsageError(`no case in ${casesDir} matches "${glob}"`);
   }

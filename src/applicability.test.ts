@@ -19,6 +19,9 @@ const harness = (capabilities: Harness["capabilities"]): Harness => ({
 });
 const caseOf = (more: Partial<Case>): Case => ({
   id: "c",
+  base: "c",
+  variant: null,
+  heldout: false,
   prompt: "p",
   checks: [{ type: "output_contains", text: "a", weight: 1 }],
   weight: 1,

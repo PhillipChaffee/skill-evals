@@ -1,11 +1,11 @@
 import { expect, test } from "vitest";
 import { UsageError } from "../scope.js";
+import { extensionsOf } from "./extensions.js";
 import type { FieldDef, FieldType } from "./fields.js";
 import {
   FIELDS,
   REGEX_FIELDS,
   WEIGHT,
-  extensionsOf,
   readField,
   registerParser,
 } from "./fields.js";
