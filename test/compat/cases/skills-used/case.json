@@ -1,0 +1,11 @@
+{
+  "weight": 3,
+  "minScore": 0.5,
+  "checks": [
+    { "type": "skill_loaded", "skill": "bro" },
+    { "type": "skill_not_loaded", "skill": "bro" },
+    { "type": "skill_loaded", "skill": "magic-mode", "weight": 2 },
+    { "type": "skill_not_loaded", "skill": "magic-mode" },
+    { "type": "tool_called", "kind": "skill" }
+  ]
+}

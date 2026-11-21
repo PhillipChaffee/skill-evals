@@ -1,0 +1,26 @@
+{
+  "weight": 2,
+  "minScore": 0.9,
+  "checks": [
+    { "type": "file_exists", "path": "out/summary.txt" },
+    { "type": "file_exists", "path": "out/missing.txt", "weight": 2 },
+    {
+      "type": "file_matches",
+      "path": "out/summary.txt",
+      "pattern": "^summary by (kit|plain)$",
+      "flags": "m"
+    },
+    {
+      "type": "file_matches",
+      "path": "out/summary.txt",
+      "pattern": "^summary by kit$",
+      "flags": "m"
+    },
+    {
+      "type": "file_matches",
+      "path": "notes.txt",
+      "pattern": "^delta$",
+      "flags": "m"
+    }
+  ]
+}

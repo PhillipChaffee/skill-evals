@@ -1,0 +1,15 @@
+{
+  "weight": 1,
+  "checks": [
+    { "type": "output_contains", "text": "\"seed\":\"beta\"" },
+    { "type": "output_not_contains", "text": "\"seed\":\"beta\"" },
+    {
+      "type": "output_matches",
+      "pattern": "\"LEAKS\":0",
+      "flags": "i",
+      "weight": 3
+    },
+    { "type": "output_lacks", "pattern": "\"leaks\":0" },
+    { "type": "output_lacks", "pattern": "\"seed\":\"gamma\"" }
+  ]
+}

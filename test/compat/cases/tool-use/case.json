@@ -1,0 +1,16 @@
+{
+  "weight": 0.5,
+  "minScore": 0.2,
+  "checks": [
+    {
+      "type": "tool_called",
+      "name": "^Skill$",
+      "inputMatches": "\"skill\":\"BRO\"",
+      "flags": "i"
+    },
+    { "type": "tool_called", "name": "^Bash$" },
+    { "type": "tool_not_called", "kind": "shell" },
+    { "type": "tool_not_called", "name": "^Skill$", "weight": 2 },
+    { "type": "tool_not_called", "kind": "edit", "inputMatches": "notes" }
+  ]
+}

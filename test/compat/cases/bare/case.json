@@ -1,0 +1,8 @@
+{
+  "checks": [
+    { "type": "output_contains", "text": "\"seed\":\"missing\"" },
+    { "type": "file_exists", "path": "notes.txt" },
+    { "type": "skill_not_loaded", "skill": "never-installed" },
+    { "type": "output_matches", "pattern": "^\\{.*\\}$" }
+  ]
+}
