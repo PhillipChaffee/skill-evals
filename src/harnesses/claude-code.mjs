@@ -1,5 +1,5 @@
 import path from "node:path";
-import { jsonLines, opt, toolCall } from "./shared.mjs";
+import { jsonLines, opt, placeSkills, pluginDir, toolCall } from "./shared.mjs";
 
 const KINDS = {
 	Bash: "shell",
@@ -22,13 +22,14 @@ export default {
 	bin: "claude",
 	authFiles: [".claude/.credentials.json"],
 
-	invocation({ kitDir, home, prompt, model, maxTurns }) {
+	invocation({ subject, home, prompt, model, maxTurns }) {
+		const configDir = path.join(home, ".claude");
+		placeSkills(subject, path.join(configDir, "skills"));
 		return {
-			// Never --bare: it switches off the plugin hooks the kit ships.
+			// Never --bare: it switches off the hooks a plugin ships.
 			args: [
 				"-p",
-				prompt,
-				...opt("--plugin-dir", kitDir),
+				...opt("--plugin-dir", pluginDir(subject)),
 				"--output-format",
 				"stream-json",
 				"--verbose",
@@ -36,8 +37,10 @@ export default {
 				"bypassPermissions",
 				...opt("--model", model),
 				...opt("--max-turns", maxTurns),
+				"--",
+				prompt,
 			],
-			env: { CLAUDE_CONFIG_DIR: path.join(home, ".claude") },
+			env: { CLAUDE_CONFIG_DIR: configDir },
 		};
 	},
 
@@ -60,7 +63,11 @@ export default {
 					}
 				: null,
 			costUsd: result?.total_cost_usd ?? null,
-			kitPaths: init?.plugins ? init.plugins.map((plugin) => plugin.path) : null,
+			loaded: {
+				paths: init?.plugins ? init.plugins.map((plugin) => plugin.path) : null,
+				// A plugin's skill is listed as `plugin:skill`.
+				skills: init?.skills ? init.skills.map((name) => name.split(":").at(-1)) : null,
+			},
 			error: !result ? "no result event" : result.is_error ? result.result || result.subtype : null,
 		};
 	},

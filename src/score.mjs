@@ -2,11 +2,11 @@
  * Scores are numbers from 0 to 1, or null for "no score".
  * - check score: what one check gave one run
  * - run score: the weighted mean of the run's check scores; an invalid run has none
- * - case score: the mean of the run scores over the reps, for one harness and one version
- * - suite score: the weighted mean of the case scores, for one harness and one version
+ * - case score: the mean of the run scores over the reps, for one harness and one subject
+ * - suite score: the weighted mean of the case scores, for one harness and one subject
  * @typedef {{ id: string, weight: number, minScore?: number, scores: Record<string, number | null> }} CaseScore
  * @typedef {{ harness: string, cases: CaseScore[], suite: Record<string, number | null> }} SuiteScore
- *   scores and suite are keyed by variant label
+ *   scores and suite are keyed by subject label
  */
 
 // Absorbs float error in a mean, so three runs at 0.8 reach a bar of 0.8.
@@ -37,7 +37,7 @@ export function scoreSuites(harnessIds, cases, records, labels) {
 			id,
 			weight,
 			minScore,
-			scores: perLabel((label) => caseScore(records.filter((r) => r.harness === harness && r.caseId === id && r.variant === label))),
+			scores: perLabel((label) => caseScore(records.filter((r) => r.harness === harness && r.caseId === id && r.subject === label))),
 		}));
 		return {
 			harness,
@@ -48,7 +48,7 @@ export function scoreSuites(harnessIds, cases, records, labels) {
 }
 
 /**
- * The pass bars that the version under test did not reach. A missing score does not reach a bar.
+ * The pass bars that the subject under test did not reach. A missing score does not reach a bar.
  * @param {SuiteScore[]} suites
  * @returns {string[]}
  */

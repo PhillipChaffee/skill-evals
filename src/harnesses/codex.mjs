@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { jsonLines, opt, sumTokens, toolCall } from "./shared.mjs";
+import { jsonLines, opt, placeSkills, pluginDir, sumTokens, toolCall } from "./shared.mjs";
 
 // Thread items that are tool calls, mapped to the part of the item that is the call's input (never its output).
 const TOOL_ITEMS = {
@@ -12,11 +12,11 @@ const TOOL_ITEMS = {
 };
 const KINDS = { command_execution: "shell", file_change: "edit", web_search: "web", collab_tool_call: "subagent" };
 
-// Codex has no flag that loads a checkout for one run, so install it into the throwaway home first.
-function installKit(kitDir) {
-	const marketplace = JSON.parse(fs.readFileSync(path.join(kitDir, ".agents/plugins/marketplace.json"), "utf8"));
+// Codex has no flag that loads a plugin directory for one run, so install it into the throwaway home first.
+function installPlugin(dir) {
+	const marketplace = JSON.parse(fs.readFileSync(path.join(dir, ".agents/plugins/marketplace.json"), "utf8"));
 	return [
-		["plugin", "marketplace", "add", kitDir],
+		["plugin", "marketplace", "add", dir],
 		["plugin", "add", `${marketplace.plugins[0].name}@${marketplace.name}`],
 	];
 }
@@ -27,11 +27,13 @@ export default {
 	bin: "codex",
 	authFiles: [".codex/auth.json"],
 
-	invocation({ kitDir, home, workspace, prompt, model }) {
+	invocation({ subject, home, workspace, prompt, model }) {
 		const codexHome = path.join(home, ".codex");
 		fs.mkdirSync(codexHome, { recursive: true });
+		placeSkills(subject, path.join(home, ".agents", "skills"));
+		const plugin = pluginDir(subject);
 		return {
-			setup: kitDir ? installKit(kitDir) : [],
+			setup: plugin ? installPlugin(plugin) : [],
 			args: [
 				"exec",
 				"--json",
@@ -40,6 +42,7 @@ export default {
 				"-C",
 				workspace,
 				...opt("-m", model),
+				"--",
 				prompt,
 			],
 			env: { CODEX_HOME: codexHome },
@@ -56,7 +59,7 @@ export default {
 			toolCalls: items.filter((item) => item.type in TOOL_ITEMS).map((item) => toolCall(KINDS, item.type, TOOL_ITEMS[item.type](item))),
 			tokens: sumTokens(usages.map((u) => ({ input: u.input_tokens, output: u.output_tokens }))),
 			costUsd: null,
-			kitPaths: null,
+			loaded: { paths: null, skills: null },
 			error: failed ? failed.error?.message || "turn failed" : usages.length ? null : "no turn.completed event",
 		};
 	},

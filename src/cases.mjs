@@ -160,7 +160,7 @@ export function loadCases(casesDir, glob = "*") {
 	try {
 		entries = fs.readdirSync(casesDir, { withFileTypes: true });
 	} catch (error) {
-		throw new UsageError(`cases directory: ${error.message}`);
+		throw new UsageError(`cannot read the cases directory ${casesDir} (${error.code}); create it or pass --cases`);
 	}
 	const cases = entries
 		.filter((entry) => entry.isDirectory() && matcher.test(entry.name))

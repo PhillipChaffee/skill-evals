@@ -9,36 +9,38 @@ import { renderReport } from "./report.mjs";
 import { invalidReason, runOnce } from "./run.mjs";
 import { failedBars, isUnitScore, scoreSuites } from "./score.mjs";
 import { UsageError } from "./scope.mjs";
-import { resolveVariant } from "./variants.mjs";
+import { describeSubject, resolveSubject } from "./subject.mjs";
 
 const USAGE = `Usage: skill-evals <command> [options]
 
-  run    Run every case against kit A and kit B, score both, and print a comparison.
-           --a <ref|path>         baseline kit (default: main)
-           --b <ref|path>         changed kit (default: the project, uncommitted changes included)
-  score  Run every case against one kit and print its scores.
-           --kit <ref|path>       the kit (default: the project, uncommitted changes included)
+  run    Run every case against subject A and subject B, score both, and print a comparison.
+           --a <subject>          the baseline (default: main)
+           --b <subject>          the change (default: the project, uncommitted changes included)
+  score  Run every case against one subject and print its scores.
+           --subject <subject>    (default: the project, uncommitted changes included)
   run and score also take:
            --harness <ids|all>    comma-separated harness ids (default: the first installed one)
            --case <glob>          case ids to run (default: *)
            --cases <dir>          directory that holds the cases (default: evals/cases in the project)
-           --reps <n>             runs for each variant and case (default: 3)
+           --reps <n>             runs for each subject and case (default: 3)
            --model <id>           passed to the harness (default: the harness's own default)
-           --min-score <0..1>     exit 1 when the suite score of the kit (B for run) is lower
+           --min-score <0..1>     exit 1 when the suite score of the subject (B for run) is lower
            --judge-harness <id>   harness that scores judged checks (default: the harness under test)
            --judge-model <id>     model that scores judged checks (default: --model)
            --out <dir>            where results go (default: a new temp directory)
   check  Run one small prompt in each installed harness and show what its adapter reports.
-           --harness <ids|all>  (default: all)   --model <id>   --out <dir>
+           --subject <subject>  --harness <ids|all>  (default: all)   --model <id>   --out <dir>
   list   Show harnesses in default-preference order, and the cases.
            --cases <dir>
 
+A subject is what a run loads: a directory, a git ref of the project, or "none" for no skills at all.
+A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
 The project is the git repository that holds the working directory, or the working directory itself.`;
 
 const OPTIONS = {
 	a: { type: "string", default: "main" },
 	b: { type: "string" },
-	kit: { type: "string" },
+	subject: { type: "string" },
 	harness: { type: "string" },
 	case: { type: "string", default: "*" },
 	cases: { type: "string" },
@@ -51,7 +53,7 @@ const OPTIONS = {
 };
 const SUITE_OPTIONS = ["harness", "case", "cases", "reps", "model", "min-score", "judge-harness", "judge-model", "out"];
 
-// The prompt names one small kit skill, so the adapter's skill-load signal shows up in the result.
+// The prompt names one small skill, so the adapter's skill-load signal shows up in the result.
 const PROBE = {
 	id: "hello",
 	prompt: 'Use the bro skill on this sentence: "The cache is cold."',
@@ -67,8 +69,8 @@ function outputDir(requested) {
 }
 
 /**
- * Runs the suite on each named version of the kit and scores it. The last version is the one under test.
- * @param {["a" | "b" | "kit", string][]} specs  label and ref or path of each version
+ * Runs the suite on each subject and scores it. The last subject is the one under test.
+ * @param {["a" | "b" | "subject", string][]} specs  label and spec of each subject
  */
 async function evaluate(options, specs, project) {
 	const reps = Number(options.reps);
@@ -79,25 +81,25 @@ async function evaluate(options, specs, project) {
 	const judgeHarness = options["judge-harness"] && selectHarnesses(options["judge-harness"]).chosen[0];
 	const judgeModel = options["judge-model"] ?? options.model;
 	const cases = loadCases(options.cases, options.case);
-	const variants = [];
+	const subjects = [];
 	try {
-		for (const [label, spec] of specs) variants.push(resolveVariant(label, spec, project));
+		for (const [label, spec] of specs) subjects.push(resolveSubject(label, spec, project));
 		const outDir = outputDir(options.out);
 		const records = [];
 		for (const { harness, bin } of selection.chosen) {
 			const judge = { ...(judgeHarness ?? { harness, bin }), model: judgeModel };
 			for (const caseDef of cases) {
 				for (let rep = 1; rep <= reps; rep++) {
-					for (const variant of variants) {
-						const record = await runOnce({ harness, bin, variant, caseDef, rep, model: options.model, judge, outDir });
+					for (const subject of subjects) {
+						const record = await runOnce({ harness, bin, subject, caseDef, rep, model: options.model, judge, outDir });
 						records.push(record);
 						const outcome = invalidReason(record) ?? `score ${record.score.toFixed(2)}`;
-						console.error(`${harness.id} ${caseDef.id} ${variant.label}${rep}: ${outcome}`);
+						console.error(`${harness.id} ${caseDef.id} ${subject.label}${rep}: ${outcome}`);
 					}
 				}
 			}
 		}
-		const labels = variants.map((variant) => variant.label);
+		const labels = subjects.map((subject) => subject.label);
 		const suites = scoreSuites(
 			selection.chosen.map(({ harness }) => harness.id),
 			cases,
@@ -106,15 +108,15 @@ async function evaluate(options, specs, project) {
 		);
 		const belowBar = failedBars(suites, labels.at(-1), minScore);
 		const judgeNote = `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`;
-		const summary = variants.map(({ label, spec, dir, commit }) => ({ label, spec, dir, commit }));
+		const summary = subjects.map(({ label, spec, kind, dir, skills, commit }) => ({ label, spec, kind, dir, skills, commit }));
 		fs.writeFileSync(
 			path.join(outDir, "results.json"),
-			JSON.stringify({ variants: summary, model: options.model ?? null, judge: judgeNote, reps, suites, belowBar, records }, null, "\t"),
+			JSON.stringify({ subjects: summary, model: options.model ?? null, judge: judgeNote, reps, suites, belowBar, records }, null, "\t"),
 		);
-		console.log(renderReport({ variants, selection, cases, records, suites, belowBar, judgeNote, reps, model: options.model, outDir }));
+		console.log(renderReport({ subjects, selection, cases, records, suites, belowBar, judgeNote, reps, model: options.model, outDir }));
 		return records.some(invalidReason) || belowBar.length ? 1 : 0;
 	} finally {
-		for (const variant of variants) variant.dispose();
+		for (const subject of subjects) subject.dispose();
 	}
 }
 
@@ -125,43 +127,47 @@ const FILLABLE = {
 	tokens: (record) => record.tokens !== null,
 	costUsd: (record) => record.costUsd !== null,
 };
-const KIT_LOADED = { true: "yes", false: "NO", null: "this harness gives no evidence" };
+const SUBJECT_LOADED = { true: "yes", false: "NO", null: "no evidence from this harness" };
 
 async function check(options, project) {
 	const located = namedHarnesses(options.harness).map((harness) => ({ harness, bin: findBin(harness) }));
-	const variant = resolveVariant("b", project.root, project);
-	const outDir = located.some((entry) => entry.bin) ? outputDir(options.out) : "nothing ran";
-	const rows = [];
-	let failed = false;
-	for (const { harness, bin } of located) {
-		if (!bin) {
-			rows.push([harness.id, `no ("${harness.bin}" not found)`, "", "", "", ""]);
-			continue;
+	const subject = resolveSubject("subject", options.subject, project);
+	try {
+		const outDir = located.some((entry) => entry.bin) ? outputDir(options.out) : "nothing ran";
+		const rows = [];
+		let failed = false;
+		for (const { harness, bin } of located) {
+			if (!bin) {
+				rows.push([harness.id, `no ("${harness.bin}" not found)`, "", "", "", ""]);
+				continue;
+			}
+			const record = await runOnce({ harness, bin, subject, caseDef: PROBE, rep: 1, model: options.model, outDir });
+			failed ||= invalidReason(record) !== null;
+			rows.push([
+				harness.id,
+				"yes",
+				record.error ? `NO: ${record.error.replace(/\s+/g, " ").slice(0, 200)}` : "yes",
+				subject.kind === "none" ? "nothing to load" : SUBJECT_LOADED[record.subjectLoaded],
+				record.skillsLoaded.join(", ") || "none",
+				Object.keys(FILLABLE)
+					.filter((field) => FILLABLE[field](record))
+					.join(", ") || "none",
+			]);
 		}
-		const record = await runOnce({ harness, bin, variant, caseDef: PROBE, rep: 1, model: options.model, outDir });
-		failed ||= invalidReason(record) !== null;
-		rows.push([
-			harness.id,
-			"yes",
-			record.error ? `NO: ${record.error.replace(/\s+/g, " ").slice(0, 200)}` : "yes",
-			KIT_LOADED[record.kitLoaded],
-			record.skillsLoaded.join(", ") || "none",
-			Object.keys(FILLABLE)
-				.filter((field) => FILLABLE[field](record))
-				.join(", ") || "none",
-		]);
+		console.log(
+			[
+				`Subject: ${describeSubject(subject)}`,
+				`Output: ${outDir}`,
+				"",
+				"| Harness | Installed | Ran | Reported the subject as loaded | Skills the agent loaded | Record fields filled |",
+				"| --- | --- | --- | --- | --- | --- |",
+				...rows.map((row) => `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`),
+			].join("\n"),
+		);
+		return failed ? 1 : 0;
+	} finally {
+		subject.dispose();
 	}
-	console.log(
-		[
-			`Kit: ${variant.dir}`,
-			`Output: ${outDir}`,
-			"",
-			"| Harness | Installed | Ran | Kit loaded from this checkout | Skills loaded | Record fields filled |",
-			"| --- | --- | --- | --- | --- | --- |",
-			...rows.map((row) => `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`),
-		].join("\n"),
-	);
-	return failed ? 1 : 0;
 }
 
 function list(options) {
@@ -198,8 +204,11 @@ const COMMANDS = {
 			),
 		options: ["a", "b", ...SUITE_OPTIONS],
 	},
-	score: { handler: (options, project) => evaluate(options, [["kit", options.kit]], project), options: ["kit", ...SUITE_OPTIONS] },
-	check: { handler: check, options: ["harness", "model", "out"] },
+	score: {
+		handler: (options, project) => evaluate(options, [["subject", options.subject]], project),
+		options: ["subject", ...SUITE_OPTIONS],
+	},
+	check: { handler: check, options: ["subject", "harness", "model", "out"] },
 	list: { handler: list, options: ["cases"] },
 };
 
@@ -210,7 +219,7 @@ export async function main([name, ...args]) {
 		if (!command) throw new UsageError(`${name ? `unknown command "${name}"` : "missing command"}\n\n${USAGE}`);
 		const options = Object.fromEntries(command.options.map((key) => [key, OPTIONS[key]]));
 		const project = findProject(process.cwd());
-		const defaults = { b: project.root, kit: project.root, cases: path.join(project.root, "evals", "cases") };
+		const defaults = { b: project.root, subject: project.root, cases: path.join(project.root, "evals", "cases") };
 		return await command.handler({ ...defaults, ...parseArgs({ args, options }).values }, project);
 	} catch (error) {
 		if (!(error instanceof UsageError || error.code?.startsWith("ERR_PARSE_ARGS"))) throw error;

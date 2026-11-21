@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { HARNESSES, selectHarnesses } from "../src/harnesses/index.mjs";
@@ -25,7 +26,7 @@ const STREAMS = [
 		skills: ["bro"],
 		tokens: { input: 4 + 73969 + 16918, output: 378 },
 		costUsd: 0.00431269,
-		kitPaths: ["/work/kit-9fq1", "/tmp/home-4c1d/.claude/plugins/synced/design"],
+		loaded: { paths: ["/work/kit-9fq1", "/tmp/home-4c1d/.claude/plugins/synced/design"], skills: null },
 	},
 	{
 		id: "pi",
@@ -35,7 +36,6 @@ const STREAMS = [
 		skills: ["bro"],
 		tokens: { input: 2400, output: 68 },
 		costUsd: 0,
-		kitPaths: null,
 	},
 	{
 		id: "opencode",
@@ -45,7 +45,6 @@ const STREAMS = [
 		skills: ["bro"],
 		tokens: { input: 2400, output: 68 },
 		costUsd: 0,
-		kitPaths: null,
 	},
 	{
 		id: "codex",
@@ -61,7 +60,6 @@ const STREAMS = [
 		skills: ["bro"],
 		tokens: { input: 2400, output: 68 },
 		costUsd: null,
-		kitPaths: null,
 	},
 	{
 		id: "cursor",
@@ -82,7 +80,6 @@ const STREAMS = [
 		skills: [],
 		tokens: null,
 		costUsd: null,
-		kitPaths: null,
 	},
 ];
 
@@ -95,9 +92,15 @@ for (const expected of STREAMS) {
 		assert.deepEqual(skillsLoaded(parsed.toolCalls), expected.skills);
 		assert.deepEqual(parsed.tokens, expected.tokens);
 		assert.equal(parsed.costUsd, expected.costUsd);
-		assert.deepEqual(parsed.kitPaths, expected.kitPaths);
+		assert.deepEqual(parsed.loaded, expected.loaded ?? { paths: null, skills: null });
 	});
 }
+
+test("claude-code reports the skills it listed at startup, without a plugin prefix", () => {
+	const init = { type: "system", subtype: "init", plugins: [], skills: ["magic:bro", "greet"] };
+	const { loaded } = HARNESSES.find((harness) => harness.id === "claude-code").parse(JSON.stringify(init));
+	assert.deepEqual(loaded, { paths: [], skills: ["bro", "greet"] });
+});
 
 const FAILURES = [
 	{ id: "pi", fixture: "pi-error.stream.jsonl", error: /security token included in the request is invalid/ },
@@ -191,4 +194,64 @@ test("the default harness is the first installed one in preference order", () =>
 	assert.throws(() => chosen(undefined, only()), /no harness is installed/);
 	assert.throws(() => chosen("cursor", only("pi")), /not installed/);
 	assert.throws(() => chosen("emacs", only("pi")), /unknown harness/);
+});
+
+/** What each adapter's `invocation` does with a subject, in a throwaway home. */
+function invoke(t, id, subject, prompt = "say hello") {
+	const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "home-")));
+	t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+	const harness = HARNESSES.find((candidate) => candidate.id === id);
+	return { home, ...harness.invocation({ subject, home, workspace: home, prompt }) };
+}
+
+function skillsSubject(t) {
+	const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "skills-")));
+	t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+	fs.mkdirSync(path.join(dir, "greet"));
+	fs.writeFileSync(path.join(dir, "greet/SKILL.md"), "Say hello.\n");
+	return { kind: "skills", dir, skills: ["greet"], skillDirs: { greet: path.join(dir, "greet") } };
+}
+
+// Where each harness discovers a skill of its user, relative to the home directory.
+const SKILL_HOMES = {
+	"claude-code": ".claude/skills",
+	cursor: ".cursor/skills",
+	codex: ".agents/skills",
+	opencode: ".agents/skills",
+	pi: ".pi/agent/skills",
+};
+
+test("each adapter places a skills subject where its harness discovers skills", (t) => {
+	const subject = skillsSubject(t);
+	assert.deepEqual(Object.keys(SKILL_HOMES).sort(), HARNESSES.map((harness) => harness.id).sort());
+	for (const [id, skillHome] of Object.entries(SKILL_HOMES)) {
+		const { home, args } = invoke(t, id, subject);
+		const copy = path.join(home, skillHome, "greet");
+		assert.equal(fs.readFileSync(path.join(copy, "SKILL.md"), "utf8"), "Say hello.\n", id);
+		assert.equal(fs.lstatSync(copy).isSymbolicLink(), false, id);
+		assert.ok(!args.includes(subject.dir), `${id} must not point the harness at the folder itself`);
+	}
+	// Pi runs with skill discovery off, so it has to be told about each copy.
+	const pi = invoke(t, "pi", subject);
+	assert.equal(pi.args[pi.args.indexOf("--skill") + 1], path.join(pi.home, ".pi/agent/skills/greet"));
+});
+
+test("an adapter places no skills for a plugin subject or for no subject", (t) => {
+	const plugin = { ...skillsSubject(t), kind: "plugin" };
+	// Codex installs a plugin from its marketplace file, which this bare directory lacks.
+	for (const id of Object.keys(SKILL_HOMES).filter((id) => id !== "codex")) {
+		for (const subject of [plugin, null]) {
+			const { home } = invoke(t, id, subject);
+			assert.equal(fs.existsSync(path.join(home, SKILL_HOMES[id])), false, id);
+		}
+	}
+});
+
+test("each adapter keeps a prompt that starts with a dash as the prompt", (t) => {
+	const prompt = "--help me";
+	for (const { id } of HARNESSES) {
+		const { args, stdin } = invoke(t, id, null, prompt);
+		if (stdin === undefined) assert.deepEqual(args.slice(-2), ["--", prompt], id);
+		else assert.deepEqual([stdin, args.includes(prompt)], [prompt, false], id);
+	}
 });

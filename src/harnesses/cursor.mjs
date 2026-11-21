@@ -1,5 +1,5 @@
 import path from "node:path";
-import { jsonLines, opt, toolCall } from "./shared.mjs";
+import { jsonLines, opt, placeSkills, pluginDir, toolCall } from "./shared.mjs";
 
 const KINDS = {
 	shell: "shell",
@@ -32,18 +32,20 @@ export default {
 	bin: "cursor-agent",
 	authFiles: [".cursor/auth.json", ".config/cursor/auth.json"],
 
-	invocation({ kitDir, home, workspace, prompt, model }) {
+	invocation({ subject, home, workspace, prompt, model }) {
+		placeSkills(subject, path.join(home, ".cursor", "skills"));
 		return {
 			args: [
 				"-p",
 				"--output-format",
 				"stream-json",
-				...opt("--plugin-dir", kitDir),
+				...opt("--plugin-dir", pluginDir(subject)),
 				"--force",
 				"--trust",
 				"--workspace",
 				workspace,
 				...opt("--model", model),
+				"--",
 				prompt,
 			],
 			env: { CURSOR_CONFIG_DIR: path.join(home, ".cursor") },
@@ -60,7 +62,7 @@ export default {
 			toolCalls: events.filter((e) => e.type === "tool_call" && e.subtype === "started").map((e) => nativeCall(e.tool_call)),
 			tokens: null,
 			costUsd: null,
-			kitPaths: null,
+			loaded: { paths: null, skills: null },
 			error: !result ? "no result event" : result.is_error ? result.result || result.subtype : null,
 		};
 	},

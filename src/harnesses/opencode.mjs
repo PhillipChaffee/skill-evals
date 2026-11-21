@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { jsonLines, opt, sumTokens, toolCall } from "./shared.mjs";
+import { jsonLines, opt, placeSkills, pluginDir, sumTokens, toolCall } from "./shared.mjs";
 
 const KINDS = {
 	bash: "shell",
@@ -23,13 +23,14 @@ export default {
 	bin: "opencode",
 	authFiles: [".local/share/opencode/auth.json"],
 
-	invocation({ kitDir, home, workspace, prompt, model }) {
+	invocation({ subject, home, workspace, prompt, model }) {
 		const configDir = path.join(home, ".config", "opencode");
 		fs.mkdirSync(configDir, { recursive: true });
 		// V1 reads "plugin" and ignores "plugins" (seen on 1.19.6); V2 is documented to read "plugins".
-		const kits = kitDir ? [kitDir] : [];
-		fs.writeFileSync(path.join(configDir, "opencode.json"), JSON.stringify({ plugin: kits, plugins: kits }));
-		return { args: ["run", "--format", "json", "--auto", "--dir", workspace, ...opt("-m", model), prompt], env: {} };
+		const plugins = [pluginDir(subject)].filter(Boolean);
+		fs.writeFileSync(path.join(configDir, "opencode.json"), JSON.stringify({ plugin: plugins, plugins }));
+		placeSkills(subject, path.join(home, ".agents", "skills"));
+		return { args: ["run", "--format", "json", "--auto", "--dir", workspace, ...opt("-m", model), "--", prompt], env: {} };
 	},
 
 	parse(stdout) {
@@ -47,7 +48,7 @@ export default {
 				steps.map(({ tokens }) => ({ input: tokens.input + tokens.cache.read + tokens.cache.write, output: tokens.output })),
 			),
 			costUsd: steps.length ? steps.reduce((total, step) => total + (step.cost ?? 0), 0) : null,
-			kitPaths: null,
+			loaded: { paths: null, skills: null },
 			error: failure ? failure.data?.message || failure.name || "error" : steps.length ? null : "no step_finish event",
 		};
 	},

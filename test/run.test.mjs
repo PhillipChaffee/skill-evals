@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { failedBars, scoreSuites, weightedMean } from "../src/score.mjs";
-import { UsageError } from "../src/scope.mjs";
-import { resolveVariant } from "../src/variants.mjs";
-import { fakeHarness, gitRepo, sandbox } from "./helpers.mjs";
+import { fakeHarness, sandbox } from "./helpers.mjs";
 
-function kit(box, name, behavior) {
+function plugin(box, name, behavior) {
+	box.write(`${name}/.claude-plugin/plugin.json`, { name });
 	box.write(`${name}/behavior.json`, { name, ...behavior });
+	return path.join(box.root, name);
+}
+
+function skillsFolder(box, name, skills) {
+	for (const [skill, text] of Object.entries(skills)) box.write(`${name}/${skill}/SKILL.md`, text);
 	return path.join(box.root, name);
 }
 
@@ -20,7 +23,7 @@ const CHECKS = [
 	{ type: "output_lacks", pattern: '"leaks":0' },
 	{ type: "file_exists", path: "out/summary.txt" },
 	{ type: "file_exists", path: "out/missing.txt" },
-	{ type: "file_matches", path: "out/summary.txt", pattern: "^summary by kit-beta$", flags: "m" },
+	{ type: "file_matches", path: "out/summary.txt", pattern: "^summary by plugin-beta$", flags: "m" },
 ];
 
 function plantCase(box, checks = CHECKS) {
@@ -30,27 +33,27 @@ function plantCase(box, checks = CHECKS) {
 	return path.join(box.root, "cases");
 }
 
-test("run reports the difference between two kit directories and leaves no temp state behind", (t) => {
+test("run reports the difference between two plugin directories and leaves no temp state behind", (t) => {
 	const box = sandbox(t);
-	const kitA = kit(box, "kit-alpha", { costUsd: 0.01 });
-	const kitB = kit(box, "kit-beta", { costUsd: 0.03, skill: "bro" });
+	const pluginA = plugin(box, "plugin-alpha", { costUsd: 0.01 });
+	const pluginB = plugin(box, "plugin-beta", { costUsd: 0.03, skill: "bro" });
 	const outDir = path.join(box.root, "results");
 
-	const result = box.cli(["run", "--a", kitA, "--b", kitB, "--cases", plantCase(box), "--reps", "2", "--out", outDir]);
+	const result = box.cli(["run", "--a", pluginA, "--b", pluginB, "--cases", plantCase(box), "--reps", "2", "--out", outDir]);
 	assert.equal(result.status, 0, result.stderr);
 
 	const { records } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
 	assert.deepEqual(
-		records.map((record) => `${record.harness} ${record.caseId} ${record.variant}${record.rep}`),
+		records.map((record) => `${record.harness} ${record.caseId} ${record.subject}${record.rep}`),
 		["a1", "b1", "a2", "b2"].map((run) => `claude-code restate ${run}`),
 	);
-	const scores = (label) => records.find((record) => record.variant === label).checks.map((check) => check.score);
+	const scores = (label) => records.find((record) => record.subject === label).checks.map((check) => check.score);
 	assert.deepEqual(scores("a"), [0, 1, 1, 0, 1, 0, 0]);
 	assert.deepEqual(scores("b"), [1, 0, 1, 0, 1, 0, 1]);
 	for (const record of records) {
 		assert.equal(record.ok, true);
-		assert.equal(record.kitLoaded, true);
-		assert.deepEqual(record.skillsLoaded, record.variant === "b" ? ["bro"] : []);
+		assert.equal(record.subjectLoaded, true);
+		assert.deepEqual(record.skillsLoaded, record.subject === "b" ? ["bro"] : []);
 		assert.deepEqual(record.tokens, { input: 1000, output: 50 });
 		const seen = JSON.parse(record.finalText);
 		assert.equal(seen.prompt, "say it in plain words");
@@ -62,7 +65,7 @@ test("run reports the difference between two kit directories and leaves no temp 
 
 	const row = result.stdout.split("\n").find((line) => line.startsWith("| restate |"));
 	assert.match(row, /`skill_loaded bro` A 0\/2, B 2\/2/);
-	assert.match(row, /`file_matches out\/summary\.txt \/\^summary by kit-beta\$\/m` A 0\/2, B 2\/2/);
+	assert.match(row, /`file_matches out\/summary\.txt \/\^summary by plugin-beta\$\/m` A 0\/2, B 2\/2/);
 	assert.match(row, /\$0\.0100 \/ \$0\.0300 \(\+\$0\.0200\)/);
 	assert.match(row, /1000 \/ 1000 \(\+0\)/);
 	assert.match(result.stdout, /^- Harness: claude-code \(default/m);
@@ -72,18 +75,18 @@ test("run reports the difference between two kit directories and leaves no temp 
 	assert.match(fs.readFileSync(path.join(runDir, "a1.stream.jsonl"), "utf8"), /"type":"result"/);
 });
 
-test("run does not count a run whose harness loaded some other kit, and exits non-zero", (t) => {
+test("run does not count a run whose harness loaded some other plugin, and exits non-zero", (t) => {
 	const box = sandbox(t);
-	const kitA = kit(box, "kit-alpha", { costUsd: 0.01 });
-	const ghost = kit(box, "kit-ghost", { costUsd: 0.01, skill: "bro", ghost: true });
+	const pluginA = plugin(box, "plugin-alpha", { costUsd: 0.01 });
+	const ghost = plugin(box, "plugin-ghost", { costUsd: 0.01, skill: "bro", ghost: true });
 	const outDir = path.join(box.root, "results");
 
-	const result = box.cli(["run", "--a", kitA, "--b", ghost, "--cases", plantCase(box), "--reps", "1", "--out", outDir]);
+	const result = box.cli(["run", "--a", pluginA, "--b", ghost, "--cases", plantCase(box), "--reps", "1", "--out", outDir]);
 	assert.equal(result.status, 1, result.stderr);
 
 	const { records } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
 	assert.deepEqual(
-		records.map((record) => record.kitLoaded),
+		records.map((record) => record.subjectLoaded),
 		[true, false],
 	);
 	const row = result.stdout.split("\n").find((line) => line.startsWith("| restate |"));
@@ -93,9 +96,9 @@ test("run does not count a run whose harness loaded some other kit, and exits no
 
 test("run rejects a bad case file or command line before it starts any harness", (t) => {
 	const box = sandbox(t);
-	const kitA = kit(box, "kit-alpha", { costUsd: 0.01 });
+	const pluginA = plugin(box, "plugin-alpha", { costUsd: 0.01 });
 	const outDir = path.join(box.root, "results");
-	const run = (...extra) => box.cli(["run", "--a", kitA, "--b", kitA, "--out", outDir, ...extra]);
+	const run = (...extra) => box.cli(["run", "--a", pluginA, "--b", pluginA, "--out", outDir, ...extra]);
 	const cases = plantCase(box, [{ type: "smells_right", skill: "bro" }]);
 
 	const unknownCheck = run("--cases", cases);
@@ -140,14 +143,14 @@ test("run rejects a bad case file or command line before it starts any harness",
 const WEIGHTED = [
 	{ type: "skill_loaded", skill: "bro", weight: 3 },
 	{ type: "output_contains", text: '"seed":"planted"' },
-	{ type: "tool_called", kind: "skill", inputMatches: "kit:bro" },
+	{ type: "tool_called", kind: "skill", inputMatches: "plugin:bro" },
 	{ type: "tool_not_called", name: "^Bash$" },
 ];
 
 test("scores are weighted means, and a suite or case score under its bar fails the command", (t) => {
 	const box = sandbox(t);
-	const plain = kit(box, "kit-alpha", { costUsd: 0.01 });
-	const skilled = kit(box, "kit-beta", { costUsd: 0.01, skill: "bro" });
+	const plain = plugin(box, "plugin-alpha", { costUsd: 0.01 });
+	const skilled = plugin(box, "plugin-beta", { costUsd: 0.01, skill: "bro" });
 	const cases = plantCase(box, WEIGHTED);
 	box.write("cases/steady/prompt.md", "anything\n");
 	box.write("cases/steady/case.json", { checks: [{ type: "output_not_contains", text: "no such text" }], weight: 2 });
@@ -159,7 +162,7 @@ test("scores are weighted means, and a suite or case score under its bar fails t
 	assert.equal(better.status, 0, better.stderr);
 	// restate: A passes 2 of weights 3+1+1+1, B passes all. Suite: restate weight 1, steady weight 2.
 	assert.deepEqual(
-		results().records.map((record) => `${record.caseId} ${record.variant} ${record.score.toFixed(3)}`),
+		results().records.map((record) => `${record.caseId} ${record.subject} ${record.score.toFixed(3)}`),
 		["restate a 0.333", "restate b 1.000", "steady a 1.000", "steady b 1.000"],
 	);
 	assert.deepEqual(results().suites, [
@@ -186,11 +189,11 @@ test("scores are weighted means, and a suite or case score under its bar fails t
 	const underCaseBar = run(skilled, plain);
 	assert.equal(underCaseBar.status, 1);
 	assert.match(underCaseBar.stdout, /^- claude-code: case `restate` score 0\.33 does not reach its minScore 0\.50$/m);
-	assert.equal(run(plain, skilled).status, 0, "the bars apply to B, the version under test");
+	assert.equal(run(plain, skilled).status, 0, "the bars apply to B, the subject under test");
 });
 
 test("a case score is the mean over the reps of the valid runs, and a suite with an unscored case has no score", () => {
-	const run = (caseId, variant, score) => ({ harness: "h", caseId, variant, score });
+	const run = (caseId, subject, score) => ({ harness: "h", caseId, subject, score });
 	const cases = [
 		{ id: "one", weight: 1 },
 		{ id: "two", weight: 3, minScore: 0.8 },
@@ -223,49 +226,49 @@ test("a case score is the mean over the reps of the valid runs, and a suite with
 	assert.deepEqual(failedBars([suite], "b", undefined).length, 1);
 });
 
-test("score runs the suite on one version and applies the pass bar to it", (t) => {
+test("score runs the suite on one subject and applies the pass bar to it", (t) => {
 	const box = sandbox(t);
-	const plain = kit(box, "kit-alpha", { costUsd: 0.01 });
-	const skilled = kit(box, "kit-beta", { costUsd: 0.03, skill: "bro" });
+	const plain = plugin(box, "plugin-alpha", { costUsd: 0.01 });
+	const skilled = plugin(box, "plugin-beta", { costUsd: 0.03, skill: "bro" });
 	const cases = plantCase(box, WEIGHTED);
 	const outDir = path.join(box.root, "results");
-	const score = (kitDir, ...extra) => box.cli(["score", "--kit", kitDir, "--cases", cases, "--reps", "2", "--out", outDir, ...extra]);
+	const score = (dir, ...extra) => box.cli(["score", "--subject", dir, "--cases", cases, "--reps", "2", "--out", outDir, ...extra]);
 
 	const good = score(skilled, "--min-score", "1");
 	assert.equal(good.status, 0, good.stderr);
-	const { records, variants } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
+	const { records, subjects } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
 	assert.deepEqual(
-		records.map((record) => `${record.variant}${record.rep} ${record.score}`),
-		["kit1 1", "kit2 1"],
+		records.map((record) => `${record.subject}${record.rep} ${record.score}`),
+		["subject1 1", "subject2 1"],
 	);
 	assert.deepEqual(
-		variants.map((variant) => variant.dir),
-		[skilled],
+		subjects.map((subject) => `${subject.kind} ${subject.dir}`),
+		[`plugin ${skilled}`],
 	);
-	assert.match(good.stdout, /^# Kit scores$/m);
+	assert.match(good.stdout, /^# Skill scores$/m);
 	assert.match(good.stdout, /^\| restate \| 1\.00 \| `skill_loaded bro \(weight 3\)` 2\/2<br>.*\| \$0\.0300 \|$/m);
 	assert.match(good.stdout, /^Suite score: 1\.00$/m);
-	assert.equal(fs.existsSync(path.join(outDir, "claude-code/restate/kit2.final.md")), true);
+	assert.equal(fs.existsSync(path.join(outDir, "claude-code/restate/subject2.final.md")), true);
 
 	const bad = score(plain, "--min-score", "0.5");
 	assert.equal(bad.status, 1);
 	assert.match(bad.stdout, /suite score 0\.33 does not reach --min-score 0\.50/);
-	assert.equal(box.cli(["score", "--a", plain, "--cases", cases]).status, 2, "score takes one version");
+	assert.equal(box.cli(["score", "--a", plain, "--cases", cases]).status, 2, "score takes one subject");
 });
 
 const RUBRIC = "Says the word fixed and nothing about weather.";
 
 function judgedRun(t, replies, ...extra) {
 	const box = sandbox(t);
-	const kitA = kit(box, "kit-alpha", { costUsd: 0.01, answer: "It is fixed now." });
-	const kitB = kit(box, "kit-beta", { costUsd: 0.01, answer: "It is fixed now." });
+	const pluginA = plugin(box, "plugin-alpha", { costUsd: 0.01, answer: "It is fixed now." });
+	const pluginB = plugin(box, "plugin-beta", { costUsd: 0.01, answer: "It is fixed now." });
 	const cases = plantCase(box, [
 		{ type: "judge", rubric: RUBRIC, weight: 3 },
 		{ type: "output_contains", text: "broken" },
 	]);
 	box.write("judge/replies.json", replies);
 	const outDir = path.join(box.root, "results");
-	const result = box.cli(["run", "--a", kitA, "--b", kitB, "--cases", cases, "--out", outDir, ...extra], {
+	const result = box.cli(["run", "--a", pluginA, "--b", pluginB, "--cases", cases, "--out", outDir, ...extra], {
 		FAKE_JUDGE_DIR: path.join(box.root, "judge"),
 		SKILL_EVALS_BIN_CODEX: fakeHarness,
 	});
@@ -320,8 +323,9 @@ test("a judged check takes its score from a model that sees the task, the answer
 	assert.equal(new Set(asked.map((call) => call.prompt)).size, 1, "A and B get the same prompt, byte for byte");
 	const [{ prompt, model }] = asked;
 	for (const part of ["say it in plain words", "It is fixed now.", RUBRIC]) assert.ok(prompt.includes(part), part);
-	for (const secret of [box.root, "kit-alpha", "kit-beta", "claude-code", "run-model"]) assert.ok(!prompt.includes(secret), secret);
+	for (const secret of [box.root, "plugin-alpha", "plugin-beta", "claude-code", "run-model"]) assert.ok(!prompt.includes(secret), secret);
 	assert.equal(model, "run-model", "the judge model defaults to --model");
+	assert.equal(asked[0].pluginDir, null, "the judge runs with nothing loaded");
 
 	const row = result.stdout.split("\n").find((line) => line.startsWith("| restate |"));
 	assert.match(
@@ -350,8 +354,9 @@ test("the judge runs on the harness and the model that the judge flags name", (t
 	assert.match(otherHarness.result.stdout, /^- Judge: codex, model judge-model$/m);
 });
 
-test("check shows, for each harness, that it is missing or what its adapter delivered from this checkout", (t) => {
+test("check shows, for each harness, that it is missing or what its adapter delivered for the subject", (t) => {
 	const box = sandbox(t);
+	box.write("skills/greet/SKILL.md", "Say hello.\n");
 	const cells = (stdout, id) =>
 		stdout
 			.split("\n")
@@ -371,35 +376,67 @@ test("check shows, for each harness, that it is missing or what its adapter deli
 	assert.match(cells(broken.stdout, "codex")[3], /^NO: /);
 });
 
-test("a git ref resolves to a detached worktree of that commit, and dispose removes it every time", (t) => {
-	const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-")));
-	t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
-	const git = gitRepo(repo);
-	for (const version of ["one", "two"]) {
-		fs.writeFileSync(path.join(repo, "version.txt"), version);
-		git("add", ".");
-		git("commit", "-q", "-m", version);
-	}
-	fs.writeFileSync(path.join(repo, "version.txt"), "uncommitted");
-	const project = { root: repo, isGitRepo: true };
-	const worktrees = () => git("worktree", "list", "--porcelain").match(/^worktree /gm).length;
+test("a prompt that starts with a dash reaches the agent as the prompt", (t) => {
+	const box = sandbox(t);
+	box.write("cases/dashed/prompt.md", "--help me\n");
+	box.write("cases/dashed/case.json", { checks: [{ type: "output_contains", text: '"prompt":"--help me"' }] });
+	const outDir = path.join(box.root, "results");
 
-	const old = resolveVariant("a", "trunk~1", project);
-	assert.equal(fs.readFileSync(path.join(old.dir, "version.txt"), "utf8"), "one");
-	assert.equal(old.commit, git("rev-parse", "trunk~1"));
-	assert.match(path.basename(old.dir), /^kit-/);
-	assert.equal(worktrees(), 2);
-	old.dispose();
-	old.dispose();
-	assert.equal(fs.existsSync(old.dir), false);
-	assert.equal(worktrees(), 1);
+	const result = box.cli(["score", "--subject", "none", "--cases", path.join(box.root, "cases"), "--reps", "1", "--out", outDir]);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /^Suite score: 1\.00$/m);
+});
 
-	const live = resolveVariant("b", repo, project);
-	assert.equal(fs.readFileSync(path.join(live.dir, "version.txt"), "utf8"), "uncommitted");
-	assert.equal(live.commit, null);
-	live.dispose();
-	assert.equal(fs.existsSync(repo), true, "a directory variant is never removed");
+const GREET_CASE = [{ type: "skill_loaded", skill: "greet" }];
 
-	assert.throws(() => resolveVariant("a", "no-such-ref", project), UsageError);
-	assert.equal(worktrees(), 1);
+function greetRun(t, args, env) {
+	const box = sandbox(t);
+	const mine = skillsFolder(box, "mine", { greet: "the copy under test\n" });
+	// The sandbox root is the real home of the command, so this is a globally installed skill.
+	box.write(".claude/skills/greet/SKILL.md", "the global copy\n");
+	box.write("cases/hello/prompt.md", "use greet to say hello\n");
+	box.write("cases/hello/case.json", { checks: GREET_CASE });
+	const outDir = path.join(box.root, "results");
+	const result = box.cli([...args(mine), "--cases", path.join(box.root, "cases"), "--reps", "1", "--out", outDir], env);
+	const { records, subjects } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
+	return { box, result, records, subjects };
+}
+
+test("a globally installed skill of the same name does not load", (t) => {
+	const { box, result, records } = greetRun(t, (mine) => ["score", "--subject", mine]);
+	assert.equal(result.status, 0, result.stderr);
+	const seen = JSON.parse(records[0].finalText);
+	assert.deepEqual(seen.skills, { greet: "the copy under test\n" });
+	assert.ok(!seen.home.startsWith(box.root));
+	assert.equal(records[0].subjectLoaded, true);
+});
+
+test("run --a none --b <skills dir> reports the no-skills baseline as A", (t) => {
+	const { result, records, subjects } = greetRun(t, (mine) => ["run", "--a", "none", "--b", mine]);
+	assert.equal(result.status, 0, result.stderr);
+	assert.deepEqual(
+		subjects.map(({ label, kind, skills }) => ({ label, kind, skills })),
+		[
+			{ label: "a", kind: "none", skills: [] },
+			{ label: "b", kind: "skills", skills: ["greet"] },
+		],
+	);
+	assert.deepEqual(
+		records.map((record) => [record.subject, record.skillsLoaded, JSON.parse(record.finalText).skills, record.score]),
+		[
+			["a", [], {}, 0],
+			["b", ["greet"], { greet: "the copy under test\n" }, 1],
+		],
+	);
+	assert.match(result.stdout, /^- A: no skills$/m);
+	assert.match(result.stdout, /`skill_loaded greet` A 0\/1, B 1\/1/);
+	assert.match(result.stdout, /^Suite score: 0\.00 \/ 1\.00 \(\+1\.00\)$/m);
+});
+
+test("a run whose harness lists none of the subject's skills is invalid", (t) => {
+	const { result, records } = greetRun(t, (mine) => ["score", "--subject", mine], { FAKE_HIDE_SKILLS: "1" });
+	assert.equal(result.status, 1);
+	assert.equal(records[0].subjectLoaded, false);
+	assert.equal(records[0].score, null);
+	assert.match(result.stdout, /^- SUBJECT `hello` rep 1: the harness did not load the subject/m);
 });

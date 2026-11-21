@@ -12,11 +12,13 @@ import { onDispose, tempDir } from "./scope.mjs";
  * @typedef {{ durationMs: number, tokens: import("./harnesses/shared.mjs").Tokens | null, costUsd: number | null }} Usage
  * @typedef {import("./cases.mjs").Check & { score: number | null, reason?: string }} CheckResult
  *   score is null when a judged check got no usable answer; reason is the judge's, or why there is no score
- * @typedef {{ harness: string, variant: string, caseId: string, rep: number, ok: boolean, error: string | null,
+ * @typedef {{ harness: string, subject: string, caseId: string, rep: number, ok: boolean, error: string | null,
  *   finalText: string, toolCalls: import("./harnesses/shared.mjs").ToolCall[], skillsLoaded: string[],
- *   kitLoaded: boolean | null, checks: CheckResult[], score: number | null,
+ *   subjectLoaded: boolean | null, checks: CheckResult[], score: number | null,
  *   judge: (Usage & { calls: number }) | null } & Usage} RunRecord
- *   kitLoaded: whether the harness reported the variant's directory as a loaded kit; null when it reports nothing
+ *   subject: the subject's label
+ *   subjectLoaded: whether the harness reported the subject as loaded at startup; null when it reports nothing,
+ *     or when there is nothing to load
  *   score: the run score, null when the run is invalid
  *   judge: what the judged checks cost, kept apart from the run's own numbers; null when no judge ran
  * @typedef {{ harness: import("./harnesses/shared.mjs").Harness, bin: string, model?: string }} Judge
@@ -28,7 +30,7 @@ const SKILL_FILE = /skills[\\/]+([\w-]+)[\\/]+skill\.md/gi;
 
 /**
  * The one rule for "the agent loaded a skill", shared by every harness: a call of the harness's skill tool that names
- * it (any `kit:` prefix dropped), or any tool call whose input points at `skills/<name>/SKILL.md`.
+ * it (any `plugin:` prefix dropped), or any tool call whose input points at `skills/<name>/SKILL.md`.
  * @param {import("./harnesses/shared.mjs").ToolCall[]} toolCalls
  */
 export function skillsLoaded(toolCalls) {
@@ -46,7 +48,7 @@ export function skillsLoaded(toolCalls) {
 /** Why a record must not be counted, or null when it is a valid run. */
 export function invalidReason(record) {
 	if (record.error) return `run failed: ${record.error}`;
-	if (record.kitLoaded === false) return "the harness did not load the kit from this variant's directory";
+	if (record.subjectLoaded === false) return "the harness did not load the subject: it is not among the plugins and skills it reported";
 	const unscored = record.checks.find((check) => check.score === null);
 	if (unscored) return `a judged check has no score: ${unscored.reason}`;
 	return null;
@@ -62,6 +64,16 @@ function samePath(x, y) {
 	};
 	return real(x) === real(y);
 }
+
+/**
+ * Subject kind -> whether the harness reported the subject as loaded, or null when it does not report that.
+ * A plugin is found by its directory and a skills folder by the name of every skill in it.
+ */
+const REPORTED_LOADED = {
+	plugin: (subject, loaded) => loaded.paths && loaded.paths.some((loadedPath) => samePath(loadedPath, subject.dir)),
+	skills: (subject, loaded) => loaded.skills && subject.skills.every((name) => loaded.skills.includes(name)),
+	none: () => null,
+};
 
 /** The child sees a throwaway home and nothing that names this tool. */
 function childEnv(home, extra) {
@@ -89,10 +101,13 @@ function copyAuthFiles(authFiles, home) {
 }
 
 /** @returns {Promise<{ stdout: string, failure: string | null }>} */
-function exec(bin, args, { cwd, env, timeoutSeconds }) {
+function exec(bin, args, { cwd, env, timeoutSeconds, stdin }) {
 	return new Promise((resolve) => {
 		// Its own process group, so a timeout or an interrupt also stops whatever the harness started.
-		const child = spawn(bin, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+		const child = spawn(bin, args, { cwd, env, stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"], detached: true });
+		// A harness that exits without reading its input must not take this process down with EPIPE.
+		child.stdin?.on("error", () => {});
+		child.stdin?.end(stdin);
 		const kill = () => {
 			try {
 				process.kill(-child.pid, "SIGKILL");
@@ -139,25 +154,26 @@ async function attempt(harness, bin, input, timeoutSeconds) {
 		if (failure) return { stdout: "", failure: `setup "${step.slice(0, 2).join(" ")}": ${failure}`, durationMs: 0 };
 	}
 	const started = Date.now();
-	const result = await exec(bin, invocation.args, options);
+	const result = await exec(bin, invocation.args, { ...options, stdin: invocation.stdin });
 	return { ...result, durationMs: Date.now() - started };
 }
 
 /**
  * One prompt in one harness, in a fresh home and workspace. `use` sees the result while the workspace still exists.
  * @template T
- * @param {{ harness: import("./harnesses/shared.mjs").Harness, bin: string, kitDir: string | null, prompt: string,
- *   model?: string, maxTurns?: number, timeoutSeconds: number, workspaceDir?: string | null }} run
+ * @param {{ harness: import("./harnesses/shared.mjs").Harness, bin: string,
+ *   subject: import("./harnesses/shared.mjs").LoadedSubject | null, prompt: string, model?: string, maxTurns?: number,
+ *   timeoutSeconds: number, workspaceDir?: string | null }} run
  * @param {(result: { stdout: string, parsed: import("./harnesses/shared.mjs").Parsed, error: string | null,
  *   durationMs: number, workspace: string }) => T} use
  */
-async function session({ harness, bin, kitDir, prompt, model, maxTurns, timeoutSeconds, workspaceDir }, use) {
+async function session({ harness, bin, subject, prompt, model, maxTurns, timeoutSeconds, workspaceDir }, use) {
 	const home = tempDir("home-");
 	const workspace = tempDir("proj-");
 	try {
 		if (workspaceDir) fs.cpSync(workspaceDir, workspace.dir, { recursive: true });
 		copyAuthFiles(harness.authFiles, home.dir);
-		const input = { kitDir, home: home.dir, workspace: workspace.dir, prompt, model, maxTurns };
+		const input = { subject, home: home.dir, workspace: workspace.dir, prompt, model, maxTurns };
 		const { stdout, failure, durationMs } = await attempt(harness, bin, input, timeoutSeconds);
 		const parsed = harness.parse(stdout);
 		// The harness's own message is the most specific one, but only when it produced a stream at all.
@@ -181,26 +197,28 @@ function totalUsage(replies) {
 }
 
 /**
- * One prompt, one harness, one variant: run, normalize, score every check, clean up.
- * The judge runs with no kit, and its prompt carries nothing about the variant.
- * @param {{ harness: import("./harnesses/shared.mjs").Harness, bin: string, variant: import("./variants.mjs").Variant,
+ * One prompt, one harness, one subject: run, normalize, score every check, clean up.
+ * The judge runs with nothing loaded, and its prompt carries nothing about the subject.
+ * @param {{ harness: import("./harnesses/shared.mjs").Harness, bin: string, subject: import("./subject.mjs").Subject,
  *   caseDef: import("./cases.mjs").Case, rep: number, model?: string, judge?: Judge, outDir: string }} run
  * @returns {Promise<RunRecord>}
  */
-export async function runOnce({ harness, bin, variant, caseDef, rep, model, judge: judgeWith, outDir }) {
+export async function runOnce({ harness, bin, subject, caseDef, rep, model, judge: judgeWith, outDir }) {
 	const { prompt, maxTurns, timeoutSeconds, workspaceDir } = caseDef;
-	return session({ harness, bin, kitDir: variant.dir, prompt, model, maxTurns, timeoutSeconds, workspaceDir }, async (ran) => {
+	// To a harness, no skills and the judge's "nothing loaded" are the same thing.
+	const toLoad = subject.kind === "none" ? null : subject;
+	return session({ harness, bin, subject: toLoad, prompt, model, maxTurns, timeoutSeconds, workspaceDir }, async (ran) => {
 		const { stdout, parsed, error, durationMs } = ran;
 		const outcome = { ...parsed, skillsLoaded: skillsLoaded(parsed.toolCalls), workspace: ran.workspace };
 
-		const stem = path.join(outDir, harness.id, caseDef.id, `${variant.label}${rep}`);
+		const stem = path.join(outDir, harness.id, caseDef.id, `${subject.label}${rep}`);
 		fs.mkdirSync(path.dirname(stem), { recursive: true });
 		fs.writeFileSync(`${stem}.stream.jsonl`, stdout);
 		fs.writeFileSync(`${stem}.final.md`, parsed.finalText);
 
 		const record = {
 			harness: harness.id,
-			variant: variant.label,
+			subject: subject.label,
 			caseId: caseDef.id,
 			rep,
 			ok: !error,
@@ -208,7 +226,7 @@ export async function runOnce({ harness, bin, variant, caseDef, rep, model, judg
 			finalText: parsed.finalText,
 			toolCalls: parsed.toolCalls,
 			skillsLoaded: outcome.skillsLoaded,
-			kitLoaded: parsed.kitPaths && parsed.kitPaths.some((kitPath) => samePath(kitPath, variant.dir)),
+			subjectLoaded: REPORTED_LOADED[subject.kind](subject, parsed.loaded),
 			durationMs,
 			tokens: parsed.tokens,
 			costUsd: parsed.costUsd,
@@ -217,7 +235,7 @@ export async function runOnce({ harness, bin, variant, caseDef, rep, model, judg
 		const judgeable = invalidReason(record) === null;
 		const ask = (judgePrompt) =>
 			session(
-				{ ...judgeWith, kitDir: null, prompt: judgePrompt, ...JUDGE_LIMITS },
+				{ ...judgeWith, subject: null, prompt: judgePrompt, ...JUDGE_LIMITS },
 				({ parsed: reply, error: failure, durationMs: took }) => ({
 					finalText: reply.finalText,
 					error: failure,

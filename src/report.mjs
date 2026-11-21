@@ -1,7 +1,7 @@
 import { describeCheck, isJudged } from "./cases.mjs";
 import { invalidReason } from "./run.mjs";
 import { formatScore } from "./score.mjs";
-import { describeVariant } from "./variants.mjs";
+import { describeSubject } from "./subject.mjs";
 
 const METRICS = [
 	{ title: "Duration", value: (record) => record.durationMs / 1000, format: (v) => `${v.toFixed(1)} s` },
@@ -17,7 +17,7 @@ function median(values) {
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-/** One value for each variant, and the change from the first to the second when there are two. */
+/** One value for each subject, and the change from the first to the second when there are two. */
 function versus(values, format) {
 	if (values.every((value) => value === null)) return "n/a";
 	const shown = values.map((value) => (value === null ? "n/a" : format(value))).join(" / ");
@@ -54,7 +54,7 @@ function harnessSection(suite, cases, records, labels) {
 	const heading = (title) => (labels.length > 1 ? `${title}, A / B (B - A)` : title);
 	const rows = cases.map((caseDef, caseIndex) => {
 		const valid = labels.map((label) =>
-			mine.filter((record) => record.caseId === caseDef.id && record.variant === label && !invalidReason(record)),
+			mine.filter((record) => record.caseId === caseDef.id && record.subject === label && !invalidReason(record)),
 		);
 		const checks = caseDef.checks.map(
 			(check, index) =>
@@ -75,7 +75,7 @@ function harnessSection(suite, cases, records, labels) {
 	});
 	const invalid = mine.filter(invalidReason).map((record) => {
 		const reason = invalidReason(record).replace(/\s+/g, " ").slice(0, 300);
-		return `- ${record.variant.toUpperCase()} \`${record.caseId}\` rep ${record.rep}: ${reason}`;
+		return `- ${record.subject.toUpperCase()} \`${record.caseId}\` rep ${record.rep}: ${reason}`;
 	});
 	return [
 		`## ${suite.harness}`,
@@ -93,23 +93,23 @@ function harnessSection(suite, cases, records, labels) {
 }
 
 /**
- * @param {{ variants: import("./variants.mjs").Variant[],
+ * @param {{ subjects: import("./subject.mjs").Subject[],
  *   selection: ReturnType<typeof import("./harnesses/index.mjs").selectHarnesses>,
  *   cases: import("./cases.mjs").Case[], records: import("./run.mjs").RunRecord[],
  *   suites: import("./score.mjs").SuiteScore[], belowBar: string[], judgeNote: string,
  *   reps: number, model?: string, outDir: string }} run
  */
-export function renderReport({ variants, selection, cases, records, suites, belowBar, judgeNote, reps, model, outDir }) {
-	const labels = variants.map((variant) => variant.label);
+export function renderReport({ subjects, selection, cases, records, suites, belowBar, judgeNote, reps, model, outDir }) {
+	const labels = subjects.map((subject) => subject.label);
 	const judged = cases.some((caseDef) => caseDef.checks.some(isJudged));
 	return [
-		variants.length > 1 ? "# Kit comparison" : "# Kit scores",
+		subjects.length > 1 ? "# Skill comparison" : "# Skill scores",
 		"",
-		...variants.map((variant) => `- ${variant.label.toUpperCase()}: ${describeVariant(variant)}`),
+		...subjects.map((subject) => `- ${subject.label.toUpperCase()}: ${describeSubject(subject)}`),
 		`- Harness: ${selection.chosen.map(({ harness }) => harness.id).join(", ")} (${selection.reason})`,
 		`- Model: ${model ?? "the harness default"}`,
 		...(judged ? [`- Judge: ${judgeNote}`] : []),
-		`- Reps: ${reps} for each ${variants.length > 1 ? "variant and case" : "case"}`,
+		`- Reps: ${reps} for each ${subjects.length > 1 ? "subject and case" : "case"}`,
 		`- Output: ${outDir}`,
 		"",
 		suites.map((suite) => harnessSection(suite, cases, records, labels)).join("\n\n"),
