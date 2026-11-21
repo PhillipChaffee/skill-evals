@@ -1,5 +1,6 @@
 import path from "node:path";
 import { readNeeds } from "../capabilities.js";
+import { CASE_ENV_RULE, caseEnvFault } from "../env.js";
 import { regex } from "./rules.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { isUnitScore } from "../score.js";
@@ -19,6 +20,8 @@ export type FieldType =
   | "bool"
   | "enum"
   | "texts"
+  | "tags"
+  | "envvars"
   | "needs"
   | "matcher"
   | "matchers"
@@ -147,6 +150,9 @@ function text(value: unknown, at: FieldAt & { name: string }): string {
   return value;
 }
 
+// A tag: lowercase letters, digits and hyphens, and it does not start with a hyphen.
+const TAG = /^[a-z0-9][a-z0-9-]*$/;
+
 const failure = (at: FieldAt, problem: string): UsageError =>
   new UsageError(`${at.where}: ${problem}`);
 
@@ -238,6 +244,33 @@ const PARSERS: Record<FieldType, FieldParser> = {
       );
     }
     return value as string[];
+  },
+  tags: (value, at) => {
+    if (
+      !Array.isArray(value) ||
+      !value.every((tag) => typeof tag === "string" && TAG.test(tag))
+    ) {
+      throw failure(
+        at,
+        `"${at.name}" must be a list of tags, each made of lowercase letters, digits and hyphens, starting with a letter or digit`,
+      );
+    }
+    return value as string[];
+  },
+  envvars: (value, at) => {
+    if (!isPlainObject(value)) {
+      throw failure(at, `"${at.name}" must be an object of variable values`);
+    }
+    for (const [name, setting] of Object.entries(value)) {
+      const fault = caseEnvFault(name);
+      if (fault) {
+        throw failure(at, `${at.name} cannot set "${name}": ${CASE_ENV_RULE}`);
+      }
+      if (typeof setting !== "string") {
+        throw failure(at, `${at.name} "${name}" must be a string`);
+      }
+    }
+    return value;
   },
   needs: (value, at) => readNeeds(value, at.where),
   matcher: (value, at) => {

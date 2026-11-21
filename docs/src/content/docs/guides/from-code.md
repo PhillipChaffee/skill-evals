@@ -21,7 +21,7 @@ if (evaluation.belowBar.length || evaluation.invalid.length)
 | Export                 | What it is                                                                                                                         |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `evaluate(options)`    | Does what `run` and `score` do, without the report. Unset options take their value from the [config file](../reference/config.md). |
-| `loadCases(dir, glob)` | Reads and validates the cases in a directory.                                                                                      |
+| `loadCases(dir, glob)` | Reads and validates the cases in a directory and its subdirectories. `glob` selects by id and defaults to every case.              |
 | `HARNESSES`            | The harness adapters, in default-preference order.                                                                                 |
 
 Every option, every field of the result, and every exported type is in the API reference, which is generated from the doc comments in [`src/index.ts`](https://github.com/PhillipChaffee/skill-evals/blob/main/src/index.ts) and the files it exports from when the docs site is built. In the docs site its pages are next to this one in the sidebar.

@@ -85,6 +85,7 @@ export default defineConfig({
           label: "Guides",
           items: [
             "guides/write-a-case",
+            "guides/organise-a-suite",
             "guides/judged-checks",
             "guides/decision-checks",
             "guides/read-the-report",

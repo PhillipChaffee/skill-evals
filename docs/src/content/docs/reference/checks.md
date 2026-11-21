@@ -51,16 +51,27 @@ A check is one object in the `checks` list of a `case.json`. Every check has a `
 
 The keys of a `case.json`. Any other key is a load error, except a key that starts with `x-`.
 
-| Key              | Type     | Holds                                                                                                                                                                          |
-| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `checks`         | `object` | A non-empty list of checks.                                                                                                                                                    |
-| `weight`         | `number` | How much the case counts in its suite. Default: 1.                                                                                                                             |
-| `minScore`       | `unit`   | The lowest score the case may get and still pass.                                                                                                                              |
-| `maxTurns`       | `int`    | The most turns the agent may take. Only Claude Code applies it.                                                                                                                |
-| `timeoutSeconds` | `int`    | The seconds a run may take. Default: 600.                                                                                                                                      |
-| `requires`       | `needs`  | A list of capabilities the case needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host's `PATH`. A harness that lacks one reports the case as not applicable. |
-| `harnesses`      | `texts`  | The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.                                               |
-| `note`           | `text`   | Why the case is limited to `harnesses`. The report shows it.                                                                                                                   |
+| Key              | Type      | Holds                                                                                                                                                                          |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `checks`         | `object`  | A non-empty list of checks.                                                                                                                                                    |
+| `weight`         | `number`  | How much the case counts in its suite. Default: 1.                                                                                                                             |
+| `minScore`       | `unit`    | The lowest score the case may get and still pass.                                                                                                                              |
+| `maxTurns`       | `int`     | The most turns the agent may take. Only Claude Code applies it.                                                                                                                |
+| `timeoutSeconds` | `int`     | The seconds a run may take. Default: 600.                                                                                                                                      |
+| `requires`       | `needs`   | A list of capabilities the case needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host's `PATH`. A harness that lacks one reports the case as not applicable. |
+| `harnesses`      | `texts`   | The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.                                               |
+| `note`           | `text`    | Why the case is limited to `harnesses`. The report shows it.                                                                                                                   |
+| `tags`           | `tags`    | Labels for selecting cases with `--tag`, `--tag-all` and `--not-tag`. Each is lowercase letters, digits and hyphens.                                                           |
+| `description`    | `text`    | What the case shows, in a sentence.                                                                                                                                            |
+| `targets`        | `texts`   | The names of the skills the case is about. The report counts the cases of each in its coverage table.                                                                          |
+| `kind`           | `text`    | The kind of case, such as `trigger` or `negative`.                                                                                                                             |
+| `expected`       | `text`    | What a good run does, in a sentence. It is for readers; no check reads it.                                                                                                     |
+| `guard`          | `bool`    | True for a case that must keep passing. The report lists it in its own table. Its score counts in the suite score like any other. Default: false.                              |
+| `reps`           | `int`     | Runs for each subject in this case, in place of `--reps`.                                                                                                                      |
+| `model`          | `text`    | The model of the agent in this case, in place of `--model`.                                                                                                                    |
+| `judgeModel`     | `text`    | The model that scores the judged checks of this case, in place of `--judge-model`.                                                                                             |
+| `env`            | `envvars` | Variables the agent's process gets, with the values given here. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`.                                                    |
+| `minDelta`       | `unit`    | The least score difference between the subjects that the case must show. A number from 0 to 1.                                                                                 |
 
 ## Tool kinds
 

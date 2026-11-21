@@ -47,6 +47,10 @@ const probe = (subject: Subject): Case => ({
   timeoutSeconds: PROBE_TIMEOUT_SECONDS,
   workspaceDir: null,
   extensions: {},
+  tags: [],
+  targets: [],
+  guard: false,
+  env: {},
 });
 
 // What an adapter can fill in a run record; `check` shows which of these a harness delivered.
@@ -157,7 +161,7 @@ function table(subject: Subject, outDir: string, rows: string[][]): string {
  */
 function loadSafely(dir: string, lenient: boolean): Case[] | string {
   try {
-    return loadCases(dir, "*", { lenient, onWarning: () => undefined });
+    return loadCases(dir, undefined, { lenient, onWarning: () => undefined });
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     return error.message.replace(/\s+/g, " ").slice(0, SHOWN_ERROR_LENGTH);

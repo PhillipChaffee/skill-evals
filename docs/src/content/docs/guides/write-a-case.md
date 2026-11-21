@@ -18,7 +18,7 @@ A case that invokes the skill does not need `skill_loaded`, and the check says l
 
 ## The files of a case
 
-A case is a directory under `evals/cases/`. Its name is the case id.
+A case is a directory under `evals/cases/`, at any depth. Its path below that directory is the case id. [Organise a suite](organise-a-suite.md) covers nested folders, tags, and selecting cases.
 
 | File         | Content                                                                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |

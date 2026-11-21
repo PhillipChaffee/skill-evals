@@ -73,16 +73,20 @@ export interface ChildEnvInput {
   pass: string[];
   /** Names the harness must not get, such as the key of the model that scores its answer. They win over everything. */
   withhold: string[];
+  /** What a case sets in its `env`: values given outright, which win over what `base` holds. Default: none. */
+  caseEnv?: Record<string, string>;
 }
 
 /**
  * Builds the environment of a harness process.
  * @param input - Where the home is, what to take from the base, and what to withhold.
  * @returns The allowlisted variables of `base`, the adapter's login variables and the config's `env` names that `base`
- *   has, `HOME` and the XDG directories under the home, and the adapter's own variables, without the withheld names.
+ *   has, `HOME` and the XDG directories under the home, the adapter's own variables, and the case's `env` values,
+ *   without the withheld names.
  */
 export function childEnv(input: ChildEnvInput): Record<string, string> {
   const { home, base, harnessEnv, authEnv, pass, withhold } = input;
+  const { caseEnv = {} } = input;
   const named = new Set([...authEnv, ...pass]);
   const inherited = Object.entries(base).filter(
     (entry): entry is [string, string] =>
@@ -97,8 +101,27 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
     XDG_STATE_HOME: path.join(home, ".local", "state"),
     XDG_CACHE_HOME: path.join(home, ".cache"),
     ...harnessEnv,
+    ...caseEnv,
   };
   return Object.fromEntries(
     Object.entries(env).filter(([name]) => !withhold.includes(name)),
   );
+}
+
+/** The rule for a name in the `env` key of a case, in words. The reference page quotes it. */
+export const CASE_ENV_RULE =
+  "A name must start with `CASE_`, or be `TZ`, `LANG` or `LC_ALL`.";
+const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL"]);
+
+/**
+ * Judges a name of the `env` key of a case.
+ * @param name - What the case file sets.
+ * @returns Why a case may not set it, or null when it may.
+ */
+export function caseEnvFault(name: string): string | null {
+  const fault = envNameFault(name);
+  if (fault) return fault;
+  return name.startsWith("CASE_") || CASE_ENV_NAMES.has(name)
+    ? null
+    : CASE_ENV_RULE;
 }

@@ -1,0 +1,10 @@
+{
+  "description": "A question that is not about writing a commit message. The commit-message skill should stay out.",
+  "tags": ["smoke", "routing", "negative"],
+  "targets": ["commit-message"],
+  "kind": "negative",
+  "guard": true,
+  "reps": 2,
+  "env": { "CASE_REGION": "eu" },
+  "checks": [{ "type": "skill_not_loaded", "skill": "commit-message" }]
+}

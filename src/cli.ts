@@ -1,16 +1,17 @@
 import fs from "node:fs";
+import type { ParseArgsOptionDescriptor } from "node:util";
 import { parseArgs } from "node:util";
-import { loadCases } from "./cases.js";
 import type { EvaluateOptions } from "./evaluate.js";
 import { evaluate } from "./evaluate.js";
 import { HARNESSES, findBin } from "./harnesses/index.js";
 import { check } from "./probe.js";
 import type { Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
-import { renderReport } from "./report.js";
+import { renderCoverage, renderReport } from "./report.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { formatScore } from "./score.js";
+import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
 import { SUBJECT_CHANGED_EXIT_CODE, sourceChangedMessage } from "./subject.js";
 import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
@@ -56,10 +57,21 @@ function list(given: Options, project: Project): number {
     bin: findBin(harness),
   }));
   const first = installed.find((entry) => entry.bin);
-  const cases = fs.existsSync(options.cases)
-    ? loadCases(options.cases, "*", { lenient: options.lenient ?? false }).map(
-        (caseDef) => `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
-      )
+  const chosen = fs.existsSync(options.cases)
+    ? loadSelection(options.cases, selectionOf(options), {
+        lenient: options.lenient ?? false,
+      })
+    : null;
+  const cases = chosen
+    ? [
+        ...chosen.map(
+          (caseDef) =>
+            `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
+        ),
+        "",
+        `${String(chosen.length)} cases selected`,
+        ...(options.targets ? ["", ...renderCoverage(coverageOf(chosen))] : []),
+      ]
     : ["- none: the directory does not exist"];
   console.log(
     [
@@ -80,6 +92,10 @@ function list(given: Options, project: Project): number {
 const SUITE_FLAGS: Flag[] = [
   "harness",
   "case",
+  "not-case",
+  "tag",
+  "tag-all",
+  "not-tag",
   "cases",
   "reps",
   "model",
@@ -124,11 +140,35 @@ export const COMMANDS: Record<string, Command> = {
     description:
       "Show the harnesses in default-preference order, and the cases.",
     handler: list,
-    flags: ["cases", "lenient"],
+    flags: [
+      "cases",
+      "lenient",
+      "case",
+      "not-case",
+      "tag",
+      "tag-all",
+      "not-tag",
+      "targets",
+    ],
   },
 };
 
 const USAGE = usageText(COMMANDS);
+
+/**
+ * Converts what `parseArgs` gave for one flag.
+ * @param spec - The flag's entry in `FLAGS`.
+ * @param given - A switch's boolean, a list flag's texts, or a text.
+ * @returns The option's value: a boolean, the items of a list, or the text as the flag reads it.
+ */
+function readFlag(
+  spec: FlagSpec,
+  given: string | boolean | (string | boolean)[],
+) {
+  if (Array.isArray(given)) return splitList(given.map(String));
+  if (typeof given === "boolean") return given;
+  return (spec.read ?? String)(given);
+}
 
 /**
  * Reads the flags of a command.
@@ -143,17 +183,15 @@ function readOptions(command: Command, args: string[]): Options {
     options: Object.fromEntries(
       command.flags.map((flag) => {
         const spec: FlagSpec = FLAGS[flag];
-        return [flag, { type: spec.boolean ? "boolean" : "string" } as const];
+        if (spec.kind === "switch") return [flag, { type: "boolean" }];
+        return [flag, { type: "string", multiple: spec.kind === "list" }];
       }),
-    ),
-  });
+    ) as Record<string, ParseArgsOptionDescriptor>,
+  }) as { values: Record<string, string | boolean | (string | boolean)[]> };
   return Object.fromEntries(
-    Object.entries(values).map(([flag, text]) => {
+    Object.entries(values).map(([flag, given]) => {
       const spec: FlagSpec = FLAGS[flag as Flag];
-      return [
-        spec.as ?? flag,
-        typeof text === "boolean" ? text : (spec.read ?? String)(String(text)),
-      ];
+      return [spec.as ?? flag, readFlag(spec, given)];
     }),
   );
 }

@@ -7,7 +7,7 @@ export type Options = Omit<
   EvaluateOptions,
   "cwd" | "subjects" | "onRun" | "onWarning"
 > &
-  ProbeOptions & { a?: string; b?: string };
+  ProbeOptions & { a?: string; b?: string; targets?: boolean };
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
 export interface FlagSpec {
@@ -15,9 +15,12 @@ export interface FlagSpec {
   as?: keyof Options;
   /** Converts the text; it stays text when absent. */
   read?: (text: string) => number;
-  /** True for a flag that takes no value: it sets its option to true. */
-  boolean?: true;
-  /** What stands for the value after the flag, as in `--reps <n>`. Empty for a boolean flag. */
+  /**
+   * How the flag takes its value. "text" (the default) takes one value, "list" may be given again and holds every
+   * value, split at commas, and "switch" takes no value and sets its option to true.
+   */
+  kind?: "text" | "list" | "switch";
+  /** What stands for the value after the flag, as in `--reps <n>`. Empty for a switch. */
   value: string;
   /** What the flag sets, in one sentence. */
   description: string;
@@ -45,9 +48,46 @@ export const FLAGS = {
   },
   case: {
     as: "caseGlob",
-    value: "glob",
-    description: "Which case ids to run. Only * is special.",
-    default: "*",
+    kind: "list",
+    value: "globs",
+    description:
+      "Which case ids to run. A glob: * stays within one directory, ** crosses directories, ? is one character, {a,b} is either. Repeat the flag or separate globs with commas.",
+    default: "every case",
+  },
+  "not-case": {
+    as: "notCase",
+    kind: "list",
+    value: "globs",
+    description: "Case ids to leave out, as globs like those of --case.",
+    default: "none",
+  },
+  tag: {
+    kind: "list",
+    value: "tags",
+    description:
+      "Run the cases that have any of these tags. Repeat the flag or separate tags with commas.",
+    default: "no tag filter",
+  },
+  "tag-all": {
+    as: "tagAll",
+    kind: "list",
+    value: "tags",
+    description: "Run the cases that have all of these tags.",
+    default: "no tag filter",
+  },
+  "not-tag": {
+    as: "notTag",
+    kind: "list",
+    value: "tags",
+    description: "Leave out the cases that have any of these tags.",
+    default: "none",
+  },
+  targets: {
+    kind: "switch",
+    value: "",
+    description:
+      "Print the coverage table: for each target skill, how many selected cases name it.",
+    default: "off",
   },
   cases: {
     value: "dir",
@@ -106,14 +146,14 @@ export const FLAGS = {
     default: "60",
   },
   lenient: {
-    boolean: true,
+    kind: "switch",
     value: "",
     description:
       "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",
     default: "off: an unknown key is an error",
   },
   isolated: {
-    boolean: true,
+    kind: "switch",
     value: "",
     description:
       "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
@@ -145,7 +185,7 @@ export interface CommandDoc {
  */
 export function flagSyntax(flag: Flag): string {
   const spec: FlagSpec = FLAGS[flag];
-  return spec.boolean ? `--${flag}` : `--${flag} <${spec.value}>`;
+  return spec.kind === "switch" ? `--${flag}` : `--${flag} <${spec.value}>`;
 }
 
 /**

@@ -209,7 +209,7 @@ async function scoreChecks(
   const withhold = withheld(plan);
   const problems: string[] = [];
   const ask = judgeAsker(
-    plan.judge,
+    { ...plan.judge, model: plan.caseDef.judgeModel ?? plan.judge.model },
     { isolated: plan.isolated ?? false, withhold, pass: plan.pass },
     problems,
   );
@@ -326,7 +326,7 @@ async function record(
  * @returns The record of the run. A failed run is a record with an error, never a rejection.
  */
 export async function runOnce(plan: RunPlan): Promise<RunRecord> {
-  const { harness, bin, subject, caseDef, model } = plan;
+  const { harness, bin, subject, caseDef } = plan;
   const { prompt, maxTurns, timeoutSeconds, workspaceDir } = caseDef;
   const copy = copyOf(subject);
   try {
@@ -337,7 +337,8 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
         // To a harness, no skills and the judge's "nothing loaded" are the same thing.
         subject: copy?.loaded ?? null,
         prompt,
-        model,
+        model: caseDef.model ?? plan.model,
+        env: caseDef.env,
         maxTurns,
         isolated: plan.isolated,
         timeoutSeconds,

@@ -6,6 +6,8 @@ import type { RunRecord, Usage } from "./run.js";
 import { invalidReason } from "./run.js";
 import type { SuiteScore } from "./score.js";
 import { formatScore } from "./score.js";
+import type { Coverage } from "./select.js";
+import { coverageOf } from "./select.js";
 import { describeSubject } from "./subject.js";
 
 const MS_PER_SECOND = 1000;
@@ -200,12 +202,27 @@ function harnessSection(section: Section): string {
   });
   const metricHeadings = METRICS.map((metric) => heading(metric.title));
   const rule = Array<string>(METRICS.length + LEADING_COLUMNS).fill("---");
+  const tableOf = (those: Case[]): string[] => [
+    `| Case | ${heading("Score")} | Checks | ${metricHeadings.join(" | ")} |`,
+    `| ${rule.join(" | ")} |`,
+    ...those.map((caseDef) => caseRow(caseDef, section)),
+  ];
+  const guards = cases.filter((caseDef) => caseDef.guard);
+  const others = cases.filter((caseDef) => !caseDef.guard);
   return [
     `## ${suite.harness}`,
     "",
-    `| Case | ${heading("Score")} | Checks | ${metricHeadings.join(" | ")} |`,
-    `| ${rule.join(" | ")} |`,
-    ...cases.map((caseDef) => caseRow(caseDef, section)),
+    ...(others.length > 0 || guards.length === 0 ? tableOf(others) : []),
+    ...(guards.length > 0
+      ? [
+          "",
+          "### Guard cases",
+          "",
+          "These cases must keep passing. Their scores count in the suite score like any other.",
+          "",
+          ...tableOf(guards),
+        ]
+      : []),
     "",
     `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases)`,
     ...scorerLine(
@@ -220,6 +237,44 @@ function harnessSection(section: Section): string {
       ? ["", "Invalid runs, not counted above:", "", ...invalid]
       : []),
   ].join("\n");
+}
+
+/**
+ * Lays out the coverage of the target skills as a table.
+ * @param rows - One row for each target skill.
+ * @param heading - The line that names the table.
+ * @returns The heading and the table, or a line that says no case names a target.
+ */
+export function renderCoverage(
+  rows: Coverage[],
+  heading = "Coverage by target skill",
+): string[] {
+  if (rows.length === 0) {
+    return [heading, "", "No selected case names a target skill."];
+  }
+  const line = (cells: (string | number)[]): string =>
+    `| ${cells.map((each) => cell(String(each))).join(" | ")} |`;
+  return [
+    heading,
+    "",
+    line(["skill", "cases", "dev", "held-out", "guards"]),
+    line(["---", "---", "---", "---", "---"]),
+    ...rows.map((row) =>
+      line([row.skill, row.cases, row.dev, row.heldout, row.guards]),
+    ),
+  ];
+}
+
+/**
+ * Shows how many of the cases name each target skill.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when no case names a target.
+ */
+function coverageSection(evaluation: Evaluation): string[] {
+  const rows = coverageOf(evaluation.cases);
+  return rows.length === 0
+    ? []
+    : ["", ...renderCoverage(rows, "## Coverage by target skill")];
 }
 
 /**
@@ -320,6 +375,7 @@ export function renderReport(evaluation: Evaluation): string {
     "",
     sections.join("\n\n"),
     ...commonSection(evaluation),
+    ...coverageSection(evaluation),
     ...skippedSection(evaluation),
     ...notApplicableSection(evaluation),
     ...(belowBar.length

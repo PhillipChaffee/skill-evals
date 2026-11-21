@@ -105,6 +105,24 @@ const CASES: Row[] = [
     ]),
   ],
   [
+    "tags",
+    ["smoke", "a-1"],
+    [["Smoke"], ["-a"], [""], "smoke", [1]].map((v): Bad => [
+      v,
+      /"field" must be a list of tags/,
+    ]),
+  ],
+  [
+    "envvars",
+    { CASE_A: "1", TZ: "UTC", LANG: "C", LC_ALL: "C" },
+    [
+      [{ PATH: "x" }, /field cannot set "PATH": A name must start with/],
+      [{ CASE_A: 1 }, /field "CASE_A" must be a string/],
+      [{ "CASE_A=": "x" }, /field cannot set "CASE_A="/],
+      [["CASE_A"], /"field" must be an object of variable values/],
+    ],
+  ],
+  [
     "needs",
     ["mcp", "bin:git"],
     [

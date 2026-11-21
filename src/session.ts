@@ -28,6 +28,8 @@ export interface SessionInput {
   withhold?: string[] | undefined;
   /** Names of this process's variables the project's config passes to the harness. */
   pass?: string[] | undefined;
+  /** Variables a case sets for the agent, with their values. They reach the agent's process only. */
+  env?: Record<string, string> | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -114,16 +116,19 @@ async function attempt(
     return { stdout: "", failure, durationMs: 0, placedChanges: null };
   }
   const placedChanges = watchPlaced(input.subject, invocation.placed);
-  const options = {
-    cwd: input.workspace,
-    env: childEnv({
+  const environment = (caseEnv: Record<string, string>) =>
+    childEnv({
       home: input.home,
       base: process.env,
       harnessEnv: invocation.env,
       authEnv: harness.authEnv,
       pass: session.pass ?? [],
       withhold: session.withhold ?? [],
-    }),
+      caseEnv,
+    });
+  const options = {
+    cwd: input.workspace,
+    env: environment({}),
     timeoutSeconds,
   };
   for (const step of invocation.setup ?? []) {
@@ -142,6 +147,7 @@ async function attempt(
   const started = Date.now();
   const result = await exec(bin, invocation.args, {
     ...options,
+    env: environment(session.env ?? {}),
     stdin: invocation.stdin,
   });
   return {

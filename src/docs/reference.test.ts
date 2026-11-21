@@ -53,7 +53,7 @@ test("the commands page and the help text have every command, flag, and default"
     expect(help).toContain(command.description);
   }
   for (const [flag, spec] of Object.entries(FLAGS)) {
-    const value = "boolean" in spec ? "" : " <";
+    const value = "kind" in spec && spec.kind === "switch" ? "" : " <";
     expect(commands).toContain(`--${flag}${value}`);
     expect(commands).toContain(spec.description);
     expect(help).toMatch(

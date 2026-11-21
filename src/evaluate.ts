@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { connect } from "./baseten.js";
+import type { CaseMeta } from "./case-meta.js";
+import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
-import { loadCases } from "./cases.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import type { Located } from "./harnesses/index.js";
@@ -14,6 +15,8 @@ import { requireEnvNames } from "./env.js";
 import { invalidReason, runOnce } from "./run.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, isUnitScore, scoreSuites } from "./score.js";
+import type { SelectionOptions } from "./select.js";
+import { loadSelection, selectionOf } from "./select.js";
 import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject, SubjectSummary } from "./subject.js";
 import { changedAtSource, resolveSubject } from "./subject.js";
@@ -22,7 +25,7 @@ import type { Partition } from "./applicability.js";
 import { partitionApplicable } from "./applicability.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
-export interface EvaluateOptions {
+export interface EvaluateOptions extends SelectionOptions {
   /** The working directory, which sets the project and what relative paths resolve against. Default: the process's. */
   cwd?: string;
   /** One or two of a directory, a git ref of the project, or "none". */
@@ -35,15 +38,13 @@ export interface EvaluateOptions {
   env?: string[] | undefined;
   /** Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file. */
   subjectExclude?: string[] | undefined;
-  /** Case ids to run; only `*` is special. Default: every case. */
-  caseGlob?: string | undefined;
-  /** Runs for each subject and case. Default: 3. */
+  /** Runs for each subject and case. A case's own `reps` wins. Default: 3. */
   reps?: number | undefined;
-  /** Passed to the harness. Default: the harness's own default. */
+  /** Passed to the harness. A case's own `model` wins. Default: the harness's own default. */
   model?: string | undefined;
   /** The harness that scores judged checks. Default: the harness under test. */
   judgeHarness?: string | undefined;
-  /** The model that scores judged checks. Default: `model`. */
+  /** The model that scores judged checks. A case's own `judgeModel` wins. Default: `model`. */
   judgeModel?: string | undefined;
   /** The model that scores decision checks. No default: a suite with a decision check needs it. */
   decisionModel?: string | undefined;
@@ -76,8 +77,8 @@ export interface Results {
   /** The model that scored the decision checks; null when none is set. */
   decisionModel: string | null;
   reps: number;
-  /** For each case id, what its file holds that the tool does not read: its `x-` keys. */
-  caseMeta: Record<string, { extensions: Record<string, unknown> }>;
+  /** For each case id, what its file holds besides its checks: its labels, what it is about, its overrides, its `x-` keys. */
+  caseMeta: Record<string, CaseMeta>;
   suites: SuiteScore[];
   /** The pass bars that were not reached. */
   belowBar: string[];
@@ -183,14 +184,13 @@ function decisionFor(cases: Case[], options: Config): DecisionService | null {
 /**
  * Loads the cases the options name.
  * @param options - The options after the config file was applied.
- * @returns The cases, which the glob selects.
+ * @returns The cases that the selection options choose.
  */
 const casesOf = (
-  options: Pick<EvaluateOptions, "caseGlob" | "lenient" | "onWarning"> & {
-    cases: string;
-  },
+  options: SelectionOptions &
+    Pick<EvaluateOptions, "lenient" | "onWarning"> & { cases: string },
 ): Case[] =>
-  loadCases(options.cases, options.caseGlob, {
+  loadSelection(options.cases, selectionOf(options), {
     lenient: options.lenient ?? false,
     ...(options.onWarning && { onWarning: options.onWarning }),
   });
@@ -223,7 +223,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
     for (const caseDef of plan.applied[located.harness.id] ?? []) {
-      for (let rep = 1; rep <= reps; rep++) {
+      for (let rep = 1; rep <= (caseDef.reps ?? reps); rep++) {
         for (const subject of subjects) {
           const run = {
             ...located,
@@ -299,9 +299,7 @@ function summarize(finished: Finished): Results {
     judge: `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`,
     decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
-    caseMeta: Object.fromEntries(
-      cases.map(({ id, extensions }) => [id, { extensions }]),
-    ),
+    caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
     suites,
     belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
     notApplicable: parts.notApplicable,

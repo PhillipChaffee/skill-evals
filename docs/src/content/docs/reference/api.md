@@ -22,22 +22,19 @@ import { evaluate, loadCases, HARNESSES } from "skill-evals";
 function loadCases(
   casesDir: string,
   glob?: string,
-  options?: {
-    lenient?: boolean | undefined;
-    onWarning?: ((text: string) => void) | undefined;
-  },
+  options?: LoadOptions,
 ): Case[];
 ```
 
 Loads the cases of a suite.
 
-| Parameter           | Description                                                                                                 |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `casesDir`          | A directory with one subdirectory for each case.                                                            |
-| `glob`              | Selects cases by id; only `*` is special.                                                                   |
-| `options`           | `lenient` drops a key that a case file does not take instead of failing, and `onWarning` hears of each one. |
-| `options.lenient`   | Drop unknown keys instead of failing. Default: false.                                                       |
-| `options.onWarning` | Called with a line of text for each key that `lenient` drops.                                               |
+| Parameter           | Description                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `casesDir`          | A directory that holds the cases at any depth. A case is a directory with a `prompt.md` or a `case.json`, and its id is its path below `casesDir`, with `/`. |
+| `glob`              | Selects cases by id: `*` stays within one directory, `**` crosses directories, `?` is one character and `{a,b}` is either. Default: every case.              |
+| `options`           | `lenient` drops a key that a case file does not take instead of failing, and `onWarning` hears of each one.                                                  |
+| `options.lenient`   | Drop unknown keys instead of failing. Default: false.                                                                                                        |
+| `options.onWarning` | Called with a line of text for each key that `lenient` drops.                                                                                                |
 
 **Returns.** Every matching case, sorted by id.
 
@@ -101,6 +98,17 @@ One prompt and what a good run of it does.
 | `requires`       | `Need[]`                  | What a harness must be able to do for the case to apply, besides what its checks imply.                         |
 | `harnesses?`     | `string[] \| undefined`   | The harnesses the case is for, when it is for some only. A last resort: `note` says why.                        |
 | `note?`          | `string \| undefined`     | Why the case is limited to `harnesses`; the report shows it as the reason the case is not applicable elsewhere. |
+| `tags`           | `string[]`                | Labels that `--tag`, `--tag-all` and `--not-tag` select by.                                                     |
+| `description?`   | `string \| undefined`     | What the case shows, in a sentence.                                                                             |
+| `targets`        | `string[]`                | The names of the skills the case is about; the coverage table counts them.                                      |
+| `kind?`          | `string \| undefined`     | The kind of case, such as `trigger`.                                                                            |
+| `expected?`      | `string \| undefined`     | What a good run does, in a sentence for readers.                                                                |
+| `guard`          | `boolean`                 | True for a case that must keep passing. The report lists it apart, and it is scored like any case.              |
+| `reps?`          | `number \| undefined`     | Runs for each subject, in place of `--reps`.                                                                    |
+| `model?`         | `string \| undefined`     | The model of the agent in this case's runs, in place of `--model`.                                              |
+| `judgeModel?`    | `string \| undefined`     | The model that scores this case's judged checks, in place of `--judge-model`.                                   |
+| `env`            | `Record<string, string>`  | Variables the agent's process gets, set outright.                                                               |
+| `minDelta?`      | `number \| undefined`     | The least score difference between the subjects that the case must show.                                        |
 | `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                |
 | `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                              |
 
@@ -128,7 +136,7 @@ What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and
 | `judge`         | `string`                                                                      | The harness and model that scored the judged checks, in words.                                                                                                                                          |
 | `decisionModel` | `string \| null`                                                              | The model that scored the decision checks; null when none is set.                                                                                                                                       |
 | `reps`          | `number`                                                                      |                                                                                                                                                                                                         |
-| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>`                    | For each case id, what its file holds that the tool does not read: its `x-` keys.                                                                                                                       |
+| `caseMeta`      | `Record<string, CaseMeta>`                                                    | For each case id, what its file holds besides its checks: its labels, what it is about, its overrides, its `x-` keys.                                                                                   |
 | `suites`        | `SuiteScore[]`                                                                |                                                                                                                                                                                                         |
 | `belowBar`      | `string[]`                                                                    | The pass bars that were not reached.                                                                                                                                                                    |
 | `notApplicable` | `{ harness: string; caseId: string; missing: string[]; reason: string; }[]`   | The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs.                                                                                      |
@@ -150,11 +158,10 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `cases?`           | `string \| undefined`                        | The directory that holds the cases. Default: `evals/cases` in the project.                                     |
 | `env?`             | `string[] \| undefined`                      | Names of variables the harness gets besides the allowlist. Default: `env` of the config file.                  |
 | `subjectExclude?`  | `string[] \| undefined`                      | Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file.        |
-| `caseGlob?`        | `string \| undefined`                        | Case ids to run; only `*` is special. Default: every case.                                                     |
-| `reps?`            | `number \| undefined`                        | Runs for each subject and case. Default: 3.                                                                    |
-| `model?`           | `string \| undefined`                        | Passed to the harness. Default: the harness's own default.                                                     |
+| `reps?`            | `number \| undefined`                        | Runs for each subject and case. A case's own `reps` wins. Default: 3.                                          |
+| `model?`           | `string \| undefined`                        | Passed to the harness. A case's own `model` wins. Default: the harness's own default.                          |
 | `judgeHarness?`    | `string \| undefined`                        | The harness that scores judged checks. Default: the harness under test.                                        |
-| `judgeModel?`      | `string \| undefined`                        | The model that scores judged checks. Default: `model`.                                                         |
+| `judgeModel?`      | `string \| undefined`                        | The model that scores judged checks. A case's own `judgeModel` wins. Default: `model`.                         |
 | `decisionModel?`   | `string \| undefined`                        | The model that scores decision checks. No default: a suite with a decision check needs it.                     |
 | `decisionUrl?`     | `string \| undefined`                        | The base URL of the decision model's API. Default: the provider's own.                                         |
 | `decisionTimeout?` | `number \| undefined`                        | The seconds one request to the decision model may take, a positive integer. Default: 60.                       |
@@ -164,6 +171,11 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `minScore?`        | `number \| undefined`                        | The pass bar for the suite score of the subject under test.                                                    |
 | `outDir?`          | `string \| undefined`                        | Where results go. Default: a new temp directory.                                                               |
 | `onRun?`           | `((record: RunRecord) => void) \| undefined` | Called with each run's record as soon as the run ends.                                                         |
+| `caseGlob?`        | `string \| string[] \| undefined`            | Globs over case ids to run; one glob, or a list of them. Default: every case.                                  |
+| `notCase?`         | `string[] \| undefined`                      | Globs over case ids to leave out.                                                                              |
+| `tag?`             | `string[] \| undefined`                      | Run a case that has any of these tags.                                                                         |
+| `tagAll?`          | `string[] \| undefined`                      | Run a case that has all of these tags.                                                                         |
+| `notTag?`          | `string[] \| undefined`                      | Leave out a case that has any of these tags.                                                                   |
 
 ### Results
 
@@ -178,7 +190,7 @@ What `evaluate` writes to `results.json`.
 | `judge`         | `string`                                                                      | The harness and model that scored the judged checks, in words.                                                                                                                                          |
 | `decisionModel` | `string \| null`                                                              | The model that scored the decision checks; null when none is set.                                                                                                                                       |
 | `reps`          | `number`                                                                      |                                                                                                                                                                                                         |
-| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>`                    | For each case id, what its file holds that the tool does not read: its `x-` keys.                                                                                                                       |
+| `caseMeta`      | `Record<string, CaseMeta>`                                                    | For each case id, what its file holds besides its checks: its labels, what it is about, its overrides, its `x-` keys.                                                                                   |
 | `suites`        | `SuiteScore[]`                                                                |                                                                                                                                                                                                         |
 | `belowBar`      | `string[]`                                                                    | The pass bars that were not reached.                                                                                                                                                                    |
 | `notApplicable` | `{ harness: string; caseId: string; missing: string[]; reason: string; }[]`   | The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs.                                                                                      |

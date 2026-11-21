@@ -25,6 +25,10 @@ const caseOf = (more: Partial<Case>): Case => ({
   timeoutSeconds: 1,
   workspaceDir: null,
   extensions: {},
+  tags: [],
+  targets: [],
+  guard: false,
+  env: {},
   requires: [],
   ...more,
 });

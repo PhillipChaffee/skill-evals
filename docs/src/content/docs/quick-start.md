@@ -39,4 +39,5 @@ From here:
 - [Write a case](guides/write-a-case.md) says how to pick the question a case asks, and why one case should not ask both.
 - `--a` and `--b` each take a directory, a git ref of the project, or `none`. The defaults compare `main` (A) with the project folder and its uncommitted changes (B). See [Subjects](concepts/subjects.md).
 - `skill-evals score` scores one set of skills with no comparison.
+- [Organise a suite](guides/organise-a-suite.md) shows how to nest cases, tag them, and select some with `--case` and `--tag`.
 - `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, so it can gate a pull request. See [Scores](guides/pass-bars.md).
