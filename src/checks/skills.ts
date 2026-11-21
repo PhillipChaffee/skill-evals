@@ -1,4 +1,4 @@
-import { fails, holds } from "./fields.js";
+import { fails, holds } from "./rules.js";
 import type { Test } from "./index.js";
 
 const skillLoaded: Test<"skill"> = (check, outcome) =>

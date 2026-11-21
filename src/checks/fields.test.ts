@@ -17,41 +17,106 @@ const defs = (type: FieldType, more: Partial<FieldDef> = {}) => ({
 const read = (type: FieldType, value: unknown, more: Partial<FieldDef> = {}) =>
   readField(defs(type, more), "field", { ...at, siblings: { field: value } });
 
-type Row = [FieldType, unknown, unknown[], RegExp, Partial<FieldDef>?];
-// Each type with a value it reads, and values it rejects with the message it gives.
+type Bad = [value: unknown, message: RegExp];
+type Row = [FieldType, unknown, Bad[], Partial<FieldDef>?];
+const NEEDS_TEXT = /a check needs a string "field"/;
+const OBJECT = /"field" must be an object/;
+// Each type with a value it reads, and each value it rejects with the one message it gives.
 const CASES: Row[] = [
-  ["text", "a", [1, "", null], /a check needs a string "field"/],
-  ["regex", "a+", [1, "("], /needs a string|Invalid regular expression/],
-  ["flags", "gi", ["z", 1], /Invalid flags|needs a string/],
+  [
+    "text",
+    "a",
+    [
+      [1, NEEDS_TEXT],
+      ["", NEEDS_TEXT],
+      [null, NEEDS_TEXT],
+    ],
+  ],
+  [
+    "regex",
+    "a+",
+    [
+      [1, NEEDS_TEXT],
+      ["(", /Invalid regular expression/],
+    ],
+  ],
+  [
+    "flags",
+    "gi",
+    [
+      ["z", /Invalid flags/],
+      [1, NEEDS_TEXT],
+    ],
+  ],
   [
     "path",
     "a/b.txt",
-    ["../a", "/etc", "a\\..\\b"],
-    /inside the workspace|needs/,
+    [
+      ["../a", /path must stay inside the workspace: \.\.\/a/],
+      ["/etc", /path must stay inside the workspace: \/etc/],
+      ["a\\..\\b", /path must stay inside the workspace/],
+      [1, NEEDS_TEXT],
+    ],
   ],
-  ["glob", "src/*.ts", [1], /needs a string "field"/],
-  ["kind", "shell", ["terminal", 1], /unknown tool kind "terminal"|needs/],
-  ["int", 3, [0, 1.5, "1"], /field must be a positive integer/],
-  ["unit", 0.5, [2, "1", -1], /field must be a number from 0 to 1/],
-  ["number", 2.5, [0, "1", Infinity], /field must be a positive number/],
-  ["bool", false, [0, "true"], /field must be true or false/],
+  ["glob", "src/*.ts", [[1, NEEDS_TEXT]]],
+  [
+    "kind",
+    "shell",
+    [
+      ["terminal", /unknown tool kind "terminal"; known: shell/],
+      [1, NEEDS_TEXT],
+    ],
+  ],
+  [
+    "int",
+    3,
+    [0, 1.5, "1"].map((v): Bad => [v, /field must be a positive integer/]),
+  ],
+  [
+    "unit",
+    0.5,
+    [2, "1", -1].map((v): Bad => [v, /field must be a number from 0 to 1/]),
+  ],
+  [
+    "number",
+    2.5,
+    [0, "1", Infinity].map((v): Bad => [v, /field must be a positive number/]),
+  ],
+  [
+    "bool",
+    false,
+    [0, "true"].map((v): Bad => [v, /field must be true or false/]),
+  ],
   [
     "enum",
     "no",
-    ["maybe", 1],
-    /"field" must be "yes" or "no"|needs/,
+    [
+      ["maybe", /"field" must be "yes" or "no"/],
+      [1, NEEDS_TEXT],
+    ],
     { values: ["yes", "no"] },
   ],
-  ["texts", ["a", "b"], [[], [""], "a", [1]], /non-empty list of non-empty/],
-  ["matcher", { a: 1 }, [null, [], "a"], /"field" must be an object/],
-  ["matchers", [{ a: 1 }], [{}, [1], "a"], /list of objects/],
-  ["object", { a: 1 }, [null, [], 1], /"field" must be an object/],
+  [
+    "texts",
+    ["a", "b"],
+    [[], [""], "a", [1]].map((v): Bad => [
+      v,
+      /non-empty list of non-empty strings/,
+    ]),
+  ],
+  ["matcher", { a: 1 }, [null, [], "a"].map((v): Bad => [v, OBJECT])],
+  [
+    "matchers",
+    [{ a: 1 }],
+    [{}, [1], "a"].map((v): Bad => [v, /"field" must be a list of objects/]),
+  ],
+  ["object", { a: 1 }, [null, [], 1].map((v): Bad => [v, OBJECT])],
 ];
 
-for (const [type, good, bad, message, more] of CASES) {
-  test(`the ${type} parser reads a good value and rejects a bad one`, () => {
+for (const [type, good, bad, more] of CASES) {
+  test(`the ${type} parser reads a good value and rejects each bad one`, () => {
     expect(read(type, good, more)).toEqual(good);
-    for (const value of bad) {
+    for (const [value, message] of bad) {
       expect(() => read(type, value, more)).toThrow(UsageError);
       expect(() => read(type, value, more)).toThrow(message);
     }

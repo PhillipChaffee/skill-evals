@@ -142,6 +142,9 @@ export const isDecision = (check: Check): check is DecisionCheck =>
 export const checkScore = (check: RuledCheck, outcome: Outcome): Verdict =>
   RULED[check.type].rule(check, outcome);
 
+// A question with one allowed answer decides nothing.
+const MIN_OPTIONS = 2;
+
 /**
  * Reads the answers a decision check allows.
  * @param given - The fields of the check that are set; `expect` and `options` are already of their types.
@@ -162,8 +165,6 @@ function readAnswers(
   }
   if (expect !== undefined) return {};
   const entries = Object.entries(options as Record<string, unknown>);
-  // Two answers at least: a question with one allowed answer decides nothing.
-  const MIN_OPTIONS = 2;
   if (
     entries.length < MIN_OPTIONS ||
     !entries.every(([label, value]) => label !== "" && isUnitScore(value))
@@ -208,7 +209,7 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
     mode,
   );
   const weight =
-    record["weight"] === undefined
+    record["weight"] === undefined || record["weight"] === null
       ? 1
       : readField({ weight: WEIGHT }, "weight", at);
   const given: Record<string, unknown> = {};

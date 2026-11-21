@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { loadCases } from "./cases.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 
 const USAGE_ERROR = 2;
+const CONFIG_FILE = "skill-evals.config.json";
 
 /**
  * Plants one plugin and a `run` that compares it with itself.
@@ -238,7 +239,62 @@ test("lenient is a config key, and list takes --lenient", async () => {
   const lenient = await box.cli(["list", "--cases", cases, "--lenient"]);
   expect(lenient.status, lenient.stderr).toBe(0);
   expect(lenient.stderr).toMatch(/ignored unknown key "pth"/);
-  box.write("skill-evals.config.json", { lenient: true });
+  box.write(CONFIG_FILE, { lenient: true });
   const configured = await box.cli(["list", "--cases", cases]);
   expect(configured.status, configured.stderr).toBe(0);
+});
+
+test("a null weight loads as 1, in a case and in a check", () => {
+  const box = sandbox();
+  const cases = plantCase(box, [{ ...fine, weight: null }], { weight: null });
+  const [loaded] = loadCases(cases);
+  expect(loaded?.weight).toBe(1);
+  expect(loaded?.checks[0]?.weight).toBe(1);
+});
+
+test("an invalid flags with no pattern beside it is a load error", async () => {
+  const { run } = rejecting();
+  const result = await run({
+    checks: [{ type: "tool_called", kind: "shell", flags: "z" }],
+  });
+  expect(result.status).toBe(USAGE_ERROR);
+  expect(result.stderr).toMatch(/Invalid flags/);
+});
+
+test("loadCases without onWarning warns on standard error when lenient", () => {
+  const box = sandbox();
+  const cases = plantCase(box, [TYPO]);
+  const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    expect(loadCases(cases, "*", { lenient: true })).toHaveLength(1);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringMatching(/ignored unknown key "pth"/),
+    );
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("the config key lenient must be a boolean, and it reaches run and score", async () => {
+  const { box, outDir, run } = rejecting();
+  box.write(CONFIG_FILE, { lenient: "yes" });
+  const bad = await run({ checks: [TYPO] });
+  expect(bad.status).toBe(USAGE_ERROR);
+  expect(bad.stderr).toMatch(/"lenient" must be a boolean/);
+  box.write(CONFIG_FILE, { lenient: true });
+  const good = await run({ checks: [TYPO] });
+  expect(good.status, good.stderr).toBe(0);
+  expect(good.stderr).toMatch(/ignored unknown key "pth"/);
+  expect(readResults(outDir).records.length).toBeGreaterThan(0);
+  const scored = await box.cli([
+    "score",
+    "--subject",
+    "none",
+    "--out",
+    path.join(box.root, "score-out"),
+    "--cases",
+    path.join(box.root, "cases"),
+  ]);
+  expect(scored.status, scored.stderr).toBe(0);
+  expect(scored.stderr).toMatch(/ignored unknown key "pth"/);
 });

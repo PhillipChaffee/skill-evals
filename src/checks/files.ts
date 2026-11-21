@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { holds, regex } from "./fields.js";
+import { holds, regex } from "./rules.js";
 import type { Outcome, With } from "./index.js";
 
 /**

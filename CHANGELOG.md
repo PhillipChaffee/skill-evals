@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- An unknown key in a `case.json` is now a load error that names the key and the keys that are allowed. Keys that start with `x-` are kept and written to `results.json`. `--lenient` (or `lenient` in the config file) drops unknown keys with a warning, for one release. Every field of a check has a type, and the reference page lists it.
+- An unknown key in a `case.json` is now a load error that names the key and the keys that are allowed. Keys that start with `x-` are kept and written to `results.json`. `--lenient` (or `lenient` in the config file) drops unknown keys with a warning, for one release. Every field of a check has a type, and the reference page lists it. Validation is stricter in two small ways: a `flags` that is not valid now fails at load even when no regular expression is beside it, and when a file has several faults, an unknown-key error is reported before the others.
 - The help text is written from the same tables that parse the command line. It lists the commands, then every flag once with its default and the commands that take it. No command, flag, or default changed.
 - The documentation is a website next to the landing page. Its reference pages for the checks, the commands and flags, the config file, the harnesses, and the API are generated from the code, and the tests fail when a committed page or a documented example no longer matches the tool.
 - Releases are guarded. `scripts/release-plan.sh` refuses a version tag that does not match `package.json`, is not on `main`, has no changelog entry, or is not above the latest version on npm, and the `Release check` workflow runs the same guards on every pull request. The publish workflow also makes the GitHub release.

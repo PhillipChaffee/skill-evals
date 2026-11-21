@@ -1,4 +1,4 @@
-import { fails, holds, regex } from "./fields.js";
+import { fails, holds, regex } from "./rules.js";
 import type { Spec, Test } from "./index.js";
 
 const FLAGS = { optional: ["flags"] } satisfies Partial<Spec>;

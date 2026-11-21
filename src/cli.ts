@@ -17,10 +17,6 @@ import { FLAGS, usageText } from "./usage.js";
 
 const USAGE_EXIT_CODE = 2;
 
-const warn = (text: string): void => {
-  console.error(`skill-evals: warning: ${text}`);
-};
-
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
  * @param options - What to evaluate.
@@ -34,7 +30,7 @@ async function suite(options: EvaluateOptions): Promise<number> {
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}`,
     );
   };
-  const evaluation = await evaluate({ ...options, onRun, onWarning: warn });
+  const evaluation = await evaluate({ ...options, onRun });
   console.log(renderReport(evaluation));
   return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
 }
@@ -53,10 +49,7 @@ function list(given: Options, project: Project): number {
   }));
   const first = installed.find((entry) => entry.bin);
   const cases = fs.existsSync(options.cases)
-    ? loadCases(options.cases, "*", {
-        lenient: options.lenient ?? false,
-        onWarning: warn,
-      }).map(
+    ? loadCases(options.cases, "*", { lenient: options.lenient ?? false }).map(
         (caseDef) => `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
       )
     : ["- none: the directory does not exist"];

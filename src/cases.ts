@@ -69,8 +69,11 @@ function loadCase(dir: string, mode: Mode): Case {
   }
   const at = { where: file, owner: "a case", siblings: raw ?? {} };
   const extensions = extensionsOf(Object.keys(CASE_KEYS), at, mode);
+  // A null weight counts as none, as it did before keys were typed.
   const read = (key: string): unknown =>
-    raw?.[key] === undefined ? undefined : readField(CASE_KEYS, key, at);
+    raw?.[key] === undefined || (key === "weight" && raw[key] === null)
+      ? undefined
+      : readField(CASE_KEYS, key, at);
   const workspaceDir = path.join(dir, "workspace");
   return {
     id,
@@ -106,7 +109,11 @@ export function loadCases(
 ): Case[] {
   const mode: Mode = {
     lenient: options.lenient ?? false,
-    ...(options.onWarning && { warn: options.onWarning }),
+    warn:
+      options.onWarning ??
+      ((text) => {
+        console.error(`skill-evals: warning: ${text}`);
+      }),
   };
   const literal = (part: string): string =>
     part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
