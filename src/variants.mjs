@@ -12,12 +12,17 @@ const git = (repoDir, ...args) =>
 	execFileSync("git", ["-C", repoDir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 
 /**
- * A directory is used as it is, uncommitted changes included. Anything else must be a git ref of repoDir.
+ * A directory is used as it is, uncommitted changes included. Anything else must be a git ref of the project.
+ * @param {import("./project.mjs").Project} project
  * @returns {Variant}
  */
-export function resolveVariant(label, spec, repoDir) {
+export function resolveVariant(label, spec, project) {
+	const repoDir = project.root;
 	if (fs.existsSync(spec) && fs.statSync(spec).isDirectory()) {
 		return { label, spec, dir: fs.realpathSync(spec), commit: null, dispose: () => {} };
+	}
+	if (!project.isGitRepo) {
+		throw new UsageError(`--${label} ${spec}: not a directory, and it cannot be a git ref because ${repoDir} is not in a git repository`);
 	}
 	let commit;
 	try {

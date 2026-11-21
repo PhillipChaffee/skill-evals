@@ -4,25 +4,24 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { HARNESSES, findBin, namedHarnesses, selectHarnesses } from "./harnesses/index.mjs";
 import { loadCases } from "./cases.mjs";
+import { findProject } from "./project.mjs";
 import { renderReport } from "./report.mjs";
 import { invalidReason, runOnce } from "./run.mjs";
 import { failedBars, isUnitScore, scoreSuites } from "./score.mjs";
 import { UsageError } from "./scope.mjs";
 import { resolveVariant } from "./variants.mjs";
 
-const repoDir = path.resolve(import.meta.dirname, "..");
-
 const USAGE = `Usage: skill-evals <command> [options]
 
   run    Run every case against kit A and kit B, score both, and print a comparison.
            --a <ref|path>         baseline kit (default: main)
-           --b <ref|path>         changed kit (default: this checkout, uncommitted changes included)
+           --b <ref|path>         changed kit (default: the project, uncommitted changes included)
   score  Run every case against one kit and print its scores.
-           --kit <ref|path>       the kit (default: this checkout, uncommitted changes included)
+           --kit <ref|path>       the kit (default: the project, uncommitted changes included)
   run and score also take:
            --harness <ids|all>    comma-separated harness ids (default: the first installed one)
            --case <glob>          case ids to run (default: *)
-           --cases <dir>          directory that holds the cases (default: evals/cases)
+           --cases <dir>          directory that holds the cases (default: evals/cases in the project)
            --reps <n>             runs for each variant and case (default: 3)
            --model <id>           passed to the harness (default: the harness's own default)
            --min-score <0..1>     exit 1 when the suite score of the kit (B for run) is lower
@@ -32,15 +31,17 @@ const USAGE = `Usage: skill-evals <command> [options]
   check  Run one small prompt in each installed harness and show what its adapter reports.
            --harness <ids|all>  (default: all)   --model <id>   --out <dir>
   list   Show harnesses in default-preference order, and the cases.
-           --cases <dir>`;
+           --cases <dir>
+
+The project is the git repository that holds the working directory, or the working directory itself.`;
 
 const OPTIONS = {
 	a: { type: "string", default: "main" },
-	b: { type: "string", default: repoDir },
-	kit: { type: "string", default: repoDir },
+	b: { type: "string" },
+	kit: { type: "string" },
 	harness: { type: "string" },
 	case: { type: "string", default: "*" },
-	cases: { type: "string", default: path.join(repoDir, "evals", "cases") },
+	cases: { type: "string" },
 	reps: { type: "string", default: "3" },
 	model: { type: "string" },
 	"min-score": { type: "string" },
@@ -69,7 +70,7 @@ function outputDir(requested) {
  * Runs the suite on each named version of the kit and scores it. The last version is the one under test.
  * @param {["a" | "b" | "kit", string][]} specs  label and ref or path of each version
  */
-async function evaluate(options, specs) {
+async function evaluate(options, specs, project) {
 	const reps = Number(options.reps);
 	if (!Number.isInteger(reps) || reps < 1) throw new UsageError("--reps must be a positive integer");
 	const minScore = options["min-score"] === undefined ? undefined : Number(options["min-score"]);
@@ -80,7 +81,7 @@ async function evaluate(options, specs) {
 	const cases = loadCases(options.cases, options.case);
 	const variants = [];
 	try {
-		for (const [label, spec] of specs) variants.push(resolveVariant(label, spec, repoDir));
+		for (const [label, spec] of specs) variants.push(resolveVariant(label, spec, project));
 		const outDir = outputDir(options.out);
 		const records = [];
 		for (const { harness, bin } of selection.chosen) {
@@ -126,9 +127,9 @@ const FILLABLE = {
 };
 const KIT_LOADED = { true: "yes", false: "NO", null: "this harness gives no evidence" };
 
-async function check(options) {
+async function check(options, project) {
 	const located = namedHarnesses(options.harness).map((harness) => ({ harness, bin: findBin(harness) }));
-	const variant = resolveVariant("b", repoDir, repoDir);
+	const variant = resolveVariant("b", project.root, project);
 	const outDir = located.some((entry) => entry.bin) ? outputDir(options.out) : "nothing ran";
 	const rows = [];
 	let failed = false;
@@ -186,14 +187,18 @@ function list(options) {
 
 const COMMANDS = {
 	run: {
-		handler: (options) =>
-			evaluate(options, [
-				["a", options.a],
-				["b", options.b],
-			]),
+		handler: (options, project) =>
+			evaluate(
+				options,
+				[
+					["a", options.a],
+					["b", options.b],
+				],
+				project,
+			),
 		options: ["a", "b", ...SUITE_OPTIONS],
 	},
-	score: { handler: (options) => evaluate(options, [["kit", options.kit]]), options: ["kit", ...SUITE_OPTIONS] },
+	score: { handler: (options, project) => evaluate(options, [["kit", options.kit]], project), options: ["kit", ...SUITE_OPTIONS] },
 	check: { handler: check, options: ["harness", "model", "out"] },
 	list: { handler: list, options: ["cases"] },
 };
@@ -204,7 +209,9 @@ export async function main([name, ...args]) {
 		const command = COMMANDS[name];
 		if (!command) throw new UsageError(`${name ? `unknown command "${name}"` : "missing command"}\n\n${USAGE}`);
 		const options = Object.fromEntries(command.options.map((key) => [key, OPTIONS[key]]));
-		return await command.handler(parseArgs({ args, options }).values);
+		const project = findProject(process.cwd());
+		const defaults = { b: project.root, kit: project.root, cases: path.join(project.root, "evals", "cases") };
+		return await command.handler({ ...defaults, ...parseArgs({ args, options }).values }, project);
 	} catch (error) {
 		if (!(error instanceof UsageError || error.code?.startsWith("ERR_PARSE_ARGS"))) throw error;
 		console.error(`skill-evals: ${error.message}`);

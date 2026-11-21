@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,30 +6,7 @@ import test from "node:test";
 import { failedBars, scoreSuites, weightedMean } from "../src/score.mjs";
 import { UsageError } from "../src/scope.mjs";
 import { resolveVariant } from "../src/variants.mjs";
-
-const repoDir = path.resolve(import.meta.dirname, "..");
-const cli = path.join(repoDir, "bin/skill-evals.mjs");
-const fakeHarness = path.join(import.meta.dirname, "fixtures/fake-harness.mjs");
-
-function sandbox(t) {
-	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "runs-")));
-	t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-	const write = (relative, content) => {
-		const file = path.join(root, relative);
-		fs.mkdirSync(path.dirname(file), { recursive: true });
-		fs.writeFileSync(file, typeof content === "string" ? content : JSON.stringify(content));
-		return file;
-	};
-	// A PATH that holds node and nothing else, so no harness installed on this machine can be picked up.
-	fs.mkdirSync(path.join(root, "bin"));
-	fs.symlinkSync(process.execPath, path.join(root, "bin/node"));
-	const evals = (args, env = {}) =>
-		spawnSync(process.execPath, [cli, ...args], {
-			encoding: "utf8",
-			env: { PATH: path.join(root, "bin"), HOME: root, SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness, ...env },
-		});
-	return { root, write, evals };
-}
+import { fakeHarness, gitRepo, sandbox } from "./helpers.mjs";
 
 function kit(box, name, behavior) {
 	box.write(`${name}/behavior.json`, { name, ...behavior });
@@ -60,7 +36,7 @@ test("run reports the difference between two kit directories and leaves no temp 
 	const kitB = kit(box, "kit-beta", { costUsd: 0.03, skill: "bro" });
 	const outDir = path.join(box.root, "results");
 
-	const result = box.evals(["run", "--a", kitA, "--b", kitB, "--cases", plantCase(box), "--reps", "2", "--out", outDir]);
+	const result = box.cli(["run", "--a", kitA, "--b", kitB, "--cases", plantCase(box), "--reps", "2", "--out", outDir]);
 	assert.equal(result.status, 0, result.stderr);
 
 	const { records } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
@@ -102,7 +78,7 @@ test("run does not count a run whose harness loaded some other kit, and exits no
 	const ghost = kit(box, "kit-ghost", { costUsd: 0.01, skill: "bro", ghost: true });
 	const outDir = path.join(box.root, "results");
 
-	const result = box.evals(["run", "--a", kitA, "--b", ghost, "--cases", plantCase(box), "--reps", "1", "--out", outDir]);
+	const result = box.cli(["run", "--a", kitA, "--b", ghost, "--cases", plantCase(box), "--reps", "1", "--out", outDir]);
 	assert.equal(result.status, 1, result.stderr);
 
 	const { records } = JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
@@ -119,7 +95,7 @@ test("run rejects a bad case file or command line before it starts any harness",
 	const box = sandbox(t);
 	const kitA = kit(box, "kit-alpha", { costUsd: 0.01 });
 	const outDir = path.join(box.root, "results");
-	const run = (...extra) => box.evals(["run", "--a", kitA, "--b", kitA, "--out", outDir, ...extra]);
+	const run = (...extra) => box.cli(["run", "--a", kitA, "--b", kitA, "--out", outDir, ...extra]);
 	const cases = plantCase(box, [{ type: "smells_right", skill: "bro" }]);
 
 	const unknownCheck = run("--cases", cases);
@@ -155,7 +131,7 @@ test("run rejects a bad case file or command line before it starts any harness",
 	assert.equal(run("--cases", cases, "--case", "no-such-*").status, 2);
 	assert.equal(run("--cases", cases, "--reps", "0").status, 2);
 	assert.equal(run("--cases", cases, "--b", "no-such-ref-or-dir").status, 2);
-	assert.equal(box.evals(["frobnicate"]).status, 2);
+	assert.equal(box.cli(["frobnicate"]).status, 2);
 
 	assert.equal(fs.existsSync(path.join(outDir, "results.json")), false);
 	assert.equal(fs.existsSync(path.join(outDir, "claude-code")), false);
@@ -176,7 +152,7 @@ test("scores are weighted means, and a suite or case score under its bar fails t
 	box.write("cases/steady/prompt.md", "anything\n");
 	box.write("cases/steady/case.json", { checks: [{ type: "output_not_contains", text: "no such text" }], weight: 2 });
 	const outDir = path.join(box.root, "results");
-	const run = (a, b, ...extra) => box.evals(["run", "--a", a, "--b", b, "--cases", cases, "--reps", "1", "--out", outDir, ...extra]);
+	const run = (a, b, ...extra) => box.cli(["run", "--a", a, "--b", b, "--cases", cases, "--reps", "1", "--out", outDir, ...extra]);
 	const results = () => JSON.parse(fs.readFileSync(path.join(outDir, "results.json"), "utf8"));
 
 	const better = run(plain, skilled, "--min-score", "0.9");
@@ -253,7 +229,7 @@ test("score runs the suite on one version and applies the pass bar to it", (t) =
 	const skilled = kit(box, "kit-beta", { costUsd: 0.03, skill: "bro" });
 	const cases = plantCase(box, WEIGHTED);
 	const outDir = path.join(box.root, "results");
-	const score = (kitDir, ...extra) => box.evals(["score", "--kit", kitDir, "--cases", cases, "--reps", "2", "--out", outDir, ...extra]);
+	const score = (kitDir, ...extra) => box.cli(["score", "--kit", kitDir, "--cases", cases, "--reps", "2", "--out", outDir, ...extra]);
 
 	const good = score(skilled, "--min-score", "1");
 	assert.equal(good.status, 0, good.stderr);
@@ -274,7 +250,7 @@ test("score runs the suite on one version and applies the pass bar to it", (t) =
 	const bad = score(plain, "--min-score", "0.5");
 	assert.equal(bad.status, 1);
 	assert.match(bad.stdout, /suite score 0\.33 does not reach --min-score 0\.50/);
-	assert.equal(box.evals(["score", "--a", plain, "--cases", cases]).status, 2, "score takes one version");
+	assert.equal(box.cli(["score", "--a", plain, "--cases", cases]).status, 2, "score takes one version");
 });
 
 const RUBRIC = "Says the word fixed and nothing about weather.";
@@ -289,7 +265,7 @@ function judgedRun(t, replies, ...extra) {
 	]);
 	box.write("judge/replies.json", replies);
 	const outDir = path.join(box.root, "results");
-	const result = box.evals(["run", "--a", kitA, "--b", kitB, "--cases", cases, "--out", outDir, ...extra], {
+	const result = box.cli(["run", "--a", kitA, "--b", kitB, "--cases", cases, "--out", outDir, ...extra], {
 		FAKE_JUDGE_DIR: path.join(box.root, "judge"),
 		SKILL_EVALS_BIN_CODEX: fakeHarness,
 	});
@@ -383,14 +359,14 @@ test("check shows, for each harness, that it is missing or what its adapter deli
 			.split("|")
 			.map((text) => text.trim());
 
-	const result = box.evals(["check", "--out", path.join(box.root, "probe")]);
+	const result = box.cli(["check", "--out", path.join(box.root, "probe")]);
 	assert.equal(result.status, 0, result.stderr);
 	assert.deepEqual(cells(result.stdout, "claude-code").slice(2, 5), ["yes", "yes", "yes"]);
 	assert.match(cells(result.stdout, "claude-code")[6], /^finalText, tokens$/);
 	assert.match(cells(result.stdout, "pi")[2], /^no /);
 
 	// The fake speaks one harness's stream format, so behind another adapter the run must be reported as failed.
-	const broken = box.evals(["check", "--harness", "codex", "--out", path.join(box.root, "probe")], { SKILL_EVALS_BIN_CODEX: fakeHarness });
+	const broken = box.cli(["check", "--harness", "codex", "--out", path.join(box.root, "probe")], { SKILL_EVALS_BIN_CODEX: fakeHarness });
 	assert.equal(broken.status, 1);
 	assert.match(cells(broken.stdout, "codex")[3], /^NO: /);
 });
@@ -398,20 +374,17 @@ test("check shows, for each harness, that it is missing or what its adapter deli
 test("a git ref resolves to a detached worktree of that commit, and dispose removes it every time", (t) => {
 	const repo = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-")));
 	t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
-	const git = (...args) =>
-		execFileSync("git", ["-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], {
-			encoding: "utf8",
-		}).trim();
-	git("init", "-q", "-b", "trunk");
+	const git = gitRepo(repo);
 	for (const version of ["one", "two"]) {
 		fs.writeFileSync(path.join(repo, "version.txt"), version);
 		git("add", ".");
 		git("commit", "-q", "-m", version);
 	}
 	fs.writeFileSync(path.join(repo, "version.txt"), "uncommitted");
+	const project = { root: repo, isGitRepo: true };
 	const worktrees = () => git("worktree", "list", "--porcelain").match(/^worktree /gm).length;
 
-	const old = resolveVariant("a", "trunk~1", repo);
+	const old = resolveVariant("a", "trunk~1", project);
 	assert.equal(fs.readFileSync(path.join(old.dir, "version.txt"), "utf8"), "one");
 	assert.equal(old.commit, git("rev-parse", "trunk~1"));
 	assert.match(path.basename(old.dir), /^kit-/);
@@ -421,12 +394,12 @@ test("a git ref resolves to a detached worktree of that commit, and dispose remo
 	assert.equal(fs.existsSync(old.dir), false);
 	assert.equal(worktrees(), 1);
 
-	const live = resolveVariant("b", repo, repo);
+	const live = resolveVariant("b", repo, project);
 	assert.equal(fs.readFileSync(path.join(live.dir, "version.txt"), "utf8"), "uncommitted");
 	assert.equal(live.commit, null);
 	live.dispose();
 	assert.equal(fs.existsSync(repo), true, "a directory variant is never removed");
 
-	assert.throws(() => resolveVariant("a", "no-such-ref", repo), UsageError);
+	assert.throws(() => resolveVariant("a", "no-such-ref", project), UsageError);
 	assert.equal(worktrees(), 1);
 });
