@@ -24,6 +24,7 @@ function rejecting() {
 }
 
 const fine = { type: "file_exists", path: "notes.txt" };
+const ask = { type: "decision", question: "Is it plain?" };
 const BAD_CASES: [unknown, RegExp][] = [
   [
     { checks: [{ type: "smells_right", skill: "bro" }] },
@@ -70,6 +71,28 @@ const BAD_CASES: [unknown, RegExp][] = [
     /needs a string "text"/,
   ],
   [{ checks: [{ type: "judge" }] }, /needs a string "rubric"/],
+  [{ checks: [{ type: "decision", expect: "yes" }] }, /string "question"/],
+  [{ checks: [ask] }, /exactly one of "expect" and "options"/],
+  [
+    { checks: [{ ...ask, expect: "yes", options: { good: 1, bad: 0 } }] },
+    /exactly one of "expect" and "options"/,
+  ],
+  [{ checks: [{ ...ask, expect: "maybe" }] }, /"expect" must be "yes" or "no"/],
+  [{ checks: [{ ...ask, expect: 1 }] }, /needs a string "expect"/],
+  ...[
+    { good: 1 },
+    { good: 1.5, bad: 0 },
+    { good: "1", bad: 0 },
+    [1, 0],
+    null,
+  ].map((options): [unknown, RegExp] => [
+    { checks: [{ ...ask, options }] },
+    /"options" must be an object of at least two named answers/,
+  ]),
+  [
+    { checks: [{ ...ask, options: { "": 1, bad: 0 } }] },
+    /"options" must be an object of at least two named answers/,
+  ],
   ["{ not json", /case restate: /],
 ];
 

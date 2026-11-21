@@ -30,6 +30,8 @@ const USAGE = `Usage: skill-evals <command> [options]
            --min-score <0..1>     exit 1 when the suite score of the subject (B for run) is lower
            --judge-harness <id>   harness that scores judged checks (default: the harness under test)
            --judge-model <id>     model that scores judged checks (default: --model)
+           --decision-model <id>  decision model that scores decision checks (no default)
+           --decision-url <url>   base URL of the decision model's API (default: the provider's own)
            --out <dir>            where results go (default: a new temp directory)
   check  Run one small prompt in each installed harness and show what its adapter reports.
            --subject <subject>  --harness <ids|all>  (default: all)   --model <id>   --out <dir>
@@ -40,7 +42,7 @@ A subject is what a run loads: a directory, a git ref of the project, or "none" 
 A directory or ref with a plugin manifest is loaded as a plugin. Any other is a folder of skills.
 The project is the git repository that holds the working directory, or the working directory itself.
 skill-evals.config.json in the project can set a default for cases, harness, reps, model, judgeHarness,
-judgeModel, and minScore.`;
+judgeModel, decisionModel, decisionUrl, and minScore.`;
 
 const USAGE_EXIT_CODE = 2;
 
@@ -68,6 +70,8 @@ const FLAGS = {
   "min-score": { as: "minScore", read: Number },
   "judge-harness": { as: "judgeHarness" },
   "judge-model": { as: "judgeModel" },
+  "decision-model": { as: "decisionModel" },
+  "decision-url": { as: "decisionUrl" },
   out: { as: "outDir" },
 } satisfies Record<string, FlagSpec>;
 type Flag = keyof typeof FLAGS;
@@ -81,6 +85,8 @@ const SUITE_FLAGS: Flag[] = [
   "min-score",
   "judge-harness",
   "judge-model",
+  "decision-model",
+  "decision-url",
   "out",
 ];
 

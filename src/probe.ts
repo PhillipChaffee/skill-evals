@@ -113,8 +113,9 @@ export async function check(
         caseDef: probe(subject),
         rep: 1,
         model: options.model,
-        // The probe has no judged check, so this judge never runs.
+        // The probe has no judged check and no decision check, so neither model ever runs.
         judge: { harness, bin, model: options.model },
+        decision: null,
         outDir,
       });
       failed ||= invalidReason(record) !== null;

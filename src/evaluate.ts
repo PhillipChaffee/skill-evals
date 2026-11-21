@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { connect } from "./baseten.js";
 import type { Case } from "./cases.js";
 import { loadCases } from "./cases.js";
+import { isDecision } from "./checks.js";
+import type { DecisionService } from "./decision.js";
 import type { Located } from "./harnesses/index.js";
 import { selectHarnesses } from "./harnesses/index.js";
 import type { Config } from "./project.js";
@@ -34,6 +37,10 @@ export interface EvaluateOptions {
   judgeHarness?: string | undefined;
   /** The model that scores judged checks. Default: `model`. */
   judgeModel?: string | undefined;
+  /** The model that scores decision checks. No default: a suite with a decision check needs it. */
+  decisionModel?: string | undefined;
+  /** The base URL of the decision model's API. Default: the provider's own. */
+  decisionUrl?: string | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
   /** Where results go. Default: a new temp directory. */
@@ -50,6 +57,8 @@ export interface Results {
   model: string | null;
   /** The harness and model that scored the judged checks, in words. */
   judge: string;
+  /** The model that scored the decision checks; null when none is set. */
+  decisionModel: string | null;
   reps: number;
   suites: SuiteScore[];
   /** The pass bars that were not reached. */
@@ -103,10 +112,29 @@ function requireUsable(options: Config): number {
   return reps;
 }
 
+/**
+ * Connects to the decision model when a case needs one, before any harness starts.
+ * @param cases - The cases of the suite.
+ * @param options - The options after the config file was applied.
+ * @returns The decision model, or null when no case has a decision check.
+ * @throws {UsageError} When a case has a decision check and the model or its API key is not set.
+ */
+function decisionFor(cases: Case[], options: Config): DecisionService | null {
+  if (!cases.some((caseDef) => caseDef.checks.some(isDecision))) return null;
+  const { decisionModel: model, decisionUrl: url } = options;
+  if (!model) {
+    throw new UsageError(
+      "a case has a decision check, but no decision model is set: pass --decision-model or set decisionModel in the config file",
+    );
+  }
+  return connect({ model, url, env: process.env });
+}
+
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */
 interface Plan {
   chosen: Located[];
   judgeOf: (located: Located) => Judge;
+  decision: DecisionService | null;
   cases: Case[];
   reps: number;
   subjects: Subject[];
@@ -121,7 +149,7 @@ interface Plan {
  * @returns The records in the order the runs were made.
  */
 async function runAll(plan: Plan): Promise<RunRecord[]> {
-  const { cases, reps, subjects, model, outDir } = plan;
+  const { cases, reps, subjects, model, outDir, decision } = plan;
   const records: RunRecord[] = [];
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
@@ -135,6 +163,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
             rep,
             model,
             judge,
+            decision,
             outDir,
           };
           const record = await runOnce(run);
@@ -153,6 +182,7 @@ interface Finished {
   selection: { chosen: Located[]; reason: string };
   judgeHarness: Located | undefined;
   judgeModel: string | undefined;
+  decisionModel: string | undefined;
   model: string | undefined;
   minScore: number | undefined;
   reps: number;
@@ -184,6 +214,7 @@ function summarize(finished: Finished): Results {
     harnessReason: selection.reason,
     model: model ?? null,
     judge: `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`,
+    decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
     suites,
     belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
@@ -219,6 +250,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
     : [];
   const judgeModel = options.judgeModel ?? model;
   const cases = loadCases(options.cases, options.caseGlob);
+  const decision = decisionFor(cases, options);
   const subjects: Subject[] = [];
   try {
     for (const { label, spec } of pairs) {
@@ -231,6 +263,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
         ...(judgeHarness ?? located),
         model: judgeModel,
       }),
+      decision,
       cases,
       reps,
       subjects,
@@ -243,6 +276,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       selection,
       judgeHarness,
       judgeModel,
+      decisionModel: options.decisionModel,
       model,
       minScore,
       reps,

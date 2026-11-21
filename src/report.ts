@@ -1,6 +1,6 @@
 import type { Case } from "./cases.js";
 import type { Check } from "./checks.js";
-import { describeCheck, isJudged } from "./checks.js";
+import { describeCheck, isDecision, isJudged } from "./checks.js";
 import type { Evaluation } from "./evaluate.js";
 import type { RunRecord, Usage } from "./run.js";
 import { invalidReason } from "./run.js";
@@ -79,10 +79,11 @@ function versus(
 
 /**
  * Sums up how one check went over the valid runs of one subject.
- * @param check - Decides the form: a rule gives pass or fail, a judge gives a score.
+ * @param check - Decides the form: a rule gives pass or fail, a judge or a decision model gives a score.
  * @param index - Its place among the case's checks.
  * @param records - The valid runs.
- * @returns For a deterministic check the share of runs that passed it, for a judged check its mean score.
+ * @returns For a deterministic check the share of runs that passed it, for a judged check or a decision check its
+ *   mean score.
  */
 function checkRate(check: Check, index: number, records: RunRecord[]): string {
   if (records.length === 0) return "n/a";
@@ -90,18 +91,21 @@ function checkRate(check: Check, index: number, records: RunRecord[]): string {
     (sum, record) => sum + (record.checks[index]?.score ?? 0),
     0,
   );
-  return isJudged(check)
+  return isJudged(check) || isDecision(check)
     ? formatScore(total / records.length)
     : `${String(total)}/${String(records.length)}`;
 }
 
 /**
- * Reports what the judge cost, which the table leaves out.
- * @param records - The runs of one harness.
- * @returns The lines to add under the table; none when no run was judged. A metric that any judged run lacks is left out.
+ * Reports what a scoring model cost, which the table leaves out.
+ * @param title - Names the model's role: the judge, or the decision model.
+ * @param judged - What the model cost each run that it scored.
+ * @returns The lines to add under the table; none when it scored no run. A metric that any of the runs lacks is left out.
  */
-function judgeLine(records: RunRecord[]): string[] {
-  const judged = records.flatMap((record) => record.judge ?? []);
+function scorerLine(
+  title: string,
+  judged: NonNullable<RunRecord["judge"]>[],
+): string[] {
   if (judged.length === 0) return [];
   const calls = judged.reduce((total, usage) => total + usage.calls, 0);
   const totals = METRICS.flatMap((metric) => {
@@ -113,7 +117,7 @@ function judgeLine(records: RunRecord[]): string[] {
   const parts = [`${String(calls)} calls`, ...totals];
   return [
     "",
-    `Judge, in total and not counted in the table: ${parts.join(", ")}`,
+    `${title}, in total and not counted in the table: ${parts.join(", ")}`,
   ];
 }
 
@@ -176,7 +180,8 @@ const LEADING_COLUMNS = 3;
 /**
  * Builds the part of the report for one harness.
  * @param section - The scores and runs of one harness.
- * @returns A heading, the table of cases, the suite score, the judge's cost, and the list of invalid runs.
+ * @returns A heading, the table of cases, the suite score, what the judge and the decision model cost, and the list
+ *   of invalid runs.
  */
 function harnessSection(section: Section): string {
   const { suite, cases, records, labels } = section;
@@ -200,7 +205,14 @@ function harnessSection(section: Section): string {
     ...cases.map((caseDef) => caseRow(caseDef, section)),
     "",
     `Suite score: ${versus(Object.values(suite.suite), formatScore)}`,
-    ...judgeLine(records),
+    ...scorerLine(
+      "Judge",
+      records.flatMap((record) => record.judge ?? []),
+    ),
+    ...scorerLine(
+      "Decision model",
+      records.flatMap((record) => record.decision ?? []),
+    ),
     ...(invalid.length
       ? ["", "Invalid runs, not counted above:", "", ...invalid]
       : []),
@@ -236,6 +248,9 @@ export function renderReport(evaluation: Evaluation): string {
     `- Harness: ${evaluation.harnesses.join(", ")} (${evaluation.harnessReason})`,
     `- Model: ${evaluation.model ?? "the harness default"}`,
     ...(judged ? [`- Judge: ${evaluation.judge}`] : []),
+    ...(evaluation.decisionModel === null
+      ? []
+      : [`- Decision model: ${evaluation.decisionModel}`]),
     `- Reps: ${String(reps)} for each ${compared ? "subject and case" : "case"}`,
     `- Output: ${evaluation.outDir}`,
     "",

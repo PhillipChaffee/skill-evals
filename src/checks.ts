@@ -13,6 +13,8 @@ interface CheckFields {
   inputMatches?: string;
   flags?: string;
   rubric?: string;
+  question?: string;
+  expect?: "yes" | "no";
 }
 /** The name of a field a check may carry. */
 export type Field = keyof CheckFields;
@@ -25,8 +27,19 @@ export type JudgedCheck = CheckFields & {
   weight: number;
   rubric: string;
 };
+/**
+ * A check that a decision model scores: it returns a probability for each allowed answer, and the score is the
+ * expected value. Loading a case makes sure that exactly one of `expect` and `options` is set.
+ */
+export type DecisionCheck = CheckFields & {
+  type: "decision";
+  weight: number;
+  question: string;
+  /** Each allowed answer with what it is worth, from 0 to 1. Absent for a yes or no question, which `expect` scores. */
+  options?: Record<string, number>;
+};
 /** One thing a case expects of a run. */
-export type Check = RuledCheck | JudgedCheck;
+export type Check = RuledCheck | JudgedCheck | DecisionCheck;
 
 /** What a deterministic check can observe. */
 export interface Outcome {
@@ -138,10 +151,11 @@ const RULED = {
 };
 type RuledType = keyof typeof RULED;
 
-// Every check type. A type with no rule is scored by a model instead (see judge.ts).
+// Every check type. A type with no rule is scored by a model instead (see judge.ts and decision.ts).
 export const CHECKS: Record<string, Spec> = {
   ...RULED,
   judge: { fields: ["rubric"] },
+  decision: { fields: ["question"], optional: ["expect"] },
 };
 
 /**
@@ -153,8 +167,16 @@ export const isJudged = (check: Check): check is JudgedCheck =>
   check.type === "judge";
 
 /**
+ * Finds the checks that a decision model scores.
+ * @param check - Any check of a case.
+ * @returns True when the score is the expected value of a decision model's probabilities.
+ */
+export const isDecision = (check: Check): check is DecisionCheck =>
+  check.type === "decision";
+
+/**
  * Scores a deterministic check.
- * @param check - A check that is not judged.
+ * @param check - A check that a rule scores.
  * @param outcome - What the run left behind.
  * @returns 1 when the check holds, 0 when it does not.
  */
@@ -167,10 +189,11 @@ const ELLIPSIS = "...";
 /**
  * Names a check in one line of a report.
  * @param check - Any check of a case.
- * @returns Its type and what it looks for; long text is cut short, and a weight other than 1 is shown.
+ * @returns Its type and what it looks for; long text is cut short, a decision check names the answer it expects or
+ *   its options, and a weight other than 1 is shown.
  */
 export function describeCheck(check: Check): string {
-  const quoted = [check.text, check.rubric]
+  const quoted = [check.text, check.rubric, check.question]
     .filter((text) => text !== undefined)
     .map((text) =>
       JSON.stringify(
@@ -183,12 +206,16 @@ export function describeCheck(check: Check): string {
     check[field] === undefined ? [] : [`/${check[field]}/${check.flags ?? ""}`],
   );
   const weight = check.weight === 1 ? [] : [`(weight ${String(check.weight)})`];
+  const answers = isDecision(check)
+    ? [check.expect ?? Object.keys(check.options ?? {}).join("/")]
+    : [];
   return [
     check.type,
     check.skill,
     check.path,
     check.kind,
     ...quoted,
+    ...answers,
     ...patterns,
     ...weight,
   ]

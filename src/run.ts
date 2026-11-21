@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Case } from "./cases.js";
 import type { Check, Outcome } from "./checks.js";
-import { checkScore, isJudged } from "./checks.js";
+import { checkScore, isDecision, isJudged } from "./checks.js";
+import type { DecisionService } from "./decision.js";
+import { decide } from "./decision.js";
 import type {
   Harness,
   LoadedSubject,
@@ -27,10 +29,12 @@ export interface Usage {
 
 /** A check with what it gave one run. */
 export type CheckResult = Check & {
-  /** Null when a judged check got no usable answer. */
+  /** Null when a judged check or a decision check got no usable answer. */
   score: number | null;
   /** The judge's reason, or why there is no score. */
   reason?: string;
+  /** For a decision check, the probability the model gave each allowed answer. */
+  probabilities?: Record<string, number>;
 };
 
 /** Everything kept about one run. */
@@ -52,6 +56,8 @@ export interface RunRecord extends Usage {
   score: number | null;
   /** What the judged checks cost, kept apart from the run's own numbers; null when no judge ran. */
   judge: (Usage & { calls: number }) | null;
+  /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
+  decision: (Usage & { calls: number }) | null;
 }
 
 /** The harness and model that score judged checks. */
@@ -70,12 +76,23 @@ export interface RunPlan {
   rep: number;
   model?: string | undefined;
   judge: Judge;
+  /** The model that scores decision checks; null when no case has one. */
+  decision: DecisionService | null;
   /** Where the run's stream and final text are written. */
   outDir: string;
 }
 
 // A judge answers in one message. The second turn is room for one stray tool call before the answer.
 const JUDGE_LIMITS = { maxTurns: 2, timeoutSeconds: 300 };
+// A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
+// does not start without a decision model.
+const NOT_DECIDED = {
+  score: null,
+  reason: "not decided, because the run is invalid",
+};
+// The key of the decision model stays out of every harness process, the agent's and the judge's.
+const withheld = (plan: RunPlan): string[] =>
+  plan.decision ? [plan.decision.secret] : [];
 const SKILL_FILE = /skills[\\/]+([\w-]+)[\\/]+skill\.md/gi;
 
 /**
@@ -116,7 +133,8 @@ export function invalidReason(
   }
   const unscored = record.checks.find((check) => check.score === null);
   if (unscored) {
-    return `a judged check has no score: ${String(unscored.reason)}`;
+    const kind = isDecision(unscored) ? "decision" : "judged";
+    return `a ${kind} check has no score: ${String(unscored.reason)}`;
   }
   return null;
 }
@@ -149,9 +167,9 @@ const REPORTED_LOADED = {
 };
 
 /**
- * Adds up what the judge's replies cost.
- * @param replies - Every reply of the judge for one run.
- * @returns The totals. A number that any reply does not report stays null.
+ * Adds up what the calls of a scoring model cost.
+ * @param replies - Every reply of the judge, or every request to the decision model, for one run.
+ * @returns The totals. A cost that any reply does not report stays null.
  */
 function totalUsage(replies: Usage[]): Usage & { calls: number } {
   const costs = replies.flatMap((reply) => reply.costUsd ?? []);
@@ -172,16 +190,24 @@ function totalUsage(replies: Usage[]): Usage & { calls: number } {
  *   about the subject.
  * @param outcome - What the deterministic checks observe.
  * @param judgeable - False when the run is already invalid, which leaves the judged checks without a score.
- * @returns The check results in case order, and every reply of the judge.
+ * @returns The check results in case order, every reply of the judge, and every request to the decision model.
  */
 async function scoreChecks(
   plan: RunPlan,
   outcome: Outcome,
   judgeable: boolean,
-): Promise<{ checks: CheckResult[]; replies: Usage[] }> {
+): Promise<{ checks: CheckResult[]; replies: Usage[]; requests: Usage[] }> {
+  const { prompt: task, checks: asked } = plan.caseDef;
+  const withhold = withheld(plan);
   const ask = (judgePrompt: string) =>
     session(
-      { ...plan.judge, subject: null, prompt: judgePrompt, ...JUDGE_LIMITS },
+      {
+        ...plan.judge,
+        subject: null,
+        prompt: judgePrompt,
+        ...JUDGE_LIMITS,
+        withhold,
+      },
       ({ parsed, error, durationMs }) => ({
         finalText: parsed.finalText,
         error,
@@ -190,17 +216,30 @@ async function scoreChecks(
         costUsd: parsed.costUsd,
       }),
     );
+  // One request carries every decision check of the case.
+  const decisions = asked.filter(isDecision);
+  const decided =
+    judgeable && plan.decision && decisions.length
+      ? await decide(plan.decision.model, {
+          task,
+          answer: outcome.finalText,
+          checks: decisions,
+        })
+      : null;
   const checks: CheckResult[] = [];
   const replies: Usage[] = [];
-  for (const check of plan.caseDef.checks) {
-    if (!isJudged(check)) {
+  for (const check of asked) {
+    if (isDecision(check)) {
+      const result = decided?.results[decisions.indexOf(check)];
+      checks.push({ ...check, ...(result ?? NOT_DECIDED) });
+    } else if (!isJudged(check)) {
       checks.push({ ...check, score: checkScore(check, outcome) });
     } else if (!judgeable) {
       const reason = "not judged, because the run is invalid";
       checks.push({ ...check, score: null, reason });
     } else {
       const verdict = await judge(ask, {
-        task: plan.caseDef.prompt,
+        task,
         answer: outcome.finalText,
         rubric: check.rubric,
       });
@@ -208,7 +247,7 @@ async function scoreChecks(
       checks.push({ ...check, score: verdict.score, reason: verdict.reason });
     }
   }
-  return { checks, replies };
+  return { checks, replies, requests: decided?.calls ?? [] };
 }
 
 /**
@@ -249,7 +288,7 @@ async function record(plan: RunPlan, ran: SessionResult): Promise<RunRecord> {
     tokens: parsed.tokens,
     costUsd: parsed.costUsd,
   };
-  const { checks, replies } = await scoreChecks(
+  const { checks, replies, requests } = await scoreChecks(
     plan,
     { ...parsed, skillsLoaded: loaded, workspace: ran.workspace },
     invalidReason({ ...base, checks: [] }) === null,
@@ -259,6 +298,7 @@ async function record(plan: RunPlan, ran: SessionResult): Promise<RunRecord> {
     checks,
     score: invalidReason({ ...base, checks }) ? null : weightedMean(checks),
     judge: replies.length ? totalUsage(replies) : null,
+    decision: requests.length ? totalUsage(requests) : null,
   };
 }
 
@@ -282,6 +322,7 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
       maxTurns,
       timeoutSeconds,
       workspaceDir,
+      withhold: withheld(plan),
     },
     (ran) => record(plan, ran),
   );
