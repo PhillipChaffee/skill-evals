@@ -159,28 +159,33 @@ function skillRepo() {
   return { repo, git, project: projectAt(repo, true), worktrees };
 }
 
+// What a run copies: the export, which for a git ref holds the committed files.
 const skillText = (subject: Subject) =>
   fs.readFileSync(
-    path.join(subject.skillDirs["greet"] ?? "", "SKILL.md"),
+    path.join(
+      subject.exported ?? "",
+      path.relative(subject.dir ?? "", subject.skillDirs["greet"] ?? ""),
+      "SKILL.md",
+    ),
     "utf8",
   );
 
-test("a git ref resolves to a detached worktree of that commit, and dispose removes it every time", () => {
+test("a git ref is exported with the files of that commit, and dispose removes the export every time", () => {
   const { git, project, worktrees } = skillRepo();
 
   const old = resolveSubject("a", "trunk~1", project);
   expect(skillText(old)).toBe("one");
   expect(old.commit).toBe(git("rev-parse", "trunk~1"));
   expect(old.skills, "named after the project folder").toEqual(["greet"]);
-  expect(path.basename(old.dir ?? "")).toMatch(/^kit-/);
-  expect(worktrees()).toBe(2);
+  expect(old.dir, "the project, for the report").toBe(project.root);
+  expect(path.basename(old.exported ?? "")).toMatch(/^kit-/);
+  expect(worktrees(), "no worktree").toBe(1);
   old.dispose();
   old.dispose();
-  expect(fs.existsSync(old.dir ?? "")).toBe(false);
-  expect(worktrees()).toBe(1);
+  expect(fs.existsSync(old.exported ?? "")).toBe(false);
 });
 
-test("a directory subject is used with its uncommitted changes and is never removed", () => {
+test("a directory subject is exported with its uncommitted changes, and its source is never removed", () => {
   const { repo, project } = skillRepo();
   const live = resolveSubject("b", repo, project);
   expect(skillText(live)).toBe("uncommitted");
@@ -189,7 +194,7 @@ test("a directory subject is used with its uncommitted changes and is never remo
   expect(fs.existsSync(repo)).toBe(true);
 });
 
-test("a ref that is no subject is a usage error and leaves no worktree behind", () => {
+test("a ref that is no subject is a usage error and leaves no export behind", () => {
   const { project, worktrees } = skillRepo();
   expect(() => resolveSubject("a", "no-such-ref", project)).toThrow(UsageError);
   expect(() => resolveSubject("a", "trunk~2", project)).toThrow(

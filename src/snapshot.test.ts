@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { expect, test, vi } from "vitest";
 import { allChanged, diffSnapshots, snapshot } from "./snapshot.js";
@@ -41,6 +41,8 @@ test("a snapshot hashes files and links, and diffSnapshots sorts what changed", 
   ]);
 });
 
+const LOCKED = "locked.txt";
+
 test("a file that cannot be read is hashed as unreadable, and a skipped path is absent", () => {
   const box = sandbox();
   box.write("d/locked.txt", "secret");
@@ -48,13 +50,13 @@ test("a file that cannot be read is hashed as unreadable, and a skipped path is 
   box.write("d/skipped/a.txt", "a");
   const read = fs.readFileSync.bind(fs);
   vi.spyOn(fs, "readFileSync").mockImplementation(((file: string) => {
-    if (file.endsWith("locked.txt")) throw new Error("EACCES");
+    if (file.endsWith(LOCKED)) throw new Error("EACCES");
     return read(file);
   }) as typeof fs.readFileSync);
   const taken = snapshot(path.join(box.root, "d"), (rel) => rel === "skipped");
   vi.restoreAllMocks();
-  expect([...taken.keys()].sort()).toEqual(["locked.txt", "open.txt"]);
-  expect(taken.get("locked.txt")).toBe("unreadable");
+  expect([...taken.keys()].sort()).toEqual([LOCKED, "open.txt"]);
+  expect(taken.get(LOCKED)).toBe("unreadable");
 });
 
 test("a directory that cannot be listed is one unreadable entry", () => {
@@ -70,12 +72,16 @@ test("a directory that cannot be listed is one unreadable entry", () => {
   expect([...taken.entries()]).toEqual([["sub", "unreadable"]]);
 });
 
-test("a fifo is hashed as unreadable and never opened", () => {
+test("a socket is hashed as unreadable and never opened", async () => {
   const box = sandbox();
   box.write("d/a.txt", "a");
   const dir = path.join(box.root, "d");
-  execFileSync("mkfifo", [path.join(dir, "pipe")]);
+  const server = net.createServer();
+  await new Promise<void>((resolve) => {
+    server.listen(path.join(dir, "sock"), resolve);
+  });
   const taken = snapshot(dir);
-  expect(taken.get("pipe")).toBe("unreadable");
+  server.close();
+  expect(taken.get("sock")).toBe("unreadable");
   expect(taken.get("a.txt")).toMatch(/^[0-9a-f]{64}$/);
 });

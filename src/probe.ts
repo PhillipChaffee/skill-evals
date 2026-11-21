@@ -6,7 +6,14 @@ import type { RunRecord } from "./run.js";
 import { invalidReason, runOnce } from "./run.js";
 import { outputDir } from "./scope.js";
 import type { Subject } from "./subject.js";
-import { describeSubject, resolveSubject } from "./subject.js";
+import {
+  SUBJECT_CHANGED_EXIT_CODE,
+  changedAtSource,
+  describeSubject,
+  exclusionsOf,
+  resolveSubject,
+  sourceChangedMessage,
+} from "./subject.js";
 
 /** The options of the `check` command. */
 export interface ProbeOptions {
@@ -75,6 +82,27 @@ function ranRow(subject: Subject, record: RunRecord): string[] {
 }
 
 /**
+ * Lays out the `check` output.
+ * @param subject - What the harnesses were asked to load.
+ * @param outDir - Where the runs' files are, or "nothing ran".
+ * @param rows - One row of cells for each harness.
+ * @returns The subject, the output directory, and the table.
+ */
+function table(subject: Subject, outDir: string, rows: string[][]): string {
+  return [
+    `Subject: ${describeSubject(subject)}`,
+    `Output: ${outDir}`,
+    "",
+    "| Harness | Installed | Ran | Reported the subject as loaded | Skills the agent loaded | Record fields filled |",
+    "| --- | --- | --- | --- | --- | --- |",
+    ...rows.map(
+      (row) =>
+        `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`,
+    ),
+  ].join("\n");
+}
+
+/**
  * Runs one small prompt in each harness and prints what its adapter reports, as a table.
  * @param given - The options of the command line.
  * @param project - Where the config file and the default subject are.
@@ -90,11 +118,10 @@ export async function check(
     harness,
     bin: findBin(harness),
   }));
-  const subject = resolveSubject(
-    "subject",
-    options.subject ?? project.root,
-    project,
-  );
+  const subject = resolveSubject("subject", options.subject ?? project.root, {
+    ...project,
+    left: exclusionsOf(options, project.cwd),
+  });
   try {
     const outDir = located.some((entry) => entry.bin)
       ? outputDir(options.outDir, project.cwd)
@@ -123,19 +150,12 @@ export async function check(
       failed ||= invalidReason(record) !== null;
       rows.push([harness.id, ...ranRow(subject, record)]);
     }
-    console.log(
-      [
-        `Subject: ${describeSubject(subject)}`,
-        `Output: ${outDir}`,
-        "",
-        "| Harness | Installed | Ran | Reported the subject as loaded | Skills the agent loaded | Record fields filled |",
-        "| --- | --- | --- | --- | --- | --- |",
-        ...rows.map(
-          (row) =>
-            `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`,
-        ),
-      ].join("\n"),
-    );
+    console.log(table(subject, outDir, rows));
+    const changed = changedAtSource([subject]);
+    if (changed.length > 0) {
+      console.error(`skill-evals: ${sourceChangedMessage(changed)}`);
+      return SUBJECT_CHANGED_EXIT_CODE;
+    }
     return failed ? 1 : 0;
   } finally {
     subject.dispose();

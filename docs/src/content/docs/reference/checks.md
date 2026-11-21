@@ -24,6 +24,7 @@ A check is one object in the `checks` list of a `case.json`. Every check has a `
 | `file_matches`        | `path`, `pattern`, optional `flags`                                                                | That file exists and matches the regular expression.                                                       |
 | `tool_called`         | at least one of `kind`, `name`, optional `inputMatches`, optional `flags`                          | The agent made a tool call that fits every given field.                                                    |
 | `tool_not_called`     | at least one of `kind`, `name`, optional `inputMatches`, optional `flags`                          | The agent made no tool call that fits every given field.                                                   |
+| `subject_unchanged`   |                                                                                                    | The agent changed nothing in the copy of the subject that the run loaded.                                  |
 | `judge`               | `rubric`                                                                                           | Not 0 or 1. A model scores the final answer against the rubric.                                            |
 | `decision`            | `question`, optional `expect`, optional `options`. It takes exactly one of `expect` and `options`. | Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value. |
 

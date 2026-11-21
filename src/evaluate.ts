@@ -16,7 +16,7 @@ import type { SuiteScore } from "./score.js";
 import { failedBars, isUnitScore, scoreSuites } from "./score.js";
 import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject, SubjectSummary } from "./subject.js";
-import { resolveSubject } from "./subject.js";
+import { changedAtSource, exclusionsOf, resolveSubject } from "./subject.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions {
@@ -30,6 +30,8 @@ export interface EvaluateOptions {
   cases?: string | undefined;
   /** Names of variables the harness gets besides the allowlist. Default: `env` of the config file. */
   env?: string[] | undefined;
+  /** Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file. */
+  subjectExclude?: string[] | undefined;
   /** Case ids to run; only `*` is special. Default: every case. */
   caseGlob?: string | undefined;
   /** Runs for each subject and case. Default: 3. */
@@ -76,10 +78,12 @@ export interface Results {
   belowBar: string[];
   /** The runs that do not count, each with its reason. */
   invalid: string[];
+  /** The paths of a subject directory that changed while the command ran, each as the user would type it. */
+  sourceChanged: string[];
   records: RunRecord[];
 }
 
-/** What `evaluate` returns. The evaluation succeeded when `belowBar` and `invalid` are both empty. */
+/** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty. */
 export interface Evaluation extends Results {
   cases: Case[];
   outDir: string;
@@ -219,6 +223,7 @@ interface Finished {
   reps: number;
   cases: Case[];
   records: RunRecord[];
+  sourceChanged: string[];
 }
 
 /**
@@ -257,8 +262,21 @@ function summarize(finished: Finished): Results {
       const run = `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`;
       return reason === null ? [] : [`${run}: ${reason}`];
     }),
+    sourceChanged: finished.sourceChanged,
     records,
   };
+}
+
+/**
+ * Writes `results.json`.
+ * @param outDir - The output directory.
+ * @param results - What the evaluation found.
+ */
+function writeResults(outDir: string, results: Results): void {
+  fs.writeFileSync(
+    path.join(outDir, "results.json"),
+    JSON.stringify(results, null, "\t"),
+  );
 }
 
 /**
@@ -290,8 +308,9 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const decision = decisionFor(cases, options);
   const subjects: Subject[] = [];
   try {
+    const scope = { ...project, left: exclusionsOf(options, cwd) };
     for (const { label, spec } of pairs) {
-      subjects.push(resolveSubject(label, spec, project));
+      subjects.push(resolveSubject(label, spec, scope));
     }
     const outDir = outputDir(options.outDir, cwd);
     const records = await runAll({
@@ -320,11 +339,9 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       reps,
       cases,
       records,
+      sourceChanged: changedAtSource(subjects),
     });
-    fs.writeFileSync(
-      path.join(outDir, "results.json"),
-      JSON.stringify(results, null, "\t"),
-    );
+    writeResults(outDir, results);
     return { ...results, cases, outDir };
   } finally {
     for (const subject of subjects) subject.dispose();

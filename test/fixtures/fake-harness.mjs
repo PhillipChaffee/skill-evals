@@ -5,6 +5,7 @@
 // - Given --plugin-dir, it behaves as `behavior.json` in that directory says (a plugin without one is plain).
 // - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
 //   that transcript instead of the behaviour below. Turn n of the script answers the n-th prompt of a session.
+// - A script's `exec` command sees the plugin directory as $PLUGIN_DIR, and a `write` path may start with it.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -135,10 +136,12 @@ function play(steps, turn) {
       block: { type: "tool_use", id: use, name, input },
       settle: (parent) => {
         if (write) {
-          fs.mkdirSync(path.dirname(path.resolve(write.path)), {
+          // $PLUGIN_DIR stands for the --plugin-dir this run was given, so a script can write into the plugin.
+          const target = write.path.replaceAll("$PLUGIN_DIR", pluginDir ?? "");
+          fs.mkdirSync(path.dirname(path.resolve(target)), {
             recursive: true,
           });
-          fs.writeFileSync(write.path, write.content);
+          fs.writeFileSync(target, write.content);
         }
         if (!exec) return toolResult(use, output, false, parent);
         // The sandbox's PATH holds node and git only, so a command also gets the system's.
@@ -146,6 +149,7 @@ function play(steps, turn) {
           encoding: "utf8",
           env: {
             ...process.env,
+            PLUGIN_DIR: pluginDir ?? "",
             PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin`,
           },
         });

@@ -8,7 +8,7 @@ description: Exit codes, and what a run needs on a machine that is not yours.
 | Exit code | Meaning                                                                                                                                                |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 0         | Every run is valid and every pass bar is reached.                                                                                                      |
-| 1         | A run failed or is invalid, or a score is under its bar.                                                                                               |
+| 1         | A run failed or is invalid, a score is under its bar, or the subject directory changed while the command ran.                                          |
 | 2         | A wrong command line, case file, config file, or subject. A decision check with no decision model or no API key. Also Windows, which is not supported. |
 
 - **Set the bar.** `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, and `minScore` in a `case.json` does the same for one case. See [Set a pass bar](pass-bars.md).

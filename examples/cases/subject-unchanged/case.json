@@ -1,0 +1,7 @@
+{
+  "checks": [
+    { "type": "subject_unchanged" },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { requireEnvNames } from "./env.js";
+import { globToRegExp } from "./glob.js";
 import { UsageError, messageOf } from "./scope.js";
 
 /** The project a command works on. Relative paths on a command line resolve against cwd. */
@@ -47,6 +48,7 @@ export const CONFIG_KEYS: Record<
   minScore: "number",
   lenient: "boolean",
   env: "string[]",
+  subjectExclude: "string[]",
 };
 
 /** The project's optional config file. */
@@ -64,6 +66,8 @@ export interface Config {
   lenient?: boolean;
   /** Exact names of variables of this process that the harness gets besides the allowlist. */
   env?: string[];
+  /** Globs, relative to the subject, of paths that a run never gets: they are left out of its copy. */
+  subjectExclude?: string[];
 }
 
 /**
@@ -83,6 +87,14 @@ function checkValue(file: string, key: string, value: unknown): void {
   }
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new UsageError(`${file}: "${key}" must be a list of strings`);
+  }
+  if (key === "subjectExclude") {
+    for (const glob of value as string[]) {
+      if (glob === "")
+        throw new UsageError(`${file}: "${key}" has an empty glob`);
+      globToRegExp(glob);
+    }
+    return;
   }
   requireEnvNames(value as string[], `${file}: "${key}"`);
 }

@@ -1,8 +1,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { literalGlob } from "./glob.js";
+import { exportSubject, leaveOut } from "./isolate.js";
 import type { Project } from "./project.js";
-import { UsageError, onDispose, tempDir } from "./scope.js";
+import { UsageError } from "./scope.js";
+import { allChanged, diffSnapshots, snapshot } from "./snapshot.js";
 
 /** A comparison has the labels "a" and "b"; a single subject is "subject". */
 export type Label = "a" | "b" | "subject";
@@ -17,7 +20,7 @@ export interface SubjectSummary {
    * "skills" is a plain folder of skills, copied to where each harness discovers skills; "none" loads nothing.
    */
   kind: "plugin" | "skills" | "none";
-  /** Null for "none". For a git ref it is a detached worktree. */
+  /** Null for "none". What the user named; for a git ref, the project. A run loads a copy of it, never this. */
   dir: string | null;
   /** The names of the skills found in dir, sorted. */
   skills: string[];
@@ -27,10 +30,22 @@ export interface SubjectSummary {
 
 /** What a run loads into the harness. */
 export interface Subject extends SubjectSummary {
-  /** Skill name to its directory. */
+  /** Skill name to its directory in `dir`. */
   skillDirs: Record<string, string>;
-  /** Removes the worktree of a git ref; does nothing for any other subject. */
+  /** The export that every run copies; null for "none". It has left out what the subject excludes. */
+  exported: string | null;
+  /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
+  sourceChanges: () => string[];
+  /** Removes the export. */
   dispose: () => void;
+}
+
+/** What an export leaves out, besides `.git` and `node_modules`. */
+export interface Exclusions {
+  /** Globs relative to the root of the subject, from the config key `subjectExclude`. */
+  globs: string[];
+  /** Directories that are left out when they are inside the subject: the cases and the output directory. */
+  dirs: string[];
 }
 
 /** What only a subject that is not "none" has. */
@@ -84,10 +99,15 @@ const hasSkillFile = (dir: string): boolean =>
  * Finds every `<dir>/<name>/SKILL.md` and `<dir>/skills/<name>/SKILL.md`, and dir itself when it holds a SKILL.md.
  * @param dir - The folder to search, one level deep.
  * @param ownName - The skill name of dir itself.
+ * @param shown - What an error message calls dir.
  * @returns Skill name to its directory, in name order.
  * @throws {UsageError} When two skills share a name.
  */
-function findSkills(dir: string, ownName: string): Record<string, string> {
+function findSkills(
+  dir: string,
+  ownName: string,
+  shown: string,
+): Record<string, string> {
   const found: [string, string][] = hasSkillFile(dir) ? [[ownName, dir]] : [];
   for (const parent of [dir, path.join(dir, "skills")]) {
     if (!fs.existsSync(parent)) continue;
@@ -100,7 +120,7 @@ function findSkills(dir: string, ownName: string): Record<string, string> {
   }
   const names = found.map(([name]) => name);
   const twice = names.find((name, index) => names.indexOf(name) !== index);
-  if (twice) throw new UsageError(`${dir} holds two skills named "${twice}"`);
+  if (twice) throw new UsageError(`${shown} holds two skills named "${twice}"`);
   return Object.fromEntries(found.sort(([x], [y]) => x.localeCompare(y)));
 }
 
@@ -110,36 +130,11 @@ const git = (repoDir: string, ...args: string[]): string =>
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 
-/** Where a subject's files are, and how to let go of them. */
-interface Source {
+/** Where a subject's files are, before they are exported. */
+interface Located {
+  /** A directory as it is on disk, or the project for a git ref. */
   dir: string;
   commit: string | null;
-  dispose: () => void;
-}
-
-/**
- * Checks a git ref out into a detached worktree in a temp directory.
- * @param project - The repository that owns the ref.
- * @param commit - The full hash to check out.
- * @returns The worktree, and a `dispose` that removes it and its registration in the repository.
- */
-function worktree(project: Project, commit: string): Source {
-  const temp = tempDir("kit-");
-  const dispose = onDispose(() => {
-    try {
-      git(project.root, "worktree", "remove", "--force", temp.dir);
-    } catch {
-      // Already removed, or never registered because the add below failed.
-    }
-    temp.dispose();
-  });
-  try {
-    git(project.root, "worktree", "add", "--detach", temp.dir, commit);
-  } catch (error) {
-    dispose();
-    throw error;
-  }
-  return { dir: temp.dir, commit, dispose };
 }
 
 /**
@@ -147,17 +142,13 @@ function worktree(project: Project, commit: string): Source {
  * @param label - Names the flag in an error message.
  * @param spec - A directory, relative to the working directory, or a git ref.
  * @param project - Where a ref is looked up.
- * @returns The directory to load from.
+ * @returns The directory, or the project and the commit of the ref.
  * @throws {UsageError} When spec is neither a directory nor a ref of the project.
  */
-function checkout(label: Label, spec: string, project: Project): Source {
+function locate(label: Label, spec: string, project: Project): Located {
   const dir = path.resolve(project.cwd, spec);
   if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
-    return {
-      dir: fs.realpathSync(dir),
-      commit: null,
-      dispose: () => undefined,
-    };
+    return { dir: fs.realpathSync(dir), commit: null };
   }
   if (!project.isGitRepo) {
     throw new UsageError(
@@ -178,42 +169,157 @@ function checkout(label: Label, spec: string, project: Project): Source {
       `--${label} ${spec}: not a directory and not a git ref of ${project.root}`,
     );
   }
-  return worktree(project, commit);
+  return { dir: project.root, commit };
 }
 
 /**
- * Turns what the user named into something a harness can load.
+ * Resolves the links in a path, even when its last parts do not exist yet.
+ * @param target - A path.
+ * @returns The real path of its deepest existing ancestor, with the rest appended.
+ */
+function realish(target: string): string {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    const parent = path.dirname(path.resolve(target));
+    return parent === target
+      ? target
+      : path.join(realish(parent), path.basename(target));
+  }
+}
+
+/**
+ * Turns a directory that an export leaves out into a glob.
+ * @param root - The root of the subject.
+ * @param dir - A directory that may be inside it.
+ * @returns The glob of its path relative to root; nothing when it is root itself or is outside.
+ */
+function insideGlob(root: string, dir: string): string[] {
+  const relative = path.relative(realish(root), realish(dir));
+  if (
+    relative === "" ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    return [];
+  }
+  return [literalGlob(relative.split(path.sep).join("/"))];
+}
+
+/**
+ * Gathers what the export of every subject of a command leaves out.
+ * @param options - The command's options after the config file was applied.
+ * @param options.cases - The absolute path of the cases directory.
+ * @param options.subjectExclude - The config key of the same name.
+ * @param options.outDir - The output directory as the user gave it; absent for a temp directory.
+ * @param cwd - What a relative output directory resolves against.
+ * @returns The globs of the config, and the cases and output directories, which are left out when inside a subject.
+ */
+export function exclusionsOf(
+  options: {
+    cases: string;
+    subjectExclude?: string[] | undefined;
+    outDir?: string | undefined;
+  },
+  cwd: string,
+): Exclusions {
+  return {
+    globs: options.subjectExclude ?? [],
+    dirs: [
+      options.cases,
+      ...(options.outDir ? [path.resolve(cwd, options.outDir)] : []),
+    ],
+  };
+}
+
+/** Where a command's subjects are looked up, and what their exports leave out. */
+export interface SubjectScope extends Project {
+  /** Default: nothing besides `.git` and `node_modules`. */
+  left?: Exclusions;
+}
+
+/**
+ * Exports a subject, and words a failure with the flag it came from.
+ * @param flag - How the user named the subject, such as `--a main`, for the message.
+ * @param source - Where the files are.
+ * @param globs - What the export leaves out.
+ * @returns The directory of the export and the `dispose` that removes it.
+ * @throws {UsageError} When the export fails.
+ */
+function exportNamed(
+  flag: string,
+  source: Parameters<typeof exportSubject>[0],
+  globs: string[],
+): ReturnType<typeof exportSubject> {
+  try {
+    return exportSubject(source, globs);
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    throw new UsageError(`${flag}: ${error.message}`);
+  }
+}
+
+/**
+ * Makes the baseline subject, which loads nothing.
  * @param label - The subject's place in the comparison.
- * @param spec - `none`, a directory (used as it is, uncommitted changes included), or a git ref of the project.
- * @param project - What a relative directory and a ref resolve against.
+ * @returns The subject.
+ */
+const baseline = (label: Label): Subject => ({
+  label,
+  spec: "none",
+  kind: "none",
+  dir: null,
+  skills: [],
+  skillDirs: {},
+  commit: null,
+  exported: null,
+  sourceChanges: () => [],
+  dispose: () => undefined,
+});
+
+/**
+ * Turns what the user named into something a harness can load. A subject is never loaded in place: it is exported
+ * once, and each run loads its own copy of the export.
+ * @param label - The subject's place in the comparison.
+ * @param spec - `none`, a directory (as it is on disk, uncommitted changes included), or a git ref of the project.
+ * @param scope - What a relative directory and a ref resolve against, and what the export leaves out besides `.git`
+ *   and `node_modules`.
  * @returns The subject. The caller must call its `dispose`.
- * @throws {UsageError} When spec cannot be found, or is a folder with no skill and no plugin manifest.
+ * @throws {UsageError} When spec cannot be found, is a folder with no skill and no plugin manifest, or holds a link
+ *   that leads outside it.
  */
 export function resolveSubject(
   label: Label,
   spec: string,
-  project: Project,
+  scope: SubjectScope,
 ): Subject {
-  if (spec === "none") {
-    return {
-      label,
-      spec,
-      kind: "none",
-      dir: null,
-      skills: [],
-      skillDirs: {},
-      commit: null,
-      dispose: () => undefined,
-    };
-  }
-  const source = checkout(label, spec, project);
+  if (spec === "none") return baseline(label);
+  const source = locate(label, spec, scope);
+  const { globs = [], dirs = [] } = scope.left ?? {};
+  const left = [
+    ...globs,
+    ...dirs.flatMap((dir) => insideGlob(source.dir, dir)),
+  ];
+  const exported = exportNamed(
+    `--${label} ${spec}`,
+    { ...source, repoRoot: scope.root },
+    left,
+  );
   try {
-    // A worktree has a random name, so a ref's own skill takes the name of the project folder it was checked out from.
-    const skillDirs = findSkills(
+    // A ref's own skill takes the name of the project folder it was exported from.
+    const found = findSkills(
+      exported.dir,
+      path.basename(source.dir),
       source.dir,
-      path.basename(source.commit ? project.root : source.dir),
     );
-    const kind = isPlugin(source.dir) ? "plugin" : "skills";
+    const skillDirs = Object.fromEntries(
+      Object.entries(found).map(([name, dir]) => [
+        name,
+        path.join(source.dir, path.relative(exported.dir, dir)),
+      ]),
+    );
+    const kind = isPlugin(exported.dir) ? "plugin" : "skills";
     if (kind === "skills" && Object.keys(skillDirs).length === 0) {
       throw new UsageError(
         `--${label} ${spec}: no skills found in ${spec}; it needs <name>/SKILL.md, skills/<name>/SKILL.md, its own SKILL.md, or a plugin manifest`,
@@ -227,13 +333,51 @@ export function resolveSubject(
       skills: Object.keys(skillDirs),
       skillDirs,
       commit: source.commit,
-      dispose: source.dispose,
+      exported: exported.dir,
+      sourceChanges: watchSource(source, left),
+      dispose: exported.dispose,
     };
   } catch (error) {
-    source.dispose();
+    exported.dispose();
     throw error;
   }
 }
+
+/**
+ * Hashes the source directory of a subject now, for a comparison at the end of the command.
+ * @param source - Where the subject's files are.
+ * @param globs - What the export leaves out, which the hash leaves out too.
+ * @returns A function that hashes the directory again and lists what differs, sorted, as relative posix paths. For a
+ *   git ref, whose commit cannot change, it lists nothing.
+ */
+function watchSource(source: Located, globs: string[]): () => string[] {
+  if (source.commit) return () => [];
+  const left = leaveOut(globs);
+  const before = snapshot(source.dir, left);
+  return () =>
+    allChanged(diffSnapshots(before, snapshot(source.dir, left))).sort();
+}
+
+/** The exit code of a command whose subject directory changed while it ran. A later task makes it 3. */
+export const SUBJECT_CHANGED_EXIT_CODE = 1;
+
+/**
+ * Words the hard error for a subject directory that changed during the command.
+ * @param paths - The changed paths, as the user would type them.
+ * @returns The message, without the program's name.
+ */
+export const sourceChangedMessage = (paths: string[]): string =>
+  `the subject directory changed during the run: ${paths.join(", ")}`;
+
+/**
+ * Finds what changed in the source directories of subjects since they were resolved.
+ * @param subjects - The subjects of a command, after its last run.
+ * @returns The changed paths, each as the user would type it: the subject as named, then the path inside it.
+ */
+export const changedAtSource = (subjects: Subject[]): string[] =>
+  subjects.flatMap((subject) =>
+    subject.sourceChanges().map((changed) => path.join(subject.spec, changed)),
+  );
 
 const KINDS = { plugin: "plugin", skills: "skills folder" };
 const SHORT_HASH_LENGTH = 7;

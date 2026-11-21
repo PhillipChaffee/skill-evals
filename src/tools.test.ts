@@ -48,6 +48,7 @@ const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
       finalText: "",
       skillsLoaded: [],
       workspace: "",
+      subject: { dir: null, mutated: [] },
     },
   ).score;
 // The Claude Code stream is a captured run that used every tool below; the kinds it lacks are false in all three.

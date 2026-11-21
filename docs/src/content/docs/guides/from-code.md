@@ -30,4 +30,4 @@ In what `evaluate` resolves to, `suites` holds the case and suite scores for eac
 
 The package ships type declarations, so `evaluate`'s options and what it resolves to are typed in TypeScript.
 
-`evaluate` prints nothing and does not end the process. A wrong option, case file, or config file rejects with an error whose `name` is `UsageError`. While it runs, SIGINT and SIGTERM end the process with exit code 130 after the temp directories, the worktrees, and the harness's processes are removed.
+`evaluate` prints nothing and does not end the process. A wrong option, case file, or config file rejects with an error whose `name` is `UsageError`. While it runs, SIGINT and SIGTERM end the process with exit code 130 after the temp directories and the harness's processes are removed.

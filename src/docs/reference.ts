@@ -199,6 +199,7 @@ export const EXAMPLE_CONFIG: Record<
   minScore: 0.8,
   lenient: false,
   env: ["AWS_ENDPOINT_URL"],
+  subjectExclude: ["evals/cases/**", "notes/**"],
 };
 
 /**
@@ -215,6 +216,7 @@ const flagsOf = (key: string): Flag[] =>
 // Keys that no flag sets.
 const CONFIG_ONLY: Record<string, string> = {
   env: `Names of environment variables the harness gets besides the allowlist. ${ENV_NAME_RULE} Anything else is an error.`,
+  subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,
 };
 
 const configPage = (): ReferencePage => ({

@@ -69,10 +69,7 @@ export function snapshot(
  * @returns The paths only the later one has, the paths in both whose hash differs, and the paths only the earlier one
  *   has.
  */
-export function diffSnapshots(
-  before: Snapshot,
-  after: Snapshot,
-): ChangedFiles {
+export function diffSnapshots(before: Snapshot, after: Snapshot): ChangedFiles {
   const created: string[] = [];
   const modified: string[] = [];
   for (const [file, hash] of after) {

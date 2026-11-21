@@ -1,0 +1,85 @@
+import fs from "node:fs";
+import path from "node:path";
+import { expect, test } from "vitest";
+import { plugin } from "./testing/plant.js";
+import { exec, play, scoreSubject, writeCase } from "./testing/runs.js";
+import { gitRepo, sandbox } from "./testing/sandbox.js";
+
+const KIT = "kit";
+const SKILL = "kit/skills/x/SKILL.md";
+const TREE = "tree.txt";
+
+test("a git-ref subject leaves out export-ignore paths", async () => {
+  const box = sandbox();
+  const repo = path.join(box.root, "repo");
+  fs.mkdirSync(repo);
+  plugin(box, "repo", {});
+  box.write("repo/skills/x/SKILL.md", "x\n");
+  box.write("repo/secret/answers.txt", "42\n");
+  box.write("repo/.gitattributes", "secret/ export-ignore\n");
+  const git = gitRepo(repo);
+  git("add", "-A");
+  git("commit", "-q", "-m", "plugin");
+  writeCase(box, "cases", {
+    id: "look",
+    checks: [{ type: "file_matches", path: TREE, pattern: "^x\\n0\\s*$" }],
+  });
+  play(box, {
+    name: "look",
+    id: "look",
+    steps: [
+      exec(
+        `ls "$PLUGIN_DIR/skills" > ${TREE}; ls "$PLUGIN_DIR" | grep -c secret >> ${TREE}; true`,
+      ),
+    ],
+  });
+  const { status, stderr, records } = await scoreSubject(box, {
+    subject: "trunk",
+    cases: path.join(box.root, "cases"),
+    cwd: repo,
+  });
+  expect(status, stderr).toBe(0);
+  expect(records[0]?.subjectLoaded).toBe(true);
+  expect(records[0]?.checks[0]?.score).toBe(1);
+});
+
+test("a link in the subject that points outside it is a load error", async () => {
+  const box = sandbox();
+  const kit = plugin(box, KIT, {});
+  box.write(SKILL, "x\n");
+  box.write("elsewhere/grader.txt", "g\n");
+  fs.symlinkSync("../../elsewhere", path.join(kit, "skills/out"));
+  writeCase(box, "cases", {
+    id: "look",
+    checks: [{ type: "subject_unchanged" }],
+  });
+  const { status, stderr } = await scoreSubject(box, {
+    subject: kit,
+    cases: path.join(box.root, "cases"),
+  });
+  expect(status).toBe(2);
+  expect(stderr).toMatch(/links outside the subject/);
+});
+
+test("the subject directory changing during the run fails the command", async () => {
+  const box = sandbox();
+  const kit = plugin(box, KIT, {});
+  const skill = box.write(SKILL, "original\n");
+  writeCase(box, "cases", {
+    id: "meddle",
+    checks: [{ type: "subject_unchanged" }],
+  });
+  play(box, {
+    name: "meddle",
+    id: "meddle",
+    steps: [exec(`echo more >> "${skill}"`)],
+  });
+  const { status, stderr } = await scoreSubject(box, {
+    subject: kit,
+    cases: path.join(box.root, "cases"),
+  });
+  expect(status).toBe(1);
+  expect(stderr).toContain(
+    `skill-evals: the subject directory changed during the run: ${path.join(kit, "skills/x/SKILL.md")}`,
+  );
+});

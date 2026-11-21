@@ -12,6 +12,7 @@ import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { formatScore } from "./score.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
+import { SUBJECT_CHANGED_EXIT_CODE, sourceChangedMessage } from "./subject.js";
 import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
 import { FLAGS, usageText } from "./usage.js";
 
@@ -20,7 +21,8 @@ const USAGE_EXIT_CODE = 2;
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
  * @param options - What to evaluate.
- * @returns The exit code: 1 when any run is invalid or a pass bar is not reached, else 0.
+ * @returns The exit code: 1 when any run is invalid, a pass bar is not reached, or the subject directory changed
+ *   during the command, else 0.
  */
 async function suite(options: EvaluateOptions): Promise<number> {
   const onRun = (record: RunRecord): void => {
@@ -32,6 +34,12 @@ async function suite(options: EvaluateOptions): Promise<number> {
   };
   const evaluation = await evaluate({ ...options, onRun });
   console.log(renderReport(evaluation));
+  if (evaluation.sourceChanged.length > 0) {
+    console.error(
+      `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
+    );
+    return SUBJECT_CHANGED_EXIT_CODE;
+  }
   return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
 }
 

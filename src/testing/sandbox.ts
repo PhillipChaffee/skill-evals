@@ -120,11 +120,19 @@ export function sandbox(): Sandbox {
     );
     return file;
   };
-  // A PATH that holds node and git and nothing else, so no harness installed on this machine can be picked up.
-  fs.mkdirSync(path.join(root, "bin"));
-  fs.symlinkSync(process.execPath, path.join(root, "bin/node"));
-  const git = execFileSync("which", ["git"], { encoding: "utf8" }).trim();
-  fs.symlinkSync(git, path.join(root, "bin/git"));
+  // A PATH that holds node, git and tar and nothing else, so no harness installed on this machine can be picked up.
+  // It lies outside the root, which a run copies as a subject, and a link out of a subject is a load error.
+  const tools = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "runs-bin-")),
+  );
+  onTestFinished(() => {
+    fs.rmSync(tools, { recursive: true, force: true });
+  });
+  fs.symlinkSync(process.execPath, path.join(tools, "node"));
+  for (const tool of ["git", "tar"]) {
+    const found = execFileSync("which", [tool], { encoding: "utf8" }).trim();
+    fs.symlinkSync(found, path.join(tools, tool));
+  }
   // A launcher that tells the fake where this sandbox keeps its scripts and judge replies, so no variable of the
   // command line's environment has to carry them.
   const launcher = write(
@@ -133,7 +141,7 @@ export function sandbox(): Sandbox {
   );
   fs.chmodSync(launcher, EXECUTABLE);
   const env = {
-    PATH: path.join(root, "bin"),
+    PATH: tools,
     HOME: root,
     SKILL_EVALS_BIN_CLAUDE_CODE: launcher,
     ...LAUNCHED_BY_NPX,

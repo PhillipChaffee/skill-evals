@@ -10,6 +10,7 @@ import {
   extensionsOf,
   readField,
 } from "./fields.js";
+import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
 import { SKILL_CHECKS } from "./skills.js";
 import { TOOL_CHECKS } from "./tools.js";
@@ -61,6 +62,8 @@ export interface Outcome {
   toolCalls: ToolCall[];
   skillsLoaded: string[];
   workspace: string;
+  /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. */
+  subject: { dir: string | null; mutated: string[] };
 }
 
 /** What a rule says of one run: a score from 0 to 1, and optionally why. */
@@ -98,6 +101,7 @@ const RULED = {
   ...OUTPUT_CHECKS,
   ...FILE_CHECKS,
   ...TOOL_CHECKS,
+  ...OBSERVED_CHECKS,
 };
 type RuledType = keyof typeof RULED;
 

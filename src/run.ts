@@ -13,10 +13,14 @@ import type {
   ToolCall,
 } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
+import type { RunCopy } from "./isolate.js";
+import { copyForRun } from "./isolate.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
+import type { ChangedFiles } from "./snapshot.js";
+import { allChanged } from "./snapshot.js";
 import type { Subject } from "./subject.js";
 import { hasContent } from "./subject.js";
 
@@ -51,6 +55,10 @@ export interface RunRecord extends Usage {
   skillsLoaded: string[];
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
+  /** Whether the run changed anything in its copy of the subject. Always false for "none". */
+  subjectMutated: boolean;
+  /** What the run created, modified and deleted in its copy of the subject; null for "none". */
+  subjectChanges: ChangedFiles | null;
   checks: CheckResult[];
   /** The run score, null when the run is invalid. */
   score: number | null;
@@ -253,14 +261,44 @@ async function scoreChecks(
   return { checks, replies, requests: decided?.calls ?? [] };
 }
 
+/** The copy of a subject that one run loads. */
+interface Copy extends RunCopy {
+  /** What the harness is given: the subject with every path in the copy. */
+  loaded: LoadedSubject;
+}
+
+/**
+ * Copies a subject's export for one run.
+ * @param subject - What the run loads.
+ * @returns The copy; null for "none", which has no files.
+ */
+function copyOf(subject: Subject): Copy | null {
+  if (!hasContent(subject) || subject.exported === null) return null;
+  const copy = copyForRun(subject.exported);
+  const { kind, skills } = subject;
+  const skillDirs = Object.fromEntries(
+    Object.entries(subject.skillDirs).map(([name, dir]) => [
+      name,
+      path.join(copy.dir, path.relative(subject.dir, dir)),
+    ]),
+  );
+  return { ...copy, loaded: { kind, dir: copy.dir, skills, skillDirs } };
+}
+
 /**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
  * @param ran - What the session produced; its workspace still exists.
+ * @param copy - The run's copy of the subject; null for "none".
  * @returns The record, with a score unless the run is invalid.
  */
-async function record(plan: RunPlan, ran: SessionResult): Promise<RunRecord> {
+async function record(
+  plan: RunPlan,
+  ran: SessionResult,
+  copy: Copy | null,
+): Promise<RunRecord> {
   const { harness, subject, caseDef, rep } = plan;
+  const changes = copy?.changes() ?? null;
   const { stdout, parsed, error, durationMs } = ran;
   const loaded = skillsLoaded(parsed.toolCalls);
 
@@ -284,16 +322,26 @@ async function record(plan: RunPlan, ran: SessionResult): Promise<RunRecord> {
     finalText: parsed.finalText,
     toolCalls: parsed.toolCalls,
     skillsLoaded: loaded,
-    subjectLoaded: hasContent(subject)
-      ? REPORTED_LOADED[subject.kind](subject, parsed.loaded)
+    subjectLoaded: copy
+      ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, parsed.loaded)
       : null,
+    subjectMutated: changes !== null && allChanged(changes).length > 0,
+    subjectChanges: changes,
     durationMs,
     tokens: parsed.tokens,
     costUsd: parsed.costUsd,
   };
   const { checks, replies, requests } = await scoreChecks(
     plan,
-    { ...parsed, skillsLoaded: loaded, workspace: ran.workspace },
+    {
+      ...parsed,
+      skillsLoaded: loaded,
+      workspace: ran.workspace,
+      subject: {
+        dir: copy?.loaded.dir ?? null,
+        mutated: changes ? allChanged(changes) : [],
+      },
+    },
     invalidReason({ ...base, checks: [] }) === null,
   );
   return {
@@ -314,20 +362,25 @@ async function record(plan: RunPlan, ran: SessionResult): Promise<RunRecord> {
 export async function runOnce(plan: RunPlan): Promise<RunRecord> {
   const { harness, bin, subject, caseDef, model } = plan;
   const { prompt, maxTurns, timeoutSeconds, workspaceDir } = caseDef;
-  return session(
-    {
-      harness,
-      bin,
-      // To a harness, no skills and the judge's "nothing loaded" are the same thing.
-      subject: hasContent(subject) ? subject : null,
-      prompt,
-      model,
-      maxTurns,
-      timeoutSeconds,
-      workspaceDir,
-      withhold: withheld(plan),
-      pass: plan.pass,
-    },
-    (ran) => record(plan, ran),
-  );
+  const copy = copyOf(subject);
+  try {
+    return await session(
+      {
+        harness,
+        bin,
+        // To a harness, no skills and the judge's "nothing loaded" are the same thing.
+        subject: copy?.loaded ?? null,
+        prompt,
+        model,
+        maxTurns,
+        timeoutSeconds,
+        workspaceDir,
+        withhold: withheld(plan),
+        pass: plan.pass,
+      },
+      (ran) => record(plan, ran, copy),
+    );
+  } finally {
+    copy?.dispose();
+  }
 }

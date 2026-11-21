@@ -3,43 +3,50 @@ import path from "node:path";
 import { UsageError } from "./scope.js";
 
 /**
+ * Translates the star at a position of a glob.
+ * @param glob - The whole glob.
+ * @param at - The position of a `*` in it.
+ * @returns The regular expression for it, and how many characters it took: `*` stays within a directory, `**` goes
+ *   across directories, and `**` followed by `/` also matches no directory at all.
+ */
+function star(glob: string, at: number): { source: string; length: number } {
+  if (glob.charAt(at + 1) !== "*") return { source: "[^/]*", length: 1 };
+  if (glob.charAt(at + DOUBLE_STAR) === "/")
+    return { source: "(?:.*/)?", length: DOUBLE_STAR_SLASH };
+  return { source: ".*", length: DOUBLE_STAR };
+}
+
+const DOUBLE_STAR = 2;
+const DOUBLE_STAR_SLASH = 3;
+const ESCAPED = 2;
+const literal = (char: string): string =>
+  char.replace(/[.+^${}()|[\]\\*?]/g, "\\$&");
+
+/**
  * Compiles a glob to a regular expression that matches a whole relative posix path.
- * `*` matches any run of characters but `/`, `**` matches any run including `/` (and `**` followed by `/` also
- * matches no directory at all), `?` matches one character but `/`, and `{a,b}` matches either. A backslash makes the
- * next character literal.
- * @param glob - The glob.
- * @returns The anchored expression.
+ * `*` matches any run of characters but `/`, `**` matches any run including `/`, `?` matches one character but `/`,
+ * and `{a,b}` matches either. A backslash makes the next character literal.
+ * @param glob - The pattern to compile.
+ * @returns An expression that must match the whole path.
  * @throws {UsageError} When a `{` is never closed.
  */
 export function globToRegExp(glob: string): RegExp {
   let source = "";
   let open = 0;
-  for (let at = 0; at < glob.length; at++) {
+  let at = 0;
+  while (at < glob.length) {
     const char = glob.charAt(at);
-    if (char === "*" && glob.charAt(at + 1) === "*") {
-      at++;
-      if (glob.charAt(at + 1) === "/") {
-        at++;
-        source += "(?:.*/)?";
-      } else {
-        source += ".*";
-      }
-    } else if (char === "*") {
-      source += "[^/]*";
-    } else if (char === "?") {
-      source += "[^/]";
-    } else if (char === "{") {
-      open++;
-      source += "(?:";
-    } else if (char === "}" && open > 0) {
-      open--;
-      source += ")";
-    } else if (char === "," && open > 0) {
-      source += "|";
-    } else {
-      const literal = char === "\\" ? glob.charAt(++at) : char;
-      source += literal.replace(/[.+^${}()|[\]\\*?]/g, "\\$&");
-    }
+    let part = literal(char);
+    let length = 1;
+    if (char === "*") ({ source: part, length } = star(glob, at));
+    else if (char === "?") part = "[^/]";
+    else if (char === "{") [part, open] = ["(?:", open + 1];
+    else if (char === "}" && open > 0) [part, open] = [")", open - 1];
+    else if (char === "," && open > 0) part = "|";
+    else if (char === "\\")
+      [part, length] = [literal(glob.charAt(at + 1)), ESCAPED];
+    source += part;
+    at += length;
   }
   if (open > 0) throw new UsageError(`unclosed "{" in the glob ${glob}`);
   return new RegExp(`^${source}$`);
