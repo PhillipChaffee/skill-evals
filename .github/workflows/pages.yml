@@ -8,9 +8,7 @@ name: Pages
 
 on:
   push:
-    # TEMPORARY: `website` deploys a preview of this pull request. Remove it
-    # before the merge.
-    branches: [main, website]
+    branches: [main]
     paths:
       - "site/**"
       - "docs/**"
