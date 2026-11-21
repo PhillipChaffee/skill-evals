@@ -55,7 +55,7 @@ fs.writeFileSync("out/summary.txt", `summary by ${behavior.name}\n`);
 
 const seen = {
 	seed: fs.existsSync("notes.txt") ? fs.readFileSync("notes.txt", "utf8").trim() : "missing",
-	leaks: Object.keys(process.env).filter((key) => key.startsWith("SKILL_EVALS_")).length,
+	leaks: Object.entries(process.env).filter(([key, value]) => /skill.evals/i.test(`${key}=${value}`)).length,
 	home: process.env.HOME,
 	cwd: process.cwd(),
 	prompt,

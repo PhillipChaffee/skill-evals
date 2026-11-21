@@ -7,6 +7,9 @@ export const repoDir = path.resolve(import.meta.dirname, "..");
 const bin = path.join(repoDir, "bin/skill-evals.mjs");
 export const fakeHarness = path.join(import.meta.dirname, "fixtures/fake-harness.mjs");
 
+// What npm and the shell put in the environment of a command started with `npx skill-evals`.
+const LAUNCHED_BY_NPX = { npm_lifecycle_script: "skill-evals", _: "/project/node_modules/.bin/skill-evals" };
+
 /** A temp directory with a `cli` that sees no installed harness but the fake one, behind the Claude Code adapter. */
 export function sandbox(t) {
 	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "runs-")));
@@ -25,7 +28,7 @@ export function sandbox(t) {
 		spawnSync(process.execPath, [bin, ...args], {
 			cwd,
 			encoding: "utf8",
-			env: { PATH: path.join(root, "bin"), HOME: root, SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness, ...env },
+			env: { PATH: path.join(root, "bin"), HOME: root, SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness, ...LAUNCHED_BY_NPX, ...env },
 		});
 	return { root, write, cli };
 }

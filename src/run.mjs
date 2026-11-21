@@ -75,9 +75,12 @@ const REPORTED_LOADED = {
 	none: () => null,
 };
 
+// This tool's own variables, and the ones npm and the shell set that name the command that is running.
+const NAMES_THIS_TOOL = /^(SKILL_EVALS_|npm_|_$)/;
+
 /** The child sees a throwaway home and nothing that names this tool. */
 function childEnv(home, extra) {
-	const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("SKILL_EVALS_")));
+	const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !NAMES_THIS_TOOL.test(key)));
 	return {
 		...inherited,
 		HOME: home,
