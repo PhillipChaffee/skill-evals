@@ -1,7 +1,5 @@
 # skill-evals
 
-![coverage](https://coveralls.io/github/PhillipChaffee/skill-evals/badge.svg?branch=main)
-
 `skill-evals` measures what an agent does when your skills are loaded. It runs a set of prompts in a real coding-agent harness, scores every run from 0 to 1, and can fail when a score is under a bar you set. It scores one set of skills, or it compares two: a baseline (A) and a change (B), or no skills at all and your skills.
 
 It works with Claude Code, Codex, Cursor, OpenCode, and Pi. It needs Node 22 or later and at least one of those harnesses installed. It has no dependencies. It runs on macOS and Linux.
