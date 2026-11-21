@@ -46,6 +46,12 @@ test("--help wins over missing values and other flags, for every command", async
   }
 });
 
+test("help --help exits 0", async () => {
+  const result = await sandbox().cli(["help", "--help"]);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain("Usage: skill-evals <command>");
+});
+
 test("help of an unknown command exits 2; a bare command line and an unknown command keep their usage errors", async () => {
   const box = sandbox();
   const unknown = await box.cli(["help", "frobnicate"]);

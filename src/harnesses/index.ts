@@ -74,6 +74,22 @@ export function namedHarnesses(spec: string | undefined): Harness[] {
 }
 
 /**
+ * Keeps the harnesses that are installed.
+ * @param harnesses - The harnesses to look for. Default: every known one.
+ * @param env - Where the executables are looked up.
+ * @returns Each installed harness with its executable, in the order given.
+ */
+export function installedOf(
+  harnesses: Harness[] = HARNESSES,
+  env: Env = process.env,
+): Located[] {
+  return harnesses.flatMap((harness) => {
+    const bin = findBin(harness, env);
+    return bin ? [{ harness, bin }] : [];
+  });
+}
+
+/**
  * Chooses the harnesses a run uses.
  * @param spec - A `--harness` value. Absent means the first installed harness in preference order.
  * @param env - Where the executables are looked up.
@@ -89,8 +105,9 @@ export function selectHarnesses(
     harness,
     bin: findBin(harness, env),
   }));
-  const installed = located.flatMap(({ harness, bin }) =>
-    bin ? [{ harness, bin }] : [],
+  const installed = installedOf(
+    located.map(({ harness }) => harness),
+    env,
   );
   if (spec && spec !== "all") {
     const missing = located

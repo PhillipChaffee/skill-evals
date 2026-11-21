@@ -9,7 +9,7 @@ import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
-import { HARNESSES } from "./harnesses/index.js";
+import { limitsOf } from "./case-limits.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
 import { readVariants } from "./variants.js";
@@ -159,33 +159,6 @@ const DEFAULT_TIMEOUT_SECONDS = 600;
 type Read = (key: string) => unknown;
 
 /**
- * Reads the harnesses that a case is limited to.
- * @param read - Reads a key of the case file.
- * @param file - The case file, for the messages.
- * @returns The harness ids and the note, both absent for a case that is for every harness.
- * @throws {UsageError} When a harness id is unknown, or `harnesses` has no `note`.
- */
-function limitsOf(read: Read, file: string) {
-  const harnesses = read("harnesses") as string[] | undefined;
-  const note = read("note") as string | undefined;
-  if (harnesses) {
-    const known = HARNESSES.map((harness) => harness.id);
-    const unknown = harnesses.find((id) => !known.includes(id));
-    if (unknown !== undefined) {
-      throw new UsageError(
-        `${file}: unknown harness "${unknown}"; known: ${known.join(", ")}`,
-      );
-    }
-    if (note === undefined) {
-      throw new UsageError(
-        `${file}: "harnesses" needs a "note" that says why the case is limited`,
-      );
-    }
-  }
-  return { harnesses, note };
-}
-
-/**
  * Reads the keys that label a case and override the command's settings for it.
  * @param read - Reads a key of the case file.
  * @returns The labels and overrides, with their defaults for the keys the file leaves out.
@@ -325,8 +298,8 @@ function loadCase(found: Found, mode: Mode): Case[] {
 export interface LoadOptions {
   /** Drop a key that a case file does not take instead of failing. Default: false. */
   lenient?: boolean;
-  /** Called with a line of text for each key that `lenient` drops. */
-  onWarning?: (text: string) => void;
+  /** Called with a line of text, and the id of its case, for each key that `lenient` drops. */
+  onWarning?: (text: string, caseId: string) => void;
   /** Collecting mode: hears of a fault (case id or directory, message), skips that case and goes on. Absent: throws. */
   onError?: (caseId: string, message: string) => void;
 }
@@ -344,17 +317,20 @@ export function loadWhere(
   keep: (id: string, dir: string) => boolean,
   options: LoadOptions,
 ): Case[] {
-  const mode: Mode = {
-    lenient: options.lenient ?? false,
-    warn:
-      options.onWarning ??
-      ((text) => {
-        console.error(`skill-evals: warning: ${text}`);
-      }),
-  };
+  const warn =
+    options.onWarning ??
+    ((text: string) => {
+      console.error(`skill-evals: warning: ${text}`);
+    });
   return discover(casesDir, [], options.onError)
     .filter(({ id, dir }) => keep(id, dir))
     .flatMap((found) => {
+      const mode: Mode = {
+        lenient: options.lenient ?? false,
+        warn: (text) => {
+          warn(text, found.id);
+        },
+      };
       try {
         return loadCase(found, mode);
       } catch (error) {

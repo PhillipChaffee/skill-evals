@@ -122,7 +122,7 @@ What loading cases takes besides the directory.
 | Property     | Type                                                       | Description                                                                                                     |
 | ------------ | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `lenient?`   | `boolean \| undefined`                                     | Drop a key that a case file does not take instead of failing. Default: false.                                   |
-| `onWarning?` | `((text: string) => void) \| undefined`                    | Called with a line of text for each key that `lenient` drops.                                                   |
+| `onWarning?` | `((text: string, caseId: string) => void) \| undefined`    | Called with a line of text, and the id of its case, for each key that `lenient` drops.                          |
 | `onError?`   | `((caseId: string, message: string) => void) \| undefined` | Collecting mode: hears of a fault (case id or directory, message), skips that case and goes on. Absent: throws. |
 
 ### CaseMeta

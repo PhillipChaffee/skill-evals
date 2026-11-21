@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { loadCases } from "../cases.js";
 import { skillsFolder } from "../testing/plant.js";
 import { sandbox } from "../testing/sandbox.js";
@@ -183,10 +183,12 @@ test("a later task adds a lint by appending to LINTS, and problems print before 
     { level: "problem", caseId: "good", text: "second" },
   ];
   LINTS.push(extra);
-  afterEach(() => {
+  let result;
+  try {
+    result = await box.cli(["validate", ...flags(box)]);
+  } finally {
     LINTS.splice(LINTS.indexOf(extra), 1);
-  });
-  const result = await box.cli(["validate", ...flags(box)]);
+  }
   expect(result.status).toBe(USAGE_ERROR);
   expect(result.stdout.trim().split("\n")).toEqual([
     "problem good: second",
@@ -207,4 +209,51 @@ test("loadCases with onError records each bad case and skips it; without it the 
   expect(cases.map((one) => one.id)).toEqual(["good"]);
   expect(seen.sort()).toEqual(["bad1", "bad2"]);
   expect(() => loadCases(`${box.root}/cases`)).toThrow(/non-empty array/);
+});
+
+test("a subject that cannot be resolved is a problem beside the case problems, and skill names are not checked", async () => {
+  const box = sandbox();
+  plant(box, "bad", { checks: [] });
+  const result = await box.cli([
+    "validate",
+    "--subject",
+    `${box.root}/missing`,
+    "--cases",
+    `${box.root}/cases`,
+  ]);
+  expect(result.status).toBe(USAGE_ERROR);
+  const lines = result.stdout.trim().split("\n");
+  expect(lines[0]).toMatch(/^problem bad: /);
+  expect(lines[1]).toMatch(/^problem .*missing: /);
+  expect(result.stdout).toMatch(
+    /warning .*: the subject did not resolve, so skill names were not checked/,
+  );
+  expect(lines.at(-1)).toBe("0 cases, 2 problems, 1 warnings");
+});
+
+test("a warning of the loader names its nested case, also under a relative --cases", async () => {
+  const box = sandbox();
+  plant(box, "group/deep", { checks: [fine], colour: 1 });
+  const subject = flags(box)[1] as string;
+  const result = await box.cli(
+    ["validate", "--subject", subject, "--cases", "cases", "--lenient"],
+    {},
+    box.root,
+  );
+  expect(result.status).toBe(0);
+  expect(result.stdout).toMatch(
+    /^warning group\/deep: .*unknown key "colour"/m,
+  );
+});
+
+test("a plugin-prefixed skill in a check is a warning that says so", async () => {
+  const box = sandbox();
+  plant(box, "route", {
+    checks: [{ type: "skill_loaded", skill: "plug:alpha" }],
+  });
+  const result = await box.cli(["validate", ...flags(box)]);
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain(
+    '"plug:alpha" is plugin-prefixed; checks name skills without the plugin prefix',
+  );
 });

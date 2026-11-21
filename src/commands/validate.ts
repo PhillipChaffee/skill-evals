@@ -1,12 +1,12 @@
-import path from "node:path";
 import { applicability, hostCapabilities } from "../applicability.js";
 import type { Case } from "../cases.js";
 import { exclusionsOf } from "../exclusions.js";
-import { HARNESSES, findBin } from "../harnesses/index.js";
+import { installedOf } from "../harnesses/index.js";
 import type { Located } from "../harnesses/index.js";
 import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
 import { loadSelection, selectionOf } from "../select.js";
+import { UsageError } from "../scope.js";
 import { resolveSubject } from "../subject.js";
 import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
@@ -24,8 +24,8 @@ export interface Lint {
 
 /** What a lint may look at besides the cases. */
 export interface LintContext {
-  /** The subject whose skills the cases name; `kind` is "none" when no skill names can be checked. */
-  subject: Subject;
+  /** The subject whose skills the cases name; `kind` is "none" when no skill names can be checked, and null when it could not be resolved (already a problem). */
+  subject: Subject | null;
   /** Every harness that is installed on this machine. */
   harnesses: Located[];
   project: Project;
@@ -48,17 +48,22 @@ const MAY_NAME_ABSENT = new Set(["skill_not_loaded", "skill_not_available"]);
  */
 function skillNames(cases: Case[], context: LintContext): Lint[] {
   const { subject, casesDir } = context;
-  if (subject.kind === "none") {
+  if (subject === null || subject.kind === "none") {
+    const why = subject ? "the subject is none" : "the subject did not resolve";
     return [
       {
         level: "warning",
         caseId: casesDir,
-        text: "the subject is none, so skill names were not checked",
+        text: `${why}, so skill names were not checked`,
       },
     ];
   }
   const known = `skills of the subject: ${subject.skills.join(", ") || "none"}`;
   const unknown = (name: string): boolean => !subject.skills.includes(name);
+  const why = (name: string): string =>
+    name.includes(":")
+      ? `"${name}" is plugin-prefixed; checks name skills without the plugin prefix`
+      : `names the skill "${name}", which is not a skill of the subject (${known})`;
   return cases.flatMap((one) => [
     ...one.targets.filter(unknown).map((name): Lint => ({
       level: "warning",
@@ -73,7 +78,7 @@ function skillNames(cases: Case[], context: LintContext): Lint[] {
             {
               level: "warning",
               caseId: one.id,
-              text: `a ${check.type} check names the skill "${check.skill}", which is not a skill of the subject (${known})`,
+              text: `a ${check.type} check ${why(check.skill)}`,
             } satisfies Lint,
           ]
         : [],
@@ -110,20 +115,6 @@ function notApplicable(cases: Case[], context: LintContext): Lint[] {
  */
 export const LINTS: LintRule[] = [skillNames, notApplicable];
 
-/**
- * Finds the case that a warning of the loader is about.
- * @param casesDir - The cases directory.
- * @param text - The warning, which starts with the path of a case file.
- * @returns The case's id, or the directory when the text names no case file.
- */
-function caseOf(casesDir: string, text: string): string {
-  const relative = text.startsWith(casesDir + path.sep)
-    ? text.slice(casesDir.length + 1)
-    : "";
-  const id = /^(.*?)\/case\.json/.exec(relative)?.[1];
-  return id ?? casesDir;
-}
-
 const line = ({ level, caseId, text }: Lint): string =>
   `${level} ${caseId}: ${text}`;
 
@@ -144,27 +135,27 @@ export function validate(given: Options, project: Project): number {
   const cases = loadSelection(casesDir, selectionOf(options), {
     lenient: options.lenient ?? false,
     onError: problem,
-    onWarning: (text) => {
-      found.push({
-        level: "warning",
-        caseId: caseOf(casesDir, text),
-        text,
-      });
+    onWarning: (text, caseId) => {
+      found.push({ level: "warning", caseId, text });
     },
   });
-  const subject = resolveSubject("subject", options.subject ?? project.root, {
-    ...project,
-    left: exclusionsOf(options, project.cwd),
-  });
+  const spec = options.subject ?? project.root;
+  let subject: Subject | null = null;
   try {
-    const harnesses = HARNESSES.flatMap((harness) => {
-      const bin = findBin(harness);
-      return bin ? [{ harness, bin }] : [];
+    subject = resolveSubject("subject", spec, {
+      ...project,
+      left: exclusionsOf(options, project.cwd),
     });
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    problem(spec, error.message);
+  }
+  try {
+    const harnesses = installedOf();
     const context: LintContext = { subject, harnesses, project, casesDir };
     for (const lint of LINTS) found.push(...lint(cases, context));
   } finally {
-    subject.dispose();
+    subject?.dispose();
   }
   const problems = found.filter(({ level }) => level === "problem");
   const warnings = found.filter(({ level }) => level === "warning");

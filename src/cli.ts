@@ -257,7 +257,8 @@ function help(name: string | undefined): number {
 export async function main(argv: string[]): Promise<number> {
   const [name, ...args] = argv;
   if (name === "--help") return help(undefined);
-  if (name === "help") return help(args[0]);
+  if (name === "help")
+    return help(args.includes("--help") ? undefined : args[0]);
   if (
     name !== undefined &&
     Object.hasOwn(COMMANDS, name) &&

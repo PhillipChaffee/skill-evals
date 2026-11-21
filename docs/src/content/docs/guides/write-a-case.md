@@ -70,7 +70,7 @@ The package ships `schema/case.schema.json`. Add `"$schema": "../../../node_modu
 skill-evals validate --subject ./my-skills
 ```
 
-It takes `--subject` (default: the project; `none` skips the skill names), `--cases`, `--lenient` (an unknown key becomes a warning), `--heldout` and the selection flags. Each line reads `problem <case id>: <message>` or `warning <case id>: <message>`, problems first, then `<n> cases, <p> problems, <w> warnings`.
+It takes `--subject` (default: the project; `none` skips the skill names), `--cases`, `--lenient` (an unknown key becomes a warning), `--heldout` and the selection flags. A directory name with `@` or `,` is reported even for a case that the selection leaves out, because no case id can be formed for it. Each line reads `problem <case id>: <message>` or `warning <case id>: <message>`, problems first, then `<n> cases, <p> problems, <w> warnings`.
 
 ## Needs and not-applicable cases
 
