@@ -1,5 +1,7 @@
 # skill-evals
 
+![coverage](https://coveralls.io/github/PhillipChaffee/skill-evals/badge.svg?branch=main)
+
 `skill-evals` measures what an agent does when your skills are loaded. It runs a set of prompts in a real coding-agent harness, scores every run from 0 to 1, and can fail when a score is under a bar you set. It scores one set of skills, or it compares two: a baseline (A) and a change (B), or no skills at all and your skills.
 
 It works with Claude Code, Codex, Cursor, OpenCode, and Pi. It needs Node 22 or later and at least one of those harnesses installed. It has no dependencies. It runs on macOS and Linux.
@@ -260,6 +262,8 @@ if (evaluation.belowBar.length || evaluation.invalid.length)
 
 `evaluate` resolves to `{ records, suites, belowBar, invalid, outDir, subjects, cases, harnesses, harnessReason, judge, reps, model }`. `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
 
+The package ships type declarations, so `evaluate`'s options and what it resolves to are typed in TypeScript.
+
 `evaluate` prints nothing and does not end the process. A wrong option, case file, or config file rejects with an error whose `name` is `UsageError`. While it runs, SIGINT and SIGTERM end the process with exit code 130 after the temp directories, the worktrees, and the harness's processes are removed.
 
 ## Harnesses
@@ -318,12 +322,33 @@ Two limits apply across harnesses. A login stored in the operating system's keyc
 
 Adapters live in this package. Loading one from your own code is not supported yet.
 
-1. Add `src/harnesses/<id>.mjs` that exports the five fields in the `Harness` type at the top of `src/harnesses/shared.mjs`: `id`, `bin`, `authFiles`, `invocation`, `parse`.
+1. Add `src/harnesses/<id>.ts` whose default export has the five fields of the `Harness` type in `src/harnesses/shared.ts`: `id`, `bin`, `authFiles`, `invocation`, `parse`. Declare the stream events that `parse` reads as a type in the same file.
 2. In `invocation`, load a plugin subject the way the harness loads a local plugin (`pluginDir`), copy a skills subject to where the harness discovers a user's skills (`placeSkills`), and point the harness's own config variables into `home`. Return `setup` commands when the harness has to install the plugin before it runs. When `subject` is `null`, load nothing. The judge and the `none` baseline run that way.
 3. Pass the prompt so that a leading dash cannot be read as a flag: after a `--` separator, or in `stdin` when the CLI has no separator. Confirm it against the real CLI.
 4. In `parse`, normalize the stream and nothing more. Return `null` for a field the harness does not report. Put only a tool call's input in `toolCalls`, never its output, or file contents will count as skill loads. Build each tool call with `toolCall` and a table from the harness's tool names to the kinds under [Tool checks](#tool-checks).
-5. Add the adapter to `HARNESSES` in `src/harnesses/index.mjs` at its place in the preference order.
-6. Capture one real stream into `test/fixtures/`, add it to `test/harness-parse.test.mjs`, add the harness to the table of skill locations there, and add a row to every table above.
+5. Add the adapter to `HARNESSES` in `src/harnesses/index.ts` at its place in the preference order.
+6. Capture one real stream into `test/fixtures/` and add it to `src/adapters.test.ts`. Add the harness to the table of skill locations in `src/invocation.test.ts`, and add a row to every table above.
+
+## Develop
+
+The sources are TypeScript in `src/`, with each test beside the code it covers. The lint, type, documentation, format, coverage, and hygiene gates come from the `typescript/` folder of [full-lint](https://github.com/PhillipChaffee/full-lint), whose README gives the reason for every rule.
+
+```sh
+npm ci
+npm run format:check   # prettier
+npm run typecheck      # tsc, strict and eight more flags
+npm run lint           # eslint: typed rules, doc comments, size and complexity limits
+npm test               # vitest; fails under 95% coverage of lines, functions, branches, or statements
+npm run knip           # unused files, exports, and dependencies
+npm run lint:lockfile  # every package comes from the npm registry over HTTPS
+npm run lint:graph     # no import cycles, no orphan modules
+npm run build          # compiles src/ to dist/, which is what the package ships
+./run-gates.sh         # all of the above but the build, and the hygiene tools that CI installs
+```
+
+The tests run this package's code in the test process and start a stand-in harness from `test/fixtures/` as a real child process. One test packs the package, installs the tarball into an empty project, and runs it there.
+
+`npm pack` and `npm publish` build first, so the tarball always holds a fresh `dist/`.
 
 ## License
 

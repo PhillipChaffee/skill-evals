@@ -1,3 +1,5 @@
+# Publishes the package to npm when a version tag is pushed. It runs the same
+# gates as ci.yml first, so a tag on a commit that CI never saw cannot ship.
 name: Publish
 
 on:
@@ -5,21 +7,32 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read
-  id-token: write
+  contents: read  # least privilege: no step in this workflow writes to the repo
+  id-token: write  # npm provenance: lets npm prove which workflow run built the tarball
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # bounds a hung network step; GitHub's default is 360
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: 22
+          node-version: 24
+          cache: npm
           registry-url: https://registry.npmjs.org
       - name: The tag is the version in package.json
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
+      - run: npm run knip
+      - run: npm run lint:lockfile
+      - run: npm run lint:graph
+      - run: npm run build
+      # The prepack script builds again, so the tarball cannot hold a stale dist/.
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

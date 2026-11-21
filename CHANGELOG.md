@@ -10,3 +10,4 @@ The first release. The runner comes from the `evals/` folder of [magic](https://
 - Use it from code with `evaluate`, `loadCases`, and `HARNESSES`.
 - A prompt that starts with a dash reaches the agent in every harness.
 - Windows is not supported.
+- The package is written in TypeScript. It ships compiled JavaScript and type declarations, and still has no dependencies.
