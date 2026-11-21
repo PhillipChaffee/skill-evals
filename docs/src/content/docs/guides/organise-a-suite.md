@@ -134,7 +134,7 @@ A skill should answer to what a person means, not to one wording. A variant puts
 Each variant runs as its own case, with the id `<case id>@<variant id>`, such as `routing/commit-help@hurry`. A case with variants never runs bare.
 
 - A variant has an `id`: lowercase letters, digits and hyphens, unique within the case.
-- A variant has exactly one of `prompt` and `promptAppend`. `prompt` is the whole prompt. `promptAppend` is added to the case's `prompt.md`, after a blank line, so the case needs a `prompt.md`. A case whose variants all have a `prompt` needs none.
+- A variant has exactly one of `prompt` and `promptAppend`. `prompt` is the whole prompt. `promptAppend` is added to the case's `prompt.md`, after a blank line, so the case needs a `prompt.md`. A case whose variants all have a `prompt` needs none, and then an empty `prompt.md` is fine; only `promptAppend` needs a `prompt.md` with text. A `prompt` or `promptAppend` of only whitespace is a load error.
 - A variant's `tags` are added to the case's tags for that variant, and `--tag`, `--tag-all` and `--not-tag` see the merged tags.
 - A `--case` or `--not-case` glob matches a variant by its full id or by the case's id, so `--case routing/commit-help` selects every variant and `--case "**@hurry"` selects one kind.
 - Keys of a variant other than `id`, `prompt`, `promptAppend`, `heldout` and `tags` are load errors, unless they start with `x-`.
@@ -152,4 +152,4 @@ skill-evals run                 # tuning: the dev variants only
 skill-evals run --heldout       # the check you do not tune against
 ```
 
-A case whose variants are all held out is neither listed nor run without `--heldout`. If you select only such a case, the command fails with the usual "no case matches" error, and says that held-out variants need the flag. The coverage table counts held-out variants in its `held-out` column, and the other cases that are not guards in `dev`.
+A case whose variants are all held out is neither listed nor run without `--heldout`. If you select only such a case, the command fails with the usual "no case matches" error, and says that held-out variants need the flag. The coverage table counts the held-out variants that are not guards in its `held-out` column. A held-out variant of a `guard: true` case counts under `guards`, because a guard is a guard first, and every other variant that is not a guard counts in `dev`.

@@ -23,6 +23,8 @@ export type FieldType =
   | "tags"
   | "slug"
   | "variants"
+  | "answers"
+  | "harnesses"
   | "envvars"
   | "needs"
   | "matcher"
@@ -102,7 +104,7 @@ export const FIELDS: Record<string, FieldDef> = {
       'The answer that scores 1 for a yes or no question: "yes" or "no".',
   },
   options: {
-    type: "object",
+    type: "answers",
     expected:
       "an object of at least two named answers, each with a number from 0 to 1",
     meaning:
@@ -271,6 +273,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
     }
     return value;
   },
+  answers: (value, at) => PARSERS.object(value, at),
+  harnesses: (value, at) => PARSERS.texts(value, at),
   variants: (value, at) => {
     if (Array.isArray(value) && value.length === 0) {
       throw failure(at, `"${at.name}" must not be empty`);

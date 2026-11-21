@@ -19,9 +19,13 @@ import { configMeaning } from "./reference.js";
 //
 // What the schemas cannot say, because it depends on more than one value or on a file: a decision check takes
 // exactly one of `expect` and `options` (the check's description says so); an `options` answer needs a name; a
-// variant's `promptAppend` needs a `prompt.md` beside the case file; a variant id is unique within its case; a case
-// needs a prompt source, which is `prompt.md` or a `prompt` in every variant; a regular expression must compile;
+// variant's `promptAppend` needs a `prompt.md` with text beside the case file; a variant id is unique within its case;
+// a case needs a prompt source, which is `prompt.md` or a `prompt` in every variant; a regular expression must compile;
 // and the ids of a case's directories may not hold `@` or `,`. The loader still checks all of these.
+//
+// Where the schemas are looser than the loader: a `prompt` or `promptAppend` of only whitespace, a `flags` text that
+// is not valid flags, a regular expression that does not compile, a repeated variant id, and an `options` answer with
+// an empty name pass the schema and fail to load.
 
 /** A JSON Schema, or a part of one. */
 type Schema = Record<string, unknown>;
@@ -45,7 +49,20 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
   int: { type: "integer", minimum: 1 },
   unit: { type: "number", minimum: 0, maximum: 1 },
   signed: { type: "number", minimum: -1, maximum: 1 },
-  number: { type: "number", exclusiveMinimum: 0 },
+  // A null weight counts as none: the loader has always accepted it.
+  number: {
+    anyOf: [{ type: "number", exclusiveMinimum: 0 }, { type: "null" }],
+  },
+  answers: {
+    type: "object",
+    minProperties: 2,
+    additionalProperties: { type: "number", minimum: 0, maximum: 1 },
+  },
+  harnesses: {
+    type: "array",
+    minItems: 1,
+    items: { enum: HARNESSES.map(({ id }) => id) },
+  },
   bool: { type: "boolean" },
   slug: { type: "string", pattern: SLUG_PATTERN },
   tags: { type: "array", items: { type: "string", pattern: SLUG_PATTERN } },
@@ -70,18 +87,10 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
  * @returns The type's schema, with the key as its title and the table's sentence as its description.
  */
 function valueSchema(name: string, def: FieldDef): Schema {
-  let base: Schema = BY_TYPE[def.type] ?? {};
-  if (def.type === "enum") base = { type: "string", enum: def.values };
-  if (name === "options") {
-    base = {
-      type: "object",
-      minProperties: 2,
-      additionalProperties: { type: "number", minimum: 0, maximum: 1 },
-    };
-  }
-  if (name === "harnesses") {
-    base = { ...base, items: { enum: HARNESSES.map(({ id }) => id) } };
-  }
+  const base: Schema =
+    def.type === "enum"
+      ? { type: "string", enum: def.values }
+      : (BY_TYPE[def.type] ?? {});
   return { title: name, description: def.meaning, ...base };
 }
 
@@ -103,6 +112,7 @@ const propertiesOf = (defs: Record<string, FieldDef>, skip: string[] = []) =>
  * @param type - The type's key in `CHECKS`.
  * @returns An object that requires the type's `type` and fields, allows its optional fields and `x-` keys, and
  *   nothing else. A type with `oneOf` fields needs at least one of them.
+ * @throws {Error} When a field of the spec has no entry in `FIELDS`.
  */
 function checkSchema(type: string): Schema {
   const spec = CHECKS[type];
@@ -112,10 +122,12 @@ function checkSchema(type: string): Schema {
     ...(spec?.oneOf ?? []),
   ];
   const named = Object.fromEntries(
-    [...new Set([...fields, "requires", "ifUnsupported"])].map((field) => [
-      field,
-      valueSchema(field, FIELDS[field] ?? { type: "text", meaning: "" }),
-    ]),
+    [...new Set([...fields, "requires", "ifUnsupported"])].map((field) => {
+      const def = FIELDS[field];
+      if (!def)
+        throw new Error(`check ${type}: field ${field} is not in FIELDS`);
+      return [field, valueSchema(field, def)];
+    }),
   );
   return {
     title: type,

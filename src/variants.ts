@@ -61,7 +61,7 @@ export interface Resolved {
  * @param given - The variant's `prompt` and `promptAppend`.
  * @param given.prompt - The whole prompt, for a variant that brings its own.
  * @param given.promptAppend - The text to add after the case's prompt.
- * @param base - What the case's `prompt.md` holds, or null when it has none.
+ * @param base - What the case's `prompt.md` holds; null or empty when it has none.
  * @param where - Names the file and the variant in an error message.
  * @returns The whole prompt, trimmed.
  * @throws {UsageError} Unless exactly one of the two is set; for an append with no `prompt.md`; for a blank prompt.
@@ -81,10 +81,13 @@ function promptOf(
     if (prompt.trim() === "") throw new UsageError(`${where}: prompt is empty`);
     return prompt.trim();
   }
-  if (base === null) {
+  if (!base) {
     throw new UsageError(
-      `${where}: "promptAppend" needs a prompt.md to append to`,
+      `${where}: "promptAppend" needs a prompt.md with text to append to`,
     );
+  }
+  if (promptAppend?.trim() === "") {
+    throw new UsageError(`${where}: promptAppend is empty`);
   }
   return `${base}\n\n${(promptAppend ?? "").trim()}`;
 }

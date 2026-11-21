@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
@@ -10,7 +11,6 @@ const POLITE = "tone@polite";
 const PUSHY = "tone@pushy";
 const PUSHY_PROMPT = "JUST DO IT";
 const USAGE_ERROR = 2;
-const EXACTLY_ONE = 'exactly one of "prompt" and "promptAppend"';
 
 /**
  * Plants the case that most tests here use: one paraphrase and one pressure variant over one fixture.
@@ -132,11 +132,13 @@ test("a case without variants has base = id, variant null, heldout false", async
   });
 });
 
+const BAD_FILE = "ROOT/cases/bad/case.json";
+
 /**
  * Loads a case with the given variants and reports why it failed.
  * @param variants - The `variants` key.
  * @param prompt - What prompt.md holds, or null for no file.
- * @returns The error message, or an empty text when the case loaded.
+ * @returns The error message with the sandbox's root written as ROOT, or an empty text when the case loaded.
  */
 function failure(
   variants: unknown,
@@ -145,47 +147,121 @@ function failure(
   const box = sandbox();
   box.write("cases/bad/case.json", {
     checks: [{ type: "output_contains", text: "x" }],
-    variants,
+    ...(variants !== undefined && { variants }),
   });
   if (prompt !== null) box.write("cases/bad/prompt.md", prompt);
   try {
     loadCases(path.join(box.root, "cases"));
   } catch (error) {
-    return (error as Error).message;
+    return (error as Error).message.replaceAll(box.root, "ROOT");
   }
   return "";
 }
 
 test("a variant needs exactly one prompt source, a valid unique id and known keys", () => {
-  expect(failure([{ id: "a" }])).toContain(EXACTLY_ONE);
-  expect(failure([{ id: "a", prompt: "x", promptAppend: "y" }])).toContain(
-    EXACTLY_ONE,
+  const one = `${BAD_FILE} variants[0]: a variant needs exactly one of "prompt" and "promptAppend"`;
+  expect(failure([{ id: "a" }])).toBe(one);
+  expect(failure([{ id: "a", prompt: "x", promptAppend: "y" }])).toBe(one);
+  expect(failure([{ id: "A b", prompt: "x" }])).toBe(
+    `${BAD_FILE} variants[0]: "id" must be a slug: lowercase letters, digits and hyphens, starting with a letter or digit`,
   );
-  expect(failure([{ id: "A b", prompt: "x" }])).toContain("variants[0]");
   expect(
     failure([
       { id: "a", prompt: "x" },
       { id: "a", prompt: "y" },
     ]),
-  ).toContain('duplicate variant id "a"');
-  expect(failure([{ id: "a", prompt: "x", color: 1 }])).toContain(
-    'unknown key "color" for a variant',
+  ).toBe(`${BAD_FILE} variants[1]: duplicate variant id "a"`);
+  expect(failure([{ id: "a", prompt: "x", color: 1 }])).toBe(
+    `${BAD_FILE} variants[0]: unknown key "color" for a variant; allowed: id, prompt, promptAppend, heldout, tags`,
   );
-  expect(failure([])).toContain("variants");
-  expect(failure("no")).toContain("variants");
-  expect(failure([{ id: "a", prompt: "  " }])).toContain("is empty");
-  expect(failure([{ id: "a", heldout: "yes", prompt: "x" }])).toContain(
-    "heldout",
+  expect(failure([])).toBe(`${BAD_FILE}: "variants" must not be empty`);
+  expect(failure("no")).toBe(
+    `${BAD_FILE}: "variants" must be a list of objects`,
+  );
+  expect(failure([{ id: "a", prompt: "  " }])).toBe(
+    `${BAD_FILE} variants[0]: prompt is empty`,
+  );
+  expect(failure([{ id: "a", promptAppend: "  " }])).toBe(
+    `${BAD_FILE} variants[0]: promptAppend is empty`,
+  );
+  expect(failure([{ id: "a", heldout: "yes", prompt: "x" }])).toBe(
+    `${BAD_FILE} variants[0]: heldout must be true or false`,
   );
 });
 
-test("promptAppend needs a prompt.md, a variant that sets prompt does not, and x- keys are kept", () => {
-  expect(failure([{ id: "a", promptAppend: "y" }], null)).toContain(
-    "needs a prompt.md",
-  );
+test("promptAppend needs a prompt.md with text; a variant that sets prompt does not, even beside an empty one", () => {
+  const needs = `${BAD_FILE} variants[0]: "promptAppend" needs a prompt.md with text to append to`;
+  expect(failure([{ id: "a", promptAppend: "y" }], null)).toBe(needs);
+  expect(failure([{ id: "a", promptAppend: "y" }], "")).toBe(needs);
   expect(failure([{ id: "a", prompt: "y", "x-note": 1 }], null)).toBe("");
-  expect(failure([{ id: "a", prompt: "y" }], "")).toContain(
-    "prompt.md is empty",
+  expect(failure([{ id: "a", prompt: "y" }], "")).toBe("");
+  expect(failure(undefined, "")).toBe("case bad: prompt.md is empty");
+  expect(failure(undefined, null)).toBe(
+    "case bad: no prompt source; add a prompt.md",
   );
-  expect(failure(undefined, null)).toContain("no prompt source");
+});
+
+test('"variants" of the wrong type reports that, even with no prompt.md', () => {
+  expect(failure("no", null)).toBe(
+    `${BAD_FILE}: "variants" must be a list of objects`,
+  );
+});
+
+test("a variant tag that repeats a case tag is listed once", () => {
+  const box = sandbox();
+  plant(box, TONE, {
+    tags: ["core", "pressure"],
+    variants: [{ id: "a", prompt: "p", tags: ["pressure", "extra"] }],
+  });
+  const [only] = loadCases(path.join(box.root, "cases"));
+  expect(only?.tags).toEqual(["core", "pressure", "extra"]);
+});
+
+test("a held-out variant of a guard case counts under guards, not held-out", async () => {
+  const box = sandbox();
+  plant(box, TONE, {
+    targets: ["writer"],
+    guard: true,
+    variants: [
+      { id: "dev", prompt: "p" },
+      { id: "secret", prompt: "q", heldout: true },
+    ],
+  });
+  plant(box, "other", {
+    targets: ["writer"],
+    variants: [{ id: "h", prompt: "x", heldout: true }],
+  });
+  const out = await cli(box, "list", "--heldout", "--targets");
+  expect(tableRow(out.stdout, "writer")).toBe("| writer | 3 | 0 | 1 | 2 |");
+});
+
+test("a broken case beside the selected variant does not fail --case id@variant", async () => {
+  const box = sandbox();
+  plant(box, "good", {
+    variants: [
+      { id: "v1", prompt: "a" },
+      { id: "v2", prompt: "b" },
+    ],
+  });
+  box.write("cases/broken/prompt.md", "x\n");
+  box.write("cases/broken/case.json", { checks: [] });
+  const one = await cli(box, "list", "--case", "good@v1");
+  expect(one.status, one.stderr).toBe(0);
+  expect(listed(one.stdout)).toEqual(["good@v1"]);
+  expect(loadCases(path.join(box.root, "cases"), "good@v2")).toHaveLength(1);
+  const wide = await cli(box, "list", "--case", "**@v1");
+  expect(wide.status).toBe(USAGE_ERROR);
+});
+
+test("a variant run writes its files under <out>/<harness>/<case>@<variant>/", async () => {
+  const box = sandbox();
+  planted(box);
+  const outDir = path.join(box.root, "results");
+  await cli(box, "score", "--out", outDir);
+  expect(
+    fs.existsSync(
+      path.join(outDir, "claude-code/tone@polite/subject1.final.md"),
+    ),
+  ).toBe(true);
+  expect(fs.existsSync(path.join(outDir, "claude-code/tone"))).toBe(false);
 });

@@ -8,7 +8,7 @@ import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { discover } from "./discover.js";
-import { globToRegExp } from "./glob.js";
+import { baseGlobOf, globToRegExp } from "./glob.js";
 import { HARNESSES } from "./harnesses/index.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -90,7 +90,7 @@ export const CASE_KEYS: Record<string, FieldDef> = {
       'A list of capabilities the case needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host\'s `PATH`. A harness that lacks one reports the case as not applicable.',
   },
   harnesses: {
-    type: "texts",
+    type: "harnesses",
     meaning:
       "The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.",
   },
@@ -275,9 +275,12 @@ function loadCase(found: Found, mode: Mode): Case[] {
   const { id, dir } = found;
   const file = path.join(dir, "case.json");
   const { prompt, raw } = readFiles(found);
-  if (prompt === "") throw new UsageError(`case ${id}: prompt.md is empty`);
-  if (prompt === null && !Array.isArray(raw?.["variants"])) {
-    throw new UsageError(`case ${id}: no prompt source; add a prompt.md`);
+  // Without variants, prompt.md is the prompt. With them, it matters only to a variant that appends to it.
+  if (raw?.["variants"] === undefined) {
+    if (prompt === "") throw new UsageError(`case ${id}: prompt.md is empty`);
+    if (prompt === null) {
+      throw new UsageError(`case ${id}: no prompt source; add a prompt.md`);
+    }
   }
   const checks = raw?.["checks"];
   if (!Array.isArray(checks) || checks.length === 0) {
@@ -374,12 +377,11 @@ export function loadCases(
   options: LoadOptions = {},
 ): Case[] {
   const matcher = globToRegExp(glob);
-  // A glob with an `@` can name a variant, which the case's own id cannot tell.
-  const cases = loadWhere(
-    casesDir,
-    (id) => glob.includes("@") || matcher.test(id),
-    options,
-  ).filter((one) => matcher.test(one.id) || matcher.test(one.base));
+  // A glob that names a variant is tried on the case's path by its part before the `@`.
+  const bases = globToRegExp(baseGlobOf(glob));
+  const cases = loadWhere(casesDir, (id) => bases.test(id), options).filter(
+    (one) => matcher.test(one.id) || matcher.test(one.base),
+  );
   if (cases.length === 0) {
     throw new UsageError(`no case in ${casesDir} matches "${glob}"`);
   }

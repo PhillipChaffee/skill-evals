@@ -92,3 +92,17 @@ export function expandGlob(
   });
   return found.sort();
 }
+
+/**
+ * Takes the part of a case glob that names the case, before the `@` that starts a variant's name.
+ * @param glob - A glob over case ids.
+ * @returns The part before the first `@`, or the whole glob when it has none. A part that is empty, or that holds a
+ *   brace the `@` splits, names nothing certain, so it is `**`.
+ */
+export function baseGlobOf(glob: string): string {
+  const at = glob.indexOf("@");
+  if (at < 0) return glob;
+  const part = glob.slice(0, at);
+  const braces = (char: string) => part.split(char).length;
+  return part === "" || braces("{") !== braces("}") ? "**" : part;
+}

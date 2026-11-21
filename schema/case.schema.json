@@ -13,8 +13,7 @@
     "weight": {
       "title": "weight",
       "description": "How much the case counts in its suite. Default: 1.",
-      "type": "number",
-      "exclusiveMinimum": 0
+      "anyOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "null" }]
     },
     "minScore": {
       "title": "minScore",
@@ -215,8 +214,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "skill": {
           "title": "skill",
@@ -253,8 +254,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "skill": {
           "title": "skill",
@@ -291,8 +294,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "pattern": {
           "title": "pattern",
@@ -335,8 +340,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "pattern": {
           "title": "pattern",
@@ -379,8 +386,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "text": {
           "title": "text",
@@ -417,8 +426,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "text": {
           "title": "text",
@@ -455,8 +466,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "path": {
           "title": "path",
@@ -494,8 +507,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "path": {
           "title": "path",
@@ -545,8 +560,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "kind": {
           "title": "kind",
@@ -612,8 +629,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "kind": {
           "title": "kind",
@@ -679,8 +698,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "requires": {
           "title": "requires",
@@ -711,8 +732,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "rubric": {
           "title": "rubric",
@@ -749,8 +772,10 @@
         "weight": {
           "title": "weight",
           "description": "A positive number that says how much it counts. Default: 1.",
-          "type": "number",
-          "exclusiveMinimum": 0
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "question": {
           "title": "question",

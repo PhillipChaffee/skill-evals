@@ -249,7 +249,7 @@ ${FENCE}
 
 In a ${code("case.json")}, use ${code("schema/case.schema.json")} of the same package, with a path relative to the case file, such as ${code("../../../node_modules/skill-evals/schema/case.schema.json")}. The ${code("$id")} of each schema is under ${code("https://phillipchaffee.github.io/skill-evals/schema/")}.
 
-The schemas check what one value can show. They do not check that a decision check has exactly one of ${code("expect")} and ${code("options")}, that a regular expression compiles, that a variant id is unique within its case, that a variant's ${code("promptAppend")} has a ${code("prompt.md")} to append to, or that a case has a prompt source. ${code("skill-evals list")} checks these.
+The schemas check what one value can show. They do not check that a decision check has exactly one of ${code("expect")} and ${code("options")}, that a regular expression compiles, that a variant id is unique within its case, that a variant's ${code("promptAppend")} has a ${code("prompt.md")} with text to append to, that a case has a prompt source, or that a ${code("prompt")} is more than whitespace, so a file can pass the schema and still fail to load. A weight of ${code("null")} passes, because the loader takes it as no weight. ${code("skill-evals list")} checks the rest.
 `,
 });
 

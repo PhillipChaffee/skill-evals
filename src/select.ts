@@ -1,6 +1,6 @@
 import type { Case, LoadOptions } from "./cases.js";
 import { loadWhere } from "./cases.js";
-import { globToRegExp } from "./glob.js";
+import { baseGlobOf, globToRegExp } from "./glob.js";
 import { UsageError } from "./scope.js";
 
 /** Which cases a command works on. Every part that is set must hold; a part that is absent holds for every case. */
@@ -88,8 +88,8 @@ interface IdTests {
 /**
  * Tells which ids a selection lets through.
  * @param by - The selection; its tag parts are not looked at.
- * @returns The two tests. A glob with an `@` can name a variant, which the case's path cannot tell, so such a glob
- *   lets every case be read.
+ * @returns The two tests. A glob that names a variant is tried on the case's path by its part before the `@`, so a
+ *   case that part does not reach is never read.
  * @throws {UsageError} When a glob has a `{` that is never closed.
  */
 function idTests(by: Selection): IdTests {
@@ -98,10 +98,9 @@ function idTests(by: Selection): IdTests {
   const unwanted = (by.notIds ?? []).map(globToRegExp);
   const anyOf = (globs: RegExp[], ...ids: string[]) =>
     globs.some((glob) => ids.some((id) => glob.test(id)));
-  const varied = wantedText.some((glob) => glob.includes("@"));
+  const wantedBases = wantedText.map((glob) => globToRegExp(baseGlobOf(glob)));
   return {
-    mayLoad: (base) =>
-      (varied || anyOf(wanted, base)) && !anyOf(unwanted, base),
+    mayLoad: (base) => anyOf(wantedBases, base) && !anyOf(unwanted, base),
     chooses: ({ id, base }) =>
       anyOf(wanted, id, base) && !anyOf(unwanted, id, base),
   };
