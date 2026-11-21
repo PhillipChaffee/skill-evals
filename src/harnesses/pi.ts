@@ -48,7 +48,7 @@ const pi: Harness = {
   bin: "pi",
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
-  capabilities: new Set(["isolated"]),
+  capabilities: new Set([]),
   status: "scripted",
 
   invocation({ subject, home, prompt, model }) {

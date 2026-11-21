@@ -68,6 +68,7 @@ export interface Parsed {
   toolCalls: ToolCall[];
   tokens: Tokens | null;
   costUsd: number | null;
+  /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */
   loaded: Loaded;
   error: string | null;
 }
@@ -142,7 +143,37 @@ export interface Harness {
    * the shared rule. Absent: `foreignDefault`.
    */
   foreign?: (loaded: Loaded, subject: LoadedSubject | null) => string[];
+  /**
+   * How the adapter isolates a run, for an adapter with the `isolated` capability. `invocation` uses these same
+   * `args` and `env` when the run is isolated.
+   */
+  isolation?: Isolation;
 }
+
+/** The switches that make a harness load nothing but the subject, and what the run record proves of that. */
+interface Isolation {
+  /** Command-line arguments added when the run is isolated. */
+  args: string[];
+  /** Environment variables added when the run is isolated. */
+  env: Record<string, string>;
+  /** What the report of what loaded covers. */
+  proves: string;
+  /** What no switch removes and the report does not show. */
+  notProven: string;
+}
+
+/**
+ * Tells whether a harness that should report what it loaded left out plugins or skills.
+ * @param harness - The adapter.
+ * @param loaded - What it reported.
+ * @returns True for a harness with `loadedReport` whose plugins or skills are null. Such a report proves nothing.
+ */
+export const reportMissing = (
+  harness: Pick<Harness, "capabilities">,
+  loaded: Loaded,
+): boolean =>
+  harness.capabilities.has("loadedReport") &&
+  (loaded.paths === null || loaded.skills === null);
 
 /**
  * Compares two paths that may reach one directory through different symlinks.

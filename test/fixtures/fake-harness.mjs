@@ -9,6 +9,7 @@
 // - Started with `--mode json` (the arguments of the Pi adapter) it is Pi-shaped instead: the prompt comes from standard
 //   input, the plugin directory from `-e`, and the stream is Pi's (`tool_execution_start`, `turn_end`). It plays the
 //   same scripts, for `text`, `final`, `call`, and `parallel` steps; it has no judge, no agents, and no hooks.
+// - A script's `initOmit` names init fields to leave out, and `noInit` leaves the init event out.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -35,6 +36,11 @@ const finish = (result, costUsd) =>
     },
   });
 
+// Every start is logged, so a test can tell that no harness ran.
+if (process.env.FAKE_START_LOG) {
+  fs.appendFileSync(process.env.FAKE_START_LOG, "start\n");
+}
+
 const piMode = flag("--mode") === "json";
 const prompt = piMode
   ? fs.readFileSync(0, "utf8")
@@ -54,7 +60,17 @@ if (!piMode && prompt.startsWith("Grade one answer")) {
     log,
     `${JSON.stringify({ prompt, model: flag("--model"), pluginDir, env: Object.keys(process.env) })}\n`,
   );
-  emit({ type: "system", subtype: "init", plugins: [], skills: [] });
+  // `judge/init.json` replaces fields of the judge's init event.
+  const initFile = path.join(dir, "init.json");
+  emit({
+    type: "system",
+    subtype: "init",
+    plugins: [],
+    skills: [],
+    ...(fs.existsSync(initFile)
+      ? JSON.parse(fs.readFileSync(initFile, "utf8"))
+      : {}),
+  });
   finish(replies[asked], 0.002);
   process.exit(0);
 }
@@ -301,7 +317,7 @@ const installed = fs.existsSync(skillsDir)
   ? fs.readdirSync(skillsDir).sort()
   : [];
 
-emit({
+const init = {
   type: "system",
   subtype: "init",
   plugins: pluginDir
@@ -311,7 +327,10 @@ emit({
     ? []
     : installed,
   ...played?.found.init,
-});
+};
+// A script can leave fields out of the init event, or the whole event.
+for (const key of played?.found.initOmit ?? []) delete init[key];
+if (!played?.found.noInit) emit(init);
 if (played) {
   const turn = turnIndex(played.file);
   play(played.found.turns[turn] ?? [], turn);

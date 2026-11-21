@@ -117,7 +117,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
     HARNESSES.map((h) => [h.id, [h.status, [...h.capabilities]]]),
   );
   expect(declared).toEqual({
-    pi: ["scripted", ["isolated"]],
+    pi: ["scripted", []],
     "claude-code": [
       "real-model",
       ["subagents", "childCalls", "loadedReport", "skillListing", "isolated"],

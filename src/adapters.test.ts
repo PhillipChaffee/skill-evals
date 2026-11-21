@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
+import { NOT_REPORTED } from "./harnesses/shared.js";
 import { skillsLoaded } from "./run.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
@@ -9,14 +10,6 @@ const CLAUDE_CODE = "claude-code";
 const KIT_COPY = "/run/kit-1";
 const CODEX_STREAM = "codex.stream.jsonl";
 const CURSOR_STREAM = "cursor.stream.jsonl";
-const NOT_REPORTED = {
-  paths: null,
-  skills: null,
-  agents: null,
-  rules: null,
-  hooks: null,
-  mcpServers: null,
-};
 
 // Every stream below was captured from the real CLI, with ids and paths scrubbed. For pi, opencode, and codex the
 // CLI was driven by a scripted local model endpoint. cursor.stream.jsonl is the one exception: it is the example

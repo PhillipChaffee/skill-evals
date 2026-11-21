@@ -218,6 +218,29 @@ ${FENCE}
 
 const ISOLATED = code("--isolated");
 
+/**
+ * Names the harnesses that cannot run with `--isolated`, and why.
+ * @returns A sentence; the harnesses are the registry's, so it changes with their capabilities.
+ */
+const isolatable = (): string => {
+  const lacking = HARNESSES.filter(
+    (harness) =>
+      !harness.isolation || !harness.capabilities.has("loadedReport"),
+  ).map((harness) => code(harness.id));
+  return `Today ${lacking.join(", ")} cannot run with it. Pi is started with discovery switched off (${code("-ne -ns -np")}) whatever the flag says, and that stays its default, but it reports nothing it loaded, so it cannot run ${ISOLATED} until an adapter can prove what it loaded.`;
+};
+
+// What was read in the code of Claude Code 2.1.330, which is not in its help text.
+const CLAUDE_NOTES = `### What Claude Code does with these switches
+
+- ${code("--setting-sources user")}: the CLI loads ${code("CLAUDE_CONFIG_DIR/skills")}, the user's settings and the user's plugins only for the ${code("user")} source, and the workspace's ${code(".claude/")} skills and settings only for ${code("project")} and ${code("local")}. User level is the throwaway home, which holds only what the run puts there, such as the skills of a skills subject. An empty list (${code('""')}) is accepted by the parser, but it would leave a skills subject unloaded.
+- ${code("--strict-mcp-config")}: only the servers of ${code("--mcp-config")}. When an organization's enterprise MCP config is present the CLI refuses the flag and exits, which makes the run fail. A plugin's own MCP server is named ${code("plugin:<plugin>:<server>")} in the init event; every other server is outside the subject. Whether the flag also drops a plugin's own servers was not confirmed.
+- ${code("CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")} switches off auto memory.
+- Never ${code("--bare")}: it also switches off the subject plugin's own hooks.
+- A bare skill or agent name counts as a built-in, which is not outside the subject: any bare name that is not one of the subject's own skills. This includes skills from the organization's managed policy directory, which the CLI loads under every flag (the 2.1.330 code has no switch for it, and no \`CLAUDE_CODE_DISABLE_POLICY_SKILLS\`). The init event does not tell the two apart, and the built-in names were not confirmed against a real capture. A plugin directory, a ${code("plugin:")}-prefixed skill or agent of another plugin, and an MCP server that is not the subject's are outside the subject.
+- Organization-managed plugins load under every flag. The init event lists them, so the run is invalid.
+- Not proven by the record: managed policy settings (hooks, environment, permissions), managed memory and ${code("CLAUDE.md")} files, rules and hooks. The report does not list them.`;
+
 const harnessesPage = (): ReferencePage => ({
   file: "agents/harnesses.md",
   markdown: `${header(
@@ -245,19 +268,35 @@ ${table(
 
 ## Isolation
 
-${ISOLATED} needs the ${code("isolated")} capability. Today ${code("pi")} and ${code(CLAUDE_CODE)} declare it. Any other harness with ${ISOLATED} is a usage error that names it, raised before a run starts. Flags are never trusted: the run record keeps what the harness reported as loaded, and under ${ISOLATED} anything reported that does not come from the subject makes the run invalid.
+${ISOLATED} starts the harness with nothing loaded but the subject, and invalidates a run whose own report of what it loaded shows anything else. The ${code("isolated")} capability means that the adapter does the first and proves the second from its report, so ${ISOLATED} needs ${code("loadedReport")} too. A harness without both is a usage error that names it, raised before a run starts. ${isolatable()} Flags are never trusted, and a harness that should report its plugins and skills but does not makes the run invalid with ${code("the harness did not report what it loaded")}. Under ${ISOLATED} the judge, which loads nothing, gets the same switches when its harness can take them, and what it reports is held to the same rule.
 
-| Harness | What ${ISOLATED} adds | What it cannot stop |
-| ------- | ------------------------------- | ------------------- |
-| ${code("pi")} | Nothing. Every run already starts with ${code("-ne -ns -np")}, which switch off the discovery of extensions, skills and prompt templates. | Pi does not report what it loaded, so the record shows null for every kind. |
-| ${code(CLAUDE_CODE)} | ${code('--setting-sources ""')} (no user, project or local settings), ${code("--strict-mcp-config")} (no MCP servers, because none is given with ${code("--mcp-config")}), and ${code("CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")}. Never ${code("--bare")}, which also switches off the subject plugin's own hooks. | Organization-managed plugins and policy settings load under any flag. They show in the init event, and the run is invalid. |
+${table(
+  [
+    "Harness",
+    "Switches added by --isolated",
+    "What the report proves",
+    "Not proven",
+  ],
+  HARNESSES.flatMap((harness) =>
+    harness.isolation
+      ? [
+          [
+            code(harness.id),
+            [
+              code(harness.isolation.args.join(" ")),
+              ...Object.entries(harness.isolation.env).map(([name, value]) =>
+                code(`${name}=${value}`),
+              ),
+            ].join(" "),
+            harness.isolation.proves,
+            harness.isolation.notProven,
+          ],
+        ]
+      : [],
+  ),
+)}
 
-The CLI help for ${code("claude")} 2.1.330 says ${code("--setting-sources <sources>")} takes a comma-separated list of ${code("user, project, local")}, and ${code("--strict-mcp-config")} uses only the servers from ${code("--mcp-config")}. The help does not say that an empty list is accepted. The CLI source maps an empty string to no sources, so the empty list is used. This was read from the installed code, not run against a model.
-
-What counts as outside the subject, for the harness that reports it:
-
-- **Claude Code:** a reported plugin directory that is not the per-run copy of the subject plugin, and a skill listed as ${code("plugin:skill")} whose plugin is not the subject plugin. A skill listed with no prefix is a Claude Code built-in and is not outside the subject: user-level skills live in the throwaway home, and project and local settings are off. These built-in names were not confirmed against a real capture.
-- **Any other harness that starts to report:** every reported plugin directory, skill, agent, MCP server and hook that the subject does not own.
+${CLAUDE_NOTES}
 `,
 });
 

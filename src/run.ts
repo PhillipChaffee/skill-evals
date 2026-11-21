@@ -5,18 +5,13 @@ import type { Check, Outcome } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { decide } from "./decision.js";
-import type {
-  Harness,
-  Loaded,
-  LoadedSubject,
-  Tokens,
-  ToolCall,
-} from "./harnesses/shared.js";
-import { foreignOf, samePath, sumTokens } from "./harnesses/shared.js";
+import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
+import { sumTokens } from "./harnesses/shared.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
+import { judgeAsker, startupRecord } from "./startup.js";
 import type { ChangedFiles } from "./snapshot.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
@@ -60,6 +55,10 @@ export interface RunRecord extends Usage {
   isolated: boolean;
   /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
   unexpected: string[];
+  /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */
+  reportMissing: boolean;
+  /** Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. */
+  judgeProblem: string | null;
   /** Whether the run changed anything in its copy of the subject. Always false for "none". */
   subjectMutated: boolean;
   /** What the run created, modified and deleted in its copy of the subject; null for "none". */
@@ -99,8 +98,6 @@ export interface RunPlan {
   outDir: string;
 }
 
-// A judge answers in one message. The second turn is room for one stray tool call before the answer.
-const JUDGE_LIMITS = { maxTurns: 2, timeoutSeconds: 300 };
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
 // does not start without a decision model.
 const NOT_DECIDED = {
@@ -144,16 +141,26 @@ export function skillsLoaded(toolCalls: ToolCall[]): string[] {
 export function invalidReason(
   record: Pick<
     RunRecord,
-    "error" | "subjectLoaded" | "isolated" | "unexpected" | "checks"
+    | "error"
+    | "subjectLoaded"
+    | "isolated"
+    | "reportMissing"
+    | "unexpected"
+    | "judgeProblem"
+    | "checks"
   >,
 ): string | null {
   if (record.error) return `run failed: ${record.error}`;
   if (record.subjectLoaded === false) {
     return "the harness did not load the subject: it is not among the plugins and skills it reported";
   }
+  if (record.isolated && record.reportMissing) {
+    return "the harness did not report what it loaded";
+  }
   if (record.isolated && record.unexpected.length > 0) {
     return `loaded outside the subject: ${record.unexpected.join(", ")}`;
   }
+  if (record.isolated && record.judgeProblem) return record.judgeProblem;
   const unscored = record.checks.find((check) => check.score === null);
   if (unscored) {
     const kind = isDecision(unscored) ? "decision" : "judged";
@@ -161,15 +168,6 @@ export function invalidReason(
   }
   return null;
 }
-
-// Subject kind -> whether the harness reported the subject as loaded, or null when it does not report that.
-// A plugin is found by its directory and a skills folder by the name of every skill in it.
-const REPORTED_LOADED = {
-  plugin: (subject: LoadedSubject, { paths }: Loaded) =>
-    paths && paths.some((loadedPath) => samePath(loadedPath, subject.dir)),
-  skills: (subject: LoadedSubject, { skills }: Loaded) =>
-    skills && subject.skills.every((name) => skills.includes(name)),
-};
 
 /**
  * Adds up what the calls of a scoring model cost.
@@ -201,27 +199,20 @@ async function scoreChecks(
   plan: RunPlan,
   outcome: Outcome,
   judgeable: boolean,
-): Promise<{ checks: CheckResult[]; replies: Usage[]; requests: Usage[] }> {
+): Promise<{
+  checks: CheckResult[];
+  replies: Usage[];
+  requests: Usage[];
+  judgeProblem: string | null;
+}> {
   const { prompt: task, checks: asked } = plan.caseDef;
   const withhold = withheld(plan);
-  const ask = (judgePrompt: string) =>
-    session(
-      {
-        ...plan.judge,
-        subject: null,
-        prompt: judgePrompt,
-        ...JUDGE_LIMITS,
-        withhold,
-        pass: plan.pass,
-      },
-      ({ parsed, error, durationMs }) => ({
-        finalText: parsed.finalText,
-        error,
-        durationMs,
-        tokens: parsed.tokens,
-        costUsd: parsed.costUsd,
-      }),
-    );
+  const problems: string[] = [];
+  const ask = judgeAsker(
+    plan.judge,
+    { isolated: plan.isolated ?? false, withhold, pass: plan.pass },
+    problems,
+  );
   // One request carries every decision check of the case.
   const decisions = asked.filter(isDecision);
   const decided =
@@ -253,31 +244,11 @@ async function scoreChecks(
       checks.push({ ...check, score: verdict.score, reason: verdict.reason });
     }
   }
-  return { checks, replies, requests: decided?.calls ?? [] };
-}
-
-/**
- * Judges what the harness reported as loaded.
- * @param plan - The run that was made.
- * @param loaded - What the harness reported.
- * @param copy - The run's copy of the subject; null for "none".
- * @returns Whether the subject is among what loaded (null when the harness reports no such thing, or nothing is
- *   loaded), the report itself, whether the run was isolated, and the names of what does not come from the subject.
- */
-function startupRecord(
-  plan: RunPlan,
-  loaded: Loaded,
-  copy: Copy | null,
-): Pick<RunRecord, "subjectLoaded" | "loaded" | "isolated" | "unexpected"> {
-  const reports = plan.harness.capabilities.has("loadedReport");
   return {
-    subjectLoaded:
-      copy && reports
-        ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, loaded)
-        : null,
-    loaded,
-    isolated: plan.isolated ?? false,
-    unexpected: foreignOf(plan.harness, loaded, copy?.loaded ?? null),
+    checks,
+    replies,
+    requests: decided?.calls ?? [],
+    judgeProblem: problems[0] ?? null,
   };
 }
 
@@ -325,7 +296,7 @@ async function record(
     tokens: parsed.tokens,
     costUsd: parsed.costUsd,
   };
-  const { checks, replies, requests } = await scoreChecks(
+  const { checks, replies, requests, judgeProblem } = await scoreChecks(
     plan,
     {
       ...parsed,
@@ -337,12 +308,12 @@ async function record(
         observed,
       },
     },
-    invalidReason({ ...base, checks: [] }) === null,
+    invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
   );
+  const judged = { ...base, judgeProblem, checks };
   return {
-    ...base,
-    checks,
-    score: invalidReason({ ...base, checks }) ? null : weightedMean(checks),
+    ...judged,
+    score: invalidReason(judged) ? null : weightedMean(checks),
     judge: replies.length ? totalUsage(replies) : null,
     decision: requests.length ? totalUsage(requests) : null,
   };

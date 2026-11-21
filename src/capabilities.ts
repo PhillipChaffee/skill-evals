@@ -43,7 +43,7 @@ export const CAPABILITIES = {
   loadedReport:
     "The harness reports the plugins and skills it loaded at startup, which `--isolated` and the subject-loaded test read.",
   isolated:
-    "The harness can start with nothing loaded but what the run gives it, so `--isolated` can promise that.",
+    "The harness starts with nothing loaded but what the run gives it and proves that from its report, so `--isolated` can promise it. It needs `loadedReport` too.",
   sandbox:
     "The harness can run its tools in a sandbox that denies the network and the files outside the workspace.",
 } as const satisfies Record<string, string>;

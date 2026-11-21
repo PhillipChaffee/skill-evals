@@ -118,18 +118,24 @@ export function selectHarnesses(
 }
 
 /**
- * Refuses `--isolated` for a harness that cannot start with nothing loaded.
+ * Refuses `--isolated` for a harness that cannot start isolated and prove from its report what it loaded.
  * @param chosen - The harnesses that will run.
- * @throws {UsageError} Naming each harness that lacks the `isolated` capability.
+ * @throws {UsageError} Naming each harness that lacks the `isolated` or the `loadedReport` capability.
  */
 export function requireIsolation(chosen: Located[]): void {
   const lacking = chosen
     .map(({ harness }) => harness)
-    .filter((harness) => !harness.capabilities.has("isolated"))
+    .filter(
+      (harness) =>
+        !(
+          harness.capabilities.has("isolated") &&
+          harness.capabilities.has("loadedReport")
+        ),
+    )
     .map((harness) => harness.id);
   if (lacking.length > 0) {
     throw new UsageError(
-      `--isolated cannot run with ${lacking.join(", ")}: the harness cannot start with nothing loaded but the subject`,
+      `--isolated cannot run with ${lacking.join(", ")}: the harness must start with nothing loaded but the subject and prove from its own report what it loaded`,
     );
   }
 }

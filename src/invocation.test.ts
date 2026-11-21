@@ -223,13 +223,31 @@ test("the claude-code invocation carries its isolation switches only when isolat
   expect(plain.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_AUTO_MEMORY");
   const plugin: LoadedSubject = { ...skillsSubject(), kind: "plugin" };
   const { args, env } = invoke(CLAUDE_CODE, plugin, { isolated: true });
-  // An empty list: no user, project or local settings. Never --bare, which switches off the plugin's own hooks.
-  expect(args[args.indexOf("--setting-sources") + 1]).toBe("");
+  // Only the user source, which is the throwaway home. Never --bare, which switches off the plugin's own hooks.
+  expect(args[args.indexOf("--setting-sources") + 1]).toBe("user");
   expect(args).toContain("--strict-mcp-config");
   expect(args).not.toContain("--bare");
   expect(args[args.indexOf(PLUGIN_DIR) + 1]).toBe(plugin.dir);
   expect(env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
   expect(args.at(-1)).toBe("say hello");
+});
+
+test("the invocation uses the adapter's own isolation description", () => {
+  const claude = HARNESSES.find((h) => h.id === CLAUDE_CODE);
+  const { args, env } = invoke(CLAUDE_CODE, null, { isolated: true });
+  expect(claude?.isolation?.args.every((a) => args.includes(a))).toBe(true);
+  expect(claude?.isolation?.env).toEqual({
+    CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+  });
+  expect(env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"]).toBe("1");
+});
+
+test("a harness with the isolated capability describes its isolation", () => {
+  for (const harness of HARNESSES) {
+    expect(harness.capabilities.has("isolated"), harness.id).toBe(
+      harness.isolation !== undefined,
+    );
+  }
 });
 
 test("pi, which is always started with discovery off, takes the same arguments isolated or not", () => {

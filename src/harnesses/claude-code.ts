@@ -54,6 +54,19 @@ type Event =
       };
     };
 
+// Never --bare: it switches off the hooks a plugin ships.
+// `user` is the throwaway home, which holds only what the run seeds, and it is the one source that loads
+// CLAUDE_CONFIG_DIR/skills, where a skills subject is placed. Project and local stay off, so the workspace's own
+// `.claude/` is not read.
+const ISOLATION: NonNullable<Harness["isolation"]> = {
+  args: ["--setting-sources", "user", "--strict-mcp-config"],
+  env: { CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" },
+  proves:
+    "Every plugin directory, plugin-prefixed skill and agent, and MCP server in the init event is the subject's. The report must list plugins and skills, or the run is invalid.",
+  notProven:
+    "Managed policy settings (hooks, environment, permissions), managed memory and CLAUDE.md files, rules and hooks, and bare-named skills and agents, which are Claude Code's built-ins or the organization's managed ones: no switch removes them and the init event does not tell them apart.",
+};
+
 const claudeCode: Harness = {
   id: "claude-code",
   bin: "claude",
@@ -76,7 +89,7 @@ const claudeCode: Harness = {
       args: [
         "-p",
         ...opt("--plugin-dir", pluginDir(subject)),
-        ...(isolated ? ISOLATION_ARGS : []),
+        ...(isolated ? ISOLATION.args : []),
         "--output-format",
         "stream-json",
         "--verbose",
@@ -87,10 +100,7 @@ const claudeCode: Harness = {
         "--",
         prompt,
       ],
-      env: {
-        CLAUDE_CONFIG_DIR: configDir,
-        ...(isolated && { CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" }),
-      },
+      env: { CLAUDE_CONFIG_DIR: configDir, ...(isolated && ISOLATION.env) },
     };
   },
 
@@ -138,15 +148,10 @@ const claudeCode: Harness = {
     };
   },
 
-  // Bare skill names are Claude Code's own and the throwaway home holds no user skills, so only a plugin path other
-  // than the subject's copy, and a skill of another plugin, are foreign.
+  // A bare skill or agent name is a built-in or a managed-policy one, which no switch removes; see `isolation`.
   foreign: foreignOfClaude,
+  isolation: ISOLATION,
 };
-
-// Never --bare: it switches off the hooks a plugin ships.
-// An empty list loads no user, project or local settings (the CLI maps "" to no sources). Managed policy settings
-// load regardless, and no flag stops an organization's plugins: `foreign` finds them.
-const ISOLATION_ARGS = ["--setting-sources", "", "--strict-mcp-config"];
 
 /**
  * Names what Claude Code loaded that is not the subject's.
@@ -158,19 +163,27 @@ function foreignOfClaude(
   loaded: Loaded,
   subject: LoadedSubject | null,
 ): string[] {
-  const ownPlugins = (loaded.plugins ?? [])
+  const own = (loaded.plugins ?? [])
     .filter(
       (plugin) =>
         subject?.kind === "plugin" && samePath(plugin.path, subject.dir),
     )
     .map((plugin) => plugin.name);
-  const otherSkills = (loaded.rawSkills ?? []).filter((name) => {
+  // `plugin:name` and `plugin:skill` carry the plugin's name before the last colon.
+  const ofOther = (name: string): boolean => {
     const colon = name.lastIndexOf(":");
-    return colon >= 0 && !ownPlugins.includes(name.slice(0, colon));
-  });
+    return colon >= 0 && !own.includes(name.slice(0, colon));
+  };
+  // A plugin's MCP server is `plugin:<plugin>:<server>`; every other server comes from somewhere else.
+  const serverIsOwn = (name: string): boolean =>
+    own.some((plugin) => name.startsWith(`plugin:${plugin}:`));
   return [
     ...foreignPaths(loaded, subject),
-    ...otherSkills.map((name) => `skill ${name}`),
+    ...(loaded.rawSkills ?? []).filter(ofOther).map((n) => `skill ${n}`),
+    ...(loaded.agents ?? []).filter(ofOther).map((n) => `agent ${n}`),
+    ...(loaded.mcpServers ?? [])
+      .filter((name) => !serverIsOwn(name))
+      .map((n) => `MCP server ${n}`),
   ];
 }
 

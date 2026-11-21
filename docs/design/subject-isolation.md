@@ -27,7 +27,7 @@ The source directory is hashed before the first run and after the last. A differ
 
 `--isolated` starts the harness with nothing but the subject. It is opt-in in this release, and the CI guide recommends it.
 
-Each adapter that declares the `isolated` capability turns off user-level, organization-level and project-level plugins, skills, rules, hooks, MCP servers and memory. An adapter that cannot do it does not declare the capability, and `--isolated` with that harness is a usage error.
+Each adapter that declares the `isolated` capability (which also needs `loadedReport`: it starts isolated and proves it from its report) turns off user-level, organization-level and project-level plugins, skills, rules, hooks, MCP servers and memory. An adapter that cannot do it does not declare the capability, and `--isolated` with that harness is a usage error.
 
 Flags are never trusted. The record keeps what the harness reported as loaded (`loaded`) and the names in it that do not come from the subject (`unexpected`). Each adapter may say what is foreign with its own `foreign(loaded, subject)`; the shared rule counts every reported plugin path, skill, agent, MCP server and hook that the subject does not own. Under `--isolated`, a non-empty `unexpected` makes the run invalid with the reason `loaded outside the subject: <names>`. There is no static list of built-ins. Claude Code treats a bare skill name as a built-in and not foreign, which was not confirmed against a real capture.
 

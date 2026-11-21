@@ -5,7 +5,14 @@ export type { Check } from "./checks/index.js";
 export { evaluate } from "./evaluate.js";
 export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";
 export { HARNESSES } from "./harnesses/index.js";
-export type { Harness, Parsed, Tokens, ToolCall } from "./harnesses/shared.js";
+export type {
+  Harness,
+  Loaded,
+  LoadedSubject,
+  Parsed,
+  Tokens,
+  ToolCall,
+} from "./harnesses/shared.js";
 export type { CheckResult, RunRecord } from "./run.js";
 export type { CaseScore, CommonSet, SuiteScore } from "./score.js";
 export type { SubjectSummary } from "./subject.js";

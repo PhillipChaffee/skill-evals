@@ -1,23 +1,14 @@
+import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import claudeCode from "./harnesses/claude-code.js";
-import type { Loaded, LoadedSubject } from "./harnesses/shared.js";
-import { foreignOf } from "./harnesses/shared.js";
+import { requireIsolation } from "./harnesses/index.js";
 import { plantCase, plugin, script, skillsFolder } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 
 const ISOLATED = "--isolated";
 const NONE = "none";
-const KIT_COPY = "/run/kit-1";
+const YES = '{"score": 1, "reason": "yes"}';
 const ORG_PLUGIN = "/opt/org/plugin";
-const NOTHING: Loaded = {
-  paths: null,
-  skills: null,
-  agents: null,
-  rules: null,
-  hooks: null,
-  mcpServers: null,
-};
 
 /**
  * Runs the planted case once.
@@ -66,6 +57,7 @@ test("--a none --isolated records zero skills", async () => {
     flags: [ISOLATED],
   });
   expect(result.status, result.stderr).toBe(0);
+  expect(fs.existsSync(box.started)).toBe(true);
   expect(records[0]?.loaded.skills).toEqual([]);
   expect(records[0]?.unexpected).toEqual([]);
   expect(invalid).toEqual([]);
@@ -131,30 +123,100 @@ test("a skills folder, and a bare name that is a Claude Code built-in, load clea
   expect(invalid).toEqual([]);
 });
 
-test("a harness that reports agents and servers shows what is foreign", async () => {
+test("an agent or an MCP server that is not the subject's invalidates the run, and the record names it", async () => {
   const box = sandbox();
   script(box, "more", {
-    init: { agents: ["reviewer"], mcp_servers: [{ name: "db" }] },
+    init: {
+      agents: ["Explore", "org:reviewer"],
+      mcp_servers: [{ name: "db" }],
+    },
     turns: done,
   });
-  const { records } = await scoreOnce(box, { subject: NONE, flags: [] });
-  expect(records[0]?.loaded.agents).toEqual(["reviewer"]);
+  const { records, invalid } = await scoreOnce(box, {
+    subject: NONE,
+    flags: [ISOLATED],
+  });
+  expect(records[0]?.loaded.agents).toEqual(["Explore", "org:reviewer"]);
   expect(records[0]?.loaded.mcpServers).toEqual(["db"]);
+  expect(records[0]?.unexpected).toEqual([
+    "agent org:reviewer",
+    "MCP server db",
+  ]);
+  expect(invalid[0]).toMatch(
+    /loaded outside the subject: agent org:reviewer, MCP server db$/,
+  );
 });
 
-test("pi runs under --isolated, and reports nothing it could not see", async () => {
+test("the subject plugin's own agents and MCP servers are not foreign", async () => {
   const box = sandbox();
-  const { result, records } = await scoreOnce(box, {
-    subject: NONE,
-    flags: [ISOLATED, "--harness", "pi"],
-    env: { SKILL_EVALS_BIN_PI: box.pi },
+  const kit = plugin(box, "kit", {});
+  script(box, "own", {
+    init: {
+      agents: ["plugin:reviewer"],
+      mcp_servers: [{ name: "plugin:plugin:db" }],
+    },
+    turns: done,
+  });
+  const { records, result } = await scoreOnce(box, {
+    subject: kit,
+    flags: [ISOLATED],
   });
   expect(result.status, result.stderr).toBe(0);
-  expect(records[0]?.loaded).toEqual(NOTHING);
-  expect(records[0]?.isolated).toBe(true);
+  expect(records[0]?.unexpected).toEqual([]);
 });
 
-test("--isolated with a harness that cannot isolate is a usage error that names it", async () => {
+const NOT_REPORTED_REASON = /the harness did not report what it loaded$/;
+
+test.each([
+  ["no init event", { noInit: true }],
+  ["an init event without plugins", { initOmit: ["plugins" as const] }],
+  ["an init event without skills", { initOmit: ["skills" as const] }],
+])(
+  "%s under --isolated invalidates the run, and without it the run counts",
+  async (_name, more) => {
+    const box = sandbox();
+    script(box, "partial", { ...more, turns: done });
+    const isolated = await scoreOnce(box, { subject: NONE, flags: [ISOLATED] });
+    expect(isolated.result.status).toBe(1);
+    expect(isolated.invalid[0]).toMatch(NOT_REPORTED_REASON);
+    expect(isolated.records[0]?.score).toBeNull();
+    fs.rmSync(path.join(box.root, "results"), { recursive: true });
+    const plain = await scoreOnce(box, { subject: NONE, flags: [] });
+    expect(plain.result.status, plain.result.stderr).toBe(0);
+    expect(plain.invalid).toEqual([]);
+  },
+);
+
+test("a judge that reports something loaded invalidates an isolated run and names the judge", async () => {
+  const box = sandbox();
+  box.write("fake/judge/replies.json", Array(2).fill(YES));
+  box.write("fake/judge/init.json", {
+    plugins: [{ name: "org", path: ORG_PLUGIN }],
+  });
+  script(box, "ok", { turns: done });
+  const cases = plantCase(box, [{ type: "judge", rubric: "Says done." }]);
+  const outDir = path.join(box.root, "results");
+  const args = [
+    "score",
+    "--subject",
+    NONE,
+    "--cases",
+    cases,
+    "--reps",
+    "1",
+    "--out",
+    outDir,
+  ];
+  const result = await box.cli([...args, ISOLATED]);
+  expect(result.status).toBe(1);
+  expect(readResults(outDir).invalid[0]).toMatch(
+    /the judge loaded outside the subject: \/opt\/org\/plugin$/,
+  );
+  const plain = await box.cli(args);
+  expect(plain.status, plain.stderr).toBe(0);
+});
+
+test("--isolated with a harness that cannot isolate is a usage error that names it, before any harness starts", async () => {
   const box = sandbox();
   const cases = plantCase(box, [{ type: "output_contains", text: "done" }]);
   const result = await box.cli(
@@ -166,13 +228,29 @@ test("--isolated with a harness that cannot isolate is a usage error that names 
       cases,
       ISOLATED,
       "--harness",
-      "codex,pi",
+      "codex,pi,claude-code",
     ],
     { SKILL_EVALS_BIN_CODEX: box.pi, SKILL_EVALS_BIN_PI: box.pi },
   );
   expect(result.status).toBe(2);
-  expect(result.stderr).toMatch(/--isolated.*codex/);
-  expect(result.stderr).not.toMatch(/pi/);
+  expect(result.stderr).toMatch(/--isolated cannot run with codex, pi:/);
+  expect(result.stderr).not.toMatch(/\bclaude-code\b.*:.*\bclaude-code\b/);
+  expect(fs.existsSync(box.started)).toBe(false);
+});
+
+test("a harness needs both isolated and loadedReport to run under --isolated", () => {
+  const harness = (...caps: string[]) => ({
+    harness: { id: "x", capabilities: new Set(caps) } as never,
+    bin: "x",
+  });
+  const run =
+    (...caps: string[]) =>
+    () => {
+      requireIsolation([harness(...caps)]);
+    };
+  expect(run("isolated", "loadedReport")).not.toThrow();
+  expect(run("isolated")).toThrow(/cannot run/);
+  expect(run("loadedReport")).toThrow(/cannot run/);
 });
 
 test("isolated can be set in the config file", async () => {
@@ -194,50 +272,4 @@ test("isolated can be set in the config file", async () => {
   ]);
   expect(result.status).toBe(1);
   expect(result.stdout).toMatch(/loaded outside the subject/);
-});
-
-const copy = (kind: LoadedSubject["kind"]): LoadedSubject => ({
-  kind,
-  dir: KIT_COPY,
-  skills: ["greet"],
-  skillDirs: {},
-});
-
-test("the default foreign list names every reported plugin path, skill, agent, server and hook the subject does not own", () => {
-  const loaded: Loaded = {
-    paths: [KIT_COPY, "/other"],
-    skills: ["greet", "stray"],
-    agents: ["a"],
-    rules: ["r"],
-    hooks: ["h"],
-    mcpServers: ["m"],
-  };
-  const plain = {};
-  expect(foreignOf(plain, loaded, copy("plugin"))).toEqual([
-    "/other",
-    "skill stray",
-    "agent a",
-    "MCP server m",
-    "hook h",
-  ]);
-  expect(foreignOf(plain, loaded, null)).toContain(KIT_COPY);
-  expect(foreignOf(plain, loaded, copy("skills"))).toContain(KIT_COPY);
-  expect(foreignOf(plain, NOTHING, null)).toEqual([]);
-});
-
-test("claude-code treats a prefixed skill of another plugin as foreign and a bare name as a built-in", () => {
-  const loaded: Loaded = {
-    ...NOTHING,
-    paths: [KIT_COPY, "/org"],
-    skills: ["greet", "x", "init"],
-    rawSkills: ["kit:greet", "org:x", "init"],
-    plugins: [
-      { name: "kit", path: KIT_COPY },
-      { name: "org", path: "/org" },
-    ],
-  };
-  expect(foreignOf(claudeCode, loaded, copy("plugin"))).toEqual([
-    "/org",
-    "skill org:x",
-  ]);
 });

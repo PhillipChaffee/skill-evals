@@ -110,6 +110,10 @@ export interface FakeScript {
   match?: { prompt?: string; plugin?: boolean };
   /** Fields of the opening `init` event to replace. */
   init?: Partial<InitEvent>;
+  /** Names of init fields to leave out. */
+  initOmit?: (keyof InitEvent)[];
+  /** Leaves the init event out of the stream. */
+  noInit?: boolean;
   /** The steps of each turn; turn n answers the n-th prompt of a session. */
   turns: FakeStep[][];
 }

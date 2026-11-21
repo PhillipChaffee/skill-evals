@@ -203,19 +203,46 @@ The adapter of one coding-agent CLI.
 | `invocation`   | `(input: RunInput) => Invocation`                                                                                                                                                                                                                                                                                                                                  |                                                                                                                                                            |
 | `parse`        | `(stdout: string) => Parsed`                                                                                                                                                                                                                                                                                                                                       | May throw on a stream it does not understand; the caller reports that as a failed run.                                                                     |
 | `foreign?`     | `((loaded: Loaded, subject: LoadedSubject \| null) => string[]) \| undefined`                                                                                                                                                                                                                                                                                      | Names what the harness reported that does not come from the subject, for a harness whose report needs more than the shared rule. Absent: `foreignDefault`. |
+| `isolation?`   | `Isolation \| undefined`                                                                                                                                                                                                                                                                                                                                           | How the adapter isolates a run, for an adapter with the `isolated` capability. `invocation` uses these same `args` and `env` when the run is isolated.     |
+
+### Loaded
+
+What a harness says it loaded at startup. Null means the harness does not report that kind of thing.
+
+| Property     | Type                                                     | Description                                                                                      |
+| ------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `paths`      | `string[] \| null`                                       | The directories of its plugins.                                                                  |
+| `skills`     | `string[] \| null`                                       | The names of its skills, without any plugin prefix.                                              |
+| `agents`     | `string[] \| null`                                       |                                                                                                  |
+| `rules`      | `string[] \| null`                                       |                                                                                                  |
+| `hooks`      | `string[] \| null`                                       |                                                                                                  |
+| `mcpServers` | `string[] \| null`                                       |                                                                                                  |
+| `rawSkills?` | `string[] \| null \| undefined`                          | The skill names as the harness listed them, with any plugin prefix, for an adapter that has one. |
+| `plugins?`   | `{ name: string; path: string; }[] \| null \| undefined` | The plugins with their names, for an adapter that reports them.                                  |
+
+### LoadedSubject
+
+A plugin or a skills folder: a subject that puts something into the harness.
+
+```ts
+type LoadedSubject = Pick<Subject, "skills" | "skillDirs"> & {
+  kind: "plugin" | "skills";
+  dir: string;
+};
+```
 
 ### Parsed
 
 A harness's output stream in the one shape every harness shares. Null means the harness does not report the field.
 
-| Property    | Type             | Description |
-| ----------- | ---------------- | ----------- |
-| `finalText` | `string`         |             |
-| `toolCalls` | `ToolCall[]`     |             |
-| `tokens`    | `Tokens \| null` |             |
-| `costUsd`   | `number \| null` |             |
-| `loaded`    | `Loaded`         |             |
-| `error`     | `string \| null` |             |
+| Property    | Type             | Description                                                                                                       |
+| ----------- | ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `finalText` | `string`         |                                                                                                                   |
+| `toolCalls` | `ToolCall[]`     |                                                                                                                   |
+| `tokens`    | `Tokens \| null` |                                                                                                                   |
+| `costUsd`   | `number \| null` |                                                                                                                   |
+| `loaded`    | `Loaded`         | What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. |
+| `error`     | `string \| null` |                                                                                                                   |
 
 ### Tokens
 
@@ -255,30 +282,32 @@ type CheckResult = Check & {
 
 Everything kept about one run.
 
-| Property         | Type                                   | Description                                                                                                                    |
-| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `harness`        | `string`                               |                                                                                                                                |
-| `subject`        | `string`                               | The subject's label.                                                                                                           |
-| `caseId`         | `string`                               |                                                                                                                                |
-| `rep`            | `number`                               |                                                                                                                                |
-| `ok`             | `boolean`                              |                                                                                                                                |
-| `error`          | `string \| null`                       |                                                                                                                                |
-| `finalText`      | `string`                               |                                                                                                                                |
-| `toolCalls`      | `ToolCall[]`                           |                                                                                                                                |
-| `skillsLoaded`   | `string[]`                             |                                                                                                                                |
-| `subjectLoaded`  | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. |
-| `loaded`         | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                             |
-| `isolated`       | `boolean`                              | Whether the run was started with `--isolated`.                                                                                 |
-| `unexpected`     | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                  |
-| `subjectMutated` | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                          |
-| `subjectChanges` | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                        |
-| `checks`         | `CheckResult[]`                        |                                                                                                                                |
-| `score`          | `number \| null`                       | The run score, null when the run is invalid.                                                                                   |
-| `judge`          | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                    |
-| `decision`       | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                      |
-| `durationMs`     | `number`                               |                                                                                                                                |
-| `tokens`         | `Tokens \| null`                       |                                                                                                                                |
-| `costUsd`        | `number \| null`                       |                                                                                                                                |
+| Property         | Type                                   | Description                                                                                                                     |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`        | `string`                               |                                                                                                                                 |
+| `subject`        | `string`                               | The subject's label.                                                                                                            |
+| `caseId`         | `string`                               |                                                                                                                                 |
+| `rep`            | `number`                               |                                                                                                                                 |
+| `ok`             | `boolean`                              |                                                                                                                                 |
+| `error`          | `string \| null`                       |                                                                                                                                 |
+| `finalText`      | `string`                               |                                                                                                                                 |
+| `toolCalls`      | `ToolCall[]`                           |                                                                                                                                 |
+| `skillsLoaded`   | `string[]`                             |                                                                                                                                 |
+| `subjectLoaded`  | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.  |
+| `loaded`         | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                              |
+| `isolated`       | `boolean`                              | Whether the run was started with `--isolated`.                                                                                  |
+| `unexpected`     | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                   |
+| `reportMissing`  | `boolean`                              | True when the harness should report its plugins and skills (`loadedReport`) and left one out.                                   |
+| `judgeProblem`   | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. |
+| `subjectMutated` | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                           |
+| `subjectChanges` | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                         |
+| `checks`         | `CheckResult[]`                        |                                                                                                                                 |
+| `score`          | `number \| null`                       | The run score, null when the run is invalid.                                                                                    |
+| `judge`          | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                     |
+| `decision`       | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                       |
+| `durationMs`     | `number`                               |                                                                                                                                 |
+| `tokens`         | `Tokens \| null`                       |                                                                                                                                 |
+| `costUsd`        | `number \| null`                       |                                                                                                                                 |
 
 ### CaseScore
 
