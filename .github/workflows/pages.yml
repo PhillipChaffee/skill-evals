@@ -1,20 +1,72 @@
-# Deploys the static site in site/ to GitHub Pages. The site has no build
-# step: the folder is uploaded as it is. Pages must be switched on once in the
-# repository settings, with "GitHub Actions" as the source, or the deploy job
-# fails.
+# Builds the website and deploys it to GitHub Pages: the landing page in
+# site/, as it is, and the docs in docs/, which Astro builds, beside it under
+# docs/. The reference pages of the docs are written from src/, so a change
+# there deploys too. A pull request builds the site and checks its links, and
+# deploys nothing. Pages must be switched on once in the repository settings,
+# with "GitHub Actions" as the source, or the deploy job fails.
 name: Pages
 
 on:
   push:
     branches: [main]
-    paths: ["site/**"]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "src/**"
+      - "CHANGELOG.md"
+      - "package-lock.json"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "src/**"
+      - "CHANGELOG.md"
+      - "package-lock.json"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read  # least privilege by default; the job asks for more
+  contents: read  # least privilege by default; the deploy job asks for more
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # bounds a hung install; GitHub's default is 360
+    concurrency:
+      group: ${{ github.workflow }}-build-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs/package-lock.json
+      # The root install: the docs build writes the reference pages from src/
+      # with the root package's own tools.
+      - run: npm ci
+      - run: npm ci
+        working-directory: docs
+      # Writes the reference pages, builds the docs, puts the landing page
+      # beside them in docs/dist/, and fails on a broken link or asset.
+      - run: npm run build
+        working-directory: docs
+      # A reference page that the build rewrote was committed stale. `npm test`
+      # in CI fails on that too; this keeps a stale page off the site.
+      - run: git diff --exit-code -- docs/src/content/docs
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5
+        with:
+          path: docs/dist
+
   deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10  # bounds a hung deployment; GitHub's default is 360
     environment:
@@ -26,14 +78,8 @@ jobs:
       group: pages
       cancel-in-progress: false
     permissions:
-      contents: read  # checks out site/
       pages: write  # publishes the uploaded artifact as the site
       id-token: write  # proves to Pages that the artifact comes from this workflow run
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5
-        with:
-          path: site
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5

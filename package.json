@@ -23,7 +23,7 @@
     "LICENSE",
     "CHANGELOG.md"
   ],
-  "//": "Deviations from the full-lint typescript template, each with its reason. (1) No \"private\", and name, version, description, license, repository, bin, exports, and files are set: this package is published. (2) The build and prepack scripts: Node does not strip types under node_modules, so the package ships compiled JavaScript. (3) @types/node: the sources use Node APIs, as the template's tsconfig comment instructs; 22 matches the engines floor. (4) vitest and @vitest/coverage-v8 are 5.0.3, not the template's 5.0.0, and minimatch is overridden to 11.0.1: osv-scanner fails the advisories gate on @vitest/mocker 5.0.0 (GHSA-qxg6-89mg-rqv8, GHSA-xp26-3454-mjgp) and on minimatch below 11.0.1 (GHSA-g3hv-75wg-m249), and eslint, typescript-eslint, and eslint-plugin-sonarjs all ask for minimatch ^10. Drop the override when their pins move to releases that ask for minimatch 11. (5) docs:reference: the reference pages of the docs are written from src/ by the tests.",
+  "//": "Deviations from the full-lint typescript template, each with its reason. (1) No \"private\", and name, version, description, license, repository, bin, exports, and files are set: this package is published. (2) The build and prepack scripts: Node does not strip types under node_modules, so the package ships compiled JavaScript. (3) @types/node: the sources use Node APIs, as the template's tsconfig comment instructs; 22 matches the engines floor. (4) vitest and @vitest/coverage-v8 are 5.0.3, not the template's 5.0.0, and minimatch is overridden to 11.0.1: osv-scanner fails the advisories gate on @vitest/mocker 5.0.0 (GHSA-qxg6-89mg-rqv8, GHSA-xp26-3454-mjgp) and on minimatch below 11.0.1 (GHSA-g3hv-75wg-m249), and eslint, typescript-eslint, and eslint-plugin-sonarjs all ask for minimatch ^10. Drop the override when their pins move to releases that ask for minimatch 11. (5) docs:reference and the second half of lint:lockfile: the docs site in docs/ is a package of its own, so that Astro stays out of this package's dependency tree; its reference pages are written from src/ by the tests, and its lockfile passes the same policy.",
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "docs:reference": "vitest run src/docs/reference.test.ts --coverage.enabled=false --update",
@@ -31,7 +31,7 @@
     "knip": "knip",
     "lint": "eslint .",
     "lint:graph": "depcruise --validate .dependency-cruiser.cjs src",
-    "lint:lockfile": "lockfile-lint -p package-lock.json -t npm -a registry.npmjs.org -o \"https:\" -n -i -e false",
+    "lint:lockfile": "lockfile-lint -p package-lock.json -t npm -a registry.npmjs.org -o \"https:\" -n -i -e false && lockfile-lint -p docs/package-lock.json -t npm -a registry.npmjs.org -o \"https:\" -n -i -e false",
     "prepack": "npm run build",
     "test": "vitest run --coverage",
     "typecheck": "tsc --noEmit"

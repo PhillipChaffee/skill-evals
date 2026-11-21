@@ -1,0 +1,91 @@
+# The docs site's one license exception, with its reason. Astro lists sharp,
+# its image optimizer, as an optional dependency, and sharp's prebuilt libvips
+# binaries are LGPL-3.0-or-later. The license gate allows LGPL-3.0-only, and
+# "or later" lets a user choose exactly that version, so the override below
+# restates the license in the allowlist's own words. Nothing in this folder is
+# part of the published npm package, and the docs hold no images to optimize.
+# One entry per prebuilt binary, because an entry matches one package name.
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-darwin-arm64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-darwin-x64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-arm"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-arm64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-ppc64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-riscv64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-s390x"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linux-x64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linuxmusl-arm64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-libvips-linuxmusl-x64"
+ecosystem = "npm"
+license.override = ["LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-wasm32"
+ecosystem = "npm"
+license.override = ["Apache-2.0", "LGPL-3.0-only", "MIT"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-win32-arm64"
+ecosystem = "npm"
+license.override = ["Apache-2.0", "LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-win32-ia32"
+ecosystem = "npm"
+license.override = ["Apache-2.0", "LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"
+
+[[PackageOverrides]]
+name = "@img/sharp-win32-x64"
+ecosystem = "npm"
+license.override = ["Apache-2.0", "LGPL-3.0-only"]
+reason = "LGPL-3.0-or-later includes LGPL-3.0-only"

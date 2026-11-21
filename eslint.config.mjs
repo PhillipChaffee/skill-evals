@@ -22,7 +22,17 @@ import vitest from "@vitest/eslint-plugin";
 export default defineConfig(
   // Build output and coverage reports hold generated code; no lint, no coverage
   // (the coverage gate in vitest.config.ts owns its own include).
-  { ignores: ["node_modules/", "dist/", "coverage/"] },
+  // Deviation from the full-lint template: docs/dist/ and docs/.astro/ are
+  // what the docs build writes (the built site and Astro's generated types).
+  {
+    ignores: [
+      "node_modules/",
+      "dist/",
+      "coverage/",
+      "docs/dist/",
+      "docs/.astro/",
+    ],
+  },
   {
     files: ["**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}"],
     extends: [js.configs.recommended], // The @eslint/js baseline for every file format this repo carries, including the config files themselves
