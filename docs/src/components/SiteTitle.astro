@@ -1,0 +1,40 @@
+---
+// The wordmark of the landing page. It links back to the landing page, which
+// is one level above the docs, and "docs" beside it links to the docs home.
+const docsHome = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/`;
+const landingPage = docsHome.replace(/docs\/$/, "");
+---
+
+<span class="wordmark sl-flex">
+  <a class="brand" href={landingPage} translate="no"
+    ><span class="prompt" aria-hidden="true">$</span> skill-evals</a
+  >
+  <a class="section" href={docsHome}>docs</a>
+</span>
+
+<style>
+  .wordmark {
+    align-items: baseline;
+    gap: 0.75rem;
+    font-family: var(--sl-font-mono);
+    white-space: nowrap;
+  }
+  a {
+    text-decoration: none;
+  }
+  .brand {
+    color: var(--sl-color-text-accent);
+    font-size: 1.125rem;
+    font-weight: 700;
+  }
+  .prompt {
+    color: var(--se-text-faint);
+  }
+  .section {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+  a:hover {
+    color: var(--se-accent-hover);
+  }
+</style>

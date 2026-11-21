@@ -1,0 +1,133 @@
+/* The palette and fonts of the landing page (site/styles.css), given to
+   Starlight through its documented custom properties. The site is dark only:
+   src/components/Empty.astro replaces the theme switch, so the light values
+   of Starlight never apply. */
+:root,
+::backdrop {
+  --se-ground: #0d0f0c;
+  --se-panel: #11140f;
+  --se-panel-raised: #161a13;
+  --se-border: #2b3125;
+  --se-border-soft: #1f241b;
+  --se-border-strong: #4a5340;
+  --se-text: #d7dbd0;
+  --se-text-bright: #f2f5ea;
+  --se-text-soft: #b9bfb0;
+  --se-text-muted: #9aa390;
+  --se-text-faint: #7d8574;
+  --se-accent: #c8f169;
+  --se-accent-hover: #e2ff9c;
+  --se-on-accent: #10140a;
+  --se-warn: #f0b55a;
+
+  --sl-color-white: var(--se-text-bright);
+  --sl-color-gray-1: var(--se-text);
+  --sl-color-gray-2: var(--se-text);
+  --sl-color-gray-3: var(--se-text-muted);
+  --sl-color-gray-4: var(--se-border-strong);
+  --sl-color-gray-5: var(--se-border);
+  --sl-color-gray-6: var(--se-panel-raised);
+  --sl-color-black: var(--se-ground);
+
+  --sl-color-accent-low: #1d2410;
+  --sl-color-accent: var(--se-accent);
+  --sl-color-accent-high: var(--se-accent);
+  --sl-color-text-invert: var(--se-on-accent);
+
+  --sl-color-orange-low: #2e220f;
+  --sl-color-orange: var(--se-warn);
+  --sl-color-orange-high: #f7d6a0;
+
+  --sl-color-bg-nav: var(--se-ground);
+  --sl-color-bg-sidebar: var(--se-panel);
+  --sl-color-bg-inline-code: var(--se-border-soft);
+  --sl-color-hairline-light: var(--se-border);
+  --sl-color-hairline: var(--se-border-soft);
+  --sl-color-hairline-shade: var(--se-border);
+  --sl-color-backdrop-overlay: rgb(13 15 12 / 0.8);
+
+  --sl-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sl-font-mono:
+    "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --sl-line-height: 1.65;
+
+  color-scheme: dark;
+}
+
+/* Headings and navigation labels are set in the mono face, like the landing
+   page's headings, step labels, and navigation. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.sidebar-content .large,
+starlight-toc h2,
+mobile-starlight-toc summary {
+  font-family: var(--__sl-font-mono);
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--se-text-bright);
+}
+
+.sl-markdown-content a:hover:not(:where(.not-content *)) {
+  color: var(--se-accent-hover);
+}
+
+/* Reference tables are wide. They scroll inside their own box, as the sample
+   report on the landing page does, so the page itself never scrolls sideways. */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--se-border);
+  border-radius: 8px;
+  font-size: var(--sl-text-sm);
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border-bottom: 1px solid var(--se-border-soft);
+  padding: 0.6rem 0.9rem;
+  vertical-align: top;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  background: var(--se-panel-raised);
+  color: var(--se-text-muted);
+  font-family: var(--__sl-font-mono);
+  font-size: var(--sl-text-xs);
+  font-weight: 500;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+.sl-markdown-content tr:last-child td:not(:where(.not-content *)) {
+  border-bottom: 0;
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  color: var(--se-text-bright);
+}
+
+/* The first column names the row. It keeps a width that reads, and a name in
+   it stays on one line. */
+.sl-markdown-content td:first-child:not(:where(.not-content *)) {
+  min-width: 9rem;
+}
+
+.sl-markdown-content td:first-child code:not(:where(.not-content *)) {
+  white-space: nowrap;
+}
+
+/* On a narrow screen the last column, which holds the prose, keeps a width
+   that reads, and the table scrolls to it. */
+.sl-markdown-content td:last-child:not(:where(.not-content *)) {
+  min-width: 15rem;
+}

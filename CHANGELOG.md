@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The help text is written from the same tables that parse the command line. It lists the commands, then every flag once with its default and the commands that take it. No command, flag, or default changed.
+- The documentation is a website next to the landing page. Its reference pages for the checks, the commands and flags, the config file, the harnesses, and the API are generated from the code, and the tests fail when a committed page or a documented example no longer matches the tool.
 - Releases are guarded. `scripts/release-plan.sh` refuses a version tag that does not match `package.json`, is not on `main`, has no changelog entry, or is not above the latest version on npm, and the `Release check` workflow runs the same guards on every pull request. The publish workflow also makes the GitHub release.
 
 ## 0.0.1

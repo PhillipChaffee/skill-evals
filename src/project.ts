@@ -28,9 +28,9 @@ export function findProject(cwd: string): Project {
   }
 }
 
-const CONFIG_FILE = "skill-evals.config.json";
+export const CONFIG_FILE = "skill-evals.config.json";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
-const CONFIG_KEYS: Record<string, "string" | "number"> = {
+export const CONFIG_KEYS: Record<string, "string" | "number"> = {
   cases: "string",
   harness: "string",
   reps: "number",

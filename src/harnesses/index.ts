@@ -8,8 +8,10 @@ import opencode from "./opencode.js";
 import pi from "./pi.js";
 import type { Harness } from "./shared.js";
 
-// Default-preference order: the first installed one runs when --harness is absent.
-// Pi leads because it has the smallest install, the fastest start, and reports tokens and cost.
+/**
+ * The harness adapters in default-preference order: the first installed one runs when `--harness` is absent.
+ * Pi leads because it has the smallest install, the fastest start, and reports tokens and cost.
+ */
 export const HARNESSES: Harness[] = [pi, claudeCode, cursor, opencode, codex];
 
 /** A harness with the executable to spawn for it. */
@@ -20,7 +22,12 @@ export interface Located {
 
 type Env = Record<string, string | undefined>;
 
-const overrideVar = (harness: Harness): string =>
+/**
+ * Names the environment variable that replaces a harness's executable.
+ * @param harness - The harness to start.
+ * @returns `SKILL_EVALS_BIN_` and the id in upper case, with underscores for dashes.
+ */
+export const overrideVar = (harness: Harness): string =>
   `SKILL_EVALS_BIN_${harness.id.toUpperCase().replaceAll("-", "_")}`;
 
 /**

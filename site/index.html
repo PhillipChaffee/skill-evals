@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>skill-evals: know what your agent skills actually do</title>
+    <meta
+      name="description"
+      content="An agent does not do the same thing twice. skill-evals runs your skills across the scenarios you care about, in a real coding agent, and scores each run against what you defined as success. Works with Claude Code, Codex, Cursor, OpenCode, and Pi."
+    />
+    <meta name="theme-color" content="#0d0f0c" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="skill-evals" />
+    <meta property="og:title" content="Know what your skills actually do." />
+    <meta
+      property="og:description"
+      content="Run your skills across the scenarios you care about, in a real coding agent. Define success, get a score, and see what each change does."
+    />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="copy.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header container">
+      <a class="brand" href="#top"
+        ><span class="prompt" aria-hidden="true">$</span> skill-evals</a
+      >
+      <nav class="site-nav" aria-label="Main">
+        <a href="#how">how it works</a>
+        <a href="#checks">checks</a>
+        <a href="#harnesses">harnesses</a>
+        <a href="docs/">docs</a>
+        <a class="accent" href="https://github.com/PhillipChaffee/skill-evals"
+          >github</a
+        >
+      </nav>
+    </header>
+
+    <main id="main" class="container">
+      <section id="top" class="hero">
+        <p class="eyebrow">evals for agent skills</p>
+        <h1>Know what your skills actually do.</h1>
+        <p class="lede">
+          An agent does not do the same thing twice. skill-evals runs your
+          skills across the scenarios you care about, in a real coding agent,
+          and scores each run against what you defined as success. Invoke a
+          skill and see what it does, or leave it out of the prompt and see
+          whether the agent reaches for it. Change a skill, run it again, and
+          see what the change did.
+        </p>
+        <div class="hero-actions">
+          <div class="command">
+            <span class="prompt" aria-hidden="true">$</span>
+            <code id="install-command"
+              >npx skill-evals run <span class="flag">--a none</span>
+              <span class="flag">--b ./skills</span></code
+            >
+            <button
+              class="copy-button"
+              type="button"
+              data-copy="install-command"
+              aria-label="Copy the command"
+              hidden
+            >
+              copy
+            </button>
+            <span class="visually-hidden" role="status" data-copy-status></span>
+          </div>
+          <a class="button button-primary" href="docs/quick-start/"
+            >Get started</a
+          >
+        </div>
+        <p class="hero-note">
+          Runs are unattended and have full permissions in the agent. Only run
+          prompts you wrote or read.
+        </p>
+      </section>
+
+      <section class="report" aria-label="Sample report">
+        <div class="report-bar">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="dot" aria-hidden="true"></span>
+          <span class="dot" aria-hidden="true"></span>
+          <span class="report-title"
+            >skill comparison · claude-code · 3 runs each</span
+          >
+        </div>
+        <div
+          class="table-scroll"
+          role="region"
+          aria-label="Sample report table"
+          tabindex="0"
+        >
+          <table>
+            <caption class="visually-hidden">
+              Scores of three cases without and with a commit-message skill
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">case</th>
+                <th scope="col">without skill</th>
+                <th scope="col">with skill</th>
+                <th scope="col">change</th>
+                <th scope="col">what moved</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">staged-diff</th>
+                <td>0.33</td>
+                <td class="good">1.00</td>
+                <td class="good">+0.67</td>
+                <td class="detail">typed subject line 0/3 → 3/3</td>
+              </tr>
+              <tr>
+                <th scope="row">described-change</th>
+                <td>0.26</td>
+                <td class="warn">0.11</td>
+                <td class="warn">-0.15</td>
+                <td class="detail">skill loaded in 0 of 3 runs</td>
+              </tr>
+              <tr>
+                <th scope="row">git-question</th>
+                <td>1.00</td>
+                <td>1.00</td>
+                <td class="flat">0.00</td>
+                <td class="detail">skill stayed out, as it should</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="report-summary">
+          <span class="label">suite score</span>
+          <span class="value"
+            >0.37 <span class="prompt" aria-hidden="true">→</span
+            ><span class="visually-hidden">to</span>
+            <span class="good">0.60</span></span
+          >
+          <span class="label"
+            >pass bar 1.00 on git-question ·
+            <span class="good">passed</span></span
+          >
+        </div>
+      </section>
+      <p class="report-caption">
+        A real report from a commit-message skill, condensed. It asks whether
+        the skill loads: no prompt names it. The second row is the finding: the
+        skill works, and it does not trigger when a change is only described.
+      </p>
+
+      <section id="why" class="section">
+        <h2>Reading a skill is not running it</h2>
+        <div class="steps">
+          <article class="card">
+            <p class="step">understand</p>
+            <h3>What it does, not what it says</h3>
+            <p>
+              A language model can load a skill on one run and ignore it on the
+              next. Run each scenario several times and see what happens, and
+              how often.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">define</p>
+            <h3>Say what success is</h3>
+            <p>
+              Write down what a good result looks like for each scenario. That
+              turns "it seems better" into a benchmark you can score against.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">change</p>
+            <h3>See what an edit did</h3>
+            <p>
+              Reword a description, add a rule, swap the model. Run the same
+              scenarios again and compare the scores, before you merge.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="questions" class="section">
+        <h2>Two questions you can ask</h2>
+        <div class="steps">
+          <article class="card">
+            <p class="step">behavior</p>
+            <h3>What does it do?</h3>
+            <p>
+              Write a prompt that invokes the skill, as you would in real use.
+              You learn whether the work comes out the way you defined success.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">triggering</p>
+            <h3>Does it load?</h3>
+            <p>
+              Write a prompt that does not name the skill. You learn whether the
+              agent picks it up on its own, and leaves it alone when it should.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="how" class="section">
+        <h2>How it works</h2>
+        <div class="steps">
+          <article class="card">
+            <p class="step">01 · write a case</p>
+            <h3>A scenario and its checks</h3>
+            <p>
+              A case is a folder: the prompt a user would type, and a JSON list
+              of checks that say what a good result is. No test code.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">02 · run it, more than once</p>
+            <h3>A real agent, a clean home</h3>
+            <p>
+              Each case runs several times, with and without the skill. Every
+              run starts your coding agent in a throwaway home directory, so
+              your own settings and installed skills stay out.
+            </p>
+          </article>
+          <article class="card">
+            <p class="step">03 · read the score</p>
+            <h3>0 to 1, with a pass bar</h3>
+            <p>
+              Checks roll up to a score for each case and the suite, and every
+              answer is saved so you can see why. Set a minimum and the command
+              fails under it.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="checks" class="section">
+        <h2>Three kinds of check</h2>
+        <div class="checks">
+          <article class="check">
+            <h3>Deterministic</h3>
+            <p>
+              Did the skill load? Was a tool called? Does the file exist, and
+              does it match? Scores 0 or 1, the same every time.
+            </p>
+            <pre><code>{ "type": "skill_loaded",
+  "skill": "commit-message" }</code></pre>
+          </article>
+          <article class="check">
+            <h3>Decision model</h3>
+            <p>
+              You define the answers and what each is worth. The model returns a
+              probability for each, and the score is computed from them.
+            </p>
+            <pre><code>{ "type": "decision",
+  "question": "Avoids jargon?",
+  "expect": "yes" }</code></pre>
+          </article>
+          <article class="check">
+            <h3>Judged</h3>
+            <p>
+              A model grades the answer against a rubric you write in plain
+              text, for what a pattern cannot see.
+            </p>
+            <pre><code>{ "type": "judge",
+  "rubric": "Keeps the meaning." }</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="harnesses" class="section section-tight">
+        <h2>Runs in the agent you use</h2>
+        <ul class="harnesses">
+          <li>Claude Code</li>
+          <li>Codex</li>
+          <li>Cursor</li>
+          <li>OpenCode</li>
+          <li>Pi</li>
+        </ul>
+        <p class="section-note">
+          One case format for all five. Score a plugin, a plain folder of
+          skills, or nothing at all as the baseline.
+        </p>
+      </section>
+
+      <section id="docs" class="cta">
+        <div class="cta-text">
+          <h2>Change a skill. Know what changed.</h2>
+          <p>
+            Open source, MIT, no dependencies. Node 22 or later and one
+            installed agent, on macOS or Linux.
+          </p>
+        </div>
+        <div class="cta-actions">
+          <a class="button button-primary" href="docs/">Read the docs</a>
+          <a
+            class="button button-secondary"
+            href="https://github.com/PhillipChaffee/skill-evals"
+            >View on GitHub</a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer container">
+      <span
+        >skill-evals ·
+        <a
+          href="https://github.com/PhillipChaffee/skill-evals/blob/main/LICENSE"
+          >MIT</a
+        ></span
+      >
+      <a href="https://github.com/PhillipChaffee/skill-evals"
+        >github.com/PhillipChaffee/skill-evals</a
+      >
+    </footer>
+  </body>
+</html>

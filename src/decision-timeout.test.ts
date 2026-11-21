@@ -9,6 +9,10 @@ const MODEL = "decider-one";
 const KEY = "skill-evals-decision-key";
 const USAGE_ERROR = 2;
 const TIMEOUT_FLAG = "--decision-timeout";
+const TWO_TIMEOUTS_MS = 2000;
+/** A timer measured by wall clock can read slightly under its delay. */
+const CLOCK_SLACK_MS = 100;
+const UNDER_CONFIG_TIMEOUT_MS = 8000;
 const PLAIN = { type: "decision", question: "Is it plain?", expect: "yes" };
 
 /**
@@ -45,9 +49,9 @@ test.each([
     expect(record?.decision?.calls).toBe(2);
     expect(
       record?.decision?.durationMs,
-      "two requests of one second",
-    ).toBeGreaterThanOrEqual(2000);
-    expect(record?.decision?.durationMs).toBeLessThan(8000);
+      "two requests of about one second, on a clock that can read a millisecond short",
+    ).toBeGreaterThanOrEqual(TWO_TIMEOUTS_MS - CLOCK_SLACK_MS);
+    expect(record?.decision?.durationMs).toBeLessThan(UNDER_CONFIG_TIMEOUT_MS);
   },
 );
 

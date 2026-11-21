@@ -2,3 +2,8 @@ node_modules/
 dist/
 coverage/
 *.tgz
+# What the docs build writes: Astro's cache and types, and the changelog page,
+# which is a copy of CHANGELOG.md. docs/dist/, the built site, is covered by
+# dist/ above.
+.astro/
+docs/src/content/docs/project/changelog.md

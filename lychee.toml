@@ -7,3 +7,9 @@
 max_retries = 2
 timeout = 20
 exclude_path = ["./coverage"]
+
+# The landing page links to the docs with relative addresses (docs/), which
+# exist only in the built site, where the docs are put beside it. They are
+# checked there instead: the docs build ends with docs/scripts/check-links.mjs,
+# which the Pages workflow runs on every pull request that touches the site.
+exclude = ['^file://.*/site/docs(/|$)']

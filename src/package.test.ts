@@ -52,7 +52,7 @@ test(
     const { project, files, run } = installed();
     expect(files).toContain("dist/bin.js");
     expect(files).toContain("dist/index.d.ts");
-    const unshipped = /^src\/|\.test\.|testing|\.ts$(?<!\.d\.ts)/;
+    const unshipped = /^src\/|\.test\.|testing|^dist\/docs\/|\.ts$(?<!\.d\.ts)/;
     expect(files.filter((file) => unshipped.test(file))).toEqual([]);
 
     const bin = path.join(project, "node_modules/.bin/skill-evals");

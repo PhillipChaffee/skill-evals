@@ -1,0 +1,17 @@
+{
+  "name": "skill-evals-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "reference": "npm --prefix .. run docs:reference",
+    "build": "npm run reference && astro build && cp -R ../site/. dist/ && cp dist/docs/404.html dist/404.html && node scripts/check-links.mjs dist",
+    "preview": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "@astrojs/markdown-satteri": "0.4.10",
+    "@astrojs/starlight": "0.43.1",
+    "astro": "7.4.13"
+  },
+  "description": "The docs site of skill-evals. Not published: the npm package holds none of it."
+}
