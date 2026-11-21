@@ -1,0 +1,11 @@
+{
+	"name": "skill-evals",
+	"version": "0.1.0",
+	"type": "module",
+	"license": "MIT",
+	"engines": { "node": ">=22" },
+	"bin": { "skill-evals": "bin/skill-evals.mjs" },
+	"exports": { ".": "./src/index.mjs" },
+	"files": ["bin", "src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"scripts": { "test": "node --test test/*.test.mjs" }
+}
