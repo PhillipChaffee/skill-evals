@@ -3,7 +3,10 @@ import type { ProbeOptions } from "./probe.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "./project.js";
 
 /** Every option a command line can set, under the name the code uses for it. */
-export type Options = Omit<EvaluateOptions, "cwd" | "subjects" | "onRun"> &
+export type Options = Omit<
+  EvaluateOptions,
+  "cwd" | "subjects" | "onRun" | "onWarning"
+> &
   ProbeOptions & { a?: string; b?: string };
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
@@ -12,7 +15,9 @@ export interface FlagSpec {
   as?: keyof Options;
   /** Converts the text; it stays text when absent. */
   read?: (text: string) => number;
-  /** What stands for the value after the flag, as in `--reps <n>`. */
+  /** True for a flag that takes no value: it sets its option to true. */
+  boolean?: true;
+  /** What stands for the value after the flag, as in `--reps <n>`. Empty for a boolean flag. */
   value: string;
   /** What the flag sets, in one sentence. */
   description: string;
@@ -100,6 +105,13 @@ export const FLAGS = {
       "How long one request to the decision model may take. A positive integer.",
     default: "60",
   },
+  lenient: {
+    boolean: true,
+    value: "",
+    description:
+      "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",
+    default: "off: an unknown key is an error",
+  },
   out: {
     as: "outDir",
     value: "dir",
@@ -121,10 +133,13 @@ export interface CommandDoc {
 /**
  * Writes a flag the way a user types it.
  * @param flag - The flag's name.
- * @returns The flag with its dashes and the placeholder of its value, as in `--reps <n>`.
+ * @returns The flag with its dashes and the placeholder of its value, as in `--reps <n>`; a flag with no value is just
+ *   its name.
  */
-export const flagSyntax = (flag: Flag): string =>
-  `--${flag} <${FLAGS[flag].value}>`;
+export function flagSyntax(flag: Flag): string {
+  const spec: FlagSpec = FLAGS[flag];
+  return spec.boolean ? `--${flag}` : `--${flag} <${spec.value}>`;
+}
 
 /**
  * Finds the commands that take a flag.

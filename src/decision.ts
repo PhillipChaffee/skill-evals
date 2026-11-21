@@ -1,4 +1,4 @@
-import type { DecisionCheck } from "./checks.js";
+import type { DecisionCheck } from "./checks/index.js";
 import type { Tokens } from "./harnesses/shared.js";
 import { messageOf } from "./scope.js";
 

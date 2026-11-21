@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import type { RuledCheck } from "./checks.js";
-import { checkScore } from "./checks.js";
+import type { RuledCheck } from "./checks/index.js";
+import { checkScore } from "./checks/index.js";
 import { skillsLoaded } from "./run.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
@@ -49,7 +49,7 @@ const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
       skillsLoaded: [],
       workspace: "",
     },
-  );
+  ).score;
 // The Claude Code stream is a captured run that used every tool below; the kinds it lacks are false in all three.
 const CALLED = [
   { kind: "shell", found: [1, 1, 0] },

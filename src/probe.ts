@@ -34,6 +34,7 @@ const probe = (subject: Subject): Case => ({
   weight: 1,
   timeoutSeconds: PROBE_TIMEOUT_SECONDS,
   workspaceDir: null,
+  extensions: {},
 });
 
 // What an adapter can fill in a run record; `check` shows which of these a harness delivered.

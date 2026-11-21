@@ -1,6 +1,6 @@
 export { loadCases } from "./cases.js";
 export type { Case } from "./cases.js";
-export type { Check } from "./checks.js";
+export type { Check } from "./checks/index.js";
 export { evaluate } from "./evaluate.js";
 export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";
 export { HARNESSES } from "./harnesses/index.js";

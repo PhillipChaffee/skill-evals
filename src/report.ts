@@ -1,6 +1,6 @@
 import type { Case } from "./cases.js";
-import type { Check } from "./checks.js";
-import { describeCheck, isDecision, isJudged } from "./checks.js";
+import type { Check } from "./checks/index.js";
+import { describeCheck, isDecision, isJudged } from "./checks/index.js";
 import type { Evaluation } from "./evaluate.js";
 import type { RunRecord, Usage } from "./run.js";
 import { invalidReason } from "./run.js";

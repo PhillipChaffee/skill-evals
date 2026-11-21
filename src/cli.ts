@@ -17,6 +17,10 @@ import { FLAGS, usageText } from "./usage.js";
 
 const USAGE_EXIT_CODE = 2;
 
+const warn = (text: string): void => {
+  console.error(`skill-evals: warning: ${text}`);
+};
+
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
  * @param options - What to evaluate.
@@ -30,7 +34,7 @@ async function suite(options: EvaluateOptions): Promise<number> {
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}`,
     );
   };
-  const evaluation = await evaluate({ ...options, onRun });
+  const evaluation = await evaluate({ ...options, onRun, onWarning: warn });
   console.log(renderReport(evaluation));
   return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
 }
@@ -49,7 +53,10 @@ function list(given: Options, project: Project): number {
   }));
   const first = installed.find((entry) => entry.bin);
   const cases = fs.existsSync(options.cases)
-    ? loadCases(options.cases).map(
+    ? loadCases(options.cases, "*", {
+        lenient: options.lenient ?? false,
+        onWarning: warn,
+      }).map(
         (caseDef) => `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
       )
     : ["- none: the directory does not exist"];
@@ -81,6 +88,7 @@ const SUITE_FLAGS: Flag[] = [
   "decision-model",
   "decision-url",
   "decision-timeout",
+  "lenient",
   "out",
 ];
 
@@ -114,7 +122,7 @@ export const COMMANDS: Record<string, Command> = {
     description:
       "Show the harnesses in default-preference order, and the cases.",
     handler: list,
-    flags: ["cases"],
+    flags: ["cases", "lenient"],
   },
 };
 
@@ -131,13 +139,19 @@ function readOptions(command: Command, args: string[]): Options {
   const { values } = parseArgs({
     args,
     options: Object.fromEntries(
-      command.flags.map((flag) => [flag, { type: "string" as const }]),
+      command.flags.map((flag) => {
+        const spec: FlagSpec = FLAGS[flag];
+        return [flag, { type: spec.boolean ? "boolean" : "string" } as const];
+      }),
     ),
   });
   return Object.fromEntries(
     Object.entries(values).map(([flag, text]) => {
       const spec: FlagSpec = FLAGS[flag as Flag];
-      return [spec.as ?? flag, (spec.read ?? String)(String(text))];
+      return [
+        spec.as ?? flag,
+        typeof text === "boolean" ? text : (spec.read ?? String)(String(text)),
+      ];
     }),
   );
 }

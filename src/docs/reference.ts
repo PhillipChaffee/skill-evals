@@ -1,5 +1,7 @@
-import type { Spec } from "../checks.js";
-import { CHECKS, FIELD_MEANINGS } from "../checks.js";
+import { CASE_KEYS } from "../cases.js";
+import { FIELDS } from "../checks/fields.js";
+import type { Spec } from "../checks/index.js";
+import { CHECKS } from "../checks/index.js";
 import { COMMANDS } from "../cli.js";
 import { HARNESSES, overrideVar } from "../harnesses/index.js";
 import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
@@ -83,7 +85,7 @@ const checksPage = (): ReferencePage => ({
       description:
         "Every check type a case can hold, with its fields and what it scores.",
     },
-    "src/checks.ts",
+    "src/checks/",
   )}
 
 A check is one object in the ${code("checks")} list of a ${code("case.json")}. Every check has a ${code("type")}, and takes an optional ${code("weight")}, a positive number that defaults to 1. [Write a case](../guides/write-a-case.md) shows how to use them.
@@ -102,9 +104,23 @@ ${table(
 ## Fields
 
 ${table(
-  ["Field", "Holds"],
-  Object.entries(FIELD_MEANINGS).map(([field, meaning]) => [
+  ["Field", "Type", "Holds"],
+  Object.entries(FIELDS).map(([field, { type, meaning }]) => [
     code(field),
+    code(type),
+    meaning,
+  ]),
+)}
+
+## Case file keys
+
+The keys of a ${code("case.json")}. Any other key is a load error, except a key that starts with ${code("x-")}.
+
+${table(
+  ["Key", "Type", "Holds"],
+  Object.entries(CASE_KEYS).map(([key, { type, meaning }]) => [
+    code(key),
+    code(type),
     meaning,
   ]),
 )}
@@ -166,7 +182,7 @@ A subject is what a run loads: a directory, a git ref of the project, or ${code(
 
 // A config file that sets every key. The tests make sure that it has exactly the keys of CONFIG_KEYS, each with a
 // value of the key's type, and that the tool accepts it.
-export const EXAMPLE_CONFIG: Record<string, string | number> = {
+export const EXAMPLE_CONFIG: Record<string, string | number | boolean> = {
   cases: "evals/cases",
   harness: "claude-code",
   reps: 3,
@@ -177,6 +193,7 @@ export const EXAMPLE_CONFIG: Record<string, string | number> = {
   decisionUrl: "<base-url>",
   decisionTimeout: 60,
   minScore: 0.8,
+  lenient: false,
 };
 
 /**

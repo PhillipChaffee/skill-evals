@@ -19,15 +19,25 @@ import { evaluate, loadCases, HARNESSES } from "skill-evals";
 ### loadCases()
 
 ```ts
-function loadCases(casesDir: string, glob?: string): Case[];
+function loadCases(
+  casesDir: string,
+  glob?: string,
+  options?: {
+    lenient?: boolean | undefined;
+    onWarning?: ((text: string) => void) | undefined;
+  },
+): Case[];
 ```
 
 Loads the cases of a suite.
 
-| Parameter  | Description                                      |
-| ---------- | ------------------------------------------------ |
-| `casesDir` | A directory with one subdirectory for each case. |
-| `glob`     | Selects cases by id; only `*` is special.        |
+| Parameter           | Description                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `casesDir`          | A directory with one subdirectory for each case.                                                            |
+| `glob`              | Selects cases by id; only `*` is special.                                                                   |
+| `options`           | `lenient` drops a key that a case file does not take instead of failing, and `onWarning` hears of each one. |
+| `options.lenient`   | Drop unknown keys instead of failing. Default: false.                                                       |
+| `options.onWarning` | Called with a line of text for each key that `lenient` drops.                                               |
 
 **Returns.** Every matching case, sorted by id.
 
@@ -63,16 +73,17 @@ const HARNESSES: Harness[];
 
 One prompt and what a good run of it does.
 
-| Property         | Type                  | Description                                                                      |
-| ---------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `id`             | `string`              |                                                                                  |
-| `prompt`         | `string`              |                                                                                  |
-| `checks`         | `Check[]`             |                                                                                  |
-| `weight`         | `number`              |                                                                                  |
-| `minScore?`      | `number \| undefined` |                                                                                  |
-| `maxTurns?`      | `number \| undefined` |                                                                                  |
-| `timeoutSeconds` | `number`              |                                                                                  |
-| `workspaceDir`   | `string \| null`      | A directory whose content the agent starts with, or null for an empty workspace. |
+| Property         | Type                      | Description                                                                        |
+| ---------------- | ------------------------- | ---------------------------------------------------------------------------------- |
+| `id`             | `string`                  |                                                                                    |
+| `prompt`         | `string`                  |                                                                                    |
+| `checks`         | `Check[]`                 |                                                                                    |
+| `weight`         | `number`                  |                                                                                    |
+| `minScore?`      | `number \| undefined`     |                                                                                    |
+| `maxTurns?`      | `number \| undefined`     |                                                                                    |
+| `timeoutSeconds` | `number`                  |                                                                                    |
+| `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.   |
+| `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author. |
 
 ### Check
 
@@ -86,21 +97,22 @@ type Check = RuledCheck | JudgedCheck | DecisionCheck;
 
 What `evaluate` returns. The evaluation succeeded when `belowBar` and `invalid` are both empty.
 
-| Property        | Type               | Description                                                       |
-| --------------- | ------------------ | ----------------------------------------------------------------- |
-| `cases`         | `Case[]`           |                                                                   |
-| `outDir`        | `string`           |                                                                   |
-| `subjects`      | `SubjectSummary[]` |                                                                   |
-| `harnesses`     | `string[]`         |                                                                   |
-| `harnessReason` | `string`           |                                                                   |
-| `model`         | `string \| null`   |                                                                   |
-| `judge`         | `string`           | The harness and model that scored the judged checks, in words.    |
-| `decisionModel` | `string \| null`   | The model that scored the decision checks; null when none is set. |
-| `reps`          | `number`           |                                                                   |
-| `suites`        | `SuiteScore[]`     |                                                                   |
-| `belowBar`      | `string[]`         | The pass bars that were not reached.                              |
-| `invalid`       | `string[]`         | The runs that do not count, each with its reason.                 |
-| `records`       | `RunRecord[]`      |                                                                   |
+| Property        | Type                                                       | Description                                                                       |
+| --------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `cases`         | `Case[]`                                                   |                                                                                   |
+| `outDir`        | `string`                                                   |                                                                                   |
+| `subjects`      | `SubjectSummary[]`                                         |                                                                                   |
+| `harnesses`     | `string[]`                                                 |                                                                                   |
+| `harnessReason` | `string`                                                   |                                                                                   |
+| `model`         | `string \| null`                                           |                                                                                   |
+| `judge`         | `string`                                                   | The harness and model that scored the judged checks, in words.                    |
+| `decisionModel` | `string \| null`                                           | The model that scored the decision checks; null when none is set.                 |
+| `reps`          | `number`                                                   |                                                                                   |
+| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>` | For each case id, what its file holds that the tool does not read: its `x-` keys. |
+| `suites`        | `SuiteScore[]`                                             |                                                                                   |
+| `belowBar`      | `string[]`                                                 | The pass bars that were not reached.                                              |
+| `invalid`       | `string[]`                                                 | The runs that do not count, each with its reason.                                 |
+| `records`       | `RunRecord[]`                                              |                                                                                   |
 
 ### EvaluateOptions
 
@@ -120,6 +132,8 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `decisionModel?`   | `string \| undefined`                        | The model that scores decision checks. No default: a suite with a decision check needs it.                     |
 | `decisionUrl?`     | `string \| undefined`                        | The base URL of the decision model's API. Default: the provider's own.                                         |
 | `decisionTimeout?` | `number \| undefined`                        | The seconds one request to the decision model may take, a positive integer. Default: 60.                       |
+| `lenient?`         | `boolean \| undefined`                       | Drop a key that a case file does not take, and warn, instead of failing. Default: false.                       |
+| `onWarning?`       | `((text: string) => void) \| undefined`      | Called with a line of text for each key that `lenient` drops.                                                  |
 | `minScore?`        | `number \| undefined`                        | The pass bar for the suite score of the subject under test.                                                    |
 | `outDir?`          | `string \| undefined`                        | Where results go. Default: a new temp directory.                                                               |
 | `onRun?`           | `((record: RunRecord) => void) \| undefined` | Called with each run's record as soon as the run ends.                                                         |
@@ -128,19 +142,20 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 
 What `evaluate` writes to `results.json`.
 
-| Property        | Type               | Description                                                       |
-| --------------- | ------------------ | ----------------------------------------------------------------- |
-| `subjects`      | `SubjectSummary[]` |                                                                   |
-| `harnesses`     | `string[]`         |                                                                   |
-| `harnessReason` | `string`           |                                                                   |
-| `model`         | `string \| null`   |                                                                   |
-| `judge`         | `string`           | The harness and model that scored the judged checks, in words.    |
-| `decisionModel` | `string \| null`   | The model that scored the decision checks; null when none is set. |
-| `reps`          | `number`           |                                                                   |
-| `suites`        | `SuiteScore[]`     |                                                                   |
-| `belowBar`      | `string[]`         | The pass bars that were not reached.                              |
-| `invalid`       | `string[]`         | The runs that do not count, each with its reason.                 |
-| `records`       | `RunRecord[]`      |                                                                   |
+| Property        | Type                                                       | Description                                                                       |
+| --------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `subjects`      | `SubjectSummary[]`                                         |                                                                                   |
+| `harnesses`     | `string[]`                                                 |                                                                                   |
+| `harnessReason` | `string`                                                   |                                                                                   |
+| `model`         | `string \| null`                                           |                                                                                   |
+| `judge`         | `string`                                                   | The harness and model that scored the judged checks, in words.                    |
+| `decisionModel` | `string \| null`                                           | The model that scored the decision checks; null when none is set.                 |
+| `reps`          | `number`                                                   |                                                                                   |
+| `caseMeta`      | `Record<string, { extensions: Record<string, unknown>; }>` | For each case id, what its file holds that the tool does not read: its `x-` keys. |
+| `suites`        | `SuiteScore[]`                                             |                                                                                   |
+| `belowBar`      | `string[]`                                                 | The pass bars that were not reached.                                              |
+| `invalid`       | `string[]`                                                 | The runs that do not count, each with its reason.                                 |
+| `records`       | `RunRecord[]`                                              |                                                                                   |
 
 ### Harness
 

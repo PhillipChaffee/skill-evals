@@ -3,7 +3,7 @@ import path from "node:path";
 import { connect } from "./baseten.js";
 import type { Case } from "./cases.js";
 import { loadCases } from "./cases.js";
-import { isDecision } from "./checks.js";
+import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import type { Located } from "./harnesses/index.js";
 import { selectHarnesses } from "./harnesses/index.js";
@@ -43,6 +43,10 @@ export interface EvaluateOptions {
   decisionUrl?: string | undefined;
   /** The seconds one request to the decision model may take, a positive integer. Default: 60. */
   decisionTimeout?: number | undefined;
+  /** Drop a key that a case file does not take, and warn, instead of failing. Default: false. */
+  lenient?: boolean | undefined;
+  /** Called with a line of text for each key that `lenient` drops. */
+  onWarning?: ((text: string) => void) | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
   /** Where results go. Default: a new temp directory. */
@@ -62,6 +66,8 @@ export interface Results {
   /** The model that scored the decision checks; null when none is set. */
   decisionModel: string | null;
   reps: number;
+  /** For each case id, what its file holds that the tool does not read: its `x-` keys. */
+  caseMeta: Record<string, { extensions: Record<string, unknown> }>;
   suites: SuiteScore[];
   /** The pass bars that were not reached. */
   belowBar: string[];
@@ -235,6 +241,9 @@ function summarize(finished: Finished): Results {
     judge: `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`,
     decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
+    caseMeta: Object.fromEntries(
+      cases.map(({ id, extensions }) => [id, { extensions }]),
+    ),
     suites,
     belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
     invalid: records.flatMap((record) => {
@@ -268,7 +277,10 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
     ? selectHarnesses(options.judgeHarness).chosen
     : [];
   const judgeModel = options.judgeModel ?? model;
-  const cases = loadCases(options.cases, options.caseGlob);
+  const cases = loadCases(options.cases, options.caseGlob, {
+    lenient: options.lenient ?? false,
+    ...(options.onWarning && { onWarning: options.onWarning }),
+  });
   const decision = decisionFor(cases, options);
   const subjects: Subject[] = [];
   try {

@@ -38,6 +38,24 @@ A prompt can start with any character. One that starts with a dash reaches the a
 
 The agent must not be able to tell that its answer is being measured. Write the prompt as a plain request, and keep these words out of the prompt and out of every file name under `workspace/`: `eval`, `test`, `judge`, `experiment`, `rubric`, `score`, `compare`, `benchmark`, `candidate`, `arena`. Naming the skill that the prompt invokes is fine: that is how a person asks for it. Do not ask the agent which skills it used. The checks read that from its tool calls. The rubric stays in `case.json`, which the agent's workspace never holds. A plugin is loaded from where it is on disk, so the agent can see that path, and the cases too when they are inside the plugin's folder.
 
+## Strict keys
+
+A key that a case file does not take is a load error. The error names the key, the check type, and the keys that type takes, so a typo such as `pth` cannot silently turn a check into a different one.
+
+```json
+{
+  "x-owner": "platform team",
+  "checks": [
+    { "type": "file_exists", "path": "notes.txt", "x-ticket": "OPS-12" }
+  ],
+  "timeoutSeconds": 300
+}
+```
+
+A key that starts with `x-` is yours. Loading keeps it, nothing reads it, and `results.json` repeats it: a case's `x-` keys are in `caseMeta` under the case id, and a check's own `x-` keys are in its entry of the run record.
+
+`--lenient` (or `"lenient": true` in the config file) loads a file that has other unknown keys. It drops each one and prints one warning for it on standard error. It exists for a suite that was written before keys were checked, and it is for one release.
+
 ## Tool checks
 
 `kind` says what the tool does, with the same word in every harness. Use it so that a case works in each harness. [Tool kinds](../reference/checks.md#tool-kinds) lists the words.

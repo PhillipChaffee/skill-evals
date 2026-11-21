@@ -1,7 +1,9 @@
 import path from "node:path";
 import { format } from "prettier";
 import { expect, test } from "vitest";
-import { CHECKS, FIELD_MEANINGS } from "../checks.js";
+import { CASE_KEYS } from "../cases.js";
+import { FIELDS } from "../checks/fields.js";
+import { CHECKS } from "../checks/index.js";
 import { COMMANDS } from "../cli.js";
 import { HARNESSES } from "../harnesses/index.js";
 import { CONFIG_KEYS } from "../project.js";
@@ -31,8 +33,10 @@ test("the checks page has every check type and every field", () => {
   const checks = page("reference/checks.md");
   for (const type of Object.keys(CHECKS))
     expect(checks).toContain(`\`${type}\``);
-  for (const field of Object.keys(FIELD_MEANINGS))
+  for (const field of Object.keys(FIELDS))
     expect(checks).toContain(`| \`${field}\` |`);
+  for (const key of Object.keys(CASE_KEYS))
+    expect(checks).toContain(`| \`${key}\` | \``);
   expect(checks).toMatch(
     /`tool_called` \| at least one of `kind`, `name`, optional `inputMatches`, optional `flags` \|/,
   );
@@ -49,10 +53,11 @@ test("the commands page and the help text have every command, flag, and default"
     expect(help).toContain(command.description);
   }
   for (const [flag, spec] of Object.entries(FLAGS)) {
-    expect(commands).toContain(`--${flag} <`);
+    const value = "boolean" in spec ? "" : " <";
+    expect(commands).toContain(`--${flag}${value}`);
     expect(commands).toContain(spec.description);
     expect(help).toMatch(
-      new RegExp(`^  --${flag} <.*\\n      default: .*\\(.*\\)$`, "m"),
+      new RegExp(`^  --${flag}${value}.*\\n      default: .*\\(.*\\)$`, "m"),
     );
     expect(help).toContain(spec.default);
   }

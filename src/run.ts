@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Case } from "./cases.js";
-import type { Check, Outcome } from "./checks.js";
-import { checkScore, isDecision, isJudged } from "./checks.js";
+import type { Check, Outcome } from "./checks/index.js";
+import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { decide } from "./decision.js";
 import type {
@@ -233,7 +233,7 @@ async function scoreChecks(
       const result = decided?.results[decisions.indexOf(check)];
       checks.push({ ...check, ...(result ?? NOT_DECIDED) });
     } else if (!isJudged(check)) {
-      checks.push({ ...check, score: checkScore(check, outcome) });
+      checks.push({ ...check, ...checkScore(check, outcome) });
     } else if (!judgeable) {
       const reason = "not judged, because the run is invalid";
       checks.push({ ...check, score: null, reason });

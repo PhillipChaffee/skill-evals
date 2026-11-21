@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { loadCases } from "./cases.js";
 import { plantCase, plugin } from "./testing/plant.js";
-import { sandbox } from "./testing/sandbox.js";
+import { readResults, sandbox } from "./testing/sandbox.js";
 
 const USAGE_ERROR = 2;
 
@@ -163,4 +164,81 @@ test("with no harness installed, score names the ones it looked for", async () =
   expect(none.stderr).toMatch(
     /no harness is installed; looked for pi, claude-code, cursor, opencode, codex/,
   );
+});
+
+const EXAMPLES = path.resolve(import.meta.dirname, "../examples/cases");
+
+test("a 0.0.1 case file loads to the same checks as before", () => {
+  const [loaded] = loadCases(EXAMPLES, "hello");
+  expect(loaded?.checks).toEqual([
+    { type: "file_exists", weight: 1, path: "haiku.txt" },
+    {
+      type: "file_matches",
+      weight: 1,
+      path: "haiku.txt",
+      pattern: "^\\s*\\S.*\\n\\s*\\S.*\\n\\s*\\S.*\\s*$",
+    },
+    {
+      type: "judge",
+      weight: 2,
+      rubric:
+        "The answer says that a haiku was saved to haiku.txt. It asks the user no question.",
+    },
+  ]);
+  expect(loaded?.extensions).toEqual({});
+});
+
+const TYPO = { type: "file_exists", path: "notes.txt", pth: "b" };
+
+test.each([
+  [{ checks: [TYPO] }, /unknown key "pth".*file_exists.*path/],
+  [{ checks: [fine], timeoutSecond: 5 }, /unknown key "timeoutSecond"/],
+  [{ checks: [fine], weight: "2" }, /weight must be a positive number/],
+  [
+    { checks: [{ ...fine, weight: "2" }] },
+    /checks\[0\]: weight must be a positive number/,
+  ],
+])(
+  "an unknown key is a load error that names it: %j",
+  async (caseFile, message) => {
+    const { run } = rejecting();
+    const result = await run(caseFile);
+    expect(result.status).toBe(USAGE_ERROR);
+    expect(result.stderr).toMatch(message);
+  },
+);
+
+test("an x- key is kept and written to results.json", async () => {
+  const { outDir, run } = rejecting();
+  const result = await run({
+    checks: [{ ...fine, "x-note": ["a"] }],
+    "x-owner": "ops",
+  });
+  expect(result.status, result.stderr).toBe(0);
+  const results = readResults(outDir);
+  expect(results.caseMeta["restate"]?.extensions["x-owner"]).toBe("ops");
+  expect(results.records[0]?.checks[0]?.["x-note"]).toEqual(["a"]);
+});
+
+test("--lenient loads the file and warns once per key on stderr", async () => {
+  const { outDir, run } = rejecting();
+  const result = await run({ checks: [TYPO], colour: 1 }, "--lenient");
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stderr.match(/ignored unknown key "pth"/g)).toHaveLength(1);
+  expect(result.stderr).toMatch(/ignored unknown key "colour"/);
+  const check = readResults(outDir).records[0]?.checks[0];
+  expect(check).not.toHaveProperty("pth");
+});
+
+test("lenient is a config key, and list takes --lenient", async () => {
+  const box = sandbox();
+  const cases = plantCase(box, [TYPO]);
+  const strict = await box.cli(["list", "--cases", cases]);
+  expect(strict.status).toBe(USAGE_ERROR);
+  const lenient = await box.cli(["list", "--cases", cases, "--lenient"]);
+  expect(lenient.status, lenient.stderr).toBe(0);
+  expect(lenient.stderr).toMatch(/ignored unknown key "pth"/);
+  box.write("skill-evals.config.json", { lenient: true });
+  const configured = await box.cli(["list", "--cases", cases]);
+  expect(configured.status, configured.stderr).toBe(0);
 });

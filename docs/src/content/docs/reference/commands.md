@@ -37,6 +37,7 @@ A wrong command line prints the same commands and flags as its help text.
 | `--decision-model <id>`        | `run`, `score`          | none                                      | The decision model that scores decision checks.                                                                   |
 | `--decision-url <url>`         | `run`, `score`          | the provider's own                        | The base URL of the decision model's API.                                                                         |
 | `--decision-timeout <seconds>` | `run`, `score`          | 60                                        | How long one request to the decision model may take. A positive integer.                                          |
+| `--lenient`                    | `run`, `score`, `list`  | off: an unknown key is an error           | Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept. |
 | `--out <dir>`                  | `run`, `score`, `check` | a new temp directory                      | Where results go.                                                                                                 |
 
 A subject is what a run loads: a directory, a git ref of the project, or `none`. [Subjects](../concepts/subjects.md) has the details. [Set a pass bar](../guides/pass-bars.md) explains `--min-score` and the exit codes, and [Decision checks](../guides/decision-checks.md) explains the decision model's flags.

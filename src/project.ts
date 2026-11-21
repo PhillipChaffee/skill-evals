@@ -30,7 +30,7 @@ export function findProject(cwd: string): Project {
 
 export const CONFIG_FILE = "skill-evals.config.json";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
-export const CONFIG_KEYS: Record<string, "string" | "number"> = {
+export const CONFIG_KEYS: Record<string, "string" | "number" | "boolean"> = {
   cases: "string",
   harness: "string",
   reps: "number",
@@ -41,6 +41,7 @@ export const CONFIG_KEYS: Record<string, "string" | "number"> = {
   decisionUrl: "string",
   decisionTimeout: "number",
   minScore: "number",
+  lenient: "boolean",
 };
 
 /** The project's optional config file. */
@@ -55,6 +56,7 @@ export interface Config {
   decisionUrl?: string;
   decisionTimeout?: number;
   minScore?: number;
+  lenient?: boolean;
 }
 
 /**
