@@ -78,6 +78,14 @@ const CASES: Row[] = [
     [2, "1", -1].map((v): Bad => [v, /field must be a number from 0 to 1/]),
   ],
   [
+    "signed",
+    -0.2,
+    [-1.5, 1.5, "0"].map((v): Bad => [
+      v,
+      /field must be a number from -1 to 1/,
+    ]),
+  ],
+  [
     "number",
     2.5,
     [0, "1", Infinity].map((v): Bad => [v, /field must be a positive number/]),
@@ -118,7 +126,11 @@ const CASES: Row[] = [
     [
       [{ PATH: "x" }, /field cannot set "PATH": A name must start with/],
       [{ CASE_A: 1 }, /field "CASE_A" must be a string/],
-      [{ "CASE_A=": "x" }, /field cannot set "CASE_A="/],
+      [
+        { "CASE_A=": "x" },
+        /field cannot set "CASE_A=": has an `=`, so it is not a variable name/,
+      ],
+      [{ CASE_A: "a\0" }, /"CASE_A" must be a string without a NUL/],
       [["CASE_A"], /"field" must be an object of variable values/],
     ],
   ],

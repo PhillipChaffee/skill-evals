@@ -71,7 +71,7 @@ The keys of a `case.json`. Any other key is a load error, except a key that star
 | `model`          | `text`    | The model of the agent in this case, in place of `--model`.                                                                                                                    |
 | `judgeModel`     | `text`    | The model that scores the judged checks of this case, in place of `--judge-model`.                                                                                             |
 | `env`            | `envvars` | Variables the agent's process gets, with the values given here. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`.                                                    |
-| `minDelta`       | `unit`    | The least score difference between the subjects that the case must show. A number from 0 to 1.                                                                                 |
+| `minDelta`       | `signed`  | The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.                              |
 
 ## Tool kinds
 

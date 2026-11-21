@@ -370,7 +370,7 @@ export function renderReport(evaluation: Evaluation): string {
     ...(evaluation.decisionModel === null
       ? []
       : [`- Decision model: ${evaluation.decisionModel}`]),
-    `- Reps: ${String(reps)} for each ${compared ? "subject and case" : "case"}`,
+    `- Reps: ${String(reps)} for each ${compared ? "subject and case" : "case"}${cases.some((caseDef) => caseDef.reps !== undefined) ? ", unless a case sets its own" : ""}`,
     `- Output: ${evaluation.outDir}`,
     "",
     sections.join("\n\n"),

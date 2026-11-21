@@ -3,24 +3,15 @@ import { expect, test } from "vitest";
 import type { Case } from "./cases.js";
 import { selectCases, splitList } from "./select.js";
 import type { Sandbox } from "./testing/sandbox.js";
+import { plant } from "./testing/nested.js";
 import { sandbox, tableRow } from "./testing/sandbox.js";
 
-const CHECKS = [{ type: "output_contains", text: "x" }];
 const ROUTING_BUG = "routing/bug/first";
 const PRESSURE_A = "pressure/a";
 const PRESSURE_B = "pressure/b";
+const CASE = "--case";
+const NOT_CASE = "--not-case";
 const ROUTING_SLOW = "routing/bug/slow-one";
-
-/**
- * Plants one case directory.
- * @param box - Where to write it.
- * @param id - The path of the case under `cases/`.
- * @param more - Other keys of its case file.
- */
-function plant(box: Sandbox, id: string, more: Record<string, unknown> = {}) {
-  box.write(`cases/${id}/prompt.md`, `# ${id}\n\ndo it\n`);
-  box.write(`cases/${id}/case.json`, { checks: CHECKS, ...more });
-}
 
 /**
  * Reads what a `list` command printed.
@@ -79,11 +70,11 @@ test("--case is repeatable, takes brace lists, and --not-case removes", async ()
   }
   const chosen = await list(
     box,
-    "--case",
+    CASE,
     "routing/**",
-    "--case",
+    CASE,
     "pressure/{a,b}",
-    "--not-case",
+    NOT_CASE,
     "**/slow-*",
   );
   expect(listed(chosen.stdout)).toEqual([
@@ -97,7 +88,7 @@ test("--case is repeatable, takes brace lists, and --not-case removes", async ()
   const none = await list(box, "--case", "missing/**");
   expect(none.status).toBe(2);
   expect(none.stderr).toMatch(/no case in .* matches "missing\/\*\*"/);
-  const several = await list(box, "--tag", "nothing", "--not-case", "other");
+  const several = await list(box, "--tag", "nothing", NOT_CASE, "other");
   expect(several.stderr).toMatch(
     /no case in .* matches the selection \(--not-case other --tag nothing\)/,
   );
@@ -199,4 +190,28 @@ test("selectCases combines every part, and no part selects everything", () => {
   expect(
     selectCases(cases, { notIds: ["a/x"], notTags: ["q"] }).map((c) => c.id),
   ).toEqual(["b"]);
+});
+
+test("every list flag may be repeated, and an empty list is a usage error", async () => {
+  const box = sandbox();
+  plant(box, "a", { tags: ["x", "y"] });
+  plant(box, "b", { tags: ["x"] });
+  plant(box, "c", { tags: ["y"] });
+  plant(box, "d");
+  expect(
+    listed((await list(box, NOT_CASE, "a", NOT_CASE, "b")).stdout),
+  ).toEqual(["c", "d"]);
+  expect(
+    listed((await list(box, "--tag-all", "x", "--tag-all", "y")).stdout),
+  ).toEqual(["a"]);
+  expect(
+    listed((await list(box, "--not-tag", "x", "--not-tag", "y")).stdout),
+  ).toEqual(["d"]);
+  for (const flag of ["--case", "--tag", "--not-tag"]) {
+    for (const value of ["", ","]) {
+      const bad = await list(box, flag, value);
+      expect(bad.status).toBe(2);
+      expect(bad.stderr).toContain(`${flag} needs at least one value`);
+    }
+  }
 });

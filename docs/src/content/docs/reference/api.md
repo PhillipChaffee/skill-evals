@@ -112,6 +112,32 @@ One prompt and what a good run of it does.
 | `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                |
 | `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                              |
 
+### LoadOptions
+
+What loading cases takes besides the directory.
+
+| Property     | Type                                    | Description                                                                   |
+| ------------ | --------------------------------------- | ----------------------------------------------------------------------------- |
+| `lenient?`   | `boolean \| undefined`                  | Drop a key that a case file does not take instead of failing. Default: false. |
+| `onWarning?` | `((text: string) => void) \| undefined` | Called with a line of text for each key that `lenient` drops.                 |
+
+### CaseMeta
+
+What `results.json` keeps of a case file besides its checks. A key the file leaves out is null, or empty for a list.
+
+| Property      | Type                      | Description                                                                    |
+| ------------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `extensions`  | `Record<string, unknown>` | The keys that start with `x-`, which belong to the case's author.              |
+| `tags`        | `string[]`                |                                                                                |
+| `targets`     | `string[]`                |                                                                                |
+| `guard`       | `boolean`                 |                                                                                |
+| `kind`        | `string \| null`          |                                                                                |
+| `description` | `string \| null`          |                                                                                |
+| `reps`        | `number \| null`          | The case's own `reps`, `model` and `judgeModel`, which win over the command's. |
+| `model`       | `string \| null`          |                                                                                |
+| `judgeModel`  | `string \| null`          |                                                                                |
+| `env`         | `Record<string, string>`  | The variables the case sets for the agent.                                     |
+
 ### Check
 
 One thing a case expects of a run.

@@ -1,9 +1,8 @@
 import path from "node:path";
 import { readNeeds } from "../capabilities.js";
-import { CASE_ENV_RULE, caseEnvFault } from "../env.js";
+import { caseEnvProblem } from "../env.js";
 import { regex } from "./rules.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
-import { isUnitScore } from "../score.js";
 import { UsageError, messageOf } from "../scope.js";
 
 /** What a field holds, which decides how loading a case parses it. */
@@ -16,6 +15,7 @@ export type FieldType =
   | "kind"
   | "int"
   | "unit"
+  | "signed"
   | "number"
   | "bool"
   | "enum"
@@ -156,6 +156,16 @@ const TAG = /^[a-z0-9][a-z0-9-]*$/;
 const failure = (at: FieldAt, problem: string): UsageError =>
   new UsageError(`${at.where}: ${problem}`);
 
+// A parser for a number from `low` to 1.
+const ranged =
+  (low: number): FieldParser =>
+  (value, at) => {
+    if (!(typeof value === "number" && value >= low && value <= 1)) {
+      throw failure(at, `${at.name} must be a number from ${String(low)} to 1`);
+    }
+    return value;
+  };
+
 // The parser of each field type. A type whose real parser lives in another module starts with a plain one, and that
 // module replaces it with registerParser. This module imports no module that uses it, so no cycle can form.
 const PARSERS: Record<FieldType, FieldParser> = {
@@ -203,12 +213,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
     }
     return value;
   },
-  unit: (value, at) => {
-    if (!isUnitScore(value)) {
-      throw failure(at, `${at.name} must be a number from 0 to 1`);
-    }
-    return value;
-  },
+  unit: ranged(0),
+  signed: ranged(-1),
   number: (value, at) => {
     if (!(typeof value === "number" && Number.isFinite(value) && value > 0)) {
       throw failure(at, `${at.name} must be a positive number`);
@@ -261,15 +267,10 @@ const PARSERS: Record<FieldType, FieldParser> = {
     if (!isPlainObject(value)) {
       throw failure(at, `"${at.name}" must be an object of variable values`);
     }
-    for (const [name, setting] of Object.entries(value)) {
-      const fault = caseEnvFault(name);
-      if (fault) {
-        throw failure(at, `${at.name} cannot set "${name}": ${CASE_ENV_RULE}`);
-      }
-      if (typeof setting !== "string") {
-        throw failure(at, `${at.name} "${name}" must be a string`);
-      }
-    }
+    const problem = Object.entries(value)
+      .map(([name, setting]) => caseEnvProblem(name, setting))
+      .find(Boolean);
+    if (problem) throw failure(at, `${at.name} ${problem}`);
     return value;
   },
   needs: (value, at) => readNeeds(value, at.where),

@@ -1,23 +1,8 @@
 import path from "node:path";
 import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
-import type { Sandbox } from "./testing/sandbox.js";
+import { CHECKS, plant } from "./testing/nested.js";
 import { sandbox } from "./testing/sandbox.js";
-
-const CHECKS = [{ type: "output_contains", text: "x" }];
-
-/**
- * Plants one case directory.
- * @param box - Where to write it.
- * @param id - The path of the case under `cases/`.
- * @param more - Other keys of its case file.
- * @returns The cases directory.
- */
-function plant(box: Sandbox, id: string, more: Record<string, unknown> = {}) {
-  box.write(`cases/${id}/prompt.md`, `# ${id}\n\ndo it\n`);
-  box.write(`cases/${id}/case.json`, { checks: CHECKS, ...more });
-  return path.join(box.root, "cases");
-}
 
 const idsIn = (dir: string, glob?: string): string[] =>
   loadCases(dir, glob).map((found) => found.id);
@@ -93,6 +78,8 @@ test("the 0.0.1 glob still selects flat ids, and a glob can name several levels"
   expect(idsIn(dir, "rest*")).toEqual(["rest-a", "rest-b"]);
   expect(idsIn(dir, "**/rest*")).toEqual(["deep/rest-c", "rest-a", "rest-b"]);
   expect(idsIn(dir, "*")).toEqual(["other", "rest-a", "rest-b"]);
+  // In 0.0.1 a question mark was plain text. Now it is a one-character wildcard.
+  expect(idsIn(dir, "rest-?")).toEqual(["rest-a", "rest-b"]);
   expect(() => loadCases(dir, "nope*")).toThrow(
     /no case in .* matches "nope\*"/,
   );
@@ -111,7 +98,7 @@ test("the new keys load, and each bad value is a load error that names it", () =
     model: "m",
     judgeModel: "j",
     env: { CASE_NAME: "x", TZ: "UTC", LANG: "C", LC_ALL: "C" },
-    minDelta: 0.1,
+    minDelta: -0.2,
   });
   const [loaded] = loadCases(dir);
   expect(loaded).toMatchObject({
@@ -125,7 +112,7 @@ test("the new keys load, and each bad value is a load error that names it", () =
     model: "m",
     judgeModel: "j",
     env: { CASE_NAME: "x", TZ: "UTC", LANG: "C", LC_ALL: "C" },
-    minDelta: 0.1,
+    minDelta: -0.2,
   });
   const bare = sandbox();
   expect(loadCases(plant(bare, "plain"))[0]).toMatchObject({
@@ -145,6 +132,10 @@ test("the new keys load, and each bad value is a load error that names it", () =
     [{ env: { PATH: "x" } }, /env cannot set "PATH"/],
     [{ env: { CASE_A: 1 } }, /env "CASE_A" must be a string/],
     [{ env: ["CASE_A"] }, /"env" must be an object/],
+    [{ env: { "CASE_A=": "x" } }, /env cannot set "CASE_A=": has an `=`/],
+    [{ env: { CASE_A: "a\0b" } }, /"CASE_A" must be a string without a NUL/],
+    [{ minDelta: -1.5 }, /minDelta must be a number from -1 to 1/],
+    [{ minDelta: 1.5 }, /minDelta must be a number from -1 to 1/],
   ];
   for (const [more, message] of bad) {
     const one = sandbox();

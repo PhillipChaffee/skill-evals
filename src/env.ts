@@ -109,7 +109,7 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
 }
 
 /** The rule for a name in the `env` key of a case, in words. The reference page quotes it. */
-export const CASE_ENV_RULE =
+const CASE_ENV_RULE =
   "A name must start with `CASE_`, or be `TZ`, `LANG` or `LC_ALL`.";
 const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL"]);
 
@@ -118,10 +118,24 @@ const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL"]);
  * @param name - What the case file sets.
  * @returns Why a case may not set it, or null when it may.
  */
-export function caseEnvFault(name: string): string | null {
+function caseEnvFault(name: string): string | null {
   const fault = envNameFault(name);
   if (fault) return fault;
   return name.startsWith("CASE_") || CASE_ENV_NAMES.has(name)
     ? null
     : CASE_ENV_RULE;
+}
+
+/**
+ * Judges one entry of the `env` key of a case.
+ * @param name - The variable's name.
+ * @param setting - The value the case file gives it.
+ * @returns What is wrong with the entry, as the end of an error message, or null when it is fine.
+ */
+export function caseEnvProblem(name: string, setting: unknown): string | null {
+  const fault = caseEnvFault(name);
+  if (fault) return `cannot set "${name}": ${fault}`;
+  return typeof setting === "string" && !setting.includes("\0")
+    ? null
+    : `"${name}" must be a string without a NUL character`;
 }

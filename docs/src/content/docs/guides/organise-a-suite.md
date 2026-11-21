@@ -81,7 +81,7 @@ skill-evals run --tag smoke,core --not-tag slow
 skill-evals list --tag core --tag-all routing
 ```
 
-The `--case` flag of 0.0.1 took one glob where only `*` was special, and ids were flat. Every 0.0.1 value selects what it selected before. `*` no longer crosses `/`, so use `**` for a nested suite.
+The `--case` flag of 0.0.1 took one glob where only `*` was special, and ids were flat. A value whose only special character is `*` selects what it selected before. `*` no longer crosses `/`, so use `**` for a nested suite. These characters were plain text in 0.0.1 and now mean something: `?`, `{`, `}` and `\` are glob syntax, and `,` separates values. A value that holds one of them selects differently.
 
 ## Count the coverage
 
@@ -104,6 +104,6 @@ There is one row for each name in the `targets` of a selected case. `dev` counts
 | `judgeModel` | The model that scores this case's judged checks, in place of `--judge-model`.                                                                                                        |
 | `env`        | Variables the agent's process gets. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`. The values are set outright, and a value of the same name in your shell is not used. |
 
-The decision model's key stays out of the environment even when a case names it. `results.json` records each case's overrides, tags and targets under `caseMeta`.
+A name outside that set is a load error, so a case cannot set the key of the decision model, which stays out of every harness's environment. A value may not hold a NUL character. A model set in a case does not change the judge's default: the judge still falls back to `--model`, unless the case also sets `judgeModel`. `results.json` records each case's overrides, tags and targets under `caseMeta`.
 
-`env` applies to the agent only. `minDelta`, a number from 0 to 1, is read and kept for the comparison bar that a later release adds.
+`env` applies to the agent only. `minDelta`, a number from -1 to 1, is read and kept for the comparison bar that a later release adds. A negative value means that B may score lower than A by at most that much.

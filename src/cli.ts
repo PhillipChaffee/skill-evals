@@ -157,15 +157,24 @@ const USAGE = usageText(COMMANDS);
 
 /**
  * Converts what `parseArgs` gave for one flag.
+ * @param flag - The flag's name, for the message.
  * @param spec - The flag's entry in `FLAGS`.
  * @param given - A switch's boolean, a list flag's texts, or a text.
  * @returns The option's value: a boolean, the items of a list, or the text as the flag reads it.
+ * @throws {UsageError} When a list flag holds no item, as in `--case ""`.
  */
 function readFlag(
+  flag: string,
   spec: FlagSpec,
   given: string | boolean | (string | boolean)[],
 ) {
-  if (Array.isArray(given)) return splitList(given.map(String));
+  if (Array.isArray(given)) {
+    const items = splitList(given.map(String));
+    if (items.length === 0) {
+      throw new UsageError(`--${flag} needs at least one value`);
+    }
+    return items;
+  }
   if (typeof given === "boolean") return given;
   return (spec.read ?? String)(given);
 }
@@ -191,7 +200,7 @@ function readOptions(command: Command, args: string[]): Options {
   return Object.fromEntries(
     Object.entries(values).map(([flag, given]) => {
       const spec: FlagSpec = FLAGS[flag as Flag];
-      return [spec.as ?? flag, readFlag(spec, given)];
+      return [spec.as ?? flag, readFlag(flag, spec, given)];
     }),
   );
 }

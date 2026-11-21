@@ -5,6 +5,8 @@ import type { FieldDef, Mode } from "./checks/fields.js";
 import { WEIGHT, extensionsOf, readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
+import type { Found } from "./discover.js";
+import { discover } from "./discover.js";
 import { globToRegExp } from "./glob.js";
 import { HARNESSES } from "./harnesses/index.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -129,20 +131,13 @@ export const CASE_KEYS: Record<string, FieldDef> = {
       "Variables the agent's process gets, with the values given here. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`.",
   },
   minDelta: {
-    type: "unit",
+    type: "signed",
     meaning:
-      "The least score difference between the subjects that the case must show. A number from 0 to 1.",
+      "The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.",
   },
 };
 
 const DEFAULT_TIMEOUT_SECONDS = 600;
-
-/** One case directory that discovery found. */
-interface Found {
-  /** The path of the directory below the cases directory, with `/`. */
-  id: string;
-  dir: string;
-}
 
 /** Reads one key of a case file with its type's parser; undefined when the file leaves the key out. */
 type Read = (key: string) => unknown;
@@ -244,46 +239,6 @@ function loadCase(found: Found, mode: Mode): Case {
     workspaceDir: fs.existsSync(workspaceDir) ? workspaceDir : null,
     extensions,
   };
-}
-
-const isCaseDir = (dir: string): boolean =>
-  ["prompt.md", "case.json"].some((name) =>
-    fs.existsSync(path.join(dir, name)),
-  );
-
-/**
- * Finds the case directories under a directory, at any depth. A directory is a case when it holds `prompt.md` or
- * `case.json`. Nothing under a case is searched, and a directory whose name starts with `_` is skipped with all it holds.
- * @param dir - The directory to search.
- * @param prefix - The names of the directories above it, below the cases directory.
- * @returns The cases, unsorted.
- * @throws {UsageError} When a directory cannot be read, or the name of a case's directory holds `@` or `,`.
- */
-function discover(dir: string, prefix: string[] = []): Found[] {
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
-    throw new UsageError(
-      prefix.length === 0
-        ? `cannot read the cases directory ${dir} (${String(code)}); create it or pass --cases`
-        : `cannot read ${dir} (${String(code)})`,
-    );
-  }
-  return entries.flatMap((entry) => {
-    if (!entry.isDirectory() || entry.name.startsWith("_")) return [];
-    const where = path.join(dir, entry.name);
-    const names = [...prefix, entry.name];
-    if (!isCaseDir(where)) return discover(where, names);
-    const id = names.join("/");
-    if (names.some((name) => /[@,]/.test(name))) {
-      throw new UsageError(
-        `case ${id}: a directory name may not hold "@" or ","`,
-      );
-    }
-    return [{ id, dir: where }];
-  });
 }
 
 /** What loading cases takes besides the directory. */

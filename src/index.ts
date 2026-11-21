@@ -1,6 +1,7 @@
 export type { Capability, Need } from "./capabilities.js";
 export { loadCases } from "./cases.js";
-export type { Case } from "./cases.js";
+export type { Case, LoadOptions } from "./cases.js";
+export type { CaseMeta } from "./case-meta.js";
 export type { Check } from "./checks/index.js";
 export { evaluate } from "./evaluate.js";
 export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";

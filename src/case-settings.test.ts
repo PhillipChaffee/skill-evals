@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { plant } from "./testing/nested.js";
 import { script } from "./testing/plant.js";
 import type { Sandbox } from "./testing/sandbox.js";
 import { readResults, sandbox, seenBy, tableRow } from "./testing/sandbox.js";
@@ -8,18 +9,6 @@ import { readResults, sandbox, seenBy, tableRow } from "./testing/sandbox.js";
 const CASE_MODEL = "case-model";
 const CASE_JUDGE = "case-judge";
 const GUARDED = "watch/guarded";
-const CHECKS = [{ type: "output_contains", text: "x" }];
-
-/**
- * Plants one case directory.
- * @param box - Where to write it.
- * @param id - The path of the case under `cases/`.
- * @param more - Other keys of its case file.
- */
-function plant(box: Sandbox, id: string, more: Record<string, unknown> = {}) {
-  box.write(`cases/${id}/prompt.md`, `# ${id}\n\ndo it\n`);
-  box.write(`cases/${id}/case.json`, { checks: CHECKS, ...more });
-}
 
 /**
  * Scores the planted cases once with no skills.
@@ -61,13 +50,12 @@ test("per-case reps overrides --reps, and nested ids make nested output director
 
 test("a case's model overrides --model for its agent runs, and judgeModel the judge's", async () => {
   const box = sandbox();
-  plant(box, "own", { model: CASE_MODEL, judgeModel: CASE_JUDGE });
-  plant(box, "inherits");
-  box.write("cases/own/case.json", {
+  plant(box, "own", {
     checks: [{ type: "judge", rubric: "fine" }],
     model: CASE_MODEL,
     judgeModel: CASE_JUDGE,
   });
+  plant(box, "inherits");
   box.write("fake/judge/replies.json", ['{"score": 1, "reason": "ok"}']);
   const { results } = await scored(
     box,
@@ -193,4 +181,28 @@ test("a tag selection applies to run and score too", async () => {
   plant(box, "b");
   const { results } = await scored(box, "--tag", "fast", "--reps", "1");
   expect(results.records.map((record) => record.caseId)).toEqual(["a"]);
+});
+
+test("the report says when a case sets its own reps", async () => {
+  const box = sandbox();
+  plant(box, "plain");
+  const without = await scored(box, "--reps", "1");
+  expect(without.result.stdout).toMatch(/^- Reps: 1 for each case$/m);
+  plant(box, "own", { reps: 1 });
+  const withOwn = await scored(box, "--reps", "2");
+  expect(withOwn.result.stdout).toMatch(
+    /^- Reps: 2 for each case, unless a case sets its own$/m,
+  );
+});
+
+test("a case cannot name a variable outside its set, so it cannot collide with the withheld decision key", async () => {
+  const box = sandbox();
+  plant(box, "bad", { env: { BASETEN_API_KEY: "x" } });
+  const result = await box.cli([
+    "list",
+    "--cases",
+    path.join(box.root, "cases"),
+  ]);
+  expect(result.status).toBe(2);
+  expect(result.stderr).toMatch(/env cannot set "BASETEN_API_KEY"/);
 });
