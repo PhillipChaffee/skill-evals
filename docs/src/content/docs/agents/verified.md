@@ -27,6 +27,8 @@ Loading a skills folder, the `none` baseline, and a prompt that starts with a da
 
 With `none`, the scripted requests of Pi, OpenCode, and Codex held neither the subject's skill nor a decoy.
 
+A prompt that names a skill invokes it, confirmed in Claude Code 2.1.330 with a real model on 2026-11-21: with a skills folder loaded, `Use the greet skill to give me a greeting to start my day.` loaded the skill in 2 of 2 runs, and the answer held the sentence that the skill asks for in 2 of 2. With `none`, 1 of the 2 runs still called the skill tool with that name, which counts as a load. The same was not run in the other four harnesses.
+
 Tool kinds and the judge:
 
 | Harness       | Tool kinds                                                                                                                                                                                                                                                        | Judge run with nothing loaded                                                                                     |

@@ -11,7 +11,12 @@ A language model does not do the same thing twice, so reading a skill tells you 
 - **Define success.** Write down what a good result is for each scenario. That turns "it seems better" into a benchmark you can score against.
 - **Change with evidence.** Edit the skill, run the same scenarios again, and compare the scores before you merge.
 
-This is a report for one `commit-message` skill, in Claude Code, with three runs for each side. A is no skills and B is the folder that holds the skill.
+There are two questions to ask of a skill, and each case asks one of them:
+
+- **What does it do when it runs?** The prompt invokes the skill by name, the way you would in real use, and the checks are about the result.
+- **Does it load when it should?** The prompt does not name the skill, and the checks are whether the agent picks it up on its own, and stays out when it should.
+
+This is a report for one `commit-message` skill, in Claude Code, with three runs for each side. A is no skills and B is the folder that holds the skill. It asks the second question: no prompt names the skill.
 
 | Case               | Score, A / B (B - A) | What moved                                                                                          |
 | ------------------ | -------------------- | --------------------------------------------------------------------------------------------------- |
@@ -68,4 +73,4 @@ The harnesses are not equally proven. Only Claude Code ran a real model while th
 
 ## Next
 
-[Quick start](quick-start.md) gets a first score in five commands. Read [Safety](safety.md) before you run it.
+[Quick start](quick-start.md) gets a first score for both questions. Read [Safety](safety.md) before you run it.

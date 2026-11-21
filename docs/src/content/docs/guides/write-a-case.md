@@ -3,6 +3,21 @@ title: Write a case
 description: The files of a case, how to write its prompt, and how to choose its checks.
 ---
 
+## Pick the question a case asks
+
+A case asks one of two questions about a skill. Decide which one before you write the prompt.
+
+| Question                             | The prompt                                                                                                | The checks                                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| What does the skill do when it runs? | Invokes the skill by name, as you would in real use: `Use the commit-message skill to write the message.` | Are about the result: the final answer, a file, a tool call, or what a model says of the answer. |
+| Does the skill load when it should?  | Does not name the skill.                                                                                  | `skill_loaded`, or `skill_not_loaded` for a request the skill should stay out of.                |
+
+Do not ask both in one case. When a prompt leaves the skill out and the checks are about the result, a low score has two causes that look the same: the agent did not load the skill, or it loaded the skill and the skill did poor work. One case for each question tells you which.
+
+A case that invokes the skill does not need `skill_loaded`, and the check says little there. A prompt that names a skill can make the agent call the harness's skill tool with that name even when the skill is not installed, and that call counts as a load. One of two Claude Code runs with no skills did that on 2026-11-21.
+
+## The files of a case
+
 A case is a directory under `evals/cases/`. Its name is the case id.
 
 | File         | Content                                                                                                                                                |
@@ -21,7 +36,7 @@ In every harness, "loaded a skill" means that the agent called the harness's ski
 
 A prompt can start with any character. One that starts with a dash reaches the agent as the prompt and is not read as a flag of the harness.
 
-The agent must not be able to tell that its answer is being measured. Write the prompt as a plain request, and keep these words out of the prompt and out of every file name under `workspace/`: `eval`, `test`, `judge`, `experiment`, `rubric`, `score`, `compare`, `benchmark`, `candidate`, `arena`. Do not ask the agent which skills it used. The checks read that from its tool calls. The rubric stays in `case.json`, which the agent's workspace never holds. A plugin is loaded from where it is on disk, so the agent can see that path, and the cases too when they are inside the plugin's folder.
+The agent must not be able to tell that its answer is being measured. Write the prompt as a plain request, and keep these words out of the prompt and out of every file name under `workspace/`: `eval`, `test`, `judge`, `experiment`, `rubric`, `score`, `compare`, `benchmark`, `candidate`, `arena`. Naming the skill that the prompt invokes is fine: that is how a person asks for it. Do not ask the agent which skills it used. The checks read that from its tool calls. The rubric stays in `case.json`, which the agent's workspace never holds. A plugin is loaded from where it is on disk, so the agent can see that path, and the cases too when they are inside the plugin's folder.
 
 ## Tool checks
 

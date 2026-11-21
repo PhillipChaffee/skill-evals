@@ -8,7 +8,12 @@ A language model does not do the same thing twice, so reading a skill tells you 
 - **Define success.** Write down what a good result is for each scenario. That turns "it seems better" into a benchmark you can score against.
 - **Change with evidence.** Edit the skill, run the same scenarios again, and compare the scores before you merge.
 
-This is a report for one `commit-message` skill, in Claude Code, with three runs for each side. A is no skills and B is the folder that holds the skill.
+There are two questions to ask of a skill, and each case asks one of them:
+
+- **What does it do when it runs?** The prompt invokes the skill by name, the way you would in real use, and the checks are about the result.
+- **Does it load when it should?** The prompt does not name the skill, and the checks are whether the agent picks it up on its own, and stays out when it should.
+
+This is a report for one `commit-message` skill, in Claude Code, with three runs for each side. A is no skills and B is the folder that holds the skill. It asks the second question: no prompt names the skill.
 
 | Case               | Score, A / B (B - A) | What moved                                                                                          |
 | ------------------ | -------------------- | --------------------------------------------------------------------------------------------------- |
@@ -35,17 +40,24 @@ npm install --save-dev skill-evals   # or run it without installing: npx skill-e
 
 ## Quick start
 
-Run this in the folder that holds your skills. Replace `greet` with the name of one of your skills, and the prompt with a request that should make the agent use it.
+Run this in the folder that holds your skills. It writes two cases, one for each question. Replace `greet` with the name of one of your skills, the prompts with requests of your own, and `Good morning` with text that a good answer from your skill holds.
 
 ```sh
-mkdir -p evals/cases/greeting
-echo 'Give me a greeting to start my day.' > evals/cases/greeting/prompt.md
-echo '{ "checks": [{ "type": "skill_loaded", "skill": "greet" }] }' > evals/cases/greeting/case.json
+mkdir -p evals/cases/greeting-invoked evals/cases/greeting-unprompted
+
+# What does the skill do? The prompt invokes it, and the check is about the answer.
+echo 'Use the greet skill to give me a greeting to start my day.' > evals/cases/greeting-invoked/prompt.md
+echo '{ "checks": [{ "type": "output_contains", "text": "Good morning" }] }' > evals/cases/greeting-invoked/case.json
+
+# Does the skill load? The prompt does not name it, and the check is the load.
+echo 'Give me a greeting to start my day.' > evals/cases/greeting-unprompted/prompt.md
+echo '{ "checks": [{ "type": "skill_loaded", "skill": "greet" }] }' > evals/cases/greeting-unprompted/case.json
+
 npx skill-evals check                              # which harnesses work on this machine
 npx skill-evals run --a none --model <model-id>    # A = no skills, B = your skills
 ```
 
-The report shows how often the agent loaded the skill without your skills (0 of 3) and with them. [`examples/cases/hello`](examples/cases/hello) in the repository is one more case you can copy.
+The report shows each case's score without your skills and with them: for the first case how often the answer held the text, and for the second how often the agent loaded the skill. [`examples/cases/hello`](examples/cases/hello) in the repository is one more case you can copy.
 
 Each run starts in a new, empty home directory, so your own settings and default model are not there. Pass `--model`, or set `model` in the [config file](docs/src/content/docs/reference/config.md). Without it each harness uses its built-in default, which may be a provider you have no key for.
 
