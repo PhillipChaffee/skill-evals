@@ -59,19 +59,26 @@ function table(
  * @returns The HTML of the sections; nothing for one subject.
  */
 function comparisonHtml(evaluation: Evaluation): string {
-  const { comparison } = evaluation;
   const note = footnote(evaluation);
-  if (comparison === null || note === null) return "";
+  if (note === null) return "";
   const found = discriminationRows(evaluation);
   const discrimination =
     found.length === 0
       ? ""
       : `<h2>Discrimination</h2><p>${e(discriminationRule())}</p>${table(
-          ["Harness", "Case", "None", "Subject", "Discrimination"],
+          [
+            "Harness",
+            "Case",
+            "Subject arm",
+            "None",
+            "Subject",
+            "Discrimination",
+          ],
           found.map((row) => ({
             cells: [
               row.harness,
               row.caseId,
+              row.arm,
               formatScore(row.none),
               formatScore(row.subject),
               row.label,
@@ -114,9 +121,13 @@ const flakeCell = (
 function tablesHtml(evaluation: Evaluation): string {
   const runs = (valid: number, planned: number): string =>
     `${String(valid)} of ${String(planned)} runs`;
-  const { comparison } = evaluation;
+  const { comparisons } = evaluation;
   const verdict = (cells: string[]): string[] =>
-    comparison === null ? [] : cells;
+    comparisons.length === 0 ? [] : cells;
+  // The comparison that a subject's row shows: its own, or for two subjects the one comparison on both rows.
+  const ownOf = (label: string) =>
+    comparisons.find((one) => one.subject === label) ??
+    (comparisons.length === 1 ? comparisons[0] : undefined);
   const suites = evaluation.suites.flatMap((suite) =>
     evaluation.subjects.map(({ label }) => ({
       cells: [
@@ -125,7 +136,7 @@ function tablesHtml(evaluation: Evaluation): string {
         formatScore(suite.suite[label] ?? null),
         ...verdict([
           suiteVerdictCell(
-            comparison?.harnesses.find((one) => one.harness === suite.harness)
+            ownOf(label)?.harnesses.find((one) => one.harness === suite.harness)
               ?.suite ?? NO_SUITE,
           ),
         ]),
@@ -144,8 +155,8 @@ function tablesHtml(evaluation: Evaluation): string {
       formatScore(row.score),
       ...verdict([
         verdictCell(
-          comparison?.harnesses
-            .find((one) => one.harness === row.harness)
+          ownOf(row.subject)
+            ?.harnesses.find((one) => one.harness === row.harness)
             ?.cases.find((one) => one.id === row.caseId),
         ),
       ]),

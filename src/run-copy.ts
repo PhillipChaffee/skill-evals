@@ -15,7 +15,7 @@ import { hasContent } from "./subject.js";
 export interface Copy extends RunCopy {
   /** What the harness is given: the subject with every path in the copy. */
   loaded: LoadedSubject;
-  /** The subject's rule files and instruction file in the copy; null when the subject names none. */
+  /** The subject's rule files and instruction file in the copy; null when the subject names none, empty under `rules=off`. */
   rules: RulesFile[] | null;
 }
 
@@ -43,7 +43,11 @@ export function copyOf(subject: Subject): Copy | null {
   return {
     ...copy,
     loaded: { kind, dir: copy.dir, skills, skillDirs, pluginName },
-    rules: subject.rules && rulesFilesOf(subject.rules, copy.dir),
+    // `rules=off` installs none, which is an empty list and not "the subject names no rules".
+    rules:
+      subject.rulesOption === "off"
+        ? []
+        : subject.rules && rulesFilesOf(subject.rules, copy.dir),
   };
 }
 

@@ -74,6 +74,17 @@ export interface Comparison {
   harnesses: HarnessDelta[];
 }
 
+/**
+ * The comparison of one subject with the baseline. In its cases `a` and `n.a` are the baseline's and `b` and `n.b` the
+ * subject's, so a comparison of two subjects reads as it did when the labels were always "a" and "b".
+ */
+export interface SubjectComparison extends Comparison {
+  /** The label of the subject compared with the baseline. */
+  subject: string;
+  /** The label of the baseline, which is the first subject. */
+  baseline: string;
+}
+
 /** What a comparison is made from. */
 export interface CompareInput {
   /** The harness ids, in report order. */
@@ -82,8 +93,15 @@ export interface CompareInput {
   applied: Record<string, Case[]>;
   /** Every run. */
   records: RunRecord[];
-  /** The subject kinds by label: "none" turns the discrimination on. */
+  /** The subject kinds by side: "none" turns the discrimination on. A is the baseline and B the subject compared with it. */
   kinds: { a: string; b: string };
+  /** The labels of the two sides, which the runs carry. Default: "a" and "b". */
+  labels?: { a: string; b: string };
+  /**
+   * The label of a "none" subject that is neither side, for the discrimination of B against it when neither side is
+   * none. Default: null, so that there is none.
+   */
+  noneLabel?: string | null;
   /** The seed of the bootstrap. */
   seed: number;
   /** The noise file; null for none. */
@@ -157,51 +175,130 @@ function label(sides: {
   return helped ? "discriminating" : "no evidence";
 }
 
+/** The arms of a discrimination: the label that is the none arm, and the label that is the subject arm. */
+export interface Arms {
+  none: string;
+  subject: string;
+}
+
+/** One side of a comparison: a subject's label and kind. */
+export interface Side {
+  label: string;
+  kind: string;
+}
+
 /**
- * Finds which arm is "none", when exactly one is.
- * @param kinds - The kind of each subject.
- * @param kinds.a - The kind of subject A.
- * @param kinds.b - The kind of subject B.
- * @returns "a" or "b"; null when neither or both are none.
+ * Finds which arm of a comparison is "none", and which is the subject.
+ * @param a - The baseline.
+ * @param b - The subject compared with it.
+ * @param external - The label of a "none" subject that is neither side; null for none.
+ * @returns A none and B not: those. B none and A not: those, the other way. Neither none: B against the external none,
+ *   when there is one. Otherwise null: both none, or no none at all.
  */
-function noneArm(kinds: { a: string; b: string }): "a" | "b" | null {
-  if (kinds.a === "none" && kinds.b !== "none") return "a";
-  return kinds.b === "none" && kinds.a !== "none" ? "b" : null;
+export function armsOf(a: Side, b: Side, external: string | null): Arms | null {
+  if (a.kind === "none") {
+    return b.kind === "none" ? null : { none: a.label, subject: b.label };
+  }
+  if (b.kind === "none") return { none: b.label, subject: a.label };
+  return external === null ? null : { none: external, subject: b.label };
+}
+
+/**
+ * Finds the "none" subject that stands outside a comparison of two others, which their discrimination is taken against.
+ * @param subjects - Every subject of the command, with its kind.
+ * @param sides - The labels of the two sides of the comparison.
+ * @param sides.a - The baseline's label.
+ * @param sides.b - The compared subject's label.
+ * @returns The label of the first "none" subject when it is neither side; null when there is none, or it is a side.
+ */
+export function externalNone(
+  subjects: { label: string; kind: string }[],
+  sides: { a: string; b: string },
+): string | null {
+  const none = subjects.find(({ kind }) => kind === "none")?.label ?? null;
+  return none === sides.a || none === sides.b ? null : none;
+}
+
+/** What a discrimination is read from. */
+interface Shown {
+  /** The mean score of the none arm and of the subject arm. */
+  means: { none: number | null; subject: number | null };
+  /** The delta from the none arm to the subject arm; null for no delta. */
+  towards: Interval | null;
+  bound: number | null;
+  /** Whether enough runs stand behind each side to call the subject helped. */
+  enough: boolean;
 }
 
 /**
  * Labels one case by what the none arm and the subject arm show.
- * @param none - Which label is none: "a" or "b".
  * @param shown - What the case showed.
- * @param shown.means - The mean score of A and of B; null for a side with no valid run.
- * @param shown.found - The bootstrap of B minus A; null for no delta.
- * @param shown.bound - The noise bound of the case; null for none.
- * @param shown.enough - Whether enough runs stand behind each side to call the subject helped.
  * @returns The label.
  */
-function discriminate(
-  none: "a" | "b",
-  shown: {
-    means: (number | null)[];
-    found: Interval | null;
-    bound: number | null;
-    enough: boolean;
-  },
-): Discrimination {
-  const { means, found, bound, enough } = shown;
-  const [meanA = null, meanB = null] = means;
-  // The delta from the none arm to the subject: B minus A when A is none, else A minus B.
-  const towards =
-    found === null || none === "a"
-      ? found
-      : { delta: -found.delta, low: -found.high, high: -found.low };
+function discriminate(shown: Shown): Discrimination {
+  const { means, towards, bound, enough } = shown;
   return label({
-    none: none === "a" ? meanA : meanB,
-    subject: none === "a" ? meanB : meanA,
+    none: means.none,
+    subject: means.subject,
     helped:
       enough &&
       towards !== null &&
       verdict(towards.delta, towards, bound) === "helped",
+  });
+}
+
+/** The runs of one case of one harness, by label, and what the labels are. */
+interface Runs {
+  harness: string;
+  id: string;
+  a: number[];
+  b: number[];
+  found: Interval | null;
+  bound: number | null;
+  options: (name: string) => { resamples: number; seed: number };
+}
+
+/**
+ * Reads the discrimination of one case from the runs of its arms.
+ * @param input - The comparison's input, which names the labels and the kinds.
+ * @param runs - The case's runs.
+ * @returns The label; null when the comparison has no none arm.
+ */
+function discriminationOf(
+  input: CompareInput,
+  runs: Runs,
+): Discrimination | null {
+  const labels = input.labels ?? { a: "a", b: "b" };
+  const arms = armsOf(
+    { label: labels.a, kind: input.kinds.a },
+    { label: labels.b, kind: input.kinds.b },
+    input.noneLabel ?? null,
+  );
+  if (arms === null) return null;
+  const { a, b, found, bound, harness, id } = runs;
+  const meanOf = (scores: number[]): number | null =>
+    scores.length === 0 ? null : mean(scores);
+  if (arms.none === labels.a || arms.none === labels.b) {
+    const noneIsA = arms.none === labels.a;
+    return discriminate({
+      means: noneIsA
+        ? { none: meanOf(a), subject: meanOf(b) }
+        : { none: meanOf(b), subject: meanOf(a) },
+      // The delta from the none arm to the subject: B minus A when A is none, else A minus B.
+      towards:
+        found === null || noneIsA
+          ? found
+          : { delta: -found.delta, low: -found.high, high: -found.low },
+      bound,
+      enough: Math.min(a.length, b.length) >= MIN_RUNS_FOR_VERDICT,
+    });
+  }
+  const none = scoresOf(input.records, { harness, id, label: arms.none });
+  return discriminate({
+    means: { none: meanOf(none), subject: meanOf(b) },
+    towards: bootstrapDelta(none, b, runs.options(id)),
+    bound,
+    enough: Math.min(none.length, b.length) >= MIN_RUNS_FOR_VERDICT,
   });
 }
 
@@ -214,19 +311,19 @@ function discriminate(
  *   on both sides.
  */
 function harnessDelta(input: CompareInput, harness: string): HarnessDelta {
-  const { records, seed, kinds } = input;
+  const { records, seed } = input;
+  const labels = input.labels ?? { a: "a", b: "b" };
   // A noise file measures one harness, and says nothing about another.
   const noise = input.noise?.harness === harness ? input.noise : null;
   const options = (name: string) => ({
     resamples: RESAMPLES,
     seed: seedFor(seed, `${harness}\u0000${name}`),
   });
-  const none = noneArm(kinds);
   const strata: Stratum[] = [];
   const cases = (input.applied[harness] ?? []).map((caseDef): CaseDelta => {
     const { id } = caseDef;
-    const a = scoresOf(records, { harness, id, label: "a" });
-    const b = scoresOf(records, { harness, id, label: "b" });
+    const a = scoresOf(records, { harness, id, label: labels.a });
+    const b = scoresOf(records, { harness, id, label: labels.b });
     const bound = noise?.perCase[id]?.p95AbsDelta ?? null;
     const enough = Math.min(a.length, b.length) >= MIN_RUNS_FOR_VERDICT;
     const found = bootstrapDelta(a, b, options(id));
@@ -243,15 +340,9 @@ function harnessDelta(input: CompareInput, harness: string): HarnessDelta {
       a: meanA ?? null,
       b: meanB ?? null,
       ...mine,
-      discrimination:
-        none === null || caseDef.guard
-          ? null
-          : discriminate(none, {
-              means: [meanA ?? null, meanB ?? null],
-              found,
-              bound,
-              enough,
-            }),
+      discrimination: caseDef.guard
+        ? null
+        : discriminationOf(input, { harness, id, a, b, found, bound, options }),
     };
   });
   const suiteBound = noise?.suite.p95AbsDelta ?? null;

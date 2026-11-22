@@ -11,6 +11,8 @@ export interface Behavior {
   ghost?: boolean;
   /** The agent's final text, in place of its report of what it saw. */
   answer?: string;
+  /** Lists the plugin's `agents/*.md` as the agents of the harness's init event. */
+  reportAgents?: boolean;
 }
 
 /**

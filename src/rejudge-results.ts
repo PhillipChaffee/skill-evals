@@ -180,6 +180,8 @@ const finishedOf = (
     decisionModel: source.decisionModel ?? undefined,
     model: source.model ?? undefined,
     minScore: source.minScore ?? undefined,
+    // Results written before comparisons of more than two subjects have no bar subject: the bars were on the last.
+    ...(source.barSubject ? { barSubject: source.barSubject } : {}),
     delta: deltaOf(source),
     reps: source.reps,
     cases,

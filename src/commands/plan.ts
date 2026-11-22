@@ -12,6 +12,7 @@ import { UsageError, messageOf } from "../scope.js";
 import type { StoredRun } from "../store.js";
 import { RUNS_FILE, readRuns, recordOf, reusable, slotName } from "../store.js";
 import type { Subject } from "../subject.js";
+import { subjectsOf } from "./subjects.js";
 import type { Options } from "../usage.js";
 import { estimateOf, renderEstimate } from "./plan-estimate.js";
 
@@ -203,10 +204,7 @@ export function printPlan(given: PlanOptions, inspect: boolean): number {
  * @returns 0.
  */
 export function plan(options: Options, project: Project): number {
-  const { a, b, subject, ...rest } = options;
-  const subjects =
-    a === undefined && b === undefined
-      ? [subject ?? project.root]
-      : [a ?? "main", b ?? project.root];
-  return printPlan({ ...rest, subjects, cwd: project.cwd }, true);
+  const { a, b, subject, subjects, ...rest } = options;
+  const given = subjectsOf({ a, b, subject, subjects }, project, true);
+  return printPlan({ ...rest, ...given, cwd: project.cwd }, true);
 }

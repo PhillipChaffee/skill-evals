@@ -1,0 +1,10 @@
+{
+  "description": "A bug report with two causes: the entry skill and the ranking skill both load. Run against the kit, the kit without its bootstrap hook, the kit with one skill, and no kit, the rate of each load shows what the hook, each skill and the whole kit are worth.",
+  "tags": ["routing", "ablation", "target"],
+  "targets": ["bug-fix", "triage"],
+  "checks": [
+    { "type": "skill_loaded", "skill": "bug-fix" },
+    { "type": "skill_loaded", "skill": "triage" }
+  ],
+  "timeoutSeconds": 300
+}

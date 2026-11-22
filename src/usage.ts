@@ -7,11 +7,13 @@ import { CONFIG_FILE, CONFIG_KEYS } from "./project.js";
 /** Every option a command line can set, under the name the code uses for it. */
 export type Options = Omit<
   EvaluateOptions,
-  "cwd" | "subjects" | "onRun" | "onFinal" | "onWarning"
+  "cwd" | "subjects" | "labels" | "onRun" | "onFinal" | "onWarning"
 > &
   ProbeOptions & {
     a?: string;
     b?: string;
+    /** `--subjects name=spec,...`, as typed. */
+    subjects?: string;
     targets?: boolean;
     dryRun?: boolean;
     strict?: boolean;

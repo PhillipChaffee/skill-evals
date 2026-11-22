@@ -27,7 +27,11 @@ export interface CaseRow extends Outcome {
   score: number | null;
   validRuns: number;
   plannedRuns: number;
-  /** B minus A for the case, the same on the rows of both subjects; null with one subject and when a side has no valid run. */
+  /**
+   * The subject's delta against the baseline for the case, B minus A: the same on the rows of both subjects of a
+   * comparison of two, and null on the baseline's row when there are more; null with one subject and when a side has no
+   * valid run.
+   */
   delta: number | null;
   /** The ends of the 95% bootstrap interval of the delta; null with it. */
   low: number | null;
@@ -38,7 +42,7 @@ export interface CaseRow extends Outcome {
   discrimination: Discrimination | null;
   /**
    * "invalid" when any run of the case is invalid, whatever the score. Else "below" when the subject under test (the
-   * last one) is under the case's `minScore`. Else "not-run" when a run of the plan did not run or no run has a score.
+   * last one, or the `--bar-subject`) is under the case's `minScore`. Else "not-run" when a run of the plan did not run or no run has a score.
    * Else "pass". "not-applicable" has no runs.
    */
   status: CaseStatus;
@@ -95,11 +99,16 @@ const NO_DELTA: CaseDelta = {
 /**
  * Finds the comparison entry of a case.
  * @param slot - The harness, case and subject.
- * @returns The case's delta, interval, verdict and discrimination; empty with one subject.
+ * @returns The case's delta, interval, verdict and discrimination for the subject, against the baseline. With two
+ *   subjects both rows have the same entry; with more, the baseline's row has none. Empty with one subject.
  */
 function deltaOf(slot: Slot): CaseDelta {
+  const { comparisons } = slot.results;
+  const own =
+    comparisons.find((one) => one.subject === slot.label) ??
+    (comparisons.length === 1 ? comparisons[0] : undefined);
   return (
-    slot.results.comparison?.harnesses
+    own?.harnesses
       .find((one) => one.harness === slot.suite.harness)
       ?.cases.find((one) => one.id === slot.scored.id) ?? NO_DELTA
   );
@@ -114,7 +123,7 @@ function deltaOf(slot: Slot): CaseDelta {
 function byScore(slot: Slot): Outcome {
   const { results, suite, scored, label } = slot;
   const score = scored.scores[label] ?? null;
-  const mine = label === results.subjects.at(-1)?.label;
+  const mine = label === results.barSubject;
   const delta = deltaOf(slot);
   const reasons = [
     ...(mine && score !== null && missesBar(score, scored.minScore)

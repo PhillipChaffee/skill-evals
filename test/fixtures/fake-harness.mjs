@@ -37,6 +37,9 @@
 //   `projects/<cwd with every character but letters and digits as "-">/<id>.jsonl` of its config directory (`native`);
 //   and the other session files it found there. In a script's text, `$HISTORY` is the message count and `$HISTORY_MODE`
 //   the mode ("none" when it found none). Without a script the final text is JSON that has `history` and `sessions`.
+// - A plugin whose `behavior.json` says `"reportAgents": true` lists its `agents/*.md` as `agents` of its init event.
+// - A plugin whose `hooks/hooks.json` has `routes` (skill names) has a bootstrap hook: with no script, the run announces a
+//   `SessionStart` hook and loads each routed skill that the plugin has under `skills/`. Without the file, nothing is routed.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -595,6 +598,36 @@ const installed = fs.existsSync(skillsDir)
   ? fs.readdirSync(skillsDir).sort()
   : [];
 
+/**
+ * Lists the agents of the plugin as Claude Code's init event does: `plugin:<name>` for each `agents/<name>.md`.
+ * Only a plugin whose `behavior.json` says `reportAgents` lists them.
+ * @returns The names; none when the plugin has no `agents/` directory.
+ */
+function pluginAgents() {
+  const dir = path.join(pluginDir, "agents");
+  return fs.existsSync(dir)
+    ? fs
+        .readdirSync(dir)
+        .filter((name) => name.endsWith(".md"))
+        .sort()
+        .map((name) => `plugin:${name.slice(0, -3)}`)
+    : [];
+}
+
+/**
+ * Reads the plugin's bootstrap hook: the `routes` of its `hooks/hooks.json` that name a skill the plugin still has. A
+ * hook configuration that an option of the subject spec removed has no hook, and a skill that it removed is not routed to.
+ * @returns The skills the hook routes to; null when the plugin has no hook configuration.
+ */
+function bootstrapRoutes() {
+  const file = pluginDir && path.join(pluginDir, "hooks/hooks.json");
+  if (!file || !fs.existsSync(file)) return null;
+  const { routes = [] } = JSON.parse(fs.readFileSync(file, "utf8"));
+  return routes.filter((name) =>
+    fs.existsSync(path.join(pluginDir, "skills", name, "SKILL.md")),
+  );
+}
+
 // The turn of the script that this process plays, and what the script says of its session and its init event.
 const turnNo = played ? turnIndex(played.file) : null;
 if (played?.found.sessions?.[turnNo]) sessionId = played.found.sessions[turnNo];
@@ -608,6 +641,7 @@ const init = {
   skills: fs.existsSync(path.join(process.env.FAKE_DIR ?? "", "hide-skills"))
     ? []
     : installed,
+  ...(behavior.reportAgents && { agents: pluginAgents() }),
   ...played?.found.init,
   ...played?.found.inits?.[turnNo],
 };
@@ -650,8 +684,30 @@ if (played) {
   const turn = turnNo;
   process.exit(play(played.found.turns[turn] ?? [], turn) ? 1 : 0);
 }
+const bootstrap = bootstrapRoutes();
+if (bootstrap) {
+  // The bootstrap hook ran: it announces itself, as Claude Code's SessionStart hook does.
+  emit({
+    type: "system",
+    subtype: "hook_started",
+    hook_event: "SessionStart",
+    hook_name: "bootstrap",
+  });
+  emit({
+    type: "system",
+    subtype: "hook_response",
+    hook_event: "SessionStart",
+    hook_name: "bootstrap",
+    exit_code: 0,
+    output: "",
+    stdout: "",
+    stderr: "",
+    outcome: "success",
+  });
+}
 const used = [
   ...(behavior.skill ? [`plugin:${behavior.skill}`] : []),
+  ...(bootstrap ?? []).map((name) => `plugin:${name}`),
   ...installed.filter((name) => prompt.includes(name)),
 ];
 for (const skill of used) {

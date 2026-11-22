@@ -35,6 +35,7 @@ import { modesOf } from "./run.js";
 import type { PlanBase } from "./run-loop.js";
 import { requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject } from "./subject.js";
+import { barSubjectOf, requireSubjectsFit } from "./subject-labels.js";
 import { resolveSubject } from "./subject.js";
 import { requireNoRulesClash } from "./rules-clash.js";
 
@@ -56,6 +57,8 @@ export interface Context {
   delta: DeltaSetup;
   /** True when the two subjects are one subject run against itself, as `calibrate` does. */
   shared: boolean;
+  /** The label of the subject that the pass bars apply to: the last unless `--bar-subject` named another. */
+  barSubject: string;
   /** The share of the planned runs that may be invalid before the command exits 3. */
   maxInvalid: number;
   /** `--history-mode`; undefined leaves each harness its own mode. */
@@ -79,6 +82,47 @@ export interface Prepared {
 }
 
 /**
+ * Names the subjects of a command and the one that the pass bars apply to.
+ * @param given - What the command line said.
+ * @param given.specs - The subjects as typed.
+ * @param given.names - Their labels, for `--subjects`; absent for the default labels.
+ * @param given.wanted - `--bar-subject`; absent for the last subject.
+ * @returns Each subject with its label, and the bar subject's label.
+ * @throws {UsageError} For a count or label that no command takes, or a `--bar-subject` that is no label.
+ */
+function subjectsNamed(given: {
+  specs: string[];
+  names: string[] | undefined;
+  wanted: string | undefined;
+}): { pairs: { label: Label; spec: string }[]; barSubject: string } {
+  const pairs = labelled(given.specs, given.names);
+  return {
+    pairs,
+    barSubject: barSubjectOf(
+      pairs.map(({ label }) => label),
+      given.wanted,
+    ),
+  };
+}
+
+/**
+ * Reads the options that size and shape the runs, and checks the ones that need a tool on the machine.
+ * @param options - The options after the config file was applied.
+ * @returns The reps, the jobs, the share of runs that may be invalid, and the history mode.
+ * @throws {UsageError} For a value that no run could use, a report format that does not exist, or `--keep-workspaces`
+ *   without `tar`.
+ */
+function settingsOf(options: Context["options"]) {
+  const reps = requireUsable(options);
+  const jobs = requireJobs(options);
+  const maxInvalid = requireMaxInvalid(options);
+  const historyMode = requireHistoryMode(options);
+  reportFormats(options);
+  if (options.keepWorkspaces) requireTar();
+  return { reps, jobs, maxInvalid, historyMode };
+}
+
+/**
  * Settles everything that can be wrong with a command line before any harness starts or any file is written.
  * @param given - The options of `run` or `score`, as `evaluate` takes them.
  * @param look - How the command uses the output directory.
@@ -92,17 +136,18 @@ export function prepare(
   given: Omit<EvaluateOptions, "onRun">,
   look: { inspect?: boolean } = {},
 ): Prepared {
-  const { cwd = process.cwd(), subjects: specs, ...rest } = given;
+  const {
+    cwd = process.cwd(),
+    subjects: specs,
+    labels: names,
+    barSubject: wanted,
+    ...rest
+  } = given;
   requireSupportedPlatform();
-  const pairs = labelled(specs);
+  const { pairs, barSubject } = subjectsNamed({ specs, names, wanted });
   const project = findProject(cwd);
   const options = withConfig(project, rest);
-  const reps = requireUsable(options);
-  const jobs = requireJobs(options);
-  const maxInvalid = requireMaxInvalid(options);
-  const historyMode = requireHistoryMode(options);
-  reportFormats(options);
-  if (options.keepWorkspaces) requireTar();
+  const { reps, jobs, maxInvalid, historyMode } = settingsOf(options);
   const resumed = resumeDir(options, cwd);
   if (look.inspect !== true) requireUsableOut(resumed, options.outDir, cwd);
   const selection = selectHarnesses(options.harness);
@@ -113,6 +158,8 @@ export function prepare(
   const cases = casesOf(options).map((one) =>
     same ? { ...one, minScore: undefined, minDelta: undefined } : one,
   );
+  const delta = requireDeltaSetup(options, { subjects: pairs.length, same });
+  requireSubjectsFit({ names, pairs, barSubject, delta, cases });
   const { judgeApi, judgeModel } = judgeSetup(cases, options);
   const limits = requireLimits(options, {
     chosen: selection.chosen,
@@ -130,11 +177,9 @@ export function prepare(
     judgeApi,
     model: options.model,
     minScore: same ? undefined : options.minScore,
-    delta: requireDeltaSetup(options, {
-      subjects: pairs.length,
-      same,
-    }),
+    delta,
     shared: same,
+    barSubject,
     maxInvalid,
     historyMode,
     reps,
@@ -197,6 +242,7 @@ export function resolveAll(prepared: Prepared, into: Subject[]): void {
           rules: options.rules,
           instructionFile: options.instructionFile,
         },
+        strippers: context.selection.chosen.map(({ harness }) => harness),
       }),
     );
   }

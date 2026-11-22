@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
+import { CAPABILITIES } from "./capabilities.js";
 import {
   fakeHarness,
   fixture,
@@ -119,4 +120,112 @@ test("check with no harness installed runs nothing and makes no output directory
   expect(result.stdout).toMatch(/^Output: nothing ran$/m);
   expect(cells(result.stdout, CLAUDE_CODE)[2]).toBe('no ("claude" not found)');
   expect(fs.existsSync(outDir)).toBe(false);
+});
+
+test("check --json parses and names every capability", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  const result = await box.cli([
+    ...["check", "--json", "--harness", `${CLAUDE_CODE},pi`],
+    ...["--out", path.join(box.root, "probe")],
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  // Standard output is the array and nothing else.
+  const probed = JSON.parse(result.stdout) as Record<string, unknown>[];
+  expect(probed.map((entry) => entry["harness"])).toEqual([CLAUDE_CODE, "pi"]);
+  for (const entry of probed) {
+    expect(Object.keys(entry).sort()).toEqual(
+      [
+        ...["harness", "installed", "status", "capabilities", "loaded"],
+        ...["pluginLoaded", "skills", "agents", "rules", "hooksFired"],
+        ...["mcpServers"],
+      ].sort(),
+    );
+    const capabilities = entry["capabilities"] as Record<string, unknown>;
+    expect(Object.keys(capabilities).sort()).toEqual(
+      Object.keys(CAPABILITIES).sort(),
+    );
+    expect(
+      Object.values(capabilities).every((has) => typeof has === "boolean"),
+    ).toBe(true);
+  }
+  const [claude, pi] = probed;
+  expect(claude).toMatchObject({
+    installed: true,
+    status: "real-model",
+    pluginLoaded: true,
+    skills: 1,
+    // The harness lists no agent, rule or MCP server in its init event: it reports none.
+    agents: null,
+    rules: null,
+    mcpServers: null,
+    // It declares `hooks`, and none ran in the probe.
+    hooksFired: 0,
+    loaded: { skills: ["greet"], rules: null },
+  });
+  expect(claude?.["capabilities"]).toMatchObject({
+    hooks: true,
+    rules: true,
+    subagents: true,
+    sandbox: false,
+    compact: false,
+  });
+  // A harness that is not installed is in the list, with nothing reported.
+  expect(pi).toMatchObject({
+    installed: false,
+    pluginLoaded: null,
+    skills: null,
+    hooksFired: null,
+    loaded: { paths: null, skills: null, hooks: null },
+  });
+});
+
+test("the check table has the columns of check --json", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  const table = await box.cli([
+    ...["check", "--harness", CLAUDE_CODE],
+    ...["--out", path.join(box.root, "probe-table")],
+  ]);
+  expect(table.stdout).toContain(
+    "| Status | Capabilities | Skills reported | Agents reported | Rules reported | Hooks fired | MCP servers reported |",
+  );
+  expect(cells(table.stdout, CLAUDE_CODE).slice(7, 14)).toEqual([
+    "real-model",
+    expect.stringContaining("hooks"),
+    "1",
+    "n/a",
+    "n/a",
+    "0",
+    "n/a",
+  ]);
+});
+
+test("check --json counts the hooks that ran in the probe, and what the harness reports it loaded", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  box.write("fake/scripts/hooked.json", {
+    init: {
+      agents: ["plugin:a", "plugin:b"],
+      mcp_servers: [{ name: "docs" }],
+    },
+    turns: [
+      [
+        { hook: { event: "SessionStart", command: "x", exit: 0, context: "" } },
+        { hook: { event: "Stop", command: "y", exit: 0 } },
+        { final: "ok" },
+      ],
+    ],
+  });
+  const result = await box.cli([
+    ...["check", "--json", "--harness", CLAUDE_CODE],
+    ...["--out", path.join(box.root, "probe")],
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  const [claude] = JSON.parse(result.stdout) as Record<string, unknown>[];
+  expect(claude).toMatchObject({
+    hooksFired: 2,
+    agents: 2,
+    mcpServers: 1,
+  });
 });

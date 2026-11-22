@@ -196,6 +196,7 @@ test("the report counts a timed-out run as scored only when it has no invalid re
     cases: [],
     skippedChecks: [],
     notApplicable: [],
+    comparisons: [],
     partial: null,
   } as never;
 

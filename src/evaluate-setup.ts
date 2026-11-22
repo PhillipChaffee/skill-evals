@@ -4,6 +4,7 @@ import type { EvaluateOptions } from "./evaluate.js";
 import type { SelectionOptions } from "./select.js";
 import { loadSelection, selectionOf } from "./select.js";
 import type { Label } from "./subject.js";
+import { requireNamed } from "./subject-labels.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { requireEnvNames } from "./env.js";
@@ -18,7 +19,7 @@ import { MS_PER_SECOND, requireSeconds } from "./seconds.js";
 import { UsageError } from "./scope.js";
 
 const DEFAULT_REPS = 3;
-// A comparison has two subjects.
+// A comparison has at least two subjects.
 const COMPARED = 2;
 /**
  * Rejects option values that no run could use, before any harness starts.
@@ -69,7 +70,7 @@ export interface DeltaSetup {
  * Reads the options that only a comparison of two subjects uses, and refuses them for one subject.
  * @param options - The options after the config file was applied.
  * @param shape - How many subjects there are, and whether they are one subject run against itself.
- * @param shape.subjects - The number of subjects: 1 or 2.
+ * @param shape.subjects - The number of subjects: 1 to 8.
  * @param shape.same - True for `calibrate`, which measures the noise and so ignores a bar and a noise file.
  * @returns The bar, the seed (default 1) and the noise file. With one subject a `minDelta` of the config is ignored.
  * @throws {UsageError} When `minDelta` is not from -1 to 1, when `seed` is not a positive
@@ -90,10 +91,10 @@ export function requireDeltaSetup(
       throw new UsageError("minDelta must be a number from -1 to 1");
     }
   }
-  const compared = shape.subjects === COMPARED && !shape.same;
+  const compared = shape.subjects >= COMPARED && !shape.same;
   return {
     minDelta: compared ? minDelta : undefined,
-    ignored: minDelta !== undefined && shape.subjects !== COMPARED,
+    ignored: minDelta !== undefined && shape.subjects < COMPARED,
     seed,
     noise:
       compared && file !== undefined ? { file, noise: readNoise(file) } : null,
@@ -158,10 +159,20 @@ export function requireHistoryMode(options: Config): HistoryMode | undefined {
 /**
  * Pairs each subject with its label.
  * @param specs - What the caller passed as `subjects`.
- * @returns "subject" for one; "a" for the baseline and "b" for the subject under test for two.
- * @throws {UsageError} When there are not one or two.
+ * @param names - The labels that `--subjects` gave, one for each spec; absent for `--a`, `--b` and `--subject`.
+ * @returns With names, each subject under its own; else "subject" for one, and "a" for the baseline and "b" for the
+ *   subject under test for two.
+ * @throws {UsageError} When there are not one or two subjects without names, or the names are not 2 to 8 distinct labels.
  */
-export function labelled(specs: string[]): { label: Label; spec: string }[] {
+export function labelled(
+  specs: string[],
+  names?: string[],
+): { label: Label; spec: string }[] {
+  if (names !== undefined) {
+    return requireNamed(
+      specs.map((spec, at) => ({ label: names[at] ?? "", spec })),
+    );
+  }
   const [first, second, ...more] = Array.isArray(specs) ? specs : [];
   if (first === undefined || more.length > 0) {
     throw new UsageError("subjects must hold one or two subjects");

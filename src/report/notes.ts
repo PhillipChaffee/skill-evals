@@ -201,7 +201,7 @@ function stoppedSection(evaluation: Evaluation): string[] {
  * @returns One note naming the cases; nothing for a comparison, or when no case sets a `minDelta`.
  */
 function deltaBarsSection(evaluation: Evaluation): string[] {
-  if (evaluation.comparison !== null) return [];
+  if (evaluation.comparisons.length > 0) return [];
   const ids = [
     ...(evaluation.minDeltaIgnored ? ["the config's minDelta"] : []),
     ...evaluation.cases

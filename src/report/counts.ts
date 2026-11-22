@@ -1,5 +1,14 @@
 import type { RunCount } from "../score.js";
 
+const PAIR = 2;
+
+/**
+ * Tells whether a report compares exactly two subjects, which it shows as A / B with one change between them.
+ * @param labels - The subject labels.
+ * @returns True for two labels; a table of more has one value for each and no single change.
+ */
+export const isPair = (labels: string[]): boolean => labels.length === PAIR;
+
 /**
  * Words how many runs stand behind a score, to print beside it.
  * @param runs - The counts by subject label.

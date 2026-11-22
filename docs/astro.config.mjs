@@ -92,6 +92,7 @@ export default defineConfig({
             "guides/judged-checks",
             "guides/decision-checks",
             "guides/read-the-report",
+            "guides/compare-variants",
             "guides/pass-bars",
             "guides/jobs-resume-plan",
             "guides/rejudge-and-diff",

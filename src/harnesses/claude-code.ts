@@ -25,6 +25,7 @@ import {
   samePath,
   stringArg,
 } from "./shared.js";
+import { stripClaudeCode } from "./claude-code-strip.js";
 import { looksRateLimited } from "./rate-limit.js";
 import { placeRules } from "./rules.js";
 import type { RulesFile, RulesTarget } from "./rules.js";
@@ -222,6 +223,7 @@ const claudeCode: Harness = {
 
   rulesTargets,
   installRules: (files, input) => placeRules(files, rulesTargets(files), input),
+  strip: stripClaudeCode,
 
   countTurns,
 

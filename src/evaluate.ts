@@ -1,5 +1,5 @@
 import type { CaseMeta } from "./case-meta.js";
-import type { Comparison } from "./comparison.js";
+import type { Comparison, SubjectComparison } from "./comparison.js";
 import type { Case } from "./cases.js";
 import type { ExitCode } from "./exit-codes.js";
 import { exitCodeOf } from "./exit-codes.js";
@@ -31,8 +31,12 @@ import type { NotRun } from "./not-run.js";
 export interface EvaluateOptions extends SelectionOptions {
   /** The working directory, which sets the project and what relative paths resolve against. Default: the process's. */
   cwd?: string;
-  /** One or two of a directory, a git ref of the project, or "none". */
+  /** One or two of a directory, a git ref of the project, or "none"; with `labels`, two to eight. Each may end in `:` and options, such as `.:hooks=off`. */
   subjects: string[];
+  /** One label for each of `subjects`, which `--subjects name=spec,...` sets: unique, lowercase letters, digits and hyphens, starting with a letter. The first subject is the baseline. Default: "subject" for one subject, "a" and "b" for two. */
+  labels?: string[] | undefined;
+  /** The label of the subject that `minScore`, `minDelta` and the cases' bars apply to. A usage error when it is not a label. Default: the last subject. */
+  barSubject?: string | undefined;
   /** Comma-separated harness ids, or "all". Default: the first installed harness. */
   harness?: string | undefined;
   /** The directory that holds the cases. Default: `evals/cases` in the project. */
@@ -163,9 +167,19 @@ export interface Results {
   suites: SuiteScore[];
   /**
    * The delta of B over A, with its 95% bootstrap interval and verdict, for each case and for the suite of each harness.
-   * Null with one subject.
+   * Null with one subject. With more than two subjects it is the comparison of the bar subject with the baseline.
    */
   comparison: Comparison | null;
+  /**
+   * The label of the subject that the pass bars apply to: the last unless `--bar-subject` named another.
+   */
+  barSubject: string;
+  /**
+   * One comparison for each subject after the first, which is the baseline: the delta, interval and verdict of that
+   * subject against it, for each case and for the suite of each harness. Empty with one subject. For two subjects it is
+   * the same comparison as `comparison`.
+   */
+  comparisons: SubjectComparison[];
   /** The pass bars that were not reached. */
   belowBar: string[];
   /** The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs. */

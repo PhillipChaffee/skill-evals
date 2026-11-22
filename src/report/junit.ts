@@ -99,8 +99,7 @@ function suiteTests(
   const counts = suite?.runs[label] ?? { valid: 0, planned: 0 };
   const counted = `${String(counts.valid)} of ${String(counts.planned)} runs`;
   const bar = evaluation.minScore ?? undefined;
-  const under =
-    label === evaluation.subjects.at(-1)?.label && missesBar(score, bar);
+  const under = label === evaluation.barSubject && missesBar(score, bar);
   const tests: Test[] = [];
   if (suite !== undefined && suite.applicable > 0) {
     tests.push({

@@ -90,7 +90,8 @@ function hostile(): Evaluation {
     harnesses: [HARNESS],
     applied: APPLIED,
     comparison: null,
-    ...{ seed: 1, noiseFile: null, minDelta: null },
+    ...{ seed: 1, noiseFile: null, minDelta: null, comparisons: [] },
+    barSubject: "subject",
   } as unknown as Evaluation;
 }
 

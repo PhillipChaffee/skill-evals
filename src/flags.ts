@@ -1,5 +1,6 @@
 import { readDecimal } from "./decimal.js";
 import type { Options } from "./usage.js";
+import { SUBJECT_FLAGS } from "./flags-subjects.js";
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
 export interface FlagSpec {
@@ -22,18 +23,8 @@ export interface FlagSpec {
   defaultIn?: Record<string, string>;
 }
 
-const PROJECT = "the project, uncommitted changes included";
-
 export const FLAGS = {
-  a: { value: "subject", description: "The baseline.", default: "main" },
-  b: { value: "subject", description: "The change.", default: PROJECT },
-  subject: {
-    value: "subject",
-    description:
-      "The subject to score, to probe, or to check the skill names of. For show, the label of a subject in the results.",
-    default: PROJECT,
-    defaultIn: { show: "the first subject of the results" },
-  },
+  ...SUBJECT_FLAGS,
   harness: {
     value: "ids|all",
     description: "Comma-separated harness ids.",
@@ -82,6 +73,13 @@ export const FLAGS = {
     description:
       "Also run the held-out variants, the ones a case marks with heldout: true. Without it they are left out.",
     default: "off",
+  },
+  json: {
+    kind: "switch",
+    value: "",
+    description:
+      "Print the result as JSON, an array with one entry for each harness: its id, whether it is installed, its status, a boolean for each capability, what it reported as loaded, whether the subject loaded, and the counts of skills, agents, rules, hooks fired and MCP servers the probe saw (null where the harness cannot report them), instead of the table.",
+    default: "off: a table",
   },
   targets: {
     kind: "switch",

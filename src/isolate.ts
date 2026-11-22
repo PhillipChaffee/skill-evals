@@ -259,11 +259,17 @@ function copyDirectory(
  * `export-ignore`. A directory that is empty only because of what was left out is removed.
  * @param source - What to export.
  * @param exclude - Globs, relative to the root of the subject, of what to leave out besides `.git` and `node_modules`.
+ * @param modify - Changes the export before it is hashed, so that what it removes is not a change a run made. Default:
+ *   nothing. It only ever sees the export, never the source.
  * @returns The export; its `dispose` also runs at process exit.
  * @throws {UsageError} When `git` or `tar` is missing, an entry cannot be copied, or a link of the subject leads
  *   outside it.
  */
-export function exportSubject(source: Source, exclude: string[]): Export {
+export function exportSubject(
+  source: Source,
+  exclude: string[],
+  modify?: (dir: string) => void,
+): Export {
   const left = leaveOut(exclude);
   const out = tempDir("kit-");
   try {
@@ -276,6 +282,7 @@ export function exportSubject(source: Source, exclude: string[]): Export {
       copyDirectory(source.dir, out.dir, left);
     }
     requireLinksInside(out.dir);
+    modify?.(out.dir);
   } catch (error) {
     out.dispose();
     throw error;

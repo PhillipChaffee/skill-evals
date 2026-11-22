@@ -9,6 +9,7 @@ import { EXIT } from "./exit-codes.js";
 import { failed } from "./fatal.js";
 import type { Flag, FlagSpec } from "./flags.js";
 import { FLAGS } from "./flags.js";
+import { COMPARE_FLAGS, SUITE_FLAGS } from "./command-flags.js";
 import type { CommandDoc, Options } from "./usage.js";
 import { commandUsage, commandsTaking, usageText } from "./usage.js";
 import { calibrate } from "./commands/calibrate.js";
@@ -19,45 +20,9 @@ import { list } from "./commands/list.js";
 import { rejudge } from "./commands/rejudge.js";
 import { show } from "./commands/show.js";
 import { plan } from "./commands/plan.js";
+import { subjectsOf } from "./commands/subjects.js";
 import { suite } from "./commands/suite.js";
 import { validate } from "./commands/validate.js";
-
-const SUITE_FLAGS: Flag[] = [
-  "harness",
-  "case",
-  "not-case",
-  "tag",
-  "tag-all",
-  "not-tag",
-  "heldout",
-  "cases",
-  "reps",
-  "jobs",
-  "retries",
-  "max-cost",
-  "max-duration",
-  "model",
-  "min-score",
-  "max-invalid",
-  "report",
-  "judge-harness",
-  "judge-model",
-  "judge-api",
-  "judge-url",
-  "decision-model",
-  "decision-url",
-  "decision-timeout",
-  "lenient",
-  "isolated",
-  "history-mode",
-  "keep-workspaces",
-  "out",
-  "resume",
-  "dry-run",
-];
-
-// The flags that only a comparison of two subjects uses.
-const COMPARE_FLAGS: Flag[] = ["min-delta", "noise", "seed"];
 
 /** A command: what it does with its options, the flags it takes, and what the help text says about it. */
 interface Command extends CommandDoc {
@@ -73,9 +38,19 @@ export const COMMANDS: Record<string, Command> = {
   run: {
     description:
       "Run every case against subject A and subject B, score both, and print a comparison.",
-    handler: ({ a = "main", b, ...options }, project) =>
-      suite({ ...options, subjects: [a, b ?? project.root] }, project),
-    flags: ["a", "b", ...SUITE_FLAGS, ...COMPARE_FLAGS],
+    handler: ({ a, b, subjects, ...options }, project) =>
+      suite(
+        { ...options, ...subjectsOf({ a, b, subjects }, project) },
+        project,
+      ),
+    flags: [
+      "a",
+      "b",
+      "subjects",
+      "bar-subject",
+      ...SUITE_FLAGS,
+      ...COMPARE_FLAGS,
+    ],
   },
   score: {
     description: "Run every case against one subject and print its scores.",
@@ -101,6 +76,8 @@ export const COMMANDS: Record<string, Command> = {
       "a",
       "b",
       "subject",
+      "subjects",
+      "bar-subject",
       ...SUITE_FLAGS.filter((flag) => flag !== "dry-run"),
       ...COMPARE_FLAGS,
     ],
@@ -109,7 +86,7 @@ export const COMMANDS: Record<string, Command> = {
     description:
       "Run one small prompt in each installed harness and show what its adapter reports.",
     handler: check,
-    flags: ["subject", "harness", "model", "out"],
+    flags: ["subject", "harness", "model", "out", "json"],
   },
   validate: {
     description:

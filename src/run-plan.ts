@@ -121,6 +121,8 @@ export interface RunRecord extends Usage, LimitFields {
   harness: string;
   /** The subject's label. */
   subject: string;
+  /** The options of the subject's spec, such as `hooks=off`, in one text, so that a resume never takes a record of another variant. Absent for a subject without options. */
+  options?: string;
   caseId: string;
   rep: number;
   ok: boolean;

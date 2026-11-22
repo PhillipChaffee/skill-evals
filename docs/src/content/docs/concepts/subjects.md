@@ -58,3 +58,7 @@ Where a `skills` subject goes, inside the run's own home directory:
 The files are copied, not linked, from the run's copy of the subject, so every path that the export leaves out is also missing here. A skill of the same name that you installed globally does not load, because your real home directory is not the run's home.
 
 With `none`, and with every other subject, the harness still loads what it ships with. Some harnesses also fetch plugins that your organization manages. Claude Code did that in the runs behind this document.
+
+## A subject may have options
+
+`<spec>:hooks=off` is the same subject with its hook configuration removed from the copy. The options are `hooks=off`, `rules=on`, `rules=off`, `agents=off`, `agents=except:<glob>`, `skills=only:<glob>` and `skills=except:<glob>`. They change the export that every run copies, never your source, and the subject's revision is the hash of the export after them. [Compare variants of a subject](../guides/compare-variants.md) shows how to run several variants in one command.

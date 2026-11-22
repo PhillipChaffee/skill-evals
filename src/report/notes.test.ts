@@ -19,6 +19,7 @@ const evaluation = (more: Record<string, unknown>) =>
     skippedChecks: [],
     notApplicable: [],
     notRun: [],
+    comparisons: [],
     partial: null,
     ...more,
   }) as never;

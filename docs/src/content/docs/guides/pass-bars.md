@@ -14,7 +14,7 @@ Every score is a number from 0 to 1.
 
 ## Pass bars
 
-There are four pass bars. `--min-score` is the lowest suite score that passes. `minScore` in a `case.json` is the lowest score of that case that passes. `--min-delta` is the least score difference, B minus A, that the suite must show. `minDelta` in a `case.json` is the same bar for that case. The score bars apply to the subject under test, which is B for `run` and the one subject for `score`, in every harness that ran. The delta bars apply to `run` only. A missing score, or a missing delta, does not reach a bar. The report ends with the bars that were not reached, and the command exits 1. [Use it in CI](ci.md) lists the exit codes.
+There are four pass bars. `--min-score` is the lowest suite score that passes. `minScore` in a `case.json` is the lowest score of that case that passes. `--min-delta` is the least score difference, B minus A, that the suite must show. `minDelta` in a `case.json` is the same bar for that case. The score bars apply to the subject under test, which is B for `run` and the one subject for `score`, in every harness that ran. The delta bars apply to `run` only. With [more than two subjects](compare-variants.md) the bars apply to the last one, or to `--bar-subject`. A missing score, or a missing delta, does not reach a bar. The report ends with the bars that were not reached, and the command exits 1. [Use it in CI](ci.md) lists the exit codes.
 
 A verdict is not a bar. The report says `helped`, `hurt` or `within noise` for each case and for the suite, and none of these changes the exit code. Only a bar does.
 

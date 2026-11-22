@@ -4,21 +4,36 @@ import path from "node:path";
 import { NO_EXCLUSIONS, globsFor } from "./exclusions.js";
 import type { Exclusions } from "./exclusions.js";
 import { exportSubject, leaveOut } from "./isolate.js";
+import { parseSpec } from "./subject-options.js";
+import { findSkills } from "./subject-skills.js";
+import type { Stripper } from "./subject-variant.js";
+import {
+  applyOptions,
+  requireStrippable,
+  rulesUnder,
+} from "./subject-variant.js";
 import type { Project } from "./project.js";
 import { UsageError } from "./scope.js";
 import { hashTree } from "./tree-hash.js";
 import type { RulesOptions, SubjectRules } from "./subject-rules.js";
-import { resolveRules } from "./subject-rules.js";
 import { allChanged, diffSnapshots, snapshot } from "./snapshot.js";
 
-/** A comparison has the labels "a" and "b"; a single subject is "subject". */
-export type Label = "a" | "b" | "subject";
+/**
+ * A subject's name in the results. A comparison of two has the labels "a" and "b", a single subject is "subject", and
+ * `--subjects name=spec,...` names each one: lowercase letters, digits and hyphens, starting with a letter.
+ */
+export type Label = string;
 
 /** The part of a subject that goes into `results.json` and the report. */
 export interface SubjectSummary {
   label: Label;
-  /** What the user named: "none", a directory, or a git ref of the project. */
+  /** What the user named: "none", a directory, or a git ref of the project; without the options after its colon. */
   spec: string;
+  /**
+   * The options of the spec in one canonical text, such as `hooks=off,skills=only:magic-*`. Absent from the results of
+   * a subject that has none, which is every subject of 0.0.1.
+   */
+  options?: string;
   /**
    * "plugin" is a directory with a harness's plugin packaging, loaded the way that harness loads a local plugin;
    * "skills" is a plain folder of skills, copied to where each harness discovers skills; "none" loads nothing.
@@ -47,6 +62,10 @@ export interface Subject extends SubjectSummary {
    * config names none, and always null for "none".
    */
   rules: SubjectRules | null;
+  /** The options of the spec in one canonical text; "" for none. */
+  options: string;
+  /** Whether the spec said `rules=on` or `rules=off`; null when it said neither, so the configured behaviour applies. */
+  rulesOption: "on" | "off" | null;
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
   sourceChanges: () => string[];
   /**
@@ -125,38 +144,6 @@ function isPlugin(dir: string): boolean {
   }
 }
 
-const hasSkillFile = (dir: string): boolean =>
-  fs.existsSync(path.join(dir, "SKILL.md"));
-
-/**
- * Finds every `<dir>/<name>/SKILL.md` and `<dir>/skills/<name>/SKILL.md`, and dir itself when it holds a SKILL.md.
- * @param dir - The folder to search, one level deep.
- * @param ownName - The skill name of dir itself.
- * @param shown - What an error message calls dir.
- * @returns Skill name to its directory, in name order.
- * @throws {UsageError} When two skills share a name.
- */
-function findSkills(
-  dir: string,
-  ownName: string,
-  shown: string,
-): Record<string, string> {
-  const found: [string, string][] = hasSkillFile(dir) ? [[ownName, dir]] : [];
-  for (const parent of [dir, path.join(dir, "skills")]) {
-    if (!fs.existsSync(parent)) continue;
-    for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
-      const skillDir = path.join(parent, entry.name);
-      if (entry.isDirectory() && hasSkillFile(skillDir)) {
-        found.push([entry.name, skillDir]);
-      }
-    }
-  }
-  const names = found.map(([name]) => name);
-  const twice = names.find((name, index) => names.indexOf(name) !== index);
-  if (twice) throw new UsageError(`${shown} holds two skills named "${twice}"`);
-  return Object.fromEntries(found.sort(([x], [y]) => x.localeCompare(y)));
-}
-
 const git = (repoDir: string, ...args: string[]): string =>
   execFileSync("git", ["-C", repoDir, ...args], {
     encoding: "utf8",
@@ -172,20 +159,20 @@ interface Located {
 
 /**
  * Locates the files of a subject. A directory is used as it is. Anything else must be a git ref of the project.
- * @param label - Names the flag in an error message.
+ * @param flag - How the user named the subject, for an error message.
  * @param spec - A directory, relative to the working directory, or a git ref.
  * @param project - Where a ref is looked up.
  * @returns The directory, or the project and the commit of the ref.
  * @throws {UsageError} When spec is neither a directory nor a ref of the project.
  */
-function locate(label: Label, spec: string, project: Project): Located {
+function locate(flag: string, spec: string, project: Project): Located {
   const dir = path.resolve(project.cwd, spec);
   if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
     return { dir: fs.realpathSync(dir), commit: null };
   }
   if (!project.isGitRepo) {
     throw new UsageError(
-      `--${label} ${spec}: not a directory, and it cannot be a git ref because ${project.root} is not in a git repository`,
+      `${flag}: not a directory, and it cannot be a git ref because ${project.root} is not in a git repository`,
     );
   }
   let commit;
@@ -199,7 +186,7 @@ function locate(label: Label, spec: string, project: Project): Located {
     );
   } catch {
     throw new UsageError(
-      `--${label} ${spec}: not a directory and not a git ref of ${project.root}`,
+      `${flag}: not a directory and not a git ref of ${project.root}`,
     );
   }
   return { dir: project.root, commit };
@@ -211,23 +198,27 @@ export interface SubjectScope extends Project {
   left?: Exclusions;
   /** The config's `rules` and `instructionFile`. Default: none. */
   rules?: RulesOptions;
+  /** The harnesses that will run, which remove the hooks and agents that a spec switches off. Default: none is asked. */
+  strippers?: Stripper[];
 }
 
 /**
  * Exports a subject, and words a failure with the flag it came from.
  * @param flag - How the user named the subject, such as `--a main`, for the message.
  * @param source - Where the files are.
- * @param globs - What the export leaves out.
+ * @param shape - What the export leaves out, and what it changes before it is hashed.
+ * @param shape.globs - What the export leaves out.
+ * @param shape.modify - Changes the export; the options of the spec are applied here.
  * @returns The directory of the export and the `dispose` that removes it.
  * @throws {UsageError} When the export fails.
  */
 function exportNamed(
   flag: string,
   source: Parameters<typeof exportSubject>[0],
-  globs: string[],
+  shape: { globs: string[]; modify: (dir: string) => void },
 ): ReturnType<typeof exportSubject> {
   try {
-    return exportSubject(source, globs);
+    return exportSubject(source, shape.globs, shape.modify);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     throw new UsageError(`${flag}: ${error.message}`);
@@ -251,66 +242,85 @@ const baseline = (label: Label): Subject => ({
   exported: null,
   exportChanged: () => [],
   rules: null,
+  options: "",
+  rulesOption: null,
   sourceChanges: () => [],
   revision: "none",
   dispose: () => undefined,
 });
 
 /**
+ * Names how the user gave a subject, for an error message.
+ * @param label - The subject's label.
+ * @param given - The spec as typed, options included.
+ * @returns `--a <spec>`, `--b <spec>` or `--subject <spec>` for the labels those flags set, else `--subjects
+ *   <label>=<spec>`.
+ */
+const flagOf = (label: Label, given: string): string =>
+  ["a", "b", "subject"].includes(label)
+    ? `--${label} ${given}`
+    : `--subjects ${label}=${given}`;
+
+/**
  * Turns what the user named into something a harness can load. A subject is never loaded in place: it is exported
- * once, and each run loads its own copy of the export.
+ * once, and each run loads its own copy of the export. The options of the spec (`<spec>:hooks=off,...`) are applied to
+ * that export only: the source is never touched.
  * @param label - The subject's place in the comparison.
- * @param spec - `none`, a directory (as it is on disk, uncommitted changes included), or a git ref of the project.
- * @param scope - What a relative directory and a ref resolve against, and what the export leaves out besides `.git`
- *   and `node_modules`.
+ * @param given - `none`, a directory (as it is on disk, uncommitted changes included), or a git ref of the project,
+ *   followed by `:` and options when it has any. An existing path that holds a colon is a path, not a spec with options.
+ * @param scope - What a relative directory and a ref resolve against, what the export leaves out besides `.git` and
+ *   `node_modules`, and the harnesses that remove hooks and agents.
  * @returns The subject. The caller must call its `dispose`.
- * @throws {UsageError} When spec cannot be found, is a folder with no skill and no plugin manifest, or holds a link
- *   that leads outside it.
+ * @throws {UsageError} When the spec cannot be found, has an unknown or contradictory option, is a folder with no skill
+ *   and no plugin manifest, leaves no skill under a `skills` option, or holds a link that leads outside it.
  */
 export function resolveSubject(
   label: Label,
-  spec: string,
+  given: string,
   scope: SubjectScope,
 ): Subject {
-  if (spec === "none") return baseline(label);
-  const source = locate(label, spec, scope);
-  const flag = `--${label} ${spec}`;
+  const flag = flagOf(label, given);
+  const { spec, options, text } = parseSpec(given, scope.cwd);
+  if (spec === "none") {
+    if (text !== "") {
+      throw new UsageError(
+        `${flag}: "none" loads nothing, so it takes no options`,
+      );
+    }
+    return baseline(label);
+  }
+  const source = locate(flag, spec, scope);
+  requireStrippable({ options, flag, strippers: scope.strippers });
   const left = globsFor(
     { flag, root: source.dir, project: scope.root },
     scope.left ?? NO_EXCLUSIONS,
   );
-  const exported = exportNamed(flag, { ...source, repoRoot: scope.root }, left);
+  const ownName = path.basename(source.dir);
+  const shape = {
+    globs: left,
+    modify: (dir: string): void => {
+      applyOptions(dir, {
+        ...{ options, flag, strippers: scope.strippers },
+        ...{ ownName, shown: source.dir },
+      });
+    },
+  };
+  const exported = exportNamed(
+    flag,
+    { ...source, repoRoot: scope.root },
+    shape,
+  );
   try {
-    // A ref's own skill takes the name of the project folder it was exported from.
-    const found = findSkills(
-      exported.dir,
-      path.basename(source.dir),
-      source.dir,
-    );
-    const skillDirs = Object.fromEntries(
-      Object.entries(found).map(([name, dir]) => [
-        name,
-        path.join(source.dir, path.relative(exported.dir, dir)),
-      ]),
-    );
-    const kind = isPlugin(exported.dir) ? "plugin" : "skills";
-    if (kind === "skills" && Object.keys(skillDirs).length === 0) {
-      throw new UsageError(
-        `--${label} ${spec}: no skills found in ${spec}; it needs <name>/SKILL.md, skills/<name>/SKILL.md, its own SKILL.md, or a plugin manifest`,
-      );
-    }
     return {
-      label,
-      spec,
-      kind,
-      dir: source.dir,
-      skills: Object.keys(skillDirs),
-      skillDirs,
-      pluginName: kind === "plugin" ? pluginNameOf(exported.dir) : null,
-      commit: source.commit,
-      exported: exported.dir,
+      ...contentOf(exported.dir, { source, flag, ownName, spec }),
+      ...{ label, spec, options: text, rulesOption: options.rules ?? null },
+      ...{ commit: source.commit, exported: exported.dir },
       exportChanged: exported.changed,
-      rules: resolveRules(scope.rules ?? {}, exported.dir, flag),
+      rules: rulesUnder(options.rules, {
+        config: scope.rules ?? {},
+        root: exported.dir,
+        flag,
+      }),
       sourceChanges: watchSource(source, left),
       revision: hashTree(exported.dir),
       dispose: exported.dispose,
@@ -319,6 +329,44 @@ export function resolveSubject(
     exported.dispose();
     throw error;
   }
+}
+
+/**
+ * Reads what an export holds: its skills, and whether it is a plugin.
+ * @param root - The export.
+ * @param named - Where it came from.
+ * @param named.source - The located source; a skill's path is told as it is in the source.
+ * @param named.flag - How the user named the subject.
+ * @param named.ownName - The skill name of the export's own SKILL.md, the project folder's name.
+ * @param named.spec - What the user named, for the message.
+ * @returns The kind, the skills with their directories in the source, and the plugin's own name.
+ * @throws {UsageError} For a folder that is no plugin and holds no skill.
+ */
+function contentOf(
+  root: string,
+  named: { source: Located; flag: string; ownName: string; spec: string },
+): Pick<Subject, "kind" | "dir" | "skills" | "skillDirs" | "pluginName"> {
+  const { source, ownName } = named;
+  const found = findSkills(root, ownName, source.dir);
+  const skillDirs = Object.fromEntries(
+    Object.entries(found).map(([name, dir]) => [
+      name,
+      path.join(source.dir, path.relative(root, dir)),
+    ]),
+  );
+  const kind = isPlugin(root) ? "plugin" : "skills";
+  if (kind === "skills" && Object.keys(skillDirs).length === 0) {
+    throw new UsageError(
+      `${named.flag}: no skills found in ${named.spec}; it needs <name>/SKILL.md, skills/<name>/SKILL.md, its own SKILL.md, or a plugin manifest`,
+    );
+  }
+  return {
+    kind,
+    dir: source.dir,
+    skills: Object.keys(skillDirs),
+    skillDirs,
+    pluginName: kind === "plugin" ? pluginNameOf(root) : null,
+  };
 }
 
 /**
@@ -364,8 +412,9 @@ const SHORT_HASH_LENGTH = 7;
  */
 export function describeSubject(subject: SubjectSummary): string {
   if (!hasContent(subject)) return "no skills";
+  const options = subject.options ? `, with ${subject.options}` : "";
   const source = subject.commit
     ? `\`${subject.spec}\` at ${subject.commit.slice(0, SHORT_HASH_LENGTH)}`
     : `directory \`${subject.dir}\` as it is on disk`;
-  return `${KINDS[subject.kind]}, ${source}`;
+  return `${KINDS[subject.kind]}, ${source}${options}`;
 }

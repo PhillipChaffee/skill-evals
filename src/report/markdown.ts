@@ -4,17 +4,17 @@ import type { HarnessDelta } from "../comparison.js";
 import { describeCheck, isJudged } from "../checks/index.js";
 import type { Evaluation } from "../evaluate.js";
 import { METRICS, checkRate, median, scorerLine, versus } from "./metrics.js";
-import { runsText } from "./counts.js";
+import { isPair, runsText } from "./counts.js";
 import type { DiscriminationRow } from "./delta.js";
 import {
   discriminationRows,
-  discriminationRule,
   flakeRate,
   flakeText,
   footnote,
   suiteVerdictCell,
   verdictCell,
 } from "./delta.js";
+import { discriminationLines } from "./discrimination-table.js";
 import { noteSections } from "./notes.js";
 import type { RunRecord } from "../run.js";
 import { invalidReason } from "../run.js";
@@ -35,8 +35,8 @@ interface Section {
   /** The runs of this harness. */
   records: RunRecord[];
   labels: string[];
-  /** The comparison of this harness; absent with one subject. */
-  delta?: HarnessDelta | undefined;
+  /** The comparison of this harness for each subject after the first; empty with one subject. */
+  deltas: { subject: string; baseline: string; delta: HarnessDelta }[];
   /** The discrimination of this harness's cases; empty unless a subject is "none". */
   discrimination: DiscriminationRow[];
 }
@@ -86,10 +86,10 @@ function caseRow(caseDef: Case, section: Section): string {
   );
   const cells = [
     caseDef.id,
-    `${versus(Object.values(scored?.scores ?? {}), formatScore)} ${runsText(scored?.runs ?? {}, labels)}`,
-    ...(section.delta
-      ? [verdictCell(section.delta.cases.find((one) => one.id === caseDef.id))]
-      : []),
+    `${versus(Object.values(scored?.scores ?? {}), formatScore, isPair(labels))} ${runsText(scored?.runs ?? {}, labels)}`,
+    ...section.deltas.map(({ delta }) =>
+      verdictCell(delta.cases.find((one) => one.id === caseDef.id)),
+    ),
     checks.join("<br>"),
     flakes.join("<br>"),
     ...METRICS.map((metric) =>
@@ -98,6 +98,7 @@ function caseRow(caseDef: Case, section: Section): string {
           median(runs.flatMap((run) => metric.value(run) ?? [])),
         ),
         metric.format,
+        isPair(labels),
       ),
     ),
   ];
@@ -108,10 +109,15 @@ function caseRow(caseDef: Case, section: Section): string {
  * Words a column title for one subject, or for a comparison.
  * @param title - The column's name.
  * @param labels - The subject labels.
- * @returns The title; "Score, A / B (B - A)" for a comparison.
+ * @returns The title; "Score, A / B (B - A)" for a comparison of two, and "Score, FULL / LEAN / NONE" for more, whose
+ *   cells give one value for each subject and no single difference.
  */
-const heading = (title: string, labels: string[]): string =>
-  labels.length > 1 ? `${title}, A / B (B - A)` : title;
+const heading = (title: string, labels: string[]): string => {
+  if (labels.length <= 1) return title;
+  return isPair(labels)
+    ? `${title}, A / B (B - A)`
+    : `${title}, ${labels.map((label) => label.toUpperCase()).join(" / ")}`;
+};
 
 /**
  * Lays out the cases of one harness as a table.
@@ -121,11 +127,13 @@ const heading = (title: string, labels: string[]): string =>
  *   table has a flake column after the checks.
  */
 function caseTable(those: Case[], section: Section): string[] {
-  const { labels, delta } = section;
+  const { labels, deltas } = section;
   const columns = [
     "Case",
     heading("Score", labels),
-    ...(delta ? ["Verdict"] : []),
+    ...deltas.map(({ subject }) =>
+      deltas.length > 1 ? `Verdict ${subject}` : "Verdict",
+    ),
     "Checks",
     "Flake",
     ...METRICS.map((metric) => heading(metric.title, labels)),
@@ -140,28 +148,22 @@ function caseTable(those: Case[], section: Section): string[] {
 /**
  * Words the delta of the suite and the discrimination of its cases.
  * @param section - The scores and runs of the harness.
- * @returns The suite verdict line, and the discrimination table when a subject is "none"; none for one subject.
+ * @returns A suite verdict line for each subject compared with the baseline, and the discrimination table when a
+ *   subject is "none"; none for one subject.
  */
 function deltaLines(section: Section): string[] {
-  const { delta, discrimination } = section;
-  if (!delta) return [];
+  const { deltas, discrimination } = section;
+  if (deltas.length === 0) return [];
+  const many = deltas.length > 1;
   return [
-    `Suite delta: ${suiteVerdictCell(delta.suite)} over ${String(delta.suite.cases)} ${delta.suite.cases === 1 ? "case" : "cases"}`,
-    ...(discrimination.length === 0
-      ? []
-      : [
-          "",
-          "### Discrimination",
-          "",
-          discriminationRule(),
-          "",
-          "| Case | None | Subject | Discrimination |",
-          "| --- | --- | --- | --- |",
-          ...discrimination.map(
-            (row) =>
-              `| ${cell(row.caseId)} | ${formatScore(row.none)} | ${formatScore(row.subject)} | ${row.label} |`,
-          ),
-        ]),
+    ...deltas.map(({ subject, baseline, delta }) => {
+      const { suite } = delta;
+      const head = many
+        ? `Suite delta ${subject} against ${baseline}`
+        : "Suite delta";
+      return `${head}: ${suiteVerdictCell(suite)} over ${String(suite.cases)} ${suite.cases === 1 ? "case" : "cases"}`;
+    }),
+    ...discriminationLines(discrimination, many),
   ];
 }
 
@@ -202,7 +204,7 @@ function harnessSection(section: Section): string {
         ]
       : []),
     "",
-    `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases, ${runsText(suite.runs, labels).slice(1, -1)})`,
+    `Suite score: ${versus(Object.values(suite.suite), formatScore, isPair(labels))} (${String(suite.applicable)} of ${String(suite.total)} cases, ${runsText(suite.runs, labels).slice(1, -1)})`,
     ...deltaLines(section),
     ...scorerLine(
       "Judge",
@@ -279,7 +281,7 @@ function commonSection(evaluation: Evaluation): string[] {
     "",
     ...Object.entries(commonSet.suite).map(
       ([harness, scores]) =>
-        `- ${harness}: ${versus(Object.values(scores), formatScore)} ${runsText(commonSet.runs[harness] ?? {}, labels)}`,
+        `- ${harness}: ${versus(Object.values(scores), formatScore, isPair(labels))} ${runsText(commonSet.runs[harness] ?? {}, labels)}`,
     ),
   ];
 }
@@ -309,9 +311,14 @@ export function renderReport(evaluation: Evaluation): string {
   const sections = evaluation.suites.map((suite) =>
     harnessSection({
       suite,
-      delta: evaluation.comparison?.harnesses.find(
-        (one) => one.harness === suite.harness,
-      ),
+      deltas: evaluation.comparisons.flatMap((one) => {
+        const delta = one.harnesses.find(
+          (found) => found.harness === suite.harness,
+        );
+        return delta === undefined
+          ? []
+          : [{ subject: one.subject, baseline: one.baseline, delta }];
+      }),
       discrimination: discrimination.filter(
         (row) => row.harness === suite.harness,
       ),

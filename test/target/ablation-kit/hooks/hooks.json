@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Bug reports go to bug-fix, then triage.'"
+          }
+        ]
+      }
+    ]
+  },
+  "routes": ["bug-fix", "triage"]
+}

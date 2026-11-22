@@ -135,6 +135,8 @@ function hostileLike(): Evaluation {
     maxInvalid: 0,
     sourceChanged: [],
     subjects: [{ label: "subject" }],
+    barSubject: "subject",
+    comparisons: [],
     suites: [
       {
         harness: "h",

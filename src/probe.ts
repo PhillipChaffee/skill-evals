@@ -12,6 +12,8 @@ import type { RunRecord } from "./run.js";
 import { invalidReason, runOnce } from "./run.js";
 import { UsageError, outputDir } from "./scope.js";
 import type { Subject } from "./subject.js";
+import type { Probed } from "./probe-json.js";
+import { EXTRA_COLUMNS, extraCells, probedOf } from "./probe-json.js";
 import {
   changedAtSource,
   describeSubject,
@@ -25,9 +27,12 @@ export interface ProbeOptions {
   harness?: string | undefined;
   model?: string | undefined;
   outDir?: string | undefined;
+  /** Print what the probe saw as JSON, an array with one entry for each harness, in place of the table. Default: false. */
+  json?: boolean | undefined;
 }
 
 const PROBE_TIMEOUT_SECONDS = 300;
+const JSON_INDENT = 2;
 const SHOWN_ERROR_LENGTH = 200;
 
 /**
@@ -153,8 +158,8 @@ function table(subject: Subject, outDir: string, rows: string[][]): string {
     `Subject: ${describeSubject(subject)}`,
     `Output: ${outDir}`,
     "",
-    "| Harness | Installed | Ran | Reported the subject as loaded | Skills the agent loaded | Record fields filled |",
-    "| --- | --- | --- | --- | --- | --- |",
+    `| Harness | Installed | Ran | Reported the subject as loaded | Skills the agent loaded | Record fields filled | ${EXTRA_COLUMNS.join(" | ")} |`,
+    `| --- | --- | --- | --- | --- | --- | ${EXTRA_COLUMNS.map(() => "---").join(" | ")} |`,
     ...rows.map(
       (row) =>
         `| ${row.map((text) => text.replaceAll("|", "\\|")).join(" | ")} |`,
@@ -177,6 +182,58 @@ function loadSafely(dir: string, lenient: boolean): Case[] | string {
   }
 }
 
+/** What one probe run needs besides its harness. */
+interface ProbeRun {
+  subject: Subject;
+  outDir: string;
+  model: string | undefined;
+  /** Names of variables the config passes to the harness. */
+  pass: string[] | undefined;
+}
+
+/**
+ * Runs the probe in each harness that is installed.
+ * @param located - The harnesses, each with the executable that was found for it, if any.
+ * @param run - The subject, the output directory and the settings of the runs.
+ * @returns The table row and the JSON entry of each harness, in order, and whether any run was invalid.
+ */
+async function probeAll(
+  located: { harness: Harness; bin: string | null }[],
+  run: ProbeRun,
+): Promise<{ rows: string[][]; probed: Probed[]; failed: boolean }> {
+  const { subject, outDir, model } = run;
+  const rows: string[][] = [];
+  const probed: Probed[] = [];
+  let failed = false;
+  for (const { harness, bin } of located) {
+    if (!bin) {
+      const none = probedOf(harness, null);
+      const missing = `no ("${harness.bin}" not found)`;
+      probed.push(none);
+      rows.push([harness.id, missing, "", "", "", "", ...extraCells(none)]);
+      continue;
+    }
+    const record = await runOnce({
+      harness,
+      bin,
+      subject,
+      caseDef: probe(subject),
+      rep: 1,
+      model,
+      // The probe has no judged check and no decision check, so neither model ever runs.
+      judge: { harness, bin, model },
+      decision: null,
+      pass: run.pass,
+      outDir,
+    });
+    failed ||= invalidReason(record) !== null;
+    const seen = probedOf(harness, { record, outDir });
+    probed.push(seen);
+    rows.push([harness.id, ...ranRow(subject, record), ...extraCells(seen)]);
+  }
+  return { rows, probed, failed };
+}
+
 /**
  * Runs one small prompt in each harness and prints what its adapter reports, as a table.
  * @param given - The options of the command line.
@@ -197,41 +254,26 @@ export async function check(
     ...project,
     left: exclusionsOf(options, project.cwd),
     rules: { rules: options.rules, instructionFile: options.instructionFile },
+    strippers: located.map((entry) => entry.harness),
   });
   try {
     const outDir = located.some((entry) => entry.bin)
       ? outputDir(options.outDir, project.cwd)
       : "nothing ran";
-    const rows: string[][] = [];
-    let failed = false;
-    for (const { harness, bin } of located) {
-      if (!bin) {
-        const missing = `no ("${harness.bin}" not found)`;
-        rows.push([harness.id, missing, "", "", "", ""]);
-        continue;
-      }
-      const record = await runOnce({
-        harness,
-        bin,
-        subject,
-        caseDef: probe(subject),
-        rep: 1,
-        model: options.model,
-        // The probe has no judged check and no decision check, so neither model ever runs.
-        judge: { harness, bin, model: options.model },
-        decision: null,
-        pass: options.env,
-        outDir,
-      });
-      failed ||= invalidReason(record) !== null;
-      rows.push([harness.id, ...ranRow(subject, record)]);
-    }
+    const { rows, probed, failed } = await probeAll(located, {
+      subject,
+      outDir,
+      model: options.model,
+      pass: options.env,
+    });
     const cases = fs.existsSync(options.cases)
       ? loadSafely(options.cases, options.lenient ?? false)
       : [];
     const harnesses = located.map((entry) => entry.harness);
     console.log(
-      `${table(subject, outDir, rows)}\n\n${capabilityNotes(cases, harnesses)}`,
+      options.json
+        ? JSON.stringify(probed, null, JSON_INDENT)
+        : `${table(subject, outDir, rows)}\n\n${capabilityNotes(cases, harnesses)}`,
     );
     const changed = changedAtSource([subject]);
     if (changed.length > 0) {

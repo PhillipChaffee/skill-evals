@@ -27,7 +27,13 @@ export interface RunMeta {
    * uncommitted changes under the subject's path, false for a git ref, and null when the subject is not in a git
    * repository or is "none".
    */
-  subjects: { label: string; revision: string; dirty: boolean | null }[];
+  subjects: {
+    label: string;
+    revision: string;
+    dirty: boolean | null;
+    /** The subject's options in one text; absent for a subject that has none. */
+    options?: string;
+  }[];
   /**
    * The hash of each case as a run on that harness sees it, by harness id and case id. It is the hash that the run key
    * uses, so a check that the harness dropped (`ifUnsupported: "skip"`) is not in it.
@@ -161,6 +167,7 @@ export const runMetaOf = (given: MetaInput): RunMeta => ({
     label: subject.label,
     revision: subject.revision,
     dirty: dirtyOf(subject),
+    ...(subject.options ? { options: subject.options } : {}),
   })),
   caseHashes: Object.fromEntries(
     Object.entries(given.applied).map(([id, cases]) => [

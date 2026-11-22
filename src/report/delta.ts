@@ -4,6 +4,8 @@ import {
   FAILING_CEILING,
   MIN_RUNS_FOR_VERDICT,
   NON_DISCRIMINATING_FLOOR,
+  armsOf,
+  externalNone,
 } from "../comparison.js";
 import { verdictText } from "../delta-format.js";
 import { describeCheck } from "../checks/index.js";
@@ -84,7 +86,8 @@ function unlisted(evaluation: Evaluation): string[] {
   if (noiseMeta === null) return [];
   return [
     ...new Set(
-      (evaluation.comparison?.harnesses ?? [])
+      evaluation.comparisons
+        .flatMap((one) => one.harnesses)
         .filter(({ harness }) => harness === noiseMeta.harness)
         .flatMap(({ cases }) =>
           cases.filter((one) => one.noise === null).map((one) => one.id),
@@ -105,9 +108,9 @@ function noiseNote(evaluation: Evaluation): string {
   }
   const others = evaluation.harnesses.filter((id) => id !== noiseMeta.harness);
   const missing = unlisted(evaluation);
-  const compared = (evaluation.comparison?.harnesses ?? []).flatMap(
-    ({ cases }) => cases.map((one) => one.id),
-  );
+  const compared = evaluation.comparisons
+    .flatMap((one) => one.harnesses)
+    .flatMap(({ cases }) => cases.map((one) => one.id));
   return [
     `Noise file: ${noiseFile}, calibrated on ${noiseMeta.harness} at ${String(noiseMeta.reps)} reps; a case is judged against its perCase p95AbsDelta there and the suite against suite.p95AbsDelta.`,
     ...(others.length === 0
@@ -141,18 +144,31 @@ function noiseNote(evaluation: Evaluation): string {
  *   and the noise file used; null for one subject, which has no delta.
  */
 export function footnote(evaluation: Evaluation): string | null {
-  if (evaluation.comparison === null) return null;
-  const orientation =
-    evaluation.subjects[1]?.kind === "none"
-      ? " Verdicts are B minus A; with B none, hurt means A scored higher."
-      : "";
-  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A case needs at least ${String(MIN_RUNS_FOR_VERDICT)} valid runs on each side (MIN_RUNS_FOR_VERDICT) and the suite the same in every case it covers; below that the verdict is "too few runs". Percentile intervals under-cover at small n, so an interval from few runs is narrower than its 95% says. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound.${orientation} ${noiseNote(evaluation)}`;
+  if (evaluation.comparisons.length === 0) return null;
+  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A case needs at least ${String(MIN_RUNS_FOR_VERDICT)} valid runs on each side (MIN_RUNS_FOR_VERDICT) and the suite the same in every case it covers; below that the verdict is "too few runs". Percentile intervals under-cover at small n, so an interval from few runs is narrower than its 95% says. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound.${orientationOf(evaluation)} ${noiseNote(evaluation)}`;
+}
+
+/**
+ * Words which way a verdict reads.
+ * @param evaluation - What `evaluate` returned; it has at least one comparison.
+ * @returns For two subjects, B minus A, and what hurt means when B is none. For more, each subject minus the first.
+ */
+function orientationOf(evaluation: Evaluation): string {
+  if (evaluation.comparisons.length > 1) {
+    const first = evaluation.subjects[0]?.label ?? "";
+    return ` Each subject's verdict is its score minus the baseline's, and the baseline is the first subject, ${first}; where the subject is none, hurt means the baseline scored higher.`;
+  }
+  return evaluation.subjects[1]?.kind === "none"
+    ? " Verdicts are B minus A; with B none, hurt means A scored higher."
+    : "";
 }
 
 /** One case of the discrimination table. */
 export interface DiscriminationRow {
   harness: string;
   caseId: string;
+  /** The label of the subject whose arm this is; the subject under comparison, or the baseline when the other is none. */
+  arm: string;
   /** The mean score of the none arm; null for no valid run. */
   none: number | null;
   /** The mean score of the arm with the subject; null for no valid run. */
@@ -163,28 +179,47 @@ export interface DiscriminationRow {
 /**
  * Lists the discrimination of every case that has one: only when a subject is "none", and never for a guard case.
  * @param evaluation - What `evaluate` returned.
- * @returns One row for each such case.
+ * @returns One row for each such case of each comparison: each subject other than "none" against the none arm.
  */
 export function discriminationRows(
   evaluation: Evaluation,
 ): DiscriminationRow[] {
-  const noneIsA = evaluation.subjects[0]?.kind === "none";
-  return (evaluation.comparison?.harnesses ?? []).flatMap(
-    ({ harness, cases }) =>
-      cases.flatMap((one) =>
-        one.discrimination === null
-          ? []
-          : [
-              {
-                harness,
-                caseId: one.id,
-                none: noneIsA ? one.a : one.b,
-                subject: noneIsA ? one.b : one.a,
-                label: one.discrimination,
-              },
-            ],
-      ),
-  );
+  const kindOf = (label: string): string =>
+    evaluation.subjects.find((one) => one.label === label)?.kind ?? "";
+  return evaluation.comparisons.flatMap((compared) => {
+    const [a, b] = [compared.baseline, compared.subject];
+    const arms = armsOf(
+      { label: a, kind: kindOf(a) },
+      { label: b, kind: kindOf(b) },
+      externalNone(evaluation.subjects, { a, b }),
+    );
+    if (arms === null) return [];
+    return compared.harnesses.flatMap(({ harness, cases }) =>
+      cases.flatMap((one) => {
+        if (one.discrimination === null) return [];
+        const mean = (label: string): number | null =>
+          label === a
+            ? one.a
+            : label === b
+              ? one.b
+              : (evaluation.suites
+                  .find((suite) => suite.harness === harness)
+                  ?.cases.find((scored) => scored.id === one.id)?.scores[
+                  label
+                ] ?? null);
+        return [
+          {
+            harness,
+            caseId: one.id,
+            arm: arms.subject,
+            none: mean(arms.none),
+            subject: mean(arms.subject),
+            label: one.discrimination,
+          },
+        ];
+      }),
+    );
+  });
 }
 
 /**

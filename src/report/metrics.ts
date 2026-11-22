@@ -55,18 +55,21 @@ export function median(values: number[]): number | null {
  * Shows one value for each subject, and the change from the first to the second when there are two.
  * @param values - One value for each subject; null is a missing one.
  * @param format - Renders a value, and the size of the change.
+ * @param withChange - Whether to add the change from the first to the second value. Default: true. A table of more than two
+ *   subjects leaves it out, because one change would say nothing of the others.
  * @returns The cell text, "n/a" when every value is missing.
  */
 export function versus(
   values: (number | null)[],
   format: (value: number) => string,
+  withChange = true,
 ): string {
   if (values.every((value) => value === null)) return "n/a";
   const shown = values
     .map((value) => (value === null ? "n/a" : format(value)))
     .join(" / ");
   const [first, second] = values;
-  if (first == null || second == null) return shown;
+  if (!withChange || first == null || second == null) return shown;
   const delta = second - first;
   return `${shown} (${delta < 0 ? "-" : "+"}${format(Math.abs(delta))})`;
 }

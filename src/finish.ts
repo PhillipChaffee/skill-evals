@@ -1,6 +1,6 @@
 import { metaOf } from "./case-meta.js";
-import type { Comparison } from "./comparison.js";
-import { compare, failedDeltaBars } from "./comparison.js";
+import { failedDeltaBars } from "./comparison.js";
+import { comparisonsOf, deltaFields } from "./finish-delta.js";
 import type { DeltaSetup } from "./evaluate-setup.js";
 import type { Case } from "./cases.js";
 import fs from "node:fs";
@@ -49,6 +49,8 @@ export interface Finished {
   records: RunRecord[];
   sourceChanged: string[];
   partial: Results["partial"];
+  /** The label the pass bars apply to; absent: the last subject. */
+  barSubject?: string;
   /** Who scored the judged checks, in words; absent: `judgeText` says it from the judge fields. */
   judgeLabel?: string;
 }
@@ -56,7 +58,7 @@ export interface Finished {
 /**
  * Takes the part of a subject that goes into `results.json`.
  * @param subject - A resolved subject.
- * @returns Its label, spec, kind, directory, skills and commit.
+ * @returns Its label, spec, kind, directory, skills and commit, and its options when it has any.
  */
 const summaryOfSubject = (subject: SubjectSummary): SubjectSummary => ({
   label: subject.label,
@@ -65,6 +67,8 @@ const summaryOfSubject = (subject: SubjectSummary): SubjectSummary => ({
   dir: subject.dir,
   skills: subject.skills,
   commit: subject.commit,
+  // Only a subject with options has the key, so that the results of any other subject stay what they were.
+  ...(subject.options ? { options: subject.options } : {}),
 });
 
 /**
@@ -78,29 +82,6 @@ const invalidList = (records: RunRecord[]): string[] =>
     const run = `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`;
     return reason === null ? [] : [`${run}: ${reason}`];
   });
-
-/**
- * Compares subject A with subject B when there are two.
- * @param finished - The runs and what they were made with.
- * @param harnesses - The ids of the harnesses, in report order.
- * @returns The comparison; null for one subject.
- */
-function comparisonOf(
-  finished: Finished,
-  harnesses: string[],
-): Comparison | null {
-  const [first, second] = finished.subjects;
-  return first && second
-    ? compare({
-        harnesses,
-        applied: finished.parts.ran,
-        records: finished.records,
-        kinds: { a: first.kind, b: second.kind },
-        seed: finished.delta.seed,
-        noise: finished.delta.noise?.noise ?? null,
-      })
-    : null;
-}
 
 /**
  * Lists the ids of the cases that apply to each harness.
@@ -127,37 +108,14 @@ export function judgeText(
 }
 
 /**
- * Takes the part of `results.json` that a comparison adds.
- * @param delta - The delta bar, the seed and the noise file.
- * @param comparison - What `comparisonOf` returned.
- * @returns The bar, the seed, the noise file's path and the comparison.
- */
-const deltaFields = (delta: DeltaSetup, comparison: Comparison | null) => ({
-  minDelta: delta.minDelta ?? null,
-  seed: delta.seed,
-  noiseFile: delta.noise?.file ?? null,
-  noiseMeta: delta.noise
-    ? {
-        harness: delta.noise.noise.harness,
-        reps: delta.noise.noise.reps,
-        caseIds: delta.noise.noise.caseIds,
-      }
-    : null,
-  minDeltaIgnored: delta.ignored,
-  comparison,
-});
-
-/**
  * Scores the runs and sums up what ran.
  * @param finished - The runs and what they were made with.
- * @returns What goes into `results.json`. The pass bars apply to the last subject, which is the one under test.
+ * @returns What goes into `results.json`. The pass bars apply to the last subject, or to `barSubject`.
  */
 export function summarize(finished: Finished): Results {
-  const { subjects, selection, model } = finished;
-  const { cases, records } = finished;
+  const { subjects, selection, model, cases, records, parts } = finished;
   const labels = subjects.map(({ label }) => label);
   const harnesses = selection.chosen.map(({ harness }) => harness.id);
-  const { parts } = finished;
   const applicable = applicableIds(parts);
   const suites = scoreSuites({
     harnesses,
@@ -167,12 +125,14 @@ export function summarize(finished: Finished): Results {
     applicable,
     reps: finished.reps,
   });
-  const comparison = comparisonOf(finished, harnesses);
+  const comparisons = comparisonsOf(finished, harnesses);
+  const barSubject = finished.barSubject ?? labels.at(-1) ?? "subject";
+  const fields = deltaFields(finished.delta, comparisons, barSubject);
   return {
     schemaVersion: 1,
     meta: finished.meta,
     minScore: finished.minScore ?? null,
-    ...deltaFields(finished.delta, comparison),
+    ...fields,
     maxInvalid: finished.maxInvalid,
     subjects: subjects.map(summaryOfSubject),
     harnesses,
@@ -184,8 +144,8 @@ export function summarize(finished: Finished): Results {
     caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
     suites,
     belowBar: [
-      ...failedBars(suites, labels.at(-1) ?? "", finished.minScore),
-      ...failedDeltaBars(comparison, finished.delta.minDelta ?? null),
+      ...failedBars(suites, barSubject, finished.minScore),
+      ...failedDeltaBars(fields.comparison, finished.delta.minDelta ?? null),
     ],
     notApplicable: parts.notApplicable,
     skippedChecks: parts.skippedChecks,
