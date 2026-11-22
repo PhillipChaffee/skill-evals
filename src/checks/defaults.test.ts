@@ -61,6 +61,7 @@ const SCENARIOS: Record<string, Scenario> = {
   tool_output_lacks: [{ tool: { kind: "shell" }, pattern: "bad" }, twoOutputs],
   tool_output_size: [{ maxBytes: 1 }, twoOutputs],
   subject_unchanged: [{}, () => bareOutcome()],
+  no_writes_outside_workspace: [{}, () => bareOutcome({ canaryChanges: [] })],
   hook_fired: [{ event: "SessionStart", max: 0 }, () => bareOutcome()],
   // Only a rule text that the harness reported matches, so a default source of "hooks" would score 0.
   context_injected: [

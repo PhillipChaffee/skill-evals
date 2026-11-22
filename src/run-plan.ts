@@ -6,6 +6,7 @@ import type { StopReason } from "./gate.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
 import type { HistoryMode } from "./history-types.js";
 import type { JudgeApi } from "./judge-api.js";
+import type { SandboxCapability } from "./os-sandbox.js";
 import type { ToolCall, Loaded } from "./harnesses/shared.js";
 import type { SkillEvent } from "./skill-events.js";
 import type { LimitFields } from "./run-limits.js";
@@ -76,6 +77,10 @@ export interface RunPlan {
   keepWorkspaces?: boolean | undefined;
   /** Set, the judge asks the API and starts no harness process; `judge` is then not used. */
   judgeApi?: JudgeApi | undefined;
+  /** Set under `--sandbox`: the harness process runs in the sandbox, with the case's `network`. */
+  sandbox?: SandboxCapability | undefined;
+  /** The project root, which `no_writes_outside_workspace` watches before and after the run. */
+  projectRoot?: string | undefined;
   /** What the judge answered before, in this output directory; none for no cache. */
   cache?: Cache | undefined;
   /**
@@ -173,6 +178,11 @@ export interface RunRecord extends Usage, LimitFields {
   subjectChanges: ChangedFiles | null;
   /** What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started. */
   changedFiles: ChangedFiles;
+  /**
+   * What changed in the canaries (the operator's home dotfiles and the project root) while the harness ran, each path with
+   * how it differs, for a case with a `no_writes_outside_workspace` check. Absent for a case without one.
+   */
+  canaryChanges?: string[];
   checks: CheckResult[];
   /**
    * The case's `preconditions` with their scores. A precondition that scores 0 makes the run invalid; none counts in

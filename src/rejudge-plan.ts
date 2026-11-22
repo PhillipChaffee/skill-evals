@@ -47,7 +47,10 @@ interface Given {
  * @returns For each harness id, the cases it runs.
  */
 const appliedTo = (source: Results, given: Given): Record<string, Case[]> =>
-  partitionApplicable(given.harnesses, given.all, source.meta.historyMode).ran;
+  partitionApplicable(given.harnesses, given.all, {
+    historyMode: source.meta.historyMode,
+    sandbox: source.meta.sandbox,
+  }).ran;
 
 /**
  * Hashes what the agent would see of a case now, as the record's run did.

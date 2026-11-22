@@ -154,6 +154,11 @@
       "description": "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
       "type": "boolean"
     },
+    "sandbox": {
+      "title": "sandbox",
+      "description": "Run each harness process in an OS sandbox: bwrap on Linux, sandbox-exec on macOS. The workspace, the throwaway home and the run's own temp directory are writable and everything else is read-only; a case with `network: \"off\"` gets no network. Setup steps and `command` checks run outside it. It exits 2 when no backend is installed. A case with `network: \"off\"` or `\"provider-only\"` is not applicable without it, and `provider-only` is not applicable with it.",
+      "type": "boolean"
+    },
     "historyMode": {
       "title": "historyMode",
       "description": "How a case's history.json reaches the agent. preamble renders it as a block in front of the first message, which every harness can do. native writes it as the harness's own session and resumes it, and only a harness that declares historyNative can: where it is forced on one that cannot, a case with a history is not applicable. Each run record keeps the mode. Results of the two modes are not comparable.",

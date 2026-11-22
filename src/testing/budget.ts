@@ -79,7 +79,7 @@ export const scoreArgs = (
   out: string,
   ...more: string[]
 ): string[] => [
-  ...["score", "--subject", "none", "--reps", "1"],
+  ...["score", "--subject", "none", "--reps", "1", "--yes"],
   ...["--cases", path.join(box.root, "suite")],
   ...["--out", path.join(box.root, out)],
   ...more,
@@ -97,7 +97,7 @@ export const resumeArgs = (
   out: string,
   ...more: string[]
 ): string[] => [
-  ...["score", "--subject", "none", "--reps", "1"],
+  ...["score", "--subject", "none", "--reps", "1", "--yes"],
   ...["--cases", path.join(box.root, "suite")],
   ...["--resume", path.join(box.root, out)],
   ...more,

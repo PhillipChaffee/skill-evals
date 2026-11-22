@@ -78,7 +78,7 @@ export const COMMANDS: Record<string, Command> = {
       "subject",
       "subjects",
       "bar-subject",
-      ...SUITE_FLAGS.filter((flag) => flag !== "dry-run"),
+      ...SUITE_FLAGS.filter((flag) => !["dry-run", "yes"].includes(flag)),
       ...COMPARE_FLAGS,
     ],
   },
@@ -161,6 +161,7 @@ export const COMMANDS: Record<string, Command> = {
       "not-tag",
       "heldout",
       "targets",
+      "show-prompts",
     ],
   },
 };

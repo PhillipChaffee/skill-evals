@@ -202,6 +202,7 @@ export async function metaOfCommand(
     isolated: modesOf(context.options).isolated,
     lenient: modesOf(context.options).lenient,
     historyMode: context.historyMode,
+    sandbox: context.sandbox,
     judge: {
       via: context.judgeApi ? "api" : "harness",
       harness: context.judgeApi

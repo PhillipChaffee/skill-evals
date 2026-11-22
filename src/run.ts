@@ -23,7 +23,6 @@ import { startupRecord } from "./startup.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
-import { relativeToHome } from "./rules-install.js";
 import { fileState } from "./run-files.js";
 import { keptArchive, stageKept } from "./run-archive.js";
 import { seenFields } from "./run-seen.js";
@@ -31,6 +30,7 @@ import { flattened } from "./case-checks.js";
 import { slicesOf } from "./turn-outcome.js";
 import { failedCalls } from "./transcript.js";
 import { writeStreams } from "./run-streams.js";
+import { confinementOf, extrasOf } from "./run-confine.js";
 
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
 export type { RunRecord } from "./run-plan.js";
@@ -237,21 +237,6 @@ export function assemble(
 }
 
 /**
- * Takes what the session did with the subject's rules.
- * @param ran - What the session produced.
- * @returns The record's `rules`; nothing when the subject names none.
- */
-const rulesOf = (ran: SessionResult): Pick<RunRecord, "rules"> =>
-  ran.rulesInstalled
-    ? {
-        rules: {
-          installed: ran.rulesInstalled,
-          reportedLoaded: relativeToHome(ran.home, ran.parsed.loaded.rules),
-        },
-      }
-    : {};
-
-/**
  * Takes what a session knows of the turns of its case.
  * @param ran - What the session produced.
  * @returns Each turn's record and workspace changes; null for a case with one prompt.
@@ -297,7 +282,7 @@ async function record(
     transcriptFile: transcript.relative,
     ...seenFields(plan),
     ...turned,
-    ...rulesOf(ran),
+    ...extrasOf(ran),
     askedUser: parsed.askedUser ?? null,
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
@@ -375,6 +360,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         withhold: withheld(plan),
         pass: plan.pass,
         keepSeed: plan.keepWorkspaces,
+        ...confinementOf(plan),
       },
       async (ran) => {
         const made = await record(plan, ran, copy);

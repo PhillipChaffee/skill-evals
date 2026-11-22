@@ -65,6 +65,8 @@ export function inputHash(
         historyMode: run.historyMode ?? null,
       }),
       ...(caseDef.sessions && { sessions: caseDef.sessions }),
+      // Only a case that sets `network` has the key, so that the hash of any other case stays what it was.
+      ...(caseDef.network !== undefined && { network: caseDef.network }),
       files: seenFiles(caseDef),
       setup: caseDef.setup,
       harness: run.harness,

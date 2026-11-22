@@ -15,6 +15,7 @@ export type Options = Omit<
     /** `--subjects name=spec,...`, as typed. */
     subjects?: string;
     targets?: boolean;
+    showPrompts?: boolean;
     dryRun?: boolean;
     strict?: boolean;
     kind?: string;

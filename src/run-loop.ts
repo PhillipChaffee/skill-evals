@@ -7,6 +7,7 @@ import { createGate } from "./gate.js";
 import type { Located } from "./harnesses/index.js";
 import type { HistoryMode } from "./history-types.js";
 import type { JudgeApi } from "./judge-api.js";
+import type { SandboxCapability } from "./os-sandbox.js";
 import { runKey } from "./run-key.js";
 import type { Progress } from "./progress.js";
 import { etaOf } from "./progress.js";
@@ -45,6 +46,10 @@ export interface PlanBase {
   jobs: number;
   /** The retries and the cost and time limits of the command. */
   limits: Limits;
+  /** What the machine's sandbox can enforce; null or absent without `--sandbox`. */
+  sandbox?: SandboxCapability | null | undefined;
+  /** The project root, for the `no_writes_outside_workspace` check; absent: the check watches no project. */
+  projectRoot?: string | undefined;
 }
 
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */
@@ -117,6 +122,8 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       keepWorkspaces: plan.keepWorkspaces,
       outDir: plan.outDir,
       judgeApi: plan.judgeApi ?? undefined,
+      sandbox: plan.sandbox ?? undefined,
+      projectRoot: plan.projectRoot,
     };
     return { subject, run, key: runKey(run) };
   });

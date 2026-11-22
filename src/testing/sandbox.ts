@@ -115,6 +115,22 @@ export interface Sandbox {
 }
 
 /**
+ * Answers the question about an unfamiliar cases directory the way a CI job does, so that a test that runs the agent
+ * does not stop at it. Set `NEEDS_APPROVAL` in the environment of the call to see the command ask instead.
+ * @param args - The command line.
+ * @param extra - The extra environment of the call.
+ * @returns The command line, with `--yes` added to a command that runs the agent.
+ */
+function approved(args: string[], extra: Record<string, string>): string[] {
+  const runs = ["run", "score", "calibrate"].includes(args[0] ?? "");
+  return runs &&
+    extra["NEEDS_APPROVAL"] === undefined &&
+    !args.includes("--yes")
+    ? [...args, "--yes"]
+    : args;
+}
+
+/**
  * Lets a test score again into the same `--out`: it removes `results.jsonl` first, as a user who removed it would. Set
  * `KEEP_RUNS` in the environment of the call to see the command refuse instead.
  * @param args - The command line.
@@ -190,13 +206,15 @@ export function sandbox(): Sandbox {
   const env = {
     PATH: tools,
     HOME: root,
+    // Outside the root, which a run copies as a subject. No test reads or writes the real state directory.
+    SKILL_EVALS_STATE_DIR: path.join(tools, "state"),
     SKILL_EVALS_BIN_CLAUDE_CODE: launcher,
     ...LAUNCHED_BY_NPX,
   };
   const cli: Sandbox["cli"] = async (args, extra = {}, cwd = root) => {
     startOver(args, cwd, extra);
     const setting = { env: { ...env, ...extra }, cwd };
-    const ran = await asProcess(setting, () => main(args));
+    const ran = await asProcess(setting, () => main(approved(args, extra)));
     return { status: ran.value, stdout: ran.stdout, stderr: ran.stderr };
   };
   return { root, write, cli, env, pi, started, versions };

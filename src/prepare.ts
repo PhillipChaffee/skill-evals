@@ -24,6 +24,8 @@ import type { Located } from "./harnesses/index.js";
 import type { HistoryMode } from "./history-types.js";
 import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
+import type { SandboxCapability } from "./os-sandbox.js";
+import { requireSandbox } from "./os-sandbox.js";
 import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
 import type { Config, Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
@@ -69,6 +71,10 @@ export interface Context {
   jobs: number;
   /** The retries and the cost and time limits. */
   limits: Limits;
+  /** What the machine's sandbox can enforce, worked out once; null without `--sandbox`. */
+  sandbox: SandboxCapability | null;
+  /** The project root, which the `no_writes_outside_workspace` check watches. */
+  projectRoot: string;
   /** The directory of the earlier command to continue; undefined for a fresh run. */
   resumed: string | undefined;
   cwd: string;
@@ -110,9 +116,10 @@ function subjectsNamed(given: {
 /**
  * Reads the options that size and shape the runs, and checks the ones that need a tool on the machine.
  * @param options - The options after the config file was applied.
- * @returns The reps, the jobs, the share of runs that may be invalid, and the history mode.
- * @throws {UsageError} For a value that no run could use, a report format that does not exist, or `--keep-workspaces`
- *   without `tar`.
+ * @returns The reps, the jobs, the share of runs that may be invalid, the history mode, and what the sandbox can
+ *   enforce (null without `--sandbox`).
+ * @throws {UsageError} For a value that no run could use, a report format that does not exist, `--keep-workspaces`
+ *   without `tar`, or `--sandbox` on a machine with no sandbox backend.
  */
 function settingsOf(options: Context["options"]) {
   const reps = requireUsable(options);
@@ -121,8 +128,20 @@ function settingsOf(options: Context["options"]) {
   const historyMode = requireHistoryMode(options);
   reportFormats(options);
   if (options.keepWorkspaces) requireTar();
-  return { reps, jobs, maxInvalid, historyMode };
+  const sandbox = options.sandbox ? requireSandbox() : null;
+  return { reps, jobs, maxInvalid, historyMode, sandbox };
 }
+
+/**
+ * Loads the cases the command runs.
+ * @param options - The options after the config file was applied.
+ * @param same - True for a calibration, which measures noise and holds nothing to a bar, so no bar of a case reaches it.
+ * @returns The selected cases.
+ */
+const loaded = (options: Context["options"], same: boolean): Case[] =>
+  casesOf(options).map((one) =>
+    same ? { ...one, minScore: undefined, minDelta: undefined } : one,
+  );
 
 /**
  * Settles everything that can be wrong with a command line before any harness starts or any file is written.
@@ -149,17 +168,14 @@ export function prepare(
   const { pairs, barSubject } = subjectsNamed({ specs, names, wanted });
   const project = findProject(cwd);
   const options = withConfig(project, rest);
-  const { reps, jobs, maxInvalid, historyMode } = settingsOf(options);
+  const settings = settingsOf(options);
   const resumed = resumeDir(options, cwd);
   if (look.inspect !== true) requireUsableOut(resumed, options.outDir, cwd);
   const selection = selectHarnesses(options.harness);
   const judgeHarness = judgeHarnessOf(options);
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
   const same = given.sameSubject ?? false;
-  // A calibration measures noise and holds nothing to a bar, so no bar of a case reaches it.
-  const cases = casesOf(options).map((one) =>
-    same ? { ...one, minScore: undefined, minDelta: undefined } : one,
-  );
+  const cases = loaded(options, same);
   const delta = requireDeltaSetup(options, { subjects: pairs.length, same });
   requireSubjectsFit({ names, pairs, barSubject, delta, cases });
   const { judgeApi, judgeModel } = judgeSetup(cases, options);
@@ -182,15 +198,13 @@ export function prepare(
     delta,
     shared: same,
     barSubject,
-    maxInvalid,
-    historyMode,
-    reps,
-    jobs,
+    ...settings,
     limits,
+    projectRoot: project.root,
     resumed,
     cwd,
     cases,
-    parts: partitionApplicable(selection.chosen, cases, historyMode),
+    parts: partitionApplicable(selection.chosen, cases, settings),
   };
   return { context, project, pairs, named: names !== undefined };
 }
@@ -291,4 +305,6 @@ export const basePlan = (
   outDir,
   jobs: context.jobs,
   limits: context.limits,
+  sandbox: context.sandbox,
+  projectRoot: context.projectRoot,
 });

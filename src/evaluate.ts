@@ -80,6 +80,13 @@ export interface EvaluateOptions extends SelectionOptions {
   lenient?: boolean | undefined;
   /** Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false. */
   isolated?: boolean | undefined;
+  /** Run the harness process in an OS sandbox: the workspace, the throwaway home and the run's temp directory writable, everything else read-only. A usage error when the machine has no backend. Default: false. */
+  sandbox?: boolean | undefined;
+  /** `--yes`: run a cases directory that was not approved, without asking. `evaluate` itself never asks; the command line does, through `approve`. */
+  yes?: boolean | undefined;
+  /** Where the cases directory is asked about before a run. Called once, after the options are checked and before any harness starts; a rejection ends the command. `--yes` is handled by the caller. */
+  approve?:
+    ((what: { casesDir: string; count: number }) => Promise<void>) | undefined;
   /** How a case's `history.json` reaches the agent: "native" or "preamble". A usage error for any other word. Default: each harness's own, which is "preamble". */
   historyMode?: string | undefined;
   /** Archive each run's workspace, seed, remotes and home, less the harness's login files, as `<run>.workspace.tar` in the output directory. A usage error without `tar` on `PATH`. Default: false. */
@@ -344,8 +351,12 @@ async function runSuite(
  */
 export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const began = Date.now();
-  const { onRun, onFinal, ...rest } = given;
+  const { onRun, onFinal, approve, ...rest } = given;
   const prepared = prepare(rest);
+  await approve?.({
+    casesDir: prepared.context.options.cases,
+    count: prepared.context.cases.length,
+  });
   const subjects: Subject[] = [];
   try {
     resolveAll(prepared, subjects);

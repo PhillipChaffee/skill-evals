@@ -10,10 +10,13 @@ import type {
 } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import type { RulesFile } from "./harnesses/rules.js";
+import type { CanarySpec } from "./canaries.js";
 import type { Seeded } from "./history-plant.js";
 import { withPreamble } from "./history.js";
 import type { History, HistoryMode } from "./history-types.js";
 import { watchDirs } from "./isolate.js";
+import type { Confinement } from "./os-sandbox.js";
+import { confine } from "./os-sandbox.js";
 import { messageOf } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
@@ -73,6 +76,10 @@ export interface SessionInput {
   rules?: RulesFile[] | null | undefined;
   /** The case's mock MCP servers; absent for a case with no `mcp/`. */
   mcp?: McpSource | undefined;
+  /** Run the harness process in the sandbox. The session adds `tmp`. Setup steps and checks run outside it. */
+  sandbox?: Confinement | undefined;
+  /** What `no_writes_outside_workspace` watches before and after the harness runs; absent for a case without that check. */
+  canaries?: CanarySpec | undefined;
   /** Take the seed copy of the workspace even when the case has no `command` check, so that the run can be archived. */
   keepSeed?: boolean | undefined;
 }
@@ -124,6 +131,8 @@ export interface SessionResult {
   mcpServers: string[];
   /** What the mock servers logged, as the log file holds it (one JSON object per line); null for a case with no `mcp/`. */
   mcpLog: string | null;
+  /** What changed in the canaries while the harness ran, each path with how it differs; null when none were watched. */
+  canaryChanges: string[] | null;
   /** Why the mock log cannot be trusted (it disagrees with the stream); empty when it can, and for a case with no servers. */
   mcpProblems: string[];
 }
@@ -346,9 +355,14 @@ export async function attempt(
   const environment = environmentOf(session, input.home, invocation.env);
   const started = Date.now();
   const watch = turnWatch(session.harness, session.maxTurns);
-  const result = await exec(session.bin, invocation.args, {
+  const inside = confine(
+    session.sandbox,
+    { bin: session.bin, args: invocation.args },
+    { workspace: input.workspace, home: input.home, mcp: input.mcpDir },
+  );
+  const result = await exec(inside.bin, inside.args, {
     cwd: input.workspace,
-    env: environment(session.env ?? {}),
+    env: environment({ ...session.env, ...inside.env }),
     timeoutSeconds: session.timeoutSeconds,
     stdin: invocation.stdin,
     // Whatever the agent left running goes with it, so a background process cannot hold the run until its time limit.

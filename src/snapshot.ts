@@ -61,15 +61,17 @@ function hashOf(file: string, entry: fs.Dirent): string {
  * Hashes every file and link under a directory. It never follows a link.
  * @param dir - The directory.
  * @param skip - Tells a relative posix path that is left out; a directory that it skips is left out whole.
+ * @param limit - The most files to hash; what comes after them in the walk is left out. Default: no limit.
  * @returns The snapshot. A directory that cannot be listed is one entry of its own, hashed as "unlistable".
  */
 export function snapshot(
   dir: string,
   skip: (relative: string) => boolean = () => false,
+  limit = Infinity,
 ): Snapshot {
   const taken: Snapshot = new Map();
   walkTree(dir, {
-    skip,
+    skip: (relative) => taken.size >= limit || skip(relative),
     unreadable: (relative) => {
       if (relative) taken.set(relative, UNLISTABLE);
     },

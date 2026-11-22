@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { watchCanaries } from "./canaries.js";
 import { tempDir } from "./scope.js";
 import type { RunEnd } from "./session-end.js";
 import { endOf } from "./session-end.js";
@@ -126,6 +127,7 @@ interface Made {
   prepared: PreparedRun | null;
   graderDir: string | null;
   rules: RulesInstalled | null;
+  canaryChanges: string[] | null;
 }
 
 /**
@@ -161,22 +163,29 @@ function resultOf(run: SessionInput, made: Made): SessionResult {
     mcpServers: run.mcp?.servers ?? [],
     mcpLog: made.read.mcpLog,
     mcpProblems: made.read.mcpProblems,
+    canaryChanges: made.canaryChanges,
   };
 }
 
 /**
  * Runs one prompt, or the turns of a case, in one harness, in a fresh home and workspace that are removed afterwards.
- * @param run - The harness, the prompt or turns, and what to load.
+ * @param input - The harness, the prompt or turns, and what to load.
  * @param use - Reads the result while the workspace still exists.
  * @returns What `use` returns.
  */
 export async function session<T>(
-  run: SessionInput,
+  input: SessionInput,
   use: (result: SessionResult) => T | Promise<T>,
 ): Promise<T> {
-  const { harness } = run;
+  const { harness } = input;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
+  // Under the sandbox the harness gets a temp directory of its own, the only one it may write to besides the two above.
+  const tmp = input.sandbox ? tempDir("tmp-") : null;
+  const run: SessionInput =
+    input.sandbox && tmp
+      ? { ...input, sandbox: { ...input.sandbox, tmp: tmp.dir } }
+      : input;
   let prepared: PreparedRun | null = null;
   let mcp: McpStarted | null = null;
   try {
@@ -202,20 +211,23 @@ export async function session<T>(
         : null;
     const failure =
       setupFailure ?? seeded.failure ?? rules?.failure ?? mcp?.failure ?? null;
+    const watched = run.canaries ? watchCanaries(run.canaries) : null;
     const done = run.turns
       ? await runTurns(run, { dirs, seed, failure, seeded })
       : await single(run, { dirs, failure, seeded });
+    const canaryChanges = watched?.() ?? null;
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
     const graderDir = prepared?.copies?.copyGrader() ?? null;
     const read = withMockLog(harness, done.end.parsed, mcp);
     return await use(
       resultOf(run, {
         ...{ seeded, done, read, dirs, seed },
-        ...{ prepared, graderDir, rules },
+        ...{ prepared, graderDir, rules, canaryChanges },
       }),
     );
   } finally {
     mcp?.staged.dispose();
+    tmp?.dispose();
     prepared?.dispose();
     home.dispose();
     workspace.dispose();

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { requireApproved } from "../approval.js";
 import type { Evaluation, EvaluateOptions } from "../evaluate.js";
 import { evaluate } from "../evaluate.js";
 import type { Progress } from "../progress.js";
@@ -59,6 +60,8 @@ export async function execute(
   const evaluation = await evaluate({
     ...given,
     onRun,
+    // Before any harness starts: the prompts of a directory this machine has not seen run with full permissions.
+    approve: (what) => requireApproved(what, { yes: given.yes }),
     // Before summary.json, so that a report that cannot be written is an error that the summary says.
     onFinal: (done) => emitReports(done, formats),
   });

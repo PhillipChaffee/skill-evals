@@ -4,6 +4,7 @@ import fs from "node:fs";
 import type { Case } from "./cases.js";
 import type { Located } from "./harnesses/index.js";
 import type { HistoryMode } from "./history-types.js";
+import type { SandboxCapability } from "./os-sandbox.js";
 import { caseHash, toolVersion } from "./run-key.js";
 import type { Subject } from "./subject.js";
 
@@ -45,6 +46,8 @@ export interface RunMeta {
   lenient?: boolean;
   /** The `--history-mode` of the command. Absent when it was not set, and from earlier results. */
   historyMode?: HistoryMode;
+  /** What the sandbox of `--sandbox` could enforce on the machine. Absent when the option was off, and from earlier results. */
+  sandbox?: SandboxCapability;
   /**
    * How the judged checks were scored: through the API or a harness session, which harness (null: the harness under
    * test), and which model. Absent from earlier results, which say it in `results.json`'s `judge` text.
@@ -146,6 +149,8 @@ interface MetaInput {
   lenient: boolean;
   /** `--history-mode`; undefined when it was not set. */
   historyMode: HistoryMode | undefined;
+  /** The capability `--sandbox` found; null when the option was off. */
+  sandbox: SandboxCapability | null;
   /** How the judged checks are scored. */
   judge: NonNullable<RunMeta["judge"]>;
 }
@@ -180,5 +185,6 @@ export const runMetaOf = (given: MetaInput): RunMeta => ({
   ...(given.historyMode === undefined
     ? {}
     : { historyMode: given.historyMode }),
+  ...(given.sandbox && { sandbox: given.sandbox }),
   judge: given.judge,
 });

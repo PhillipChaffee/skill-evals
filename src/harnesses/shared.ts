@@ -218,6 +218,12 @@ export interface Harness extends HistoryAdapter {
   bin: string;
   /** Login files to copy into the throwaway home, relative to the user's home. */
   authFiles: string[];
+  /**
+   * The paths under the operator's real home that hold the harness's own state, which a run must never change; the
+   * `no_writes_outside_workspace` check hashes them before and after. Absent: the adapter names none.
+   * @returns Paths relative to the home, such as `.claude`.
+   */
+  canaries?: () => string[];
   /** Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. */
   authEnv: string[];
   /** What the adapter can observe or do, each proven by a parser test on a stream. A case that needs more is not applicable. */

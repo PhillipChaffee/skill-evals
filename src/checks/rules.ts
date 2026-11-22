@@ -95,6 +95,8 @@ export interface Outcome {
   changed: ChangedFiles;
   /** The directories of the workspace that could not be listed, before the run or after it. */
   unlisted: string[];
+  /** What changed in the canaries while the harness ran; null or absent when they were not watched. */
+  canaryChanges?: string[] | null;
   /** The run's throwaway home, for a check with `root: "home"`. */
   home: string;
   /** The home just before the harness's prompt ran: auth files and placed skills are in it, so they never read as the agent's. */

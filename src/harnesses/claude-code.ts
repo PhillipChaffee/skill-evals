@@ -160,6 +160,8 @@ const claudeCode: Harness = {
   // Claude Code's Skill tool takes `skill`, as `plugin:skill` for a plugin's skill.
   skillOf: (call) => stringArg(call, ["skill"]),
   authFiles: [".claude/.credentials.json"],
+  // Its settings, history and login in the operator's real home; a run works in a throwaway one.
+  canaries: () => [".claude", ".claude.json"],
   authEnv: ANTHROPIC_ENV,
   capabilities: new Set([
     "subagents",

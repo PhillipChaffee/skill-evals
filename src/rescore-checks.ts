@@ -2,6 +2,7 @@ import { matchChecks } from "./check-match.js";
 import type { Check } from "./checks/index.js";
 import { COMMAND_CHECKS } from "./checks/command.js";
 import { FILE_CHECKS } from "./checks/files.js";
+import { WRITES_CHECK } from "./run-confine.js";
 import type { CheckResult } from "./run-plan.js";
 
 /** Why a check of a stored run keeps its old score, or has none. */
@@ -15,6 +16,7 @@ export const NO_ARCHIVE = "not re-scored: no workspace archive";
 const needsFiles = (check: Check): boolean =>
   Object.hasOwn(FILE_CHECKS, check.type) ||
   Object.hasOwn(COMMAND_CHECKS, check.type) ||
+  check.type === WRITES_CHECK ||
   (check.sees?.includes("files") ?? false);
 
 /** What to do with each check of the current case for a run that has no archive. */

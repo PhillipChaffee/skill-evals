@@ -157,7 +157,7 @@ function locate(
  * @returns The commands of the script when the command is a shell given a `-c` script (which may nest), else the
  *   command itself.
  */
-function unwrap(words: string[], home: string): string[][] {
+export function unwrap(words: string[], home: string): string[][] {
   const start = words.findIndex((word) => !ENV_ASSIGNMENT.test(word));
   const flag = words.findIndex(
     (word, at) => at > start && /^-[a-z]*c[a-z]*$/.test(word),

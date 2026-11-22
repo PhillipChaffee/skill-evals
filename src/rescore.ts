@@ -105,6 +105,17 @@ function unpacked(archive: string): Unpacked {
 }
 
 /**
+ * Rebuilds what the `subject_unchanged` check observes.
+ * @param record - The stored run.
+ * @returns No directory, the paths the record says changed, and whether the copy could be watched.
+ */
+const subjectOf = (record: RunRecord): Outcome["subject"] => ({
+  dir: null,
+  mutated: record.subjectChanges ? allChanged(record.subjectChanges) : [],
+  observed: record.subjectChanges !== null,
+});
+
+/**
  * Rebuilds what the checks of a run observe.
  * @param record - The stored run.
  * @param parts - The transcript, the unpacked archive (null without one) and the grader copy.
@@ -157,11 +168,8 @@ function outcomeOf(
     loaded: record.loaded,
     legacySkillLoads: context.lenient,
     ...state,
-    subject: {
-      dir: null,
-      mutated: record.subjectChanges ? allChanged(record.subjectChanges) : [],
-      observed: record.subjectChanges !== null,
-    },
+    canaryChanges: record.canaryChanges ?? null,
+    subject: subjectOf(record),
     command: commandContext(
       {
         workspace: state.workspace,

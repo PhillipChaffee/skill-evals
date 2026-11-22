@@ -7,6 +7,7 @@ import { CHECKS, describeCheck } from "./checks/index.js";
 import type { Harness } from "./harnesses/shared.js";
 import { historyNeeds } from "./history-needs.js";
 import type { HistoryMode } from "./history-types.js";
+import type { SandboxCapability } from "./os-sandbox.js";
 import { UsageError } from "./scope.js";
 
 /** Whether a harness can run a case. Decided before any run, from the adapter's declared capabilities. */
@@ -146,23 +147,36 @@ export const applicability = (
 ): Applicability => applicabilityUnder(harness, caseDef, { host });
 
 /**
- * Decides whether a harness can run a case.
- * @param harness - The adapter, which declares what it can observe or do.
- * @param caseDef - The case, with what it requires and what its checks imply.
- * @param where - What else decides it.
- * @param where.host - The host capabilities that are present, from `hostCapabilities`.
- * @param where.forced - `--history-mode`; undefined to take the adapter's own mode, which is `preamble` unless it says so.
- * @returns Applicable, with the checks to drop on this harness; or not applicable, with what is missing and why.
- *   The case is not applicable when it lists other harnesses, when the case or a check that does not say
- *   `ifUnsupported: "skip"` needs something missing, when its history or sessions need what the harness or the mode
- *   lacks (`history`, `historyNative`, `sessionStore`), or when every check would be skipped.
+ * Tells why a case's network policy cannot be kept.
+ * @param caseDef - The case whose `network` is judged.
+ * @param sandbox - What `--sandbox` can enforce on this machine; null or absent without `--sandbox`.
+ * @returns The reason the case is not applicable; null for a case whose network is open or that the sandbox can keep.
  */
-export function applicabilityUnder(
+function networkReason(
+  caseDef: Case,
+  sandbox: SandboxCapability | null | undefined,
+): string | null {
+  const wanted = caseDef.network ?? "open";
+  if (wanted === "open") return null;
+  if (!sandbox) return `network ${wanted} needs --sandbox`;
+  return sandbox.network.includes(wanted)
+    ? null
+    : `the sandbox cannot enforce ${wanted}`;
+}
+
+/**
+ * Tells whether the case is closed to a harness before its capabilities are looked at: it names other harnesses, or its
+ * network policy cannot be kept.
+ * @param harness - The adapter.
+ * @param caseDef - The case, which may name harnesses and a network policy.
+ * @param sandbox - What `--sandbox` can enforce; absent or null without `--sandbox`.
+ * @returns The not-applicable verdict; null when the case is open to the harness.
+ */
+function closed(
   harness: Harness,
   caseDef: Case,
-  where: { host: Host; forced?: HistoryMode | undefined },
-): Applicability {
-  const { host, forced } = where;
+  sandbox: SandboxCapability | null | undefined,
+): Applicability | null {
   if (caseDef.harnesses && !caseDef.harnesses.includes(harness.id)) {
     return {
       applicable: false,
@@ -170,6 +184,38 @@ export function applicabilityUnder(
       reason: caseDef.note ?? "the case names other harnesses",
     };
   }
+  const unkept = networkReason(caseDef, sandbox);
+  return unkept === null
+    ? null
+    : { applicable: false, missing: ["sandbox"], reason: unkept };
+}
+
+/**
+ * Decides whether a harness can run a case.
+ * @param harness - The adapter, which declares what it can observe or do.
+ * @param caseDef - The case, with what it requires and what its checks imply.
+ * @param where - What else decides it.
+ * @param where.host - The host capabilities that are present, from `hostCapabilities`.
+ * @param where.sandbox - What `--sandbox` can enforce; absent or null without `--sandbox`.
+ * @param where.forced - `--history-mode`; undefined to take the adapter's own mode, which is `preamble` unless it says so.
+ * @returns Applicable, with the checks to drop on this harness; or not applicable, with what is missing and why.
+ *   The case is not applicable when it lists other harnesses, when its `network` is not open and the sandbox cannot keep
+ *   it, when the case or a check that does not say `ifUnsupported: "skip"` needs something missing, when its history or
+ *   sessions need what the harness or the mode lacks (`history`, `historyNative`, `sessionStore`), or when every check
+ *   would be skipped.
+ */
+export function applicabilityUnder(
+  harness: Harness,
+  caseDef: Case,
+  where: {
+    host: Host;
+    forced?: HistoryMode | undefined;
+    sandbox?: SandboxCapability | null | undefined;
+  },
+): Applicability {
+  const { host, forced } = where;
+  const shut = closed(harness, caseDef, where.sandbox);
+  if (shut !== null) return shut;
   const seeded = historyNeeds(caseDef, { harness, forced });
   const missing = new Set<Need>(
     lacking(harness, host, [
@@ -242,13 +288,18 @@ export interface Partition {
  * @param cases - Every loaded case.
  * @param where - The host capabilities that are present, and `--history-mode` when it is set.
  * @param where.host - The host capabilities that are present.
+ * @param where.sandbox - What `--sandbox` can enforce; absent or null without it.
  * @param where.forced - The forced history mode; undefined for each adapter's own.
  * @returns What each harness runs, the pairs that are not applicable, and the checks that are skipped.
  */
 function partition(
   harnesses: Harness[],
   cases: Case[],
-  where: { host: Host; forced?: HistoryMode | undefined },
+  where: {
+    host: Host;
+    forced?: HistoryMode | undefined;
+    sandbox?: SandboxCapability | null | undefined;
+  },
 ): Partition {
   const result: Partition = { ran: {}, notApplicable: [], skippedChecks: [] };
   for (const harness of harnesses) {
@@ -294,19 +345,28 @@ function partition(
  * Decides, once for the command, which cases each harness runs.
  * @param harnesses - The harnesses that will run, each with the executable to spawn.
  * @param cases - Every loaded case.
- * @param forced - `--history-mode` or the config's `historyMode`; undefined for each adapter's own mode.
+ * @param where - What else decides it.
+ * @param where.historyMode - `--history-mode` or the config's `historyMode`; undefined for each adapter's own mode.
+ * @param where.sandbox - What `--sandbox` can enforce on this machine; absent or null when the option is off.
  * @returns What each harness runs and what it does not.
  * @throws {UsageError} When no case applies to any of the harnesses.
  */
 export function partitionApplicable(
   harnesses: { harness: Harness }[],
   cases: Case[],
-  forced?: HistoryMode,
+  where: {
+    historyMode?: HistoryMode | undefined;
+    sandbox?: SandboxCapability | null | undefined;
+  } = {},
 ): Partition {
   const parts = partition(
     harnesses.map((located) => located.harness),
     cases,
-    { host: hostCapabilities(cases), forced },
+    {
+      host: hostCapabilities(cases),
+      forced: where.historyMode,
+      sandbox: where.sandbox,
+    },
   );
   if (Object.values(parts.ran).every((ran) => ran.length === 0)) {
     throw new UsageError(

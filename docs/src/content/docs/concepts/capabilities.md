@@ -78,7 +78,7 @@ Each harness's suite score is over its own applicable cases, and it is printed a
 | `skillListing`  | The harness lists the skills it loaded at startup, so a run whose subject is missing from the list is invalid.                                                                           |
 | `loadedReport`  | The harness reports the plugins and skills it loaded at startup, which `--isolated` and the subject-loaded test read.                                                                    |
 | `isolated`      | The harness starts with nothing loaded but what the run gives it and proves that from its report, so `--isolated` can promise it. It needs `loadedReport` too.                           |
-| `sandbox`       | The harness can run its tools in a sandbox that denies the network and the files outside the workspace.                                                                                  |
+| `sandbox`       | The machine has an OS sandbox backend that `--sandbox` runs the harness in; found once when a command starts.                                                                            |
 
 ## What each harness declares
 

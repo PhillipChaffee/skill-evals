@@ -47,7 +47,7 @@ export const CAPABILITIES = {
   isolated:
     "The harness starts with nothing loaded but what the run gives it and proves that from its report, so `--isolated` can promise it. It needs `loadedReport` too.",
   sandbox:
-    "The harness can run its tools in a sandbox that denies the network and the files outside the workspace.",
+    "The machine has an OS sandbox backend that `--sandbox` runs the harness in; found once when a command starts.",
 } as const satisfies Record<string, string>;
 
 /** The name of something a harness can observe or do. */

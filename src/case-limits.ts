@@ -1,5 +1,7 @@
 import type { FieldDef } from "./checks/fields.js";
 import { HARNESSES } from "./harnesses/index.js";
+import { NETWORKS } from "./os-sandbox.js";
+import type { Network } from "./os-sandbox.js";
 import type { OnTimeout } from "./session-end.js";
 import { UsageError } from "./scope.js";
 
@@ -28,14 +30,20 @@ export const LIMIT_KEYS: Record<string, FieldDef> = {
     meaning:
       'What a run that hits `timeoutSeconds` is. "invalid" makes it an invalid run, as it always was. "score" scores it on what it left, with `stoppedBy: "timeout"`, for a case where stalling is the behaviour under test. Default: "invalid".',
   },
+  network: {
+    type: "enum",
+    values: NETWORKS,
+    meaning:
+      'What the agent may reach over the network. "open" is no restriction. "off" and "provider-only" need `--sandbox`: without it the case is not applicable, and it never runs open. "off" gives the agent no network. "provider-only" would allow the model provider and nothing else, which no sandbox backend can enforce today, so under `--sandbox` the case is not applicable with the reason "the sandbox cannot enforce provider-only". Default: "open".',
+  },
 };
 
 /**
  * Reads the harnesses that a case is limited to, and what its timeout means.
  * @param read - Reads a key of the case file.
  * @param file - The case file, for the messages.
- * @returns The harness ids and the note, both absent for a case that is for every harness, `onTimeout`, and the
- *   case's `totalTimeoutSeconds` when it sets one.
+ * @returns The harness ids and the note, both absent for a case that is for every harness, `onTimeout`, the case's
+ *   `totalTimeoutSeconds` when it sets one, and its `network` when it sets one.
  * @throws {UsageError} When a harness id is unknown, or `harnesses` has no `note`.
  */
 export function limitsOf(read: Read, file: string) {
@@ -57,5 +65,6 @@ export function limitsOf(read: Read, file: string) {
   }
   const onTimeout = (read("onTimeout") as OnTimeout | undefined) ?? "invalid";
   const totalTimeoutSeconds = read("totalTimeoutSeconds") as number | undefined;
-  return { harnesses, note, onTimeout, totalTimeoutSeconds };
+  const network = read("network") as Network | undefined;
+  return { harnesses, note, onTimeout, totalTimeoutSeconds, network };
 }

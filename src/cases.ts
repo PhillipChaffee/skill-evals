@@ -17,6 +17,7 @@ import { CASE_KEYS } from "./case-keys.js";
 import { readPreconditions } from "./case-preconditions.js";
 import { layersOf } from "./case-layers.js";
 import { limitsOf } from "./case-limits.js";
+import type { Network } from "./os-sandbox.js";
 import type { OnTimeout } from "./session-end.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -55,6 +56,8 @@ export interface Case {
   totalTimeoutSeconds?: number | undefined;
   /** What a run that hits `timeoutSeconds` is: invalid (the default), or scored on what it left. */
   onTimeout?: OnTimeout | undefined;
+  /** What the agent may reach over the network; absent means open. Anything else needs `--sandbox`. */
+  network?: Network | undefined;
   /** What a harness must be able to do for the case to apply, besides what its checks imply. */
   requires: Need[];
   /** The harnesses the case is for, when it is for some only. A last resort: `note` says why. */

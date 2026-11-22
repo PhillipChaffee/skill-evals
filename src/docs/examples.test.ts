@@ -94,6 +94,7 @@ const FEATURE_EXAMPLES = [
   "preconditions",
   "requires",
   "routing",
+  "sandbox",
   "setup-git",
   "setup-home",
   "sessions",

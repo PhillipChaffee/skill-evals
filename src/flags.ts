@@ -1,5 +1,6 @@
 import { readDecimal } from "./decimal.js";
 import type { Options } from "./usage.js";
+import { SAFETY_FLAGS } from "./flags-safety.js";
 import { SUBJECT_FLAGS } from "./flags-subjects.js";
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
@@ -25,6 +26,7 @@ export interface FlagSpec {
 
 export const FLAGS = {
   ...SUBJECT_FLAGS,
+  ...SAFETY_FLAGS,
   harness: {
     value: "ids|all",
     description: "Comma-separated harness ids.",

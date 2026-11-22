@@ -6,6 +6,7 @@ import { withConfig } from "../project.js";
 import { renderCoverage } from "../report/markdown.js";
 import { coverageOf, loadSelection, selectionOf } from "../select.js";
 import type { Options } from "../usage.js";
+import { promptLines } from "./prompts.js";
 
 /**
  * Prints the harnesses in default-preference order, each with where it is installed, and the cases.
@@ -27,10 +28,10 @@ export function list(given: Options, project: Project): number {
     : null;
   const cases = chosen
     ? [
-        ...chosen.map(
-          (caseDef) =>
-            `- ${caseDef.id}: ${String(allChecks(caseDef).length)} checks`,
-        ),
+        ...chosen.flatMap((caseDef) => [
+          `- ${caseDef.id}: ${String(allChecks(caseDef).length)} checks`,
+          ...(options.showPrompts ? promptLines(caseDef) : []),
+        ]),
         "",
         `${String(chosen.length)} cases selected`,
         ...(options.targets ? ["", ...renderCoverage(coverageOf(chosen))] : []),

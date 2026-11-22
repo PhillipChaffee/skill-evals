@@ -28,6 +28,8 @@ export const SUITE_FLAGS: Flag[] = [
   "decision-timeout",
   "lenient",
   "isolated",
+  "sandbox",
+  "yes",
   "history-mode",
   "keep-workspaces",
   "out",

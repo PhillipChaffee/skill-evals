@@ -10,9 +10,11 @@ import { diffSnapshots, snapshot, unlistedIn } from "./snapshot.js";
  * @returns The file fields of an outcome: both directories, both seeds, and what changed in each.
  */
 export function fileState(
-  ran: Pick<SessionResult, "workspace" | "seed" | "home" | "homeSeed">,
+  ran: Pick<SessionResult, "workspace" | "seed" | "home" | "homeSeed"> &
+    Partial<Pick<SessionResult, "canaryChanges">>,
 ): Pick<
   Outcome,
+  | "canaryChanges"
   | "workspace"
   | "seed"
   | "changed"
@@ -29,6 +31,7 @@ export function fileState(
     ...new Set([...unlistedIn(before), ...unlistedIn(later)]),
   ];
   return {
+    canaryChanges: ran.canaryChanges ?? null,
     workspace,
     seed,
     changed: diffSnapshots(seed, after),

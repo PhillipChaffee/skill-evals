@@ -33,6 +33,7 @@ export const EXAMPLE_CONFIG: Record<
   maxJudgedWeightShare: 0.5,
   lenient: false,
   isolated: false,
+  sandbox: false,
   historyMode: "preamble",
   keepWorkspaces: false,
   env: ["AWS_ENDPOINT_URL"],

@@ -76,6 +76,7 @@ export const CONFIG_KEYS: Record<
   maxJudgedWeightShare: "number",
   lenient: "boolean",
   isolated: "boolean",
+  sandbox: "boolean",
   historyMode: "string",
   keepWorkspaces: "boolean",
   env: "string[]",
@@ -129,6 +130,8 @@ export interface Config {
   lenient?: boolean;
   /** Start every run with nothing loaded but the subject, and invalidate a run that loaded anything else. */
   isolated?: boolean;
+  /** Run the harness process in an OS sandbox. Default: false. */
+  sandbox?: boolean;
   /** How a case's `history.json` reaches the agent: "native" or "preamble". Default: each harness's own, which is "preamble". */
   historyMode?: string;
   /** Archive each run's workspace, seed, remotes and home, less the login files, next to its other files. Default: false. */

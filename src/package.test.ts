@@ -41,7 +41,12 @@ function installed() {
     spawnSync(command, args, {
       cwd: project,
       encoding: "utf8",
-      env: { ...process.env, SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness },
+      env: {
+        ...process.env,
+        SKILL_EVALS_BIN_CLAUDE_CODE: fakeHarness,
+        // Never the operator's own state directory.
+        SKILL_EVALS_STATE_DIR: path.join(root, "state"),
+      },
     });
   return { project, files: tarball.files.map((file) => file.path), run };
 }
@@ -113,6 +118,7 @@ test(
       "1",
       "--out",
       "results",
+      "--yes",
     ];
     const scored = run(bin, "score", "--subject", "none", ...flags);
     expect(scored.status, scored.stderr).toBe(0);
