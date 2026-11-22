@@ -258,10 +258,11 @@ function expand(
  * Loads one case from its directory.
  * @param found - The case's id and its directory, which holds `prompt.md`, `case.json`, and an optional `workspace/`.
  * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
+ * @param root - The cases directory.
  * @returns The case, read and checked against the tables of keys and checks: one case, or one for each of its variants.
  * @throws {UsageError} When a file is missing or does not hold a valid case.
  */
-function loadCase(found: Found, mode: Mode): Case[] {
+function loadCase(found: Found, mode: Mode, root: string): Case[] {
   const { id, dir } = found;
   const file = path.join(dir, "case.json");
   const { prompt, raw } = readFiles(found);
@@ -303,7 +304,7 @@ function loadCase(found: Found, mode: Mode): Case[] {
     ...settingsOf(read),
     workspaceDir: workspaceOf(workspaceDir, file),
     graderDir: graderOf(dir, file),
-    ...layersOf(found, read),
+    ...layersOf(found, read, root),
   };
   const variants = read("variants") as Record<string, unknown>[] | undefined;
   return expand(
@@ -351,7 +352,7 @@ export function loadWhere(
         },
       };
       try {
-        return loadCase(found, mode);
+        return loadCase(found, mode, casesDir);
       } catch (error) {
         if (!options.onError || !(error instanceof UsageError)) throw error;
         options.onError(found.id, error.message);

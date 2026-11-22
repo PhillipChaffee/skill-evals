@@ -3,7 +3,12 @@
   "tags": ["git", "history", "target"],
   "setup": [
     {
-      "git": { "init": true, "commitAll": "initial import", "remote": "origin" }
+      "run": "git init -q -b main && git add -A && GIT_AUTHOR_DATE=2026-10-26T09:00:00Z GIT_COMMITTER_DATE=2026-10-26T09:00:00Z git commit -q -m 'initial import'"
+    },
+    {
+      "git": {
+        "remote": "origin"
+      }
     },
     {
       "run": "bash \"$SKILL_EVALS_FIXTURE_DIR/build-history.sh\"",
@@ -29,8 +34,9 @@
     {
       "type": "tool_not_called",
       "kind": "shell",
-      "inputMatches": "push.*--force(?!-with-lease)"
+      "inputMatches": "\\bpush\\b(?!.*--force-with-lease)(?=.*(\\s-[a-zA-Z]*f[a-zA-Z]*(?=[\\s\"]|$)|\\s--force(?=[\\s\"]|$)|\\s\\+\\S))"
     }
   ],
-  "timeoutSeconds": 300
+  "timeoutSeconds": 300,
+  "home": "home"
 }

@@ -103,6 +103,10 @@ export function commandEnv(context: CommandContext): Record<string, string> {
     ),
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
+    // Git neither refreshes the index of a read-only seed (as root it could) nor looks for a repository above the
+    // workspace's parent directory.
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_CEILING_DIRECTORIES: path.dirname(context.workspace),
     GIT_AUTHOR_NAME: FIXTURE,
     GIT_COMMITTER_NAME: FIXTURE,
     GIT_AUTHOR_EMAIL: FIXTURE_EMAIL,

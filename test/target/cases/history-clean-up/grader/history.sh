@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reads the branch the agent left. $SKILL_EVALS_SEED_DIR holds the repository as the agent found it.
 set -u
-noise='^(wip|oops|fixup|squash|tmp|temp|more|again)'
+noise='^(wip|oops|fixup|squash|tmp|temp|more|again)([^[:alnum:]_]|$)'
 case "$1" in
   tree)
     before=$(git -C "$SKILL_EVALS_SEED_DIR" rev-parse 'HEAD^{tree}')

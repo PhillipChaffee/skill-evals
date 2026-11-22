@@ -1,0 +1,27 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "git reset --soft main && git commit -q -m \"feat: add cart totals, tax and shipping\""
+          },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "git push -f origin feature/checkout"
+          },
+          "exec": true
+        }
+      },
+      {
+        "final": "Squashed the branch."
+      }
+    ]
+  ]
+}

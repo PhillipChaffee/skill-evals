@@ -88,6 +88,7 @@ test("the command environment is the listed names and the case's own", async () 
       ...["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"],
       ...["GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"],
       ...["GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"],
+      ...["GIT_OPTIONAL_LOCKS", "GIT_CEILING_DIRECTORIES"],
     ].sort(),
   );
   expect(result.stdout).toContain(`HOME=${dirs.home}`);

@@ -112,9 +112,12 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
 }
 
 /** The rule for a name in the `env` key of a case, in words. The reference page quotes it. */
+const GIT_IDENTITY_NAMES = ["AUTHOR", "COMMITTER"].flatMap((who) =>
+  ["NAME", "EMAIL", "DATE"].map((part) => `GIT_${who}_${part}`),
+);
 const CASE_ENV_RULE =
-  "A name must start with `CASE_`, or be `TZ`, `LANG` or `LC_ALL`.";
-const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL"]);
+  "A name must start with `CASE_`, or be `TZ`, `LANG`, `LC_ALL`, or one of the git identity names `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_AUTHOR_DATE`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` and `GIT_COMMITTER_DATE`.";
+const CASE_ENV_NAMES = new Set(["TZ", "LANG", "LC_ALL", ...GIT_IDENTITY_NAMES]);
 /** The rule for a name in the `env` key of a case, as a regular expression, for the JSON Schema of the case file. */
 export const CASE_ENV_PATTERN = `^(CASE_[^=]*|${[...CASE_ENV_NAMES].join("|")})$`;
 

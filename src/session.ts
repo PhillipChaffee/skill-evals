@@ -236,7 +236,8 @@ async function attempt(
     };
   }
   const late = afterSetup(harness, input);
-  copyHome(session.layers?.homeDir ?? null, input.home);
+  const clash = copyHome(session.layers?.homeDir ?? null, input.home);
+  if (clash) return notStarted(clash, input.home);
   const homeSeed = snapshot(input.home);
   const started = Date.now();
   const result = await exec(bin, invocation.args, {

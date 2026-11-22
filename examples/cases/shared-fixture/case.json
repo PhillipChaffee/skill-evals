@@ -1,0 +1,11 @@
+{
+  "description": "Start from a fixture folder that many cases share.",
+  "tags": ["setup", "fixtures"],
+  "fixtures": ["../_shared/shop-core"],
+  "checks": [
+    { "type": "file_matches", "path": "src/cart.js", "pattern": "count" },
+    { "type": "file_unchanged", "path": "package.json" },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

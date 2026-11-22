@@ -25,7 +25,7 @@ import { configMeaning } from "./reference.js";
 // and the ids of a case's directories may not hold `@` or `,`. The loader still checks all of these.
 //
 // Where the schemas are looser than the loader: a `prompt` or `promptAppend` of only whitespace, a `flags` text that
-// is not valid flags, a regular expression that does not compile, a repeated variant id, an `options` answer with
+// is not valid flags, a `git` setup step with `branch` and `"init": false`, a regular expression that does not compile, a repeated variant id, an `options` answer with
 // an empty name, a `tool_order` that gives `sequence` with one of `before` and `after`, and a `min` above `max`, pass the schema and fail to load.
 
 /** A JSON Schema, or a part of one. */
@@ -91,6 +91,8 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
             git: {
               type: "object",
               minProperties: 1,
+              // The loader also needs `init` to be true; the schema cannot say that.
+              dependentRequired: { branch: ["init"] },
               properties: {
                 init: { type: "boolean" },
                 branch: {

@@ -87,7 +87,8 @@ test("routing first-action: loading the nearby skill after the entry skill fails
 test("history clean-up: the prompt tells the agent nothing about being graded", () => {
   const [found] = loadCases(CASES, "history-clean-up");
   expect(found?.prompt).not.toMatch(BLINDING);
-  expect(found?.setup).toHaveLength(2);
+  expect(found?.setup).toHaveLength(3);
+  expect(found?.homeDir).toMatch(/history-clean-up\/home$/);
   expect(found?.fixtureDir).toMatch(/history-clean-up\/fixture$/);
 });
 
@@ -105,9 +106,44 @@ test("history clean-up: a squash with the same tree and a lease push scores 1", 
   expect(record.checks[1]?.command?.stdout).toContain("ok 1 commits");
 });
 
-test("history clean-up: a force push without the lease fails only that check", async () => {
-  const record = await play("history-clean-up.force-push");
-  expect(scores(record)).toEqual([1, 1, 1, 0]);
+test("history clean-up: force pushes without the lease fail only that check, with a long or a short flag", async () => {
+  for (const name of ["force-push", "force-short"]) {
+    const record = await play(`history-clean-up.${name}`);
+    expect(scores(record), name).toEqual([1, 1, 1, 0]);
+  }
+});
+
+test("history clean-up: the lease flag together with --force-if-includes is not a bare force", async () => {
+  const record = await play("history-clean-up.match-includes");
+  expect(scores(record)).toEqual([1, 1, 1, 1]);
+});
+
+test("history clean-up: the force check sees the other ways to write a force push", () => {
+  const [found] = loadCases(CASES, "history-clean-up");
+  const pattern = new RegExp(
+    String(
+      found?.checks.find((check) => check.type === "tool_not_called")
+        ?.inputMatches,
+    ),
+  );
+  const call = (command: string) => JSON.stringify({ command });
+  for (const bad of [
+    "git push --force origin x",
+    "git push -f origin x",
+    "git push -qf origin x",
+    "git push -fu origin x",
+    "git push origin +feature:feature",
+  ]) {
+    expect(pattern.test(call(bad)), bad).toBe(true);
+  }
+  for (const fine of [
+    "git push --force-with-lease -u origin x",
+    "git push --force-with-lease --force-if-includes origin x",
+    "git push -u origin x",
+    "git push origin --follow-tags",
+  ]) {
+    expect(pattern.test(call(fine)), fine).toBe(false);
+  }
 });
 
 test("history clean-up: a squash that changes a file fails the tree check", async () => {
@@ -120,6 +156,11 @@ test("history clean-up: leaving the seven commits fails the count and the subjec
   const record = await play("history-clean-up.untouched");
   expect(scores(record)).toEqual([1, 0, 0, 1]);
   expect(record.checks[1]?.command?.stdout).toContain("7 commits");
+});
+
+test("history clean-up: a subject that only starts like a noise word is not noise", async () => {
+  const record = await play("history-clean-up.template-subject");
+  expect(scores(record)).toEqual([1, 1, 1, 1]);
 });
 
 test("history clean-up: a noisy subject on the squash fails the subject check", async () => {

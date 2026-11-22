@@ -6,6 +6,7 @@ import { sandbox } from "./testing/sandbox.js";
 import type { Sandbox } from "./testing/sandbox.js";
 
 const DONE = { type: "output_contains", text: "done" };
+const SHOP = "../_shared/shop";
 
 /**
  * Plants a case with these keys and files.
@@ -50,9 +51,7 @@ test("a link in a fixture, the fixture directory or home that leaves its tree is
     "../../../../secret",
     path.join(box.root, "cases/_shared/shop/escape"),
   );
-  expect(load(box, { fixtures: ["../_shared/shop"] })).toThrow(
-    /escape is a link to/,
-  );
+  expect(load(box, { fixtures: [SHOP] })).toThrow(/escape is a link to/);
   const withFixture = sandbox();
   const run = load(withFixture, {}, { "fixture/s.sh": "x" });
   fs.symlinkSync("/etc", path.join(withFixture.root, "cases/c/fixture/abs"));
@@ -136,4 +135,37 @@ test("a fixture folder that is a file, and a fixture path that is a link out of 
   expect(load(box, { fixtures: ["../_shared/out"] })).toThrow(
     /outside the cases directory/,
   );
+});
+
+test("fixtures and home refuse a folder that is, holds or sits in a case's own files", () => {
+  const files = { "grader/secret.sh": "x", "fixture/s.sh": "x", "home/a": "x" };
+  const held = /would copy a case folder, or a grader\/ or fixture\/ folder/;
+  for (const named of [".", "grader", "fixture"]) {
+    expect(load(sandbox(), { fixtures: [named] }, files), named).toThrow(held);
+  }
+  expect(load(sandbox(), { fixtures: ["../c/grader", "."] }, files)).toThrow(
+    held,
+  );
+  for (const named of ["grader", "fixture", "grader/sub", "fixture/sub"]) {
+    const box = sandbox();
+    box.write("cases/c/grader/sub/x", "x");
+    box.write("cases/c/fixture/sub/x", "x");
+    expect(load(box, { home: named }, files), named).toThrow(held);
+  }
+});
+
+test("a shared folder that holds another case is refused, and one with an ordinary tree is not", () => {
+  const box = sandbox();
+  box.write("cases/_shared/shop/package.json", "{}");
+  box.write("cases/_shared/shop/nested/other/case.json", "{}");
+  expect(load(box, { fixtures: [SHOP] })).toThrow(/would copy a case folder/);
+  const ok = sandbox();
+  ok.write("cases/_shared/shop/package.json", "{}");
+  ok.write("cases/other/prompt.md", "p");
+  ok.write("cases/other/case.json", { checks: [DONE] });
+  ok.write("cases/other/workspace/a.txt", "a");
+  const cases = load(ok, {
+    fixtures: [SHOP, "../other/workspace"],
+  })();
+  expect(cases.map((one) => one.id)).toEqual(["c", "other"]);
 });

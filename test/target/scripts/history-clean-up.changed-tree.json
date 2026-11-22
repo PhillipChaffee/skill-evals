@@ -5,7 +5,7 @@
         "call": {
           "name": "Bash",
           "input": {
-            "command": "git reset --soft main && echo \"// stray\" >> src/cart.js && git add -A && git -c user.name=a -c user.email=a@example.invalid commit -q -m \"feat: cart totals\""
+            "command": "git reset --soft main && echo \"// stray\" >> src/cart.js && git add -A && git commit -q -m \"feat: cart totals\""
           },
           "exec": true
         }

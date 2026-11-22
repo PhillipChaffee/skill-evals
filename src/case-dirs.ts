@@ -73,6 +73,38 @@ export function fixtureOf(dir: string, file: string): string | null {
   return fixture;
 }
 
+const holdsCase = (dir: string): boolean =>
+  ["case.json", "prompt.md"].some((name) =>
+    fs.existsSync(path.join(dir, name)),
+  );
+
+/**
+ * Tells whether copying a directory into a run would hand the agent a case's own files: the directory is a case
+ * folder, holds one, or is a case's `grader/` or `fixture/` folder or inside one.
+ * @param real - The real path of the directory.
+ * @returns True when it would.
+ */
+function exposesCase(real: string): boolean {
+  const inside = real
+    .split(path.sep)
+    .map(
+      (_, index, parts) => parts.slice(0, index + 1).join(path.sep) || path.sep,
+    )
+    .some(
+      (each) =>
+        ["grader", "fixture"].includes(path.basename(each)) &&
+        holdsCase(path.dirname(each)),
+    );
+  let holds = holdsCase(real);
+  walkTree(real, {
+    visit: ({ file, dirent }) => {
+      holds ||= dirent.isDirectory() && holdsCase(file);
+      return undefined;
+    },
+  });
+  return inside || holds;
+}
+
 /**
  * Finds the directory that a key of a case file names, and checks it.
  * @param key - The key, for the messages.
@@ -108,6 +140,11 @@ function directoryNamed(
     throw fail(where.outside);
   }
   if (!fs.statSync(resolved).isDirectory()) throw fail("is not a directory");
+  if (exposesCase(fs.realpathSync(resolved))) {
+    throw fail(
+      "would copy a case folder, or a grader/ or fixture/ folder, into the run",
+    );
+  }
   requireOwnLinks(resolved, where.file, named);
   return resolved;
 }

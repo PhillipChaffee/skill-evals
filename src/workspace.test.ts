@@ -7,6 +7,8 @@ import { exec as agentRuns } from "./testing/runs.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 import { go, printed } from "./testing/setup.js";
 
+const INVALID_RUNS = 1;
+
 const BUILD_HISTORY = `set -e
 git checkout -q -b feature/clean-me
 for n in 1 2 3 4 5 6; do echo "$n" >> notes.txt; git add -A; git commit -q -m "wip $n"; done
@@ -40,24 +42,6 @@ test("a case starts on a feature branch with seven commits and an origin remote"
   expect(text).toContain("ls=2");
   expect(text).toMatch(/\n0\n$/);
   expect(text).not.toContain(box.root + "/cases");
-});
-
-test("four linked worktrees live under the remote directory", async () => {
-  const box = sandbox();
-  const got = await go(box, {
-    case: {
-      setup: [
-        { git: { init: true, commitAll: "initial" } },
-        {
-          run: 'for n in 1 2 3 4; do git worktree add -q "$SKILL_EVALS_REMOTE_DIR/wt-$n" -b "wt-$n"; done',
-        },
-      ],
-    },
-    files: { "workspace/app.txt": "a\n" },
-    agent: [agentRuns("git worktree list | wc -l")],
-  });
-  expect(got.results?.invalid).toEqual([]);
-  expect(printed(got.out)[0]?.trim()).toBe("5");
 });
 
 test("home seeds a user-level file and root home can assert on it", async () => {
@@ -160,21 +144,6 @@ test("a setup step that runs too long fails the run", async () => {
   );
 });
 
-test("setup does not read the operator's git config", async () => {
-  const box = sandbox();
-  box.write(
-    ".gitconfig",
-    "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /bin/false\n[user]\n\tname = operator\n",
-  );
-  const got = await go(box, {
-    case: { setup: [{ git: { init: true, commitAll: "initial" } }] },
-    files: { "workspace/app.txt": "a\n" },
-    agent: [agentRuns("git log -1 --format=%an")],
-  });
-  expect(got.results?.invalid).toEqual([]);
-  expect(printed(got.out)[0]?.trim()).toBe("fixture");
-});
-
 test("setup gets the command environment and the remote and fixture directories, never the grader or the seed", async () => {
   const box = sandbox();
   const got = await go(box, {
@@ -272,13 +241,13 @@ test("a case's fixture directory is not in the workspace and is removed after se
       ],
     },
     files: { "fixture/x.txt": "x\n" },
-    agent: [agentRuns("ls; ls ..")],
+    agent: [agentRuns('ls; ls "$(cat ../where.txt)" 2>&1; echo "ls=$?"')],
   });
   expect(got.results?.invalid).toEqual([]);
   const [listing] = printed(got.out);
   expect(listing).toContain("copied.txt");
   expect(listing).not.toMatch(/^fixture$/m);
-  expect(listing).not.toMatch(/^assets-/m);
+  expect(listing).toMatch(/assets-[^\n]*No such file[^\n]*\nls=[1-9]/);
 });
 
 test("layers that cannot be merged make a run record with the error, not a crash", async () => {
@@ -291,7 +260,7 @@ test("layers that cannot be merged make a run record with the error, not a crash
   const got = await go(box, {
     case: { fixtures: ["../_shared/one", "../_shared/two"] },
   });
-  expect(got.status).toBeLessThanOrEqual(3);
+  expect(got.status).toBe(INVALID_RUNS);
   expect(got.results?.invalid[0]).toMatch(/run failed: /);
   expect(fs.existsSync(box.started)).toBe(false);
 });

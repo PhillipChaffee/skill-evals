@@ -1,0 +1,15 @@
+{
+  "description": "Seed a user-level file in the throwaway home and assert on it afterwards.",
+  "tags": ["setup", "home"],
+  "home": "home",
+  "checks": [
+    {
+      "type": "file_unchanged",
+      "root": "home",
+      "path": ".config/notes/settings.json"
+    },
+    { "type": "output_contains", "text": "helix" },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

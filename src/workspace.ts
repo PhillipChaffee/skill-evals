@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import type { Case } from "./cases.js";
 import type { CommandCopies } from "./command.js";
 import { commandEnv, copiesForCommands } from "./command.js";
@@ -7,6 +8,7 @@ import { tempDir } from "./scope.js";
 import { DEFAULT_STEP_SECONDS, stepCommand } from "./setup-steps.js";
 import type { Snapshot } from "./snapshot.js";
 import { snapshot } from "./snapshot.js";
+import { walkTree } from "./walk.js";
 
 /** What a case contributes to the workspace and its setup. */
 export type Layers = Pick<
@@ -41,6 +43,13 @@ export interface PreparedRun {
 const REMOTE_PREFIX = "store-";
 const FIXTURE_PREFIX = "assets-";
 const SHOWN_COMMAND_LENGTH = 40;
+// What setup commits as unless the case's `env` says otherwise: nothing in the history names the tool.
+const NEUTRAL_IDENTITY = {
+  GIT_AUTHOR_NAME: "Developer",
+  GIT_COMMITTER_NAME: "Developer",
+  GIT_AUTHOR_EMAIL: "developer@example.com",
+  GIT_COMMITTER_EMAIL: "developer@example.com",
+};
 
 /**
  * Copies a directory's content into another, keeping links as they are; a file that exists is overwritten.
@@ -74,7 +83,10 @@ async function runSteps(
       reapOnExit: true,
     });
     if (failure) {
-      const shown = command.slice(0, SHOWN_COMMAND_LENGTH);
+      const shown = command
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, SHOWN_COMMAND_LENGTH);
       return `setup failed: step ${String(index + 1)} (${shown}): ${failure}`;
     }
   }
@@ -115,6 +127,7 @@ export async function prepareRun(
       transcriptFile: null,
       remoteDir: remote.dir,
       env: {
+        ...NEUTRAL_IDENTITY,
         ...caseDef.env,
         ...(fixture && { SKILL_EVALS_FIXTURE_DIR: fixture.dir }),
       },
@@ -149,11 +162,24 @@ export async function prepareRun(
 }
 
 /**
- * Copies a case's `home` directory into the run's throwaway home, over what is there. A `home` file cannot be at the
- * path of a login file, because loading the case refuses that.
+ * Copies a case's `home` directory into the run's throwaway home. A file of it never replaces one that is there: the
+ * login files, the skills the adapter placed and what the harness's setup wrote are not the case's to change.
  * @param homeDir - The case's `home` directory; null when it has none.
  * @param home - The run's throwaway home.
+ * @returns `home/ would replace <path>` for the first file that would; null after a copy.
  */
-export function copyHome(homeDir: string | null, home: string): void {
-  if (homeDir) copyTree(homeDir, home);
+export function copyHome(homeDir: string | null, home: string): string | null {
+  if (!homeDir) return null;
+  const clashes: string[] = [];
+  walkTree(homeDir, {
+    visit: ({ relative, dirent }) => {
+      const taken = fs.existsSync(path.join(home, relative));
+      if (taken && !dirent.isDirectory()) clashes.push(relative);
+      return undefined;
+    },
+  });
+  const [clash] = clashes;
+  if (clash) return `home/ would replace ${clash}`;
+  copyTree(homeDir, home);
+  return null;
 }

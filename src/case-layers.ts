@@ -27,13 +27,16 @@ export const LAYER_KEYS: Record<string, FieldDef> = {
  * Reads the keys and folders that decide what a run starts with besides `workspace/`.
  * @param found - The case's id and its directory.
  * @param read - Reads a key of the case file; undefined for a key the file leaves out.
+ * @param root - The cases directory.
  * @returns The setup steps, the shared fixture directories, the case's `fixture/` and its home directory.
  */
-export function layersOf(found: Found, read: (key: string) => unknown) {
-  const { id, dir } = found;
+export function layersOf(
+  found: Found,
+  read: (key: string) => unknown,
+  root: string,
+) {
+  const { dir } = found;
   const file = path.join(dir, "case.json");
-  // The id is the path below the cases directory, so one `..` for each part of it leads back to that directory.
-  const root = path.resolve(dir, ...id.split("/").map(() => ".."));
   return {
     setup: (read("setup") as SetupStep[] | undefined) ?? [],
     fixtureDirs: fixturesOf(
