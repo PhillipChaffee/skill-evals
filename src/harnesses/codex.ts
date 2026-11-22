@@ -247,6 +247,7 @@ const codex: Harness = {
       costUsd: null,
       loaded: NOT_REPORTED,
       error: failed ? failed.error?.message || "turn failed" : unfinished,
+      unfinished: !failed && usages.length === 0,
     };
   },
 };

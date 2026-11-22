@@ -7,6 +7,9 @@ import { fixture, sandbox } from "./testing/sandbox.js";
 // A stop and a timeout both take the case's timeout plus a drain; vitest's 5 s default is too tight under load.
 const TEST_TIMEOUT_MS = 30_000;
 const HEARTBEAT_WAIT_MS = 300;
+const STOP_WITHIN_MS = 5000;
+// Long enough for a loaded machine to start the harness and write its turns before the time limit.
+const SAFE_TIMEOUT_SECONDS = 5;
 const POLL_MS = 50;
 const POLL_TRIES = 60;
 
@@ -14,9 +17,12 @@ test(
   "a run stopped at maxTurns is scored and says so",
   async () => {
     const box = sandbox();
-    const { result, record } = await slowRun(box, 5, {
-      maxTurns: 2,
-      timeoutSeconds: 20,
+    const { result, record } = await slowRun(box, {
+      turns: 5,
+      caseFile: {
+        maxTurns: 2,
+        timeoutSeconds: 20,
+      },
     });
 
     expect(result.status).toBe(0);
@@ -42,10 +48,17 @@ test(
   "the process group is gone after a stop",
   async () => {
     const box = sandbox();
-    const { files } = await slowRun(box, 3, {
-      maxTurns: 1,
-      timeoutSeconds: 20,
+    const { files, record } = await slowRun(box, {
+      turns: 3,
+      caseFile: {
+        maxTurns: 1,
+        timeoutSeconds: 20,
+      },
     });
+
+    // The stop, not the 20 s timeout or the reap on exit, ended the run: it was quick, and it says maxTurns.
+    expect(record?.stoppedBy).toBe("maxTurns");
+    expect(record?.durationMs).toBeLessThan(STOP_WITHIN_MS);
 
     const pid = Number(fs.readFileSync(files.pid, "utf8"));
     for (let tries = 0; tries < POLL_TRIES && !gone(pid); tries += 1) {
@@ -63,12 +76,17 @@ test(
   "a timeout stays invalid with stoppedBy timeout",
   async () => {
     const box = sandbox();
-    const { result, record } = await slowRun(box, 1, { timeoutSeconds: 2 });
+    const { result, record } = await slowRun(box, {
+      turns: 1,
+      caseFile: {
+        timeoutSeconds: SAFE_TIMEOUT_SECONDS,
+      },
+    });
 
     expect(result.status).toBe(1);
     expect(record).toMatchObject({
       ok: false,
-      error: "timed out after 2 s",
+      error: `timed out after ${String(SAFE_TIMEOUT_SECONDS)} s`,
       score: null,
       stoppedBy: "timeout",
       maxTurnsEnforced: null,
@@ -82,7 +100,10 @@ test(
   "a timeout with no output at all has a null firstOutputMs",
   async () => {
     const box = sandbox();
-    const { record } = await slowRun(box, 0, { timeoutSeconds: 2 });
+    const { record } = await slowRun(box, {
+      turns: 0,
+      caseFile: { timeoutSeconds: 2 },
+    });
 
     expect(record).toMatchObject({ stoppedBy: "timeout", firstOutputMs: null });
   },
@@ -93,9 +114,12 @@ test(
   'onTimeout "score" scores a timed-out run on what it left',
   async () => {
     const box = sandbox();
-    const { result, record } = await slowRun(box, 2, {
-      timeoutSeconds: 2,
-      onTimeout: "score",
+    const { result, record } = await slowRun(box, {
+      turns: 2,
+      caseFile: {
+        timeoutSeconds: SAFE_TIMEOUT_SECONDS,
+        onTimeout: "score",
+      },
     });
 
     expect(result.status).toBe(0);

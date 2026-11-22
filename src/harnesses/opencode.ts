@@ -112,7 +112,13 @@ type Event = { sessionID?: string } & (
  * @param state - Raises `turns`.
  */
 function countTurns(line: unknown, state: TurnState): void {
-  if ((Object(line) as Event).type === "step_start") state.turns += 1;
+  const one = Object(line) as Event;
+  // Only the main session counts: the session id of the first event that carries one. Another id is a subagent's.
+  if (one.sessionID !== undefined) {
+    if (state.seen.size === 0) state.seen.add(one.sessionID);
+    else if (!state.seen.has(one.sessionID)) return;
+  }
+  if (one.type === "step_start") state.turns += 1;
 }
 
 const opencode: Harness = {
@@ -193,6 +199,7 @@ const opencode: Harness = {
       error: failure
         ? failure.data?.message || failure.name || "error"
         : unfinished,
+      unfinished: !failure && steps.length === 0,
     };
   },
 };

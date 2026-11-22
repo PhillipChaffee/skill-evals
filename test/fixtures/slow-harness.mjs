@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stands in for a harness that never answers: it starts a child that outlives it and then waits, so only a kill of
 // its whole process group ends the run. While the child lives, it keeps replacing the file $SLOW_HEARTBEAT_FILE names, atomically.
-// $SLOW_PID_FILE names a file that gets the child's process id. $SLOW_TURNS, a number, makes it first write that many
+// $SLOW_LATE_MS: see its use below. $SLOW_PID_FILE names a file that gets the child's process id. $SLOW_TURNS, a number, makes it first write that many
 // Claude Code shaped assistant events ("turn 1", "turn 2", ...), one per line, so a run can be stopped in the middle.
 import { spawn } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -44,5 +44,21 @@ for (let turn = 1; turn <= Number(process.env.SLOW_TURNS ?? 0); turn += 1) {
   process.stdout.write(`${JSON.stringify({ type: "assistant", message })}\n`);
   // A model takes time between turns, so each turn is its own chunk.
   await new Promise((resolve) => setTimeout(resolve, MS_PER_TURN));
+}
+// $SLOW_LATE_MS makes a helper, in a session of its own so that no kill of the group reaches it, write two more turns
+// into the harness's output that many milliseconds after this process started: a test aims it at the drain window after a timeout.
+if (process.env.SLOW_LATE_MS) {
+  const at =
+    Date.now() - process.uptime() * 1000 + Number(process.env.SLOW_LATE_MS);
+  const late = `setTimeout(() => {
+    for (const id of ["late_1", "late_2"]) {
+      const message = { id, role: "assistant", content: [{ type: "text", text: id }] };
+      process.stdout.write(JSON.stringify({ type: "assistant", message }) + "\\n");
+    }
+  }, ${at} - Date.now());`;
+  spawn(process.execPath, ["-e", late], {
+    detached: true,
+    stdio: ["ignore", "inherit", "ignore"],
+  });
 }
 setTimeout(() => {}, HOUR_MS);

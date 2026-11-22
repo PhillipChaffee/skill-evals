@@ -1,4 +1,5 @@
 import type { Evaluation } from "./evaluate.js";
+import type { RunRecord } from "./run.js";
 
 /**
  * Lists the pairs of harness and case that were not run.
@@ -71,6 +72,40 @@ function limitsSection(evaluation: Evaluation): string[] {
 }
 
 /**
+ * Counts the runs that the runner ended, for each harness and case.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when the runner ended no run.
+ */
+function stoppedSection(evaluation: Evaluation): string[] {
+  const groups = new Map<string, RunRecord[]>();
+  for (const record of evaluation.records) {
+    const key = `${record.harness} \`${record.caseId}\``;
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  }
+  const lines = [...groups].flatMap(([key, runs]) => {
+    const at = runs.filter((run) => run.stoppedBy === "maxTurns").length;
+    const late = runs.filter(
+      (run) => run.stoppedBy === "timeout" && !run.error,
+    ).length;
+    return [
+      ...(at
+        ? [
+            `- ${key}: ${String(at)} of ${String(runs.length)} runs stopped at maxTurns`,
+          ]
+        : []),
+      ...(late
+        ? [
+            `- ${key}: ${String(late)} of ${String(runs.length)} runs timed out and were scored (onTimeout: score)`,
+          ]
+        : []),
+    ];
+  });
+  return lines.length === 0
+    ? []
+    : ["", "## Stopped by the runner", "", ...lines];
+}
+
+/**
  * The report's notes on what did not run as written: the checks that were skipped, the limits that were not enforced,
  * and the cases that were not applicable.
  * @param evaluation - What `evaluate` returned.
@@ -79,5 +114,6 @@ function limitsSection(evaluation: Evaluation): string[] {
 export const noteSections = (evaluation: Evaluation): string[] => [
   ...skippedSection(evaluation),
   ...limitsSection(evaluation),
+  ...stoppedSection(evaluation),
   ...notApplicableSection(evaluation),
 ];

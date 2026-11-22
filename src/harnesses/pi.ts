@@ -181,6 +181,7 @@ const pi: Harness = {
         : null,
       loaded: NOT_REPORTED,
       error: last ? failure : "no turn_end event",
+      unfinished: !last,
     };
   },
 };

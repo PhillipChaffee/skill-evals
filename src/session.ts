@@ -199,6 +199,7 @@ const notStarted = (failure: string, home: string) => ({
   durationMs: 0,
   exec: { kind: null, stopped: false } as const,
   turns: null,
+  fault: null,
   firstOutputMs: null,
   placedChanges: null,
   placed: undefined,
@@ -213,6 +214,8 @@ interface Attempt {
   /** How the process ended: its failure kind, and whether the runner stopped it. */
   exec: Pick<ExecResult, "kind" | "stopped">;
   turns: number | null;
+  /** Why the turn counter threw, or null. */
+  fault: string | null;
   firstOutputMs: number | null;
   placedChanges: ChangedFiles | null;
   placed?: Record<string, string> | undefined;
@@ -272,6 +275,7 @@ async function attempt(
     ...result,
     exec: result,
     turns: watch?.turns() ?? null,
+    fault: watch?.fault() ?? null,
     durationMs: Date.now() - started,
     placedChanges: joined(placedChanges(), late.changes()),
     placed: { ...invocation.placed, ...late.placed },

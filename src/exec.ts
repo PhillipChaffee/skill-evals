@@ -113,7 +113,7 @@ interface Ending {
   spawnError: string | undefined;
   timedOut: boolean;
   timeoutSeconds: number;
-  /** True when `onStdout` asked for the stop. */
+  /** True when `onStdout` asked for the stop while the command was live and within its time. */
   stopped: boolean;
 }
 
@@ -219,13 +219,14 @@ export function exec(
  * request to stop.
  * @param child - The started process.
  * @param options - How much to keep, and who may stop the command.
- * @param stop - Stops the command; called once, on the first "stop".
+ * @param stop - Stops the command, when the first "stop" comes. Returns false when a stop no longer counts, because the
+ *   command exited or its timeout fired.
  * @returns `kept` for what was read so far, and `stopped` for whether a stop was asked for.
  */
 function readers(
   child: ReturnType<typeof start>,
   options: ExecOptions,
-  stop: () => void,
+  stop: () => boolean,
 ) {
   const { maxBytes = Infinity, onStdout } = options;
   const began = Date.now();
@@ -234,17 +235,17 @@ function readers(
   const out = keeper(child.stdout, maxBytes, (chunk) => {
     first ??= Date.now() - began;
     if (asked || onStdout?.(chunk) !== "stop") return;
-    asked = true;
-    stop();
+    asked = stop();
   });
   const err = keeper(child.stderr, maxBytes);
+  const kept = () => ({
+    ...{ stdout: out.text, stderr: err.text },
+    truncated: out.cut || err.cut,
+    firstOutputMs: first,
+  });
   return {
-    kept: () => ({
-      ...{ stdout: out.text, stderr: err.text },
-      truncated: out.cut || err.cut,
-      firstOutputMs: first,
-    }),
-    stopped: (): boolean => asked,
+    concluded: (how: Omit<Ending, "stopped">): ExecResult =>
+      concluded(kept(), { ...how, stopped: asked }),
   };
 }
 
@@ -281,8 +282,11 @@ function watch(
       );
     };
     const read = readers(child, options, () => {
+      // Output that arrives after the command exited, or after the timeout fired, cannot stop anything.
+      if (timedOut || ended !== null) return false;
       for (const timer of timers) clearTimeout(timer);
       killAndDrain();
+      return true;
     });
     const settle = (
       code: number | null,
@@ -293,11 +297,9 @@ function watch(
       finished = true;
       for (const timer of timers) clearTimeout(timer);
       reap();
-      const how = {
-        ...{ code, signal, spawnError, timedOut, timeoutSeconds },
-        stopped: read.stopped(),
-      };
-      resolve(concluded(read.kept(), how));
+      resolve(
+        read.concluded({ code, signal, spawnError, timedOut, timeoutSeconds }),
+      );
     };
     timers.push(
       setTimeout(() => {

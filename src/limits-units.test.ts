@@ -29,7 +29,7 @@ test("onTimeout is read as a case key: default invalid, and only invalid or scor
   );
 });
 
-test("exec stops the process group when onStdout says stop, and that is no failure", async () => {
+test("exec stops the command when onStdout says stop, and that is no failure", async () => {
   const seen: string[] = [];
   const run = await exec(
     process.execPath,
@@ -72,16 +72,64 @@ function watched(harness: Harness, name: string, maxTurns?: number) {
 const byId = (id: string): Harness =>
   HARNESSES.find((harness) => harness.id === id) as Harness;
 
-test.each([
-  ["claude-code", "claude-code-turns.stream.jsonl", 5],
-  ["pi", PI_TURNS, 3],
-  ["opencode", "opencode-turns.stream.jsonl", 3],
-])(
-  "%s counts the main-thread turns of %s over chunks that cut lines",
-  (id, name, turns) => {
-    expect(watched(byId(id), name).turns).toBe(turns);
+const FIXTURES = fs
+  .readdirSync(path.dirname(fixture("README.md")))
+  .filter((name) => /^(claude-code|pi|opencode).*\.stream\.jsonl$/.test(name))
+  .map((name) => [
+    name.split(/[-.]/)[0] === "claude" ? "claude-code" : name.split(/[-.]/)[0],
+    name,
+  ]);
+
+test.each(FIXTURES)(
+  "%s: the runner's count of %s, over chunks that cut lines, is the parse's main-thread turns",
+  (id, name) => {
+    const harness = byId(id as string);
+    const parsed = harness.parse(
+      fs.readFileSync(fixture(name as string), "utf8"),
+    );
+    const turns = new Set(
+      parsed.transcript
+        .filter((event) => event.agent.depth === 0 && event.turn !== null)
+        .map((event) => event.turn),
+    );
+    // Pi numbers its turns from 0 and the others from 1, and a turn that shows nothing in the transcript has no number.
+    expect(watched(harness, name as string).turns).toBeGreaterThanOrEqual(
+      turns.size,
+    );
+    expect(watched(harness, name as string).turns).toBeLessThanOrEqual(
+      turns.size + 1,
+    );
   },
 );
+
+test("opencode counts only its main session, the first one that names a session id", () => {
+  const watch = turnWatch(byId("opencode"), undefined);
+  const step = (sessionID: string) =>
+    `${JSON.stringify({ type: "step_start", sessionID })}\n`;
+  watch?.onStdout(step("main") + step("child") + step("main") + step("child"));
+  expect(watch?.turns()).toBe(2);
+});
+
+test("a line the parse would skip is not counted: a log line, or one with leading whitespace", () => {
+  const watch = turnWatch(byId("pi"), undefined);
+  watch?.onStdout(' {"type":"turn_start"}\nlog\n{"type":"turn_start"}\n');
+  expect(watch?.turns()).toBe(1);
+});
+
+test("a counter that throws stops the run and is reported, never thrown", () => {
+  const watch = turnWatch(
+    {
+      countTurns: () => {
+        throw new Error("boom");
+      },
+    },
+    5,
+  );
+  expect(watch?.onStdout('{"a":1}\n')).toBe("stop");
+  expect(watch?.fault()).toBe("the turn counter failed: boom");
+  // A chunk with no newline is only kept; it is counted when the line ends.
+  expect(watch?.onStdout("{")).toBe("continue");
+});
 
 test("the watch answers stop as soon as the turns pass the limit, and never without one", () => {
   const limited = watched(byId("pi"), PI_TURNS, 2);

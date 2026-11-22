@@ -2,10 +2,17 @@ import type { Harness, Loaded, LoadedSubject } from "./harnesses/shared.js";
 import { foreignOf, reportMissing, samePath } from "./harnesses/shared.js";
 import type { Copy } from "./run-copy.js";
 import type { SessionResult } from "./session.js";
+import type { StoppedBy } from "./session-end.js";
 import { session } from "./session.js";
 
 // A judge answers in one message. The second turn is room for one stray tool call before the answer.
 const JUDGE_LIMITS = { maxTurns: 2, timeoutSeconds: 300 };
+
+// Why a judge session that the runner stopped counts as failed.
+const STOPPED_JUDGE: Partial<Record<StoppedBy, string>> = {
+  maxTurns: "the judge was stopped at maxTurns",
+  timeout: "the judge timed out",
+};
 
 // Subject kind -> whether the harness reported the subject as loaded, or null when it does not report that.
 // A plugin is found by its directory and a skills folder by the name of every skill in it.
@@ -100,7 +107,7 @@ export function judgeAsker(
         withhold: options.withhold,
         pass: options.pass,
       },
-      ({ parsed, error, durationMs, home, placed }) => {
+      ({ parsed, error, durationMs, home, placed, stoppedBy }) => {
         const foreign = [
           ...foreignOf(harness, parsed.loaded, null),
           ...(harness.strays?.({ home, placed }) ?? []),
@@ -114,7 +121,8 @@ export function judgeAsker(
         }
         return {
           finalText: parsed.finalText,
-          error,
+          // A judge that the runner stopped has no usable answer: it takes the path of any judge session that failed.
+          error: error ?? STOPPED_JUDGE[stoppedBy] ?? null,
           durationMs,
           tokens: parsed.tokens,
           costUsd: parsed.costUsd,

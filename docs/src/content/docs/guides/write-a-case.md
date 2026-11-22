@@ -40,11 +40,11 @@ In every harness, "loaded a skill" means that the agent called the harness's ski
 
 ## Limits
 
-`maxTurns` is the most turns the agent may take. A turn is one assistant turn of the main agent, as the harness's own turn grouping has it, and a subagent's turns never count. The runner counts turns in the stream as it arrives, on every harness that has `turnGrouping` (Claude Code, OpenCode, Pi), and stops the harness's whole process group as turn `maxTurns + 1` begins. A partial extra turn may therefore show in the transcript; nothing seen is cut. Claude Code is also given its own `--max-turns`, and its `error_max_turns` result is read as the same stop. The run is valid and scored. Its record says `stoppedBy: "maxTurns"`, its final text is the last thing the main agent said, and `tokens` and `costUsd` may be null where the harness writes its totals only at the end.
+`maxTurns` is the most turns the agent may take. A turn is one assistant turn of the main agent, as the harness's own turn grouping has it, and a subagent's turns never count. The runner counts turns in the stream as it arrives, on every harness that has `turnGrouping` (Claude Code, OpenCode, Pi), and stops the harness's whole process group as turn `maxTurns + 1` begins. A partial extra turn may therefore show in the transcript; nothing seen is cut. Claude Code is also given its own `--max-turns`, and its `error_max_turns` result is read as the same stop. The run is valid and scored. Its record says `stoppedBy: "maxTurns"`, its final text is the last thing the main agent said, and `tokens` and `costUsd` may be null where the harness writes its totals only at the end. Only a stream with no ending is excused: an error that the harness itself reported, or an adapter that cannot read the stream, still makes the run invalid. `turns` is the count at the stop; what arrives while the process group is being killed is kept in the stream but not counted. The report lists such runs under "Stopped by the runner".
 
 A harness without `turnGrouping` cannot count turns. The case still runs, as before, bounded by the time limit; the record says `maxTurnsEnforced: false`, and the report lists the pair under "Limits not enforced".
 
-A run that reaches `timeoutSeconds` is invalid, with `stoppedBy: "timeout"`. For a case where stalling is the behaviour under test, `onTimeout: "score"` scores such a run on what it left instead (`"invalid"` is the default):
+A run that reaches `timeoutSeconds` is invalid, with `stoppedBy: "timeout"`. For a case where stalling is the behaviour under test, `onTimeout: "score"` scores such a run on what it left instead (`"invalid"` is the default). A timed-out run in which the agent did nothing at all stays invalid:
 
 ```json
 {

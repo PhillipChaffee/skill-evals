@@ -19,6 +19,12 @@ import { FLAGS, commandUsage, usageText } from "./usage.js";
 import { validate } from "./commands/validate.js";
 
 const USAGE_EXIT_CODE = 2;
+// What the progress line of a scored run says when the runner ended it.
+const STOPS = {
+  agent: "",
+  maxTurns: " (stopped at maxTurns)",
+  timeout: " (timed out, scored)",
+};
 
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
@@ -29,7 +35,8 @@ const USAGE_EXIT_CODE = 2;
 async function suite(options: EvaluateOptions): Promise<number> {
   const onRun = (record: RunRecord): void => {
     const outcome =
-      invalidReason(record) ?? `score ${formatScore(record.score)}`;
+      invalidReason(record) ??
+      `score ${formatScore(record.score)}${STOPS[record.stoppedBy ?? "agent"]}`;
     console.error(
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}`,
     );

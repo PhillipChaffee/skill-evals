@@ -151,7 +151,8 @@ const claudeCode: Harness = {
     const failure =
       result?.is_error && !hitMaxTurns ? result.result || result.subtype : null;
     return {
-      finalText: result?.result ?? "",
+      // An error result's text is the error, never an answer.
+      finalText: result?.is_error && !hitMaxTurns ? "" : (result?.result ?? ""),
       toolCalls: callsOf(transcript),
       transcript,
       sessionId:
@@ -183,6 +184,7 @@ const claudeCode: Harness = {
           : null,
       },
       error: result ? failure : "no result event",
+      unfinished: !result,
       hitMaxTurns,
     };
   },

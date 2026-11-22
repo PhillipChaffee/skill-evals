@@ -141,6 +141,12 @@ export interface Parsed {
   error: string | null;
   /** True when the harness's own result says it stopped at its turn limit. Such a stop is no error. Absent: false. */
   hitMaxTurns?: boolean;
+  /**
+   * True when `error` is only that the stream has no ending (no result, `turn_end` or `step_finish` event), which is
+   * what a stream cut by a stop or a timeout looks like. Any other error, a harness-reported one included, leaves it
+   * false. Absent: false.
+   */
+  unfinished?: boolean;
 }
 
 /** What the runner keeps while it counts the turns of a stream. */
@@ -417,16 +423,26 @@ export const withIndexes = (calls: ToolCall[]): ToolCall[] =>
  * @returns The objects, in order and unvalidated. A line that is not a JSON object is a log line, and is skipped.
  */
 export function jsonLines(stdout: string): unknown[] {
-  const events: unknown[] = [];
-  for (const line of stdout.split("\n")) {
-    if (!line.startsWith("{")) continue;
-    try {
-      events.push(JSON.parse(line));
-    } catch {
-      // A log line that happens to start with a brace; the stream itself is one object per line.
-    }
+  return stdout.split("\n").flatMap((line) => {
+    const event = jsonLine(line);
+    return event === undefined ? [] : [event];
+  });
+}
+
+/**
+ * Reads one line of a stream of one JSON object per line. The runner's turn count reads lines with this too, so that it
+ * counts exactly what the parse sees.
+ * @param line - One line, without its newline.
+ * @returns The object; undefined for a log line, which is anything that does not start with a brace or is not JSON.
+ */
+export function jsonLine(line: string): unknown {
+  if (!line.startsWith("{")) return undefined;
+  try {
+    return JSON.parse(line);
+  } catch {
+    // A log line that happens to start with a brace; the stream itself is one object per line.
+    return undefined;
   }
-  return events;
 }
 
 /**

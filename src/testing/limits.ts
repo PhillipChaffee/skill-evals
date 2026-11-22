@@ -4,7 +4,12 @@ import { CONFIG_FILE } from "../project.js";
 import type { Sandbox } from "./sandbox.js";
 import { fixture, readResults } from "./sandbox.js";
 
-const SLOW_ENV = ["SLOW_HEARTBEAT_FILE", "SLOW_PID_FILE", "SLOW_TURNS"];
+const SLOW_ENV = [
+  "SLOW_HEARTBEAT_FILE",
+  "SLOW_PID_FILE",
+  "SLOW_TURNS",
+  "SLOW_LATE_MS",
+];
 
 /** How one run of the "hello" case is made. */
 export interface Hello {
@@ -43,18 +48,23 @@ export async function scored(box: Sandbox, run: Hello = {}) {
   return { result, record: readResults(outDir).records[0] };
 }
 
+/** How the slow harness is run. */
+export interface Slow {
+  /** How many assistant events it writes first; 0 writes none. */
+  turns: number;
+  /** More keys for the case file. */
+  caseFile: Record<string, unknown>;
+  /** When a helper outside the process group writes two more turns, in milliseconds; absent: never. */
+  lateMs?: number;
+}
+
 /**
- * Runs the slow harness, which writes `turns` assistant events and then never answers.
+ * Runs the slow harness, which writes some assistant events and then never answers.
  * @param box - Where the case goes.
- * @param turns - How many events it writes first; 0 writes none.
- * @param caseFile - More keys for the case file.
+ * @param run - What it writes, and the case's other keys.
  * @returns What `scored` returns, and the files that the slow harness writes.
  */
-export async function slowRun(
-  box: Sandbox,
-  turns: number,
-  caseFile: Record<string, unknown>,
-) {
+export async function slowRun(box: Sandbox, run: Slow) {
   const files = {
     heartbeat: path.join(box.root, "heartbeat"),
     pid: path.join(box.root, "pid"),
@@ -64,9 +74,10 @@ export async function slowRun(
     SKILL_EVALS_BIN_CLAUDE_CODE: fixture("slow-harness.mjs"),
     SLOW_HEARTBEAT_FILE: files.heartbeat,
     SLOW_PID_FILE: files.pid,
-    SLOW_TURNS: String(turns),
+    SLOW_TURNS: String(run.turns),
+    ...(run.lateMs === undefined ? {} : { SLOW_LATE_MS: String(run.lateMs) }),
   };
-  return { ...(await scored(box, { env, caseFile })), files };
+  return { ...(await scored(box, { env, caseFile: run.caseFile })), files };
 }
 
 /**

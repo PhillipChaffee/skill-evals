@@ -159,6 +159,7 @@ const cursor: Harness = {
       costUsd: null,
       loaded: NOT_REPORTED,
       error: result ? failure : "no result event",
+      unfinished: !result,
     };
   },
 };
