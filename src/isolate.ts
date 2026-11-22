@@ -163,9 +163,10 @@ function leadsTo(link: string, target: string): string {
  * Makes sure that no link of a tree leads out of it, however many links it goes through. A link that is absolute
  * would reach the source directory from a copy, so it counts as outside, too.
  * @param root - The tree.
+ * @param owner - What the tree is, for the message. Default: "the subject".
  * @throws {UsageError} Naming the first link whose target is absolute, or leads outside the tree.
  */
-function requireLinksInside(root: string): void {
+export function requireLinksInside(root: string, owner = "the subject"): void {
   const real = fs.realpathSync.native(root);
   walkTree(root, {
     visit: ({ relative, file, dirent }) => {
@@ -178,7 +179,7 @@ function requireLinksInside(root: string): void {
         leaves.startsWith(`..${path.sep}`)
       ) {
         throw new UsageError(
-          `${relative} is a link to ${target}${path.isAbsolute(target) ? ", an absolute path" : ""}; links outside the subject are not allowed`,
+          `${relative} is a link to ${target}${path.isAbsolute(target) ? ", an absolute path" : ""}; links outside ${owner} are not allowed`,
         );
       }
       return undefined;

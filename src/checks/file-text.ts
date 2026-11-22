@@ -3,7 +3,7 @@ import { countLines } from "../lines.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS, regex } from "./rules.js";
 import { checkBounds } from "./bounds.js";
-import { find, shown, treeOf, unlisted, withUnlisted } from "./tree.js";
+import { find, shown, treeOf, withUnlisted } from "./tree.js";
 
 // Five mebibytes.
 const PATTERN_CAP = 5_242_880;
@@ -54,6 +54,20 @@ const absent = (check: RuledCheck, where: string): Verdict => ({
 });
 
 /**
+ * Says why a directory that cannot be listed settles a check.
+ * @param how - The rule of the check, which says whether it is about a pattern or about line counts.
+ * @param check - The check, whose pattern the reason quotes.
+ * @param dirs - The directories that could not be listed.
+ * @returns A sentence that names the directories and what could not be shown.
+ */
+const closedReason = (
+  how: TextRule,
+  check: RuledCheck,
+  dirs: string[],
+): string =>
+  `${shown(dirs)} cannot be listed, so files in it cannot be shown ${how === LACKS ? `to lack ${shownPattern(check)}` : "to be within the line bounds"}`;
+
+/**
  * Scores a check over the text of every file its path names.
  * @param how - What the check does with the files.
  * @param check - The check, whose path and pattern are read.
@@ -67,7 +81,7 @@ function overText(how: TextRule, check: RuledCheck, outcome: Outcome): Verdict {
   if (how.closed && found.unreadable.length > 0) {
     return {
       score: 0,
-      reason: `files under directories that cannot be listed cannot be shown to lack ${shownPattern(check)}${unlisted(found)}`,
+      reason: closedReason(how, check, found.unreadable),
     };
   }
   const files = found.entries.filter((entry) => entry.kind === "file");
@@ -145,7 +159,7 @@ const LACKS: TextRule = {
 
 const LINES: TextRule = {
   cover: true,
-  closed: false,
+  closed: true,
   none: absent,
   quantifier: () => "all",
   test: (check) => (text) => {

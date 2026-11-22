@@ -4,15 +4,18 @@ import path from "node:path";
 import { onTestFinished } from "vitest";
 import type { Outcome, RuledCheck } from "../checks/index.js";
 import { checkScore } from "../checks/index.js";
-import { diffSnapshots, snapshot } from "../snapshot.js";
+import { fileState } from "../run-files.js";
+import { snapshot } from "../snapshot.js";
 
 /** The state of the files of a run that changed nothing. */
 export const NO_FILES = {
   seed: new Map<string, string>(),
   changed: { created: [], modified: [], deleted: [] },
+  unlisted: [] as string[],
   home: "",
   homeSeed: new Map<string, string>(),
   homeChanged: { created: [], modified: [], deleted: [] },
+  homeUnlisted: [] as string[],
 };
 
 /**
@@ -71,14 +74,9 @@ export function dirsWith(seed: Record<string, string> = {}): Dirs {
       const before = snapshot(workspace);
       const homeBefore = snapshot(home);
       agent({ workspace, home });
-      return bareOutcome({
-        workspace,
-        home,
-        seed: before,
-        changed: diffSnapshots(before, snapshot(workspace)),
-        homeSeed: homeBefore,
-        homeChanged: diffSnapshots(homeBefore, snapshot(home)),
-      });
+      return bareOutcome(
+        fileState({ workspace, seed: before, home, homeSeed: homeBefore }),
+      );
     },
   };
 }

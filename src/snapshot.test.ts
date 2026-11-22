@@ -73,7 +73,7 @@ test("a directory that cannot be listed is one unreadable entry", () => {
   }) as unknown as typeof fs.readdirSync);
   const taken = snapshot(path.join(box.root, "d"));
   vi.restoreAllMocks();
-  expect([...taken.entries()]).toEqual([["sub", "unreadable"]]);
+  expect([...taken.entries()]).toEqual([["sub", "unlistable"]]);
 });
 
 test("a socket is hashed as unreadable and never opened", async () => {

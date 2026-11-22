@@ -1,6 +1,7 @@
 import type { Outcome } from "./checks/index.js";
+import type { Snapshot } from "./snapshot.js";
 import type { SessionResult } from "./session.js";
-import { diffSnapshots, snapshot } from "./snapshot.js";
+import { diffSnapshots, snapshot, unlistedIn } from "./snapshot.js";
 
 /**
  * Hashes the workspace and the home as the run left them, and compares them with the seeds.
@@ -12,15 +13,29 @@ export function fileState(
   ran: Pick<SessionResult, "workspace" | "seed" | "home" | "homeSeed">,
 ): Pick<
   Outcome,
-  "workspace" | "seed" | "changed" | "home" | "homeSeed" | "homeChanged"
+  | "workspace"
+  | "seed"
+  | "changed"
+  | "unlisted"
+  | "home"
+  | "homeSeed"
+  | "homeChanged"
+  | "homeUnlisted"
 > {
   const { workspace, seed, home, homeSeed } = ran;
+  const after = snapshot(workspace);
+  const homeAfter = snapshot(home);
+  const both = (before: Snapshot, later: Snapshot): string[] => [
+    ...new Set([...unlistedIn(before), ...unlistedIn(later)]),
+  ];
   return {
     workspace,
     seed,
-    changed: diffSnapshots(seed, snapshot(workspace)),
+    changed: diffSnapshots(seed, after),
+    unlisted: both(seed, after),
     home,
     homeSeed,
-    homeChanged: diffSnapshots(homeSeed, snapshot(home)),
+    homeChanged: diffSnapshots(homeSeed, homeAfter),
+    homeUnlisted: both(homeSeed, homeAfter),
   };
 }

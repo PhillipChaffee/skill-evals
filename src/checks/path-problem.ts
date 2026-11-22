@@ -12,6 +12,8 @@ export function pathProblem(file: string): string | null {
   if (path.isAbsolute(file) || file.split(/[\\/]/).includes("..")) {
     return `path must stay inside the workspace: ${file}`;
   }
+  if (file.startsWith("./"))
+    return `drop the leading ./ from the path: ${file}`;
   if (!isGlob(file)) return null;
   try {
     globToRegExp(file);

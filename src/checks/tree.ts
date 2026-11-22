@@ -5,6 +5,7 @@ import {
   GlobCapError,
   expandGlob,
   globToRegExp,
+  globBase,
   isGlob,
   isMissing,
   literalGlob,
@@ -21,6 +22,8 @@ export interface Tree {
   changed: ChangedFiles;
   /** The word a reason uses for it. */
   name: "workspace" | "home";
+  /** The directories that could not be listed, before the run or after it. */
+  unlisted: string[];
 }
 
 /** One thing that a path or glob names and that lies inside its tree. */
@@ -56,12 +59,14 @@ export const treeOf = (check: RuledCheck, outcome: Outcome): Tree =>
         seed: outcome.homeSeed,
         changed: outcome.homeChanged,
         name: "home",
+        unlisted: outcome.homeUnlisted,
       }
     : {
         dir: outcome.workspace,
         seed: outcome.seed,
         changed: outcome.changed,
         name: "workspace",
+        unlisted: outcome.unlisted,
       };
 
 // A plain path without its trailing slashes, in normal form.
@@ -139,12 +144,20 @@ function resolver(
  * @param scope - How to read the pattern, and where to report.
  * @param scope.covered - Whether a plain path that names a directory also names everything under it.
  * @param scope.found - Receives the cap reason and the directories that could not be listed.
- * @returns The relative paths: for a plain path, itself first, then everything under it when it is covered.
+ * @param scope.resolve - Finds the real path of a relative path, inside the tree.
+ * @param scope.root - The tree's real path.
+ * @returns The relative paths: for a plain path, itself first, then everything under it when it is covered. A plain
+ *   path that goes through a link inside the tree is listed from its real directory, under the path it was given.
  */
 function candidates(
   tree: Tree,
   pattern: string,
-  scope: { covered: boolean; found: Pick<Found, "capped" | "unreadable"> },
+  scope: {
+    covered: boolean;
+    found: Pick<Found, "capped" | "unreadable">;
+    resolve: (relative: string) => string | null;
+    root: string;
+  },
 ): string[] {
   const { found } = scope;
   const walked = (glob: string): string[] => {
@@ -161,8 +174,18 @@ function candidates(
   };
   if (isGlob(pattern)) return walked(pattern);
   const plain = plainOf(pattern);
-  if (!scope.covered && !pattern.endsWith("/")) return [plain];
-  return [plain, ...walked(plain === "." ? "**" : `${literalGlob(plain)}/**`)];
+  if (!scope.covered) return [plain];
+  const target = scope.resolve(plain);
+  if (target === null) return [plain];
+  const real = path.relative(scope.root, target).split(path.sep).join("/");
+  const prefix = plain === "." ? "" : `${plain}/`;
+  const under = walked(real === "" ? "**" : `${literalGlob(real)}/**`);
+  return [
+    plain,
+    ...under.map(
+      (item) => `${prefix}${real === "" ? item : item.slice(real.length + 1)}`,
+    ),
+  ];
 }
 
 /**
@@ -170,7 +193,7 @@ function candidates(
  * @param tree - The tree to look in.
  * @param pattern - A plain path or a glob.
  * @param covered - True for a check that reads a plain path naming a directory as everything under it. A path that
- *   ends in `/` is read that way whatever this says.
+ *   ends in `/` still names only a directory when this is false.
  * @returns The entries that exist and stay inside the tree, with links resolved; the cap reason when a glob matches
  *   more than the cap; and the directories that could not be listed. A plain path may go through a link that stays
  *   inside the tree. A glob never goes through a link, and a link that leads outside is not an entry. A tree that is
@@ -178,15 +201,21 @@ function candidates(
  */
 export function find(tree: Tree, pattern: string, covered = false): Found {
   const found: Found = { entries: [], capped: null, unreadable: [] };
+  let root: string;
   try {
-    fs.realpathSync.native(tree.dir);
+    root = fs.realpathSync.native(tree.dir);
   } catch (error) {
     if (!isMissing(error)) found.unreadable.push(".");
     return found;
   }
   const real = resolver(tree.dir, found.unreadable);
   const slash = !isGlob(pattern) && pattern.endsWith("/");
-  const relatives = candidates(tree, pattern, { covered, found });
+  const relatives = candidates(tree, pattern, {
+    covered,
+    found,
+    resolve: real,
+    root,
+  });
   found.entries = relatives.flatMap((relative, position): Entry[] => {
     const target = real(relative);
     if (target === null) return [];
@@ -203,6 +232,7 @@ export function find(tree: Tree, pattern: string, covered = false): Found {
       return [];
     }
   });
+  found.unreadable = [...new Set(found.unreadable)];
   return found;
 }
 
@@ -241,7 +271,7 @@ export const pathsOf = (found: Found, kind: Entry["kind"]): string[] =>
 export const unlisted = (found: Found): string =>
   found.unreadable.length === 0
     ? ""
-    : `; cannot be listed: ${shown(found.unreadable)}`;
+    : `; ${shown(found.unreadable)} cannot be listed`;
 
 /**
  * Adds the directories that could not be listed to a failing verdict.
@@ -253,3 +283,22 @@ export const withUnlisted = (verdict: Verdict, found: Found): Verdict =>
   verdict.score === 0
     ? { ...verdict, reason: `${verdict.reason ?? ""}${unlisted(found)}` }
     : verdict;
+
+/**
+ * Finds the directories that could not be listed and could hold a match of a path or glob: the walk of the glob
+ * starts in one of them or below one, or one is below where it starts.
+ * @param unlisted - The directories that could not be listed.
+ * @param pattern - A path or glob of a check.
+ * @returns The directories, which a check that depends on listing files cannot see into.
+ */
+export function mayHold(unlisted: string[], pattern: string): string[] {
+  const base = isGlob(pattern) ? globBase(pattern) : plainOf(pattern);
+  return unlisted.filter(
+    (dir) =>
+      base === "" ||
+      base === "." ||
+      dir === base ||
+      dir.startsWith(`${base}/`) ||
+      base.startsWith(`${dir}/`),
+  );
+}

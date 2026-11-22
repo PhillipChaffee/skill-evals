@@ -13,24 +13,28 @@ export interface ChangedFiles {
 }
 
 const UNREADABLE = "unreadable";
+// What a directory that cannot be listed is hashed as, so that it can be told from a file that cannot be read.
+const UNLISTABLE = "unlistable";
 const CHUNK = 1_048_576;
+// One buffer for every file: hashing is synchronous, so two files never use it at once.
+const BUFFER = Buffer.alloc(CHUNK);
 const sha256 = (data: string): string =>
   createHash("sha256").update(data).digest("hex");
 
 /**
- * Hashes a file in chunks, so that a file of any size is read without being held whole.
+ * Hashes a file in chunks of one mebibyte, so that a file of any size is read without being held whole, and a small
+ * file costs one read.
  * @param file - Its path.
  * @returns The SHA-256 of its bytes.
  */
 function hashFile(file: string): string {
   const hash = createHash("sha256");
-  const buffer = Buffer.alloc(CHUNK);
   const fd = fs.openSync(file, "r");
   try {
     for (;;) {
-      const read = fs.readSync(fd, buffer, 0, CHUNK, null);
+      const read = fs.readSync(fd, BUFFER, 0, CHUNK, null);
       if (read === 0) break;
-      hash.update(buffer.subarray(0, read));
+      hash.update(BUFFER.subarray(0, read));
     }
   } finally {
     fs.closeSync(fd);
@@ -57,7 +61,7 @@ function hashOf(file: string, entry: fs.Dirent): string {
  * Hashes every file and link under a directory. It never follows a link.
  * @param dir - The directory.
  * @param skip - Tells a relative posix path that is left out; a directory that it skips is left out whole.
- * @returns The snapshot. A directory that cannot be listed is one entry of its own, hashed as unreadable.
+ * @returns The snapshot. A directory that cannot be listed is one entry of its own, hashed as "unlistable".
  */
 export function snapshot(
   dir: string,
@@ -67,7 +71,7 @@ export function snapshot(
   walkTree(dir, {
     skip,
     unreadable: (relative) => {
-      if (relative) taken.set(relative, UNREADABLE);
+      if (relative) taken.set(relative, UNLISTABLE);
     },
     visit: ({ relative, file, dirent }) => {
       if (!dirent.isDirectory()) taken.set(relative, hashOf(file, dirent));
@@ -125,3 +129,14 @@ export const allChanged = (changes: ChangedFiles): string[] => [
   ...changes.modified,
   ...changes.deleted,
 ];
+
+/**
+ * Lists the directories that a snapshot could not look into.
+ * @param taken - A snapshot.
+ * @returns Their relative paths, sorted.
+ */
+export const unlistedIn = (taken: Snapshot): string[] =>
+  [...taken]
+    .filter(([, hash]) => hash === UNLISTABLE)
+    .map(([file]) => file)
+    .sort();

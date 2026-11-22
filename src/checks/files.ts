@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { isGlob } from "../glob.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { CHANGE_CHECKS } from "./file-changes.js";
 import { TEXT_CHECKS } from "./file-text.js";
@@ -63,7 +64,7 @@ const fileExists = (check: RuledCheck, outcome: Outcome): Verdict => {
   if (open.length === 0) {
     return {
       score: 0,
-      reason: `${shown(files.map(({ path }) => path))} exists but cannot be read`,
+      reason: `${shown(files.map(({ path }) => path))} ${files.length === 1 ? "exists" : "exist"} but cannot be read`,
     };
   }
   if (!check.created) return PASS;
@@ -72,14 +73,18 @@ const fileExists = (check: RuledCheck, outcome: Outcome): Verdict => {
     ? PASS
     : {
         score: 0,
-        reason: `${shown(open.map(({ path }) => path))} was in the seed, so the agent did not create ${open.length === 1 ? "it" : "any of them"}`,
+        reason: `${shown(open.map(({ path }) => path))} ${open.length === 1 ? "was" : "were"} in the seed, so the agent did not create ${open.length === 1 ? "it" : "any of them"}`,
       };
 };
 
 const fileAbsent = (check: RuledCheck, outcome: Outcome): Verdict => {
-  const { found } = lookup(check, outcome);
+  const { found } = lookup(check, outcome, true);
   if (found.capped !== null) return { score: 0, reason: found.capped };
-  const there = found.entries.map(({ path }) => path);
+  // A plain path that names a directory means its files, so the directory and its subdirectories are not "there".
+  const files = !isGlob(check.path ?? "") && found.entries[0]?.kind === "dir";
+  const there = found.entries
+    .filter(({ kind }) => !files || kind !== "dir")
+    .map(({ path }) => path);
   if (there.length > 0) {
     return {
       score: 0,
@@ -99,7 +104,15 @@ const fileCount = (check: RuledCheck, outcome: Outcome): Verdict => {
   if (found.capped !== null) return { score: 0, reason: found.capped };
   const files = pathsOf(found, "file");
   const { min = 1, max = Infinity } = check;
-  if (files.length >= min && files.length <= max) return PASS;
+  if (files.length >= min && files.length <= max) {
+    const unsure = found.unreadable.length > 0 && max !== Infinity;
+    return unsure
+      ? withUnlisted(
+          { score: 0, reason: "the count cannot be confirmed" },
+          found,
+        )
+      : PASS;
+  }
   const bound =
     files.length < min
       ? `fewer than min ${String(min)}`

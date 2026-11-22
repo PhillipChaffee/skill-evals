@@ -79,7 +79,7 @@ export const isGlob = (pattern: string): boolean => /[*?{]/.test(pattern);
  * @param glob - A glob.
  * @returns A relative posix path with no trailing slash, "" when the walk must start at the root.
  */
-const startOf = (glob: string): string =>
+export const globBase = (glob: string): string =>
   literalPrefix(glob).split("/").slice(0, -1).join("/");
 
 /**
@@ -110,7 +110,7 @@ export function expandGlob(
   const { limit = GLOB_LIMIT, onUnreadable = () => undefined } = options;
   const matcher = globToRegExp(glob);
   const found: string[] = [];
-  const from = startOf(glob);
+  const from = globBase(glob);
   let at = root;
   for (const part of from === "" ? [] : from.split("/")) {
     at = path.join(at, part);

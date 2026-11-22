@@ -8,7 +8,7 @@ import {
   quoteCalls,
 } from "../matchers.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
-import { checkBounds } from "./bounds.js";
+import { checkBounds, checkLineBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
 
 const TOOL_FIELDS = {
@@ -137,7 +137,10 @@ export const TOOL_CHECKS = {
     note: "A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
     needs: (check) => (check.sameTurn ? ["turnGrouping"] : []),
     notYet: ["by"],
-    validate: checkBounds,
+    validate: (given, where) => {
+      checkBounds(given, where);
+      checkLineBounds(given, where);
+    },
     rule: (check, outcome) =>
       counted(check, outcome, {
         min: check.min ?? 1,
@@ -148,6 +151,7 @@ export const TOOL_CHECKS = {
     fields: [],
     ...TOOL_FIELDS,
     notYet: ["by"],
+    validate: checkLineBounds,
     scores: "The agent made no tool call that fits every given field.",
     rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
   },

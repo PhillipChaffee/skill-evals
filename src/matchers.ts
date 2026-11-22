@@ -1,5 +1,6 @@
 import type { FieldDef, FieldParser } from "./checks/fields.js";
 import { FIELDS, readField, registerParser } from "./checks/fields.js";
+import { checkLineBounds } from "./checks/bounds.js";
 import { regex } from "./checks/rules.js";
 import type { ToolCall, ToolKind } from "./harnesses/shared.js";
 import { countLines, longestString } from "./lines.js";
@@ -79,6 +80,7 @@ export function parseMatcher(
   const read = Object.fromEntries(
     Object.keys(given).map((key) => [key, readField(defs, key, at)]),
   );
+  checkLineBounds(read, where);
   if (!SUBJECT_KEYS.some((key) => key in read)) {
     throw new UsageError(
       `${where}: a matcher needs at least one of ${SUBJECT_KEYS.map((key) => `"${key}"`).join(", ")}`,

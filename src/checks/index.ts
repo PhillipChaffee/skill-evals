@@ -91,12 +91,16 @@ export interface Outcome {
   seed: Snapshot;
   /** What the run created, modified and deleted in the workspace, compared with `seed`. */
   changed: ChangedFiles;
+  /** The directories of the workspace that could not be listed, before the run or after it. */
+  unlisted: string[];
   /** The run's throwaway home, for a check with `root: "home"`. */
   home: string;
   /** The home just before the harness's prompt ran: auth files and placed skills are in it, so they never read as the agent's. */
   homeSeed: Snapshot;
   /** What the run created, modified and deleted in the home, compared with `homeSeed`. */
   homeChanged: ChangedFiles;
+  /** The directories of the home that could not be listed, before the run or after it. */
+  homeUnlisted: string[];
   /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. `observed` is false
    * when the copy the agent saw could not be watched, which no check may read as "unchanged". */
   subject: { dir: string | null; mutated: string[]; observed?: boolean };

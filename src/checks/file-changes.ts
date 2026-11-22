@@ -3,7 +3,7 @@ import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
 import { pathProblem } from "./path-problem.js";
 import type { Tree } from "./tree.js";
-import { shown, treeOf, treeScope } from "./tree.js";
+import { mayHold, shown, treeOf, treeScope } from "./tree.js";
 import { UsageError } from "../scope.js";
 
 /** A changed path with how it changed. */
@@ -37,7 +37,27 @@ function changesIn(
   outcome: Outcome,
 ): { changes: Change[]; tree: Tree } {
   const tree = treeOf(check, outcome);
-  return { changes: changesOf(tree.changed), tree };
+  const inside = (path: string): boolean =>
+    tree.unlisted.some((dir) => path.startsWith(`${dir}/`));
+  // A directory that cannot be listed shows as a changed entry and as deleted files. Neither is a change.
+  const seen = changesOf(tree.changed).filter(
+    ({ path, how }) =>
+      !tree.unlisted.includes(path) && !(how === "deleted" && inside(path)),
+  );
+  return { changes: seen, tree };
+}
+
+/**
+ * Says which directories that cannot be listed could hold a match.
+ * @param tree - The tree the check looks at.
+ * @param patterns - The paths or globs of the check.
+ * @returns A clause that names them, "" when none could.
+ */
+function blind(tree: Tree, patterns: string[]): string {
+  const dirs = [
+    ...new Set(patterns.flatMap((glob) => mayHold(tree.unlisted, glob))),
+  ];
+  return dirs.length === 0 ? "" : `${shown(dirs)} cannot be listed`;
 }
 
 /**
@@ -51,9 +71,10 @@ function unchanged(check: RuledCheck, outcome: Outcome): Verdict {
   const { changes, tree } = changesIn(check, outcome);
   const test = treeScope(tree, check.path ?? "");
   const hit = changes.filter(({ path }) => test(path));
-  return hit.length === 0
-    ? PASS
-    : { score: 0, reason: `changed: ${named(hit)}` };
+  const dark = blind(tree, [check.path ?? ""]);
+  if (hit.length === 0 && dark === "") return PASS;
+  const parts = [hit.length > 0 ? `changed: ${named(hit)}` : "", dark];
+  return { score: 0, reason: parts.filter(Boolean).join("; ") };
 }
 
 /**
@@ -65,12 +86,12 @@ function unchanged(check: RuledCheck, outcome: Outcome): Verdict {
 function changed(check: RuledCheck, outcome: Outcome): Verdict {
   const { changes, tree } = changesIn(check, outcome);
   const test = treeScope(tree, check.path ?? "");
-  return changes.some(({ path }) => test(path))
-    ? PASS
-    : {
-        score: 0,
-        reason: `nothing matching "${check.path ?? ""}" was created, modified or deleted`,
-      };
+  if (changes.some(({ path }) => test(path))) return PASS;
+  const dark = blind(tree, [check.path ?? ""]);
+  return {
+    score: 0,
+    reason: `nothing matching "${check.path ?? ""}" was created, modified or deleted${dark === "" ? "" : `; ${dark}`}`,
+  };
 }
 
 /**
@@ -88,9 +109,15 @@ function changedOnly(check: RuledCheck, outcome: Outcome): Verdict {
       !ignored.some((test) => test(path)) &&
       !allowed.some((test) => test(path)),
   );
-  return outside.length === 0
-    ? PASS
-    : { score: 0, reason: `changed outside allow: ${named(outside)}` };
+  const covered = (dir: string): boolean =>
+    [...allowed, ...ignored].some((test) => test(`${dir}/x`));
+  const dark = tree.unlisted.filter((dir) => !covered(dir));
+  if (outside.length === 0 && dark.length === 0) return PASS;
+  const parts = [
+    outside.length > 0 ? `changed outside allow: ${named(outside)}` : "",
+    dark.length > 0 ? `${shown(dark)} cannot be listed` : "",
+  ];
+  return { score: 0, reason: parts.filter(Boolean).join("; ") };
 }
 
 /**
@@ -114,7 +141,7 @@ export const CHANGE_CHECKS = {
     fields: ["path"],
     optional: ["root"],
     scores:
-      "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed after the run scores 0.",
+      "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed, and could hold a match, scores 0.",
     note: "A plain path that names a directory, or ends in `/`, covers every file under it. A mode-only change is not a change, and a link is matched by its own path, never followed.",
     rule: unchanged,
   },
@@ -122,14 +149,14 @@ export const CHANGE_CHECKS = {
     fields: ["path"],
     optional: ["root"],
     scores:
-      "A file at `path` was created, modified or deleted by the run. A path that matches no file scores 0.",
+      "A file at `path` was created, modified or deleted by the run. A path that matches no file scores 0, and the reason names a directory that could not be listed and could have held one.",
     rule: changed,
   },
   files_changed_only: {
     fields: ["allow"],
     optional: ["ignore", "root"],
     scores:
-      "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it.",
+      "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it. A directory that could not be listed scores 0, unless an `allow` or `ignore` path covers all of it.",
     validate: checkGlobs,
     rule: changedOnly,
   },

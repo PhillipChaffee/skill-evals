@@ -834,7 +834,7 @@
     },
     "check-file_unchanged": {
       "title": "file_unchanged",
-      "description": "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed after the run scores 0. A plain path that names a directory, or ends in `/`, covers every file under it. A mode-only change is not a change, and a link is matched by its own path, never followed.",
+      "description": "No file at `path` was created, modified or deleted by the run. A path that matches no file in the seed and none now scores 1. A directory that could not be listed, and could hold a match, scores 0. A plain path that names a directory, or ends in `/`, covers every file under it. A mode-only change is not a change, and a link is matched by its own path, never followed.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -881,7 +881,7 @@
     },
     "check-file_changed": {
       "title": "file_changed",
-      "description": "A file at `path` was created, modified or deleted by the run. A path that matches no file scores 0.",
+      "description": "A file at `path` was created, modified or deleted by the run. A path that matches no file scores 0, and the reason names a directory that could not be listed and could have held one.",
       "type": "object",
       "required": ["type", "path"],
       "properties": {
@@ -928,7 +928,7 @@
     },
     "check-files_changed_only": {
       "title": "files_changed_only",
-      "description": "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it.",
+      "description": "Every path the run created, modified or deleted, except the ones `ignore` names, matches a path or glob of `allow`. A plain directory path covers everything under it. A directory that could not be listed scores 0, unless an `allow` or `ignore` path covers all of it.",
       "type": "object",
       "required": ["type", "allow"],
       "properties": {

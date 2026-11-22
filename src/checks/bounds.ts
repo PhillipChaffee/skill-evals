@@ -17,3 +17,21 @@ export function checkBounds(
     );
   }
 }
+
+/**
+ * Checks that the line bounds of a call matcher can be met.
+ * @param given - The fields that are set.
+ * @param where - Names the file and the check in an error message.
+ * @throws {UsageError} When `inputLinesMin` is above `inputLinesMax`.
+ */
+export function checkLineBounds(
+  given: Record<string, unknown>,
+  where: string,
+): void {
+  const { inputLinesMin: low, inputLinesMax: high } = given;
+  if (typeof low === "number" && typeof high === "number" && low > high) {
+    throw new UsageError(
+      `${where}: "inputLinesMin" ${String(low)} is above "inputLinesMax" ${String(high)}`,
+    );
+  }
+}

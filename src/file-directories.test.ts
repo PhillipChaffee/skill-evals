@@ -144,7 +144,7 @@ test("an unreadable directory makes file_lacks, file_absent and file_unchanged s
   const spy = unlistable("locked");
   try {
     const out = dirsWith(LOCKED_SEED).run();
-    const named = /cannot be listed: locked/;
+    const named = /locked cannot be listed/;
     for (const check of [
       { type: "file_lacks", path: "locked", pattern: "zzz" },
       { type: "file_lacks", path: "**/*.ts", pattern: "zzz" },
@@ -196,7 +196,7 @@ test("other checks name an unreadable directory in their reason", () => {
       { type: "file_lines", path: LOCKED_MD, min: 1 },
     ] as const) {
       expect(score(check, out).reason, check.type).toMatch(
-        /cannot be listed: locked/,
+        /locked cannot be listed/,
       );
     }
   } finally {
@@ -221,7 +221,7 @@ test("a path whose lookup fails for a reason other than absence fails closed; a 
     const absent = score({ type: "file_absent", path: SECRET }, out);
     expect(absent.score).toBe(0);
     expect(absent.reason).toBe(
-      "cannot be shown absent; cannot be listed: secret/x.ts",
+      "cannot be shown absent; secret/x.ts cannot be listed",
     );
     expect(
       score({ type: "file_lacks", path: SECRET, pattern: "z" }, out).score,
@@ -249,7 +249,7 @@ test("a root that cannot be looked up for another reason than absence fails clos
   }) as typeof fs.realpathSync.native);
   try {
     expect(score({ type: "file_absent", path: "a.ts" }, out).reason).toBe(
-      "cannot be shown absent; cannot be listed: .",
+      "cannot be shown absent; . cannot be listed",
     );
     expect(
       score({ type: "file_lacks", path: "**", pattern: "z" }, out).score,
