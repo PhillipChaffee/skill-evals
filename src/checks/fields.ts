@@ -1,6 +1,8 @@
 import { readNeeds } from "../capabilities.js";
 import { caseEnvProblem } from "../env.js";
 import { CALL_FIELDS, parseVias } from "./call-fields.js";
+import { COMMAND_FIELDS } from "./command-fields.js";
+import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
@@ -99,6 +101,7 @@ export const FIELDS: Record<string, FieldDef> = {
   },
   ...CALL_FIELDS,
   ...FILE_FIELDS,
+  ...COMMAND_FIELDS,
   rubric: {
     type: "text",
     meaning: "Plain text that says what a good answer does.",
@@ -117,17 +120,7 @@ export const FIELDS: Record<string, FieldDef> = {
     meaning:
       "An object of at least two answers, each with a number from 0 to 1 that says what the answer is worth.",
   },
-  requires: {
-    type: "needs",
-    meaning:
-      'A list of capabilities the check needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host\'s `PATH`. A harness that lacks one cannot run the check.',
-  },
-  ifUnsupported: {
-    type: "enum",
-    values: ["skip", "not-applicable"],
-    meaning:
-      'What a harness that lacks what the check needs does: "skip" drops this check and re-normalizes the weights, "not-applicable" excludes the whole case. Default: "not-applicable".',
-  },
+  ...NEED_FIELDS,
 };
 
 /** The `weight` of a check or of a case, which every one of them may carry. */

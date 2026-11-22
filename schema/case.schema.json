@@ -160,6 +160,7 @@
           { "$ref": "#/$defs/check-first_tool" },
           { "$ref": "#/$defs/check-tool_order" },
           { "$ref": "#/$defs/check-subject_unchanged" },
+          { "$ref": "#/$defs/check-command" },
           { "$ref": "#/$defs/check-judge" },
           { "$ref": "#/$defs/check-decision" }
         ]
@@ -1871,6 +1872,82 @@
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
           ]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-command": {
+      "title": "command",
+      "description": "The command exits with the expected code and its standard output passes. With `score: stdout`, the score is the number on the last line of standard output. It runs after the agent exits, in the workspace, as you, without a sandbox. See the safety page.",
+      "type": "object",
+      "required": ["type", "run"],
+      "properties": {
+        "type": { "const": "command" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "run": {
+          "title": "run",
+          "description": "Shell text, run with `/bin/sh -c` in the workspace after the agent exits. It runs as you, without a sandbox.",
+          "type": "string",
+          "minLength": 1
+        },
+        "expectExit": {
+          "title": "expectExit",
+          "description": "The exit code that counts as success. Default: 0.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "stdoutMatches": {
+          "title": "stdoutMatches",
+          "description": "A regular expression that the command's standard output must match.",
+          "type": "string",
+          "minLength": 1
+        },
+        "stdoutLacks": {
+          "title": "stdoutLacks",
+          "description": "A regular expression that the command's standard output must not match.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutSeconds": {
+          "title": "timeoutSeconds",
+          "description": "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120 for a `command` check, 600 for a case.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "score": {
+          "title": "score",
+          "description": "How the check scores: \"exit\" gives 1 or 0, \"stdout\" reads a number from 0 to 1 on the last non-empty line of standard output, and anything else scores 0. The exit code and the patterns must hold either way. Default: \"exit\".",
+          "type": "string",
+          "enum": ["exit", "stdout"]
         },
         "requires": {
           "title": "requires",

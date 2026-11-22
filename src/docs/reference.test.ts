@@ -124,7 +124,7 @@ test("the API page documents the exports of the package with their doc comments"
   );
   expect(api).toMatch(/^\*\*Throws `UsageError`\.\*\* For a wrong option/m);
   expect(api).toContain("| `outDir` | `string` |");
-  expect(api).toContain("type CheckResult = Check & {");
+  expect(api).toContain("type CheckResult = WithoutScore<Check> & {");
   expect(api).toContain("const HARNESSES: Harness[]");
 });
 

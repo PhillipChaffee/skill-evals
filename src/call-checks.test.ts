@@ -2,10 +2,10 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
 import type { RuledCheck } from "./checks/index.js";
-import { checkScore, describeCheck } from "./checks/index.js";
+import { describeCheck } from "./checks/index.js";
 import type { ToolCall } from "./harnesses/shared.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
-import { NO_FILES } from "./testing/outcome.js";
+import { NO_FILES, scoredNow } from "./testing/outcome.js";
 
 const call = (name: string, input: unknown, turn?: number): ToolCall => ({
   name,
@@ -14,7 +14,7 @@ const call = (name: string, input: unknown, turn?: number): ToolCall => ({
   ...(turn !== undefined && { turn }),
 });
 const score = (check: Omit<RuledCheck, "weight">, calls: ToolCall[]) =>
-  checkScore(
+  scoredNow(
     { ...check, weight: 1 },
     {
       toolCalls: calls.map((one, index) => ({ ...one, index })),

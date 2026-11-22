@@ -201,7 +201,10 @@ test("a field the table does not define is an unknown key", () => {
 test("the table types the fields that exist today, and the regex fields come from it", () => {
   expect(FIELDS["pattern"]?.type).toBe("regex");
   expect(FIELDS["expect"]?.values).toEqual(["yes", "no"]);
-  expect(REGEX_FIELDS).toEqual(["pattern", "name", "inputMatches"]);
+  expect(REGEX_FIELDS).toEqual([
+    ...["pattern", "name", "inputMatches"],
+    ...["stdoutMatches", "stdoutLacks"],
+  ]);
   expect(read("number", 1, WEIGHT)).toBe(1);
 });
 

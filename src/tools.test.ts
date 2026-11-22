@@ -1,10 +1,9 @@
 import { expect, test } from "vitest";
 import type { RuledCheck } from "./checks/index.js";
-import { checkScore } from "./checks/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
 import { legacySkillLoads } from "./skill-events.js";
 import { lines, parse, parseText } from "./testing/streams.js";
-import { NO_FILES } from "./testing/outcome.js";
+import { NO_FILES, scoredNow } from "./testing/outcome.js";
 
 const CODEX_STREAM = "codex.stream.jsonl";
 
@@ -47,7 +46,7 @@ const TOOL_STREAMS: [string, string][] = [
   ["cursor", "cursor.stream.jsonl"],
 ];
 const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
-  checkScore(
+  scoredNow(
     { ...check, weight: 1 },
     {
       toolCalls: parse(id, name).toolCalls,

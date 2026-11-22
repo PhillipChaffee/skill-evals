@@ -1,10 +1,12 @@
 import type { Capability, Need } from "../capabilities.js";
+import type { CommandContext } from "../command.js";
 import type { Loaded, ToolCall, ToolKind } from "../harnesses/shared.js";
 import type { SkillEvent, SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
 import type { ChangedFiles, Snapshot } from "../snapshot.js";
 import { UsageError } from "../scope.js";
+import { COMMAND_CHECKS } from "./command.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
 import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
@@ -46,6 +48,12 @@ interface CheckFields {
   created?: boolean;
   allow?: string[];
   ignore?: string[];
+  run?: string;
+  expectExit?: number;
+  stdoutMatches?: string;
+  stdoutLacks?: string;
+  timeoutSeconds?: number;
+  score?: "exit" | "stdout";
   rubric?: string;
   question?: string;
   expect?: "yes" | "no";
@@ -112,15 +120,28 @@ export interface Outcome {
   /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. `observed` is false
    * when the copy the agent saw could not be watched, which no check may read as "unchanged". */
   subject: { dir: string | null; mutated: string[]; observed?: boolean };
+  /** Where a `command` check runs and what it may read. */
+  command: CommandContext;
 }
 
 /** What a rule says of one run: a score from 0 to 1, and optionally why. */
 export interface Verdict {
   score: number;
   reason?: string;
+  /** For a `command` check: what the command did, with each stream cut to its last 2,000 bytes. */
+  command?: {
+    run: string;
+    exit: number | null;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+  };
 }
-/** Scores one check from what the run left behind. */
-export type Rule = (check: RuledCheck, outcome: Outcome) => Verdict;
+/** Scores one check from what the run left behind. A rule that waits for a process returns a promise. */
+export type Rule = (
+  check: RuledCheck,
+  outcome: Outcome,
+) => Verdict | Promise<Verdict>;
 
 /** A check type: the fields it requires, the fields it may take, and the rule that scores it from 0 to 1. */
 export interface Spec {
@@ -162,6 +183,7 @@ const RULED = {
   ...TOOL_CHECKS,
   ...ORDER_CHECKS,
   ...OBSERVED_CHECKS,
+  ...COMMAND_CHECKS,
 };
 type RuledType = keyof typeof RULED;
 
@@ -186,7 +208,7 @@ export const CHECKS: Record<string, Spec> = {
  * @param check - Any check of a case.
  * @returns True when a model scores the check, false when a rule does.
  */
-export const isJudged = (check: Check): check is JudgedCheck =>
+export const isJudged = (check: Pick<Check, "type">): check is JudgedCheck =>
   check.type === "judge";
 
 /**
@@ -194,17 +216,20 @@ export const isJudged = (check: Check): check is JudgedCheck =>
  * @param check - Any check of a case.
  * @returns True when the score is the expected value of a decision model's probabilities.
  */
-export const isDecision = (check: Check): check is DecisionCheck =>
-  check.type === "decision";
+export const isDecision = (
+  check: Pick<Check, "type">,
+): check is DecisionCheck => check.type === "decision";
 
 /**
  * Scores a deterministic check.
  * @param check - A check that a rule scores.
  * @param outcome - What the run left behind.
- * @returns The verdict: 1 when the check holds, 0 when it does not.
+ * @returns The verdict: 1 when the check holds, 0 when it does not. A promise for a check that runs a command.
  */
-export const checkScore = (check: RuledCheck, outcome: Outcome): Verdict =>
-  RULED[check.type].rule(check, outcome);
+export const checkScore = (
+  check: RuledCheck,
+  outcome: Outcome,
+): Verdict | Promise<Verdict> => RULED[check.type].rule(check, outcome);
 
 // A question with one allowed answer decides nothing.
 const MIN_OPTIONS = 2;
@@ -312,7 +337,7 @@ const ELLIPSIS = "...";
  *   its options, and a weight other than 1 is shown.
  */
 export function describeCheck(check: Check): string {
-  const quoted = [check.text, check.rubric, check.question]
+  const quoted = [check.text, check.run, check.rubric, check.question]
     .filter((text) => text !== undefined)
     .map((text) =>
       JSON.stringify(

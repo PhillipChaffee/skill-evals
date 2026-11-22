@@ -12,6 +12,23 @@ export interface ExecOptions {
   timeoutSeconds: number;
   /** Written to the command's standard input. Absent means the command gets no input at all. */
   stdin?: string | undefined;
+  /**
+   * Stops the whole process group when the command itself exits, not only when its pipes close. Without it a
+   * background process that keeps a pipe open holds the result back until the timeout. Default: false.
+   */
+  reapOnExit?: boolean | undefined;
+}
+
+/** What a finished command left behind. */
+export interface ExecResult {
+  stdout: string;
+  stderr: string;
+  /** Why it failed: a timeout, a non-zero exit with the end of its standard error, or a start that did not work. Null after exit code 0. */
+  failure: string | null;
+  /** The exit code; null when a signal ended the command or it never started. */
+  exit: number | null;
+  /** Which way it failed when it did not exit by itself; null for an exit, whatever its code. */
+  kind: "timeout" | "spawn" | null;
 }
 
 /**
@@ -42,14 +59,14 @@ function start(bin: string, args: string[], run: ExecOptions) {
  * @param bin - The executable.
  * @param args - Its arguments.
  * @param options - Where and with what to run it, and for how long.
- * @returns Everything the command wrote to standard output, and why it failed: a timeout, a non-zero exit with the
- *   end of its standard error, or a start that did not work. `failure` is null after exit code 0.
+ * @returns Everything the command wrote to both streams, and why it failed: a timeout, a non-zero exit with the end of
+ *   its standard error, or a start that did not work. `failure` is null after exit code 0.
  */
 export function exec(
   bin: string,
   args: string[],
   options: ExecOptions,
-): Promise<{ stdout: string; failure: string | null }> {
+): Promise<ExecResult> {
   const { timeoutSeconds } = options;
   return new Promise((resolve) => {
     const child = start(bin, args, options);
@@ -74,20 +91,29 @@ export function exec(
     }, timeoutSeconds * MS_PER_SECOND);
     child.stdout.on("data", (chunk: string) => (stdout += chunk));
     child.stderr.on("data", (chunk: string) => (stderr += chunk));
-    const finish = (failure: string | null): void => {
+    let finished = false;
+    const finish = (
+      failure: string | null,
+      exit: number | null,
+      kind: ExecResult["kind"],
+    ): void => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
       reap();
-      resolve({ stdout, failure });
+      resolve({ stdout, stderr, failure, exit, kind });
     };
     child.on("error", (error) => {
-      finish(error.message);
+      finish(error.message, null, "spawn");
     });
+    if (options.reapOnExit) child.on("exit", kill);
     child.on("close", (code, signal) => {
-      if (timedOut) finish(`timed out after ${String(timeoutSeconds)} s`);
-      else if (code === 0) finish(null);
+      if (timedOut) {
+        finish(`timed out after ${String(timeoutSeconds)} s`, code, "timeout");
+      } else if (code === 0) finish(null, code, null);
       else {
         const tail = stderr.trim().slice(-SHOWN_STDERR_LENGTH);
-        finish(`exit ${String(code ?? signal)}: ${tail}`);
+        finish(`exit ${String(code ?? signal)}: ${tail}`, code, null);
       }
     });
   });

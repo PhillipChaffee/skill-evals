@@ -9,7 +9,7 @@ import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
-import { requireLinksInside } from "./isolate.js";
+import { graderOf, workspaceOf } from "./case-dirs.js";
 import { limitsOf } from "./case-limits.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -62,6 +62,11 @@ export interface Case {
   minDelta?: number | undefined;
   /** A directory whose content the agent starts with, or null for an empty workspace. */
   workspaceDir: string | null;
+  /**
+   * The case's `grader/` directory, or null. It is never copied before the agent runs. After the agent exits a
+   * `command` check reaches a copy of it through `SKILL_EVALS_GRADER_DIR`.
+   */
+  graderDir: string | null;
   /** The keys of the case file that start with `x-`, which belong to the case's author. */
   extensions: Record<string, unknown>;
 }
@@ -286,6 +291,7 @@ function loadCase(found: Found, mode: Mode): Case[] {
       (read("timeoutSeconds") as number | undefined) ?? DEFAULT_TIMEOUT_SECONDS,
     ...settingsOf(read),
     workspaceDir: workspaceOf(workspaceDir, file),
+    graderDir: graderOf(dir, file),
   };
   const variants = read("variants") as Record<string, unknown>[] | undefined;
   return expand(
@@ -293,27 +299,6 @@ function loadCase(found: Found, mode: Mode): Case[] {
     variants && readVariants(variants, prompt, { file, mode }),
     prompt,
   );
-}
-
-/**
- * Finds a case's `workspace/` folder, and makes sure that no link in it can reach outside it.
- * @param dir - Where the folder would be.
- * @param file - The case file, for an error message.
- * @returns The folder, or null when there is none.
- * @throws {UsageError} Naming the first link whose target is absolute or leads outside the folder: a copy keeps links
- *   as they are, so the agent could write into the case through it.
- */
-function workspaceOf(dir: string, file: string): string | null {
-  if (!fs.existsSync(dir)) return null;
-  try {
-    requireLinksInside(dir, "the workspace");
-  } catch (error) {
-    if (error instanceof UsageError) {
-      throw new UsageError(`${file}: workspace/${error.message}`);
-    }
-    throw error;
-  }
-  return dir;
 }
 
 /** What loading cases takes besides the directory. */

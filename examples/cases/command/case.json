@@ -1,0 +1,15 @@
+{
+  "description": "Pass a check the agent never saw, run after it exits.",
+  "tags": ["command"],
+  "checks": [
+    {
+      "type": "command",
+      "run": "node \"$SKILL_EVALS_GRADER_DIR/held-out.mjs\"",
+      "stdoutMatches": "^ok ",
+      "weight": 3
+    },
+    { "type": "command", "run": "node --check src/parse.mjs" },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

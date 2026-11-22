@@ -49,6 +49,7 @@ const probe = (subject: Subject): Case => ({
   weight: 1,
   timeoutSeconds: PROBE_TIMEOUT_SECONDS,
   workspaceDir: null,
+  graderDir: null,
   extensions: {},
   tags: [],
   targets: [],

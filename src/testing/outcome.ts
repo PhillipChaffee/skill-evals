@@ -2,7 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { onTestFinished } from "vitest";
-import type { Outcome, RuledCheck } from "../checks/index.js";
+import type { CommandContext } from "../command.js";
+import type { Outcome, RuledCheck, Verdict } from "../checks/index.js";
 import { checkScore } from "../checks/index.js";
 import { NOT_REPORTED } from "../harnesses/shared.js";
 import { fileState } from "../run-files.js";
@@ -17,6 +18,16 @@ export const NO_FILES = {
   homeSeed: new Map<string, string>(),
   homeChanged: { created: [], modified: [], deleted: [] },
   homeUnlisted: [] as string[],
+  // A command that looks at nothing: the workspace is where the test put it, and no held-out directory exists.
+  command: {
+    workspace: "",
+    graderDir: null,
+    seedDir: "",
+    home: "",
+    transcriptFile: null,
+    remoteDir: null,
+    env: {},
+  } as CommandContext,
 };
 
 /**
@@ -76,9 +87,15 @@ export function dirsWith(seed: Record<string, string> = {}): Dirs {
       const before = snapshot(workspace);
       const homeBefore = snapshot(home);
       agent({ workspace, home });
-      return bareOutcome(
-        fileState({ workspace, seed: before, home, homeSeed: homeBefore }),
-      );
+      return bareOutcome({
+        ...fileState({ workspace, seed: before, home, homeSeed: homeBefore }),
+        command: {
+          ...NO_FILES.command,
+          workspace,
+          seedDir: workspace,
+          home,
+        },
+      });
     },
   };
 }
@@ -87,10 +104,30 @@ export function dirsWith(seed: Record<string, string> = {}): Dirs {
 export type Given = Omit<RuledCheck, "weight">;
 
 /**
+ * Scores a check whose rule does not wait for a process.
+ * @param check - The check, with its weight.
+ * @param outcome - What the run left behind.
+ * @returns Its verdict.
+ */
+export const scoredNow = (check: RuledCheck, outcome: Outcome): Verdict =>
+  checkScore(check, outcome) as Verdict;
+
+/**
  * Scores one check against an outcome.
  * @param check - The check, with the fields its type takes.
  * @param outcome - What the run left behind.
  * @returns Its verdict.
  */
 export const scored = (check: Given, outcome: Outcome) =>
-  checkScore({ ...check, weight: 1 }, outcome);
+  scoredNow({ ...check, weight: 1 }, outcome);
+
+/**
+ * Scores one check against an outcome, waiting for a rule that runs a process.
+ * @param check - The check, with the fields its type takes.
+ * @param outcome - What the run left behind.
+ * @returns Its verdict.
+ */
+export const scoredAsync = async (
+  check: Given,
+  outcome: Outcome,
+): Promise<Verdict> => checkScore({ ...check, weight: 1 }, outcome);

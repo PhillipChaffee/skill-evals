@@ -243,6 +243,53 @@ A link in a case's `workspace/` folder whose target is absolute, or leads outsid
 
 The full cases are in `examples/cases/file-state`.
 
+## Commands after the run
+
+A `command` check runs a shell command in the workspace after the agent exits, and scores it. Use it for what a pattern cannot say: the project's own tests, a check the agent never saw, a `git` query, or a mutation check.
+
+```json
+{
+  "type": "command",
+  "run": "node \"$SKILL_EVALS_GRADER_DIR/held-out.mjs\"",
+  "expectExit": 0,
+  "stdoutMatches": "^ok ",
+  "timeoutSeconds": 120,
+  "weight": 3
+}
+```
+
+The command runs with `/bin/sh -c`, in the workspace, in its own process group. The check scores 1 when the exit code is `expectExit` (default 0) and standard output matches `stdoutMatches` and does not match `stdoutLacks`, and 0 when it does not. With `"score": "stdout"` the check scores the number on the last non-empty line of standard output, which must be from 0 to 1; any other last line scores 0 and the reason quotes it. The exit code and the patterns must hold either way. A mutation ratio is a good use: the grader prints `0.75` when it caught three of four bad changes.
+
+Checks run one after the other in case order, so a later command sees what an earlier one did. A command that times out, or cannot be started, scores 0 with the reason (`timed out after 1 s`, `could not start: ...`), and the run stays valid. Whatever the command left running in the background is killed with it. A command check runs only when the run is valid so far: after a harness error or a time limit, it is not run, scores nothing, and the run is invalid for its first reason.
+
+The run record keeps the command, its exit code, its duration, and the last 2,000 bytes of each stream as `command` on the check. The reason is `exit <n> in <ms> ms`, and on a failure it ends with the end of standard error.
+
+A `grader/` folder beside `prompt.md` holds files that only the command may read. It is not copied into the workspace before the agent runs. After the agent exits it is copied into a new temp directory with a plain name, and `SKILL_EVALS_GRADER_DIR` names it. The copy is removed with the run's other temp directories. A `grader/` folder inside `workspace/` is a load error, because the agent would start with the held-out files.
+
+The command gets exactly these variables, and the ones in the case's `env`, and nothing else from your shell. It never gets a provider key.
+
+| Variable                                                      | Value                                                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `PATH`, `TMPDIR`, `LANG`                                      | Taken from the environment of the command that runs `skill-evals`.                                      |
+| `HOME`, `SKILL_EVALS_HOME`                                    | The run's throwaway home.                                                                               |
+| `SKILL_EVALS_WORKSPACE`                                       | The workspace, as the agent left it.                                                                    |
+| `SKILL_EVALS_GRADER_DIR`                                      | The copy of `grader/`. Not set when the case has none.                                                  |
+| `SKILL_EVALS_SEED_DIR`                                        | A copy of the workspace as it was before the agent ran. Taken only when the case has a `command` check. |
+| `SKILL_EVALS_TRANSCRIPT`, `SKILL_EVALS_REMOTE_DIR`            | Not set yet.                                                                                            |
+| `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`                    | `/dev/null` and `1`, so no git setting of yours applies.                                                |
+| `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and the two `_EMAIL`s | `fixture`, and `fixture@example.invalid`.                                                               |
+
+A mutation check applies a known-bad change and expects the agent's own check to catch it:
+
+```json
+{
+  "type": "command",
+  "run": "git apply \"$SKILL_EVALS_GRADER_DIR/bad.patch\" && ! npm run lint --silent"
+}
+```
+
+Commands run as you, without a sandbox. [Safety](../safety.md) says what that means. The full case is in `examples/cases/command`.
+
 ## Checks that a model scores
 
 Use a `judge` check or a `decision` check for a quality that no pattern can find. [Judged checks](judged-checks.md) and [Decision checks](decision-checks.md) say how each is scored and configured.

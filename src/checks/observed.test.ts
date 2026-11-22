@@ -1,10 +1,9 @@
 import { expect, test } from "vitest";
 import { NOT_REPORTED } from "../harnesses/shared.js";
-import { checkScore } from "./index.js";
-import { NO_FILES } from "../testing/outcome.js";
+import { NO_FILES, scoredNow } from "../testing/outcome.js";
 
 const score = (mutated: string[], observed?: boolean) =>
-  checkScore(
+  scoredNow(
     { type: "subject_unchanged", weight: 1 },
     {
       finalText: "",

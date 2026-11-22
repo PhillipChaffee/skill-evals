@@ -86,34 +86,35 @@ type Need = Capability | `bin:${string}`;
 
 One prompt and what a good run of it does.
 
-| Property         | Type                      | Description                                                                                                     |
-| ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `id`             | `string`                  | What `--case` selects and results are keyed by: the case's path, or `<path>@<variant>` for a variant.           |
-| `base`           | `string`                  | The case's path, which a variant shares with its case. Equal to `id` for a case without variants.               |
-| `variant`        | `string \| null`          | The variant's id, or null for a case without variants.                                                          |
-| `heldout`        | `boolean`                 | True for a variant that runs only with `--heldout`.                                                             |
-| `prompt`         | `string`                  |                                                                                                                 |
-| `checks`         | `Check[]`                 |                                                                                                                 |
-| `weight`         | `number`                  |                                                                                                                 |
-| `minScore?`      | `number \| undefined`     |                                                                                                                 |
-| `maxTurns?`      | `number \| undefined`     |                                                                                                                 |
-| `timeoutSeconds` | `number`                  |                                                                                                                 |
-| `requires`       | `Need[]`                  | What a harness must be able to do for the case to apply, besides what its checks imply.                         |
-| `harnesses?`     | `string[] \| undefined`   | The harnesses the case is for, when it is for some only. A last resort: `note` says why.                        |
-| `note?`          | `string \| undefined`     | Why the case is limited to `harnesses`; the report shows it as the reason the case is not applicable elsewhere. |
-| `tags`           | `string[]`                | Labels that `--tag`, `--tag-all` and `--not-tag` select by.                                                     |
-| `description?`   | `string \| undefined`     | What the case shows, in a sentence.                                                                             |
-| `targets`        | `string[]`                | The names of the skills the case is about; the coverage table counts them.                                      |
-| `kind?`          | `string \| undefined`     | The kind of case, such as `trigger`.                                                                            |
-| `expected?`      | `string \| undefined`     | What a good run does, in a sentence for readers.                                                                |
-| `guard`          | `boolean`                 | True for a case that must keep passing. The report lists it apart, and it is scored like any case.              |
-| `reps?`          | `number \| undefined`     | Runs for each subject, in place of `--reps`.                                                                    |
-| `model?`         | `string \| undefined`     | The model of the agent in this case's runs, in place of `--model`.                                              |
-| `judgeModel?`    | `string \| undefined`     | The model that scores this case's judged checks, in place of `--judge-model`.                                   |
-| `env`            | `Record<string, string>`  | Variables the agent's process gets, set outright.                                                               |
-| `minDelta?`      | `number \| undefined`     | The least score difference between the subjects that the case must show.                                        |
-| `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                |
-| `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                              |
+| Property         | Type                      | Description                                                                                                                                                                       |
+| ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `string`                  | What `--case` selects and results are keyed by: the case's path, or `<path>@<variant>` for a variant.                                                                             |
+| `base`           | `string`                  | The case's path, which a variant shares with its case. Equal to `id` for a case without variants.                                                                                 |
+| `variant`        | `string \| null`          | The variant's id, or null for a case without variants.                                                                                                                            |
+| `heldout`        | `boolean`                 | True for a variant that runs only with `--heldout`.                                                                                                                               |
+| `prompt`         | `string`                  |                                                                                                                                                                                   |
+| `checks`         | `Check[]`                 |                                                                                                                                                                                   |
+| `weight`         | `number`                  |                                                                                                                                                                                   |
+| `minScore?`      | `number \| undefined`     |                                                                                                                                                                                   |
+| `maxTurns?`      | `number \| undefined`     |                                                                                                                                                                                   |
+| `timeoutSeconds` | `number`                  |                                                                                                                                                                                   |
+| `requires`       | `Need[]`                  | What a harness must be able to do for the case to apply, besides what its checks imply.                                                                                           |
+| `harnesses?`     | `string[] \| undefined`   | The harnesses the case is for, when it is for some only. A last resort: `note` says why.                                                                                          |
+| `note?`          | `string \| undefined`     | Why the case is limited to `harnesses`; the report shows it as the reason the case is not applicable elsewhere.                                                                   |
+| `tags`           | `string[]`                | Labels that `--tag`, `--tag-all` and `--not-tag` select by.                                                                                                                       |
+| `description?`   | `string \| undefined`     | What the case shows, in a sentence.                                                                                                                                               |
+| `targets`        | `string[]`                | The names of the skills the case is about; the coverage table counts them.                                                                                                        |
+| `kind?`          | `string \| undefined`     | The kind of case, such as `trigger`.                                                                                                                                              |
+| `expected?`      | `string \| undefined`     | What a good run does, in a sentence for readers.                                                                                                                                  |
+| `guard`          | `boolean`                 | True for a case that must keep passing. The report lists it apart, and it is scored like any case.                                                                                |
+| `reps?`          | `number \| undefined`     | Runs for each subject, in place of `--reps`.                                                                                                                                      |
+| `model?`         | `string \| undefined`     | The model of the agent in this case's runs, in place of `--model`.                                                                                                                |
+| `judgeModel?`    | `string \| undefined`     | The model that scores this case's judged checks, in place of `--judge-model`.                                                                                                     |
+| `env`            | `Record<string, string>`  | Variables the agent's process gets, set outright.                                                                                                                                 |
+| `minDelta?`      | `number \| undefined`     | The least score difference between the subjects that the case must show.                                                                                                          |
+| `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                                                                                  |
+| `graderDir`      | `string \| null`          | The case's `grader/` directory, or null. It is never copied before the agent runs. After the agent exits a `command` check reaches a copy of it through `SKILL_EVALS_GRADER_DIR`. |
+| `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                                                                                                |
 
 ### LoadOptions
 
@@ -336,13 +337,15 @@ One tool call of the agent.
 A check with what it gave one run.
 
 ```ts
-type CheckResult = Check & {
-  /** Null when a judged check or a decision check got no usable answer. */
+type CheckResult = WithoutScore<Check> & {
+  /** Null when a judged check, a decision check or a command check got no usable answer. */
   score: number | null;
   /** The judge's reason, or why there is no score. */
   reason?: string;
   /** For a decision check, the probability the model gave each allowed answer. */
   probabilities?: Record<string, number>;
+  /** For a command check: what the command did, each stream cut to its last 2,000 bytes. */
+  command?: Verdict["command"];
 };
 ```
 

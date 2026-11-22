@@ -27,6 +27,7 @@ const caseOf = (more: Partial<Case>): Case => ({
   weight: 1,
   timeoutSeconds: 1,
   workspaceDir: null,
+  graderDir: null,
   extensions: {},
   tags: [],
   targets: [],

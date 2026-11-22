@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { CommandCopies } from "./command.js";
+import { copiesForCommands } from "./command.js";
 import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
@@ -31,6 +33,11 @@ export interface SessionInput {
   pass?: string[] | undefined;
   /** Variables a case sets for the agent, with their values. They reach the agent's process only. */
   env?: Record<string, string> | undefined;
+  /**
+   * Present when the case has a command check: the session keeps a copy of the workspace before the agent runs, and
+   * copies `graderDir` (the case's held-out directory, or null) after the agent exits.
+   */
+  commands?: { graderDir: string | null } | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -54,6 +61,10 @@ export interface SessionResult {
   homeSeed: Snapshot;
   /** Where the adapter placed each skill: skill name to directory; absent when it placed none. */
   placed: Record<string, string> | undefined;
+  /** The workspace as the copy left it, kept as a directory; null unless the case has a command check. */
+  seedDir: string | null;
+  /** The held-out directory, copied after the agent exited; null when the case has none or has no command check. */
+  graderDir: string | null;
 }
 
 // Login files hold secrets, so only the owner may read the copies.
@@ -270,6 +281,7 @@ export async function session<T>(
   const { isolated } = run;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
+  let copies: CommandCopies | null = null;
   try {
     if (workspaceDir) {
       fs.cpSync(workspaceDir, workspace.dir, {
@@ -278,6 +290,9 @@ export async function session<T>(
       });
     }
     const seed = snapshot(workspace.dir);
+    copies = run.commands
+      ? copiesForCommands(workspace.dir, run.commands.graderDir)
+      : null;
     copyAuthFiles(harness.authFiles, home.dir);
     const input = {
       subject,
@@ -290,6 +305,8 @@ export async function session<T>(
     };
     const { stdout, failure, durationMs, placedChanges, placed, homeSeed } =
       await attempt(run, input);
+    // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
+    const graderDir = copies?.copyGrader() ?? null;
     const parsed = parseStream(harness, stdout);
     // The harness's own message is the most specific one, but only when it produced a stream at all.
     const error =
@@ -305,8 +322,11 @@ export async function session<T>(
       home: home.dir,
       homeSeed,
       placed,
+      seedDir: copies?.seedDir ?? null,
+      graderDir,
     });
   } finally {
+    copies?.dispose();
     home.dispose();
     workspace.dispose();
   }
