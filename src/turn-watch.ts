@@ -15,8 +15,10 @@ export interface TurnWatch {
 /**
  * Starts counting the turns of a harness's stream. Chunks are joined into whole lines first, so an adapter never sees a
  * half line, and a line is read as the adapter's parse reads it (`jsonLine`). The runner stops the process as turn
- * `maxTurns + 1` begins, so a partial extra turn may be in the transcript; nothing that was seen is cut. The count is
- * the count at the stop: output that arrives after it is not counted.
+ * `maxTurns + 1` begins, so a partial extra turn may be in the transcript; nothing that was seen is cut. Counting ends
+ * at the stop request: for a run stopped at `maxTurns`, and for an exit that the kill did not end (the process exited
+ * or crashed first), the count is the count at that request, and output that arrives after it is not counted. For a
+ * timeout there is no request, and the lines read until the process was gone count, the drain included.
  * @param harness - The adapter; one without `countTurns` cannot be watched.
  * @param maxTurns - The most turns the agent may take; absent counts without ever stopping.
  * @returns The watch, or null for a harness that cannot count turns.

@@ -47,6 +47,30 @@ test(
 );
 
 test(
+  "a child that writes the crossing chunk and then crashes with its own signal was not stopped",
+  async () => {
+    const crash = 'console.log("{}"); process.kill(process.pid, "SIGSEGV")';
+    const run = await exec(process.execPath, ["-e", crash], {
+      cwd: process.cwd(),
+      env: ENV,
+      timeoutSeconds: 20,
+      onStdout: () => {
+        block(LAG_MS);
+        return "stop";
+      },
+    });
+
+    expect(run).toMatchObject({
+      stopped: false,
+      signal: "SIGSEGV",
+      kind: null,
+    });
+    expect(run.failure).toMatch(/^exit SIGSEGV/);
+  },
+  TEST_TIMEOUT_MS,
+);
+
+test(
   "a chunk that is read after the overdue timeout fired is a timeout, not a stop",
   async () => {
     // The child stays alive, so the timeout's kill ends it by a signal, as a runner's stop would.
@@ -69,9 +93,12 @@ test(
   TEST_TIMEOUT_MS,
 );
 
-test(
-  "a stream with three turns and no result, then exit 1, is a failed run even with maxTurns 2",
-  async () => {
+test.each([
+  ["exit 1", "process.exit(1)"],
+  ["a crash by its own signal", 'process.kill(process.pid, "SIGSEGV")'],
+])(
+  "a stream with three turns and no result, then %s, is a failed run even with maxTurns 2",
+  async (_ending, end) => {
     const box = sandbox();
     const turn = (id: number) =>
       JSON.stringify({
@@ -83,7 +110,7 @@ test(
       });
     const crash = box.write(
       "bin/crash.mjs",
-      `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify([1, 2, 3].map(turn).join("\n") + "\n")});\nprocess.exit(1);\n`,
+      `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify([1, 2, 3].map(turn).join("\n") + "\n")});\n${end};\n`,
     );
     fs.chmodSync(crash, 0o755);
     // The counter blocks as the runner would when it is behind, so the process has exited before the stop is asked for.

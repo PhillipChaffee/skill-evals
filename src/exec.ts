@@ -246,10 +246,13 @@ function readers(
   });
   return {
     concluded: (how: Omit<Ending, "stopped">): ExecResult =>
-      // A stop counts only when the kill ended the command. An exit with a code means it ended by itself, first.
+      // A stop counts only when the runner's kill ended the command: it died of SIGKILL, the signal that kill sends.
+      // An exit with a code, or another signal such as a crash's SIGSEGV, means it ended by itself, first. An external
+      // SIGKILL in the same window is the accepted residual.
       concluded(kept(), {
         ...how,
-        stopped: asked && how.code === null && how.spawnError === undefined,
+        stopped:
+          asked && how.signal === "SIGKILL" && how.spawnError === undefined,
       }),
   };
 }
