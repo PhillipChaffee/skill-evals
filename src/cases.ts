@@ -11,7 +11,8 @@ import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
 import { LAYER_KEYS, layersOf } from "./case-layers.js";
-import { limitsOf } from "./case-limits.js";
+import { LIMIT_KEYS, limitsOf } from "./case-limits.js";
+import type { OnTimeout } from "./session-end.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
 import type { SetupStep } from "./setup-steps.js";
@@ -32,8 +33,11 @@ export interface Case {
   checks: Check[];
   weight: number;
   minScore?: number | undefined;
+  /** The most main-thread turns the agent may take; the runner stops the run as the next one begins. Absent: no limit. */
   maxTurns?: number | undefined;
   timeoutSeconds: number;
+  /** What a run that hits `timeoutSeconds` is: invalid (the default), or scored on what it left. */
+  onTimeout?: OnTimeout | undefined;
   /** What a harness must be able to do for the case to apply, besides what its checks imply. */
   requires: Need[];
   /** The harnesses the case is for, when it is for some only. A last resort: `note` says why. */
@@ -92,14 +96,7 @@ export const CASE_KEYS: Record<string, FieldDef> = {
     type: "unit",
     meaning: "The lowest score the case may get and still pass.",
   },
-  maxTurns: {
-    type: "int",
-    meaning: "The most turns the agent may take. Only Claude Code applies it.",
-  },
-  timeoutSeconds: {
-    type: "int",
-    meaning: "The seconds a run may take. Default: 600.",
-  },
+  ...LIMIT_KEYS,
   requires: {
     type: "needs",
     meaning:

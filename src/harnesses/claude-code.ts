@@ -2,7 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { callsOf, numbered } from "../transcript.js";
 import type { MessageEvent } from "./claude-code-stream.js";
-import { agentTokens, transcriptParts } from "./claude-code-stream.js";
+import {
+  agentTokens,
+  countTurns,
+  transcriptParts,
+} from "./claude-code-stream.js";
 import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
 import {
   ANTHROPIC_ENV,
@@ -131,6 +135,8 @@ const claudeCode: Harness = {
     };
   },
 
+  countTurns,
+
   parse(stdout) {
     const raw = jsonLines(stdout);
     const events = raw as Event[];
@@ -140,7 +146,10 @@ const claudeCode: Harness = {
       .find((e) => e.subtype === "init");
     const result = events.filter((e) => e.type === "result").at(-1);
     const usage = result?.usage;
-    const failure = result?.is_error ? result.result || result.subtype : null;
+    // The CLI's own turn limit is a stop the case asked for, not a failure.
+    const hitMaxTurns = result?.subtype === "error_max_turns";
+    const failure =
+      result?.is_error && !hitMaxTurns ? result.result || result.subtype : null;
     return {
       finalText: result?.result ?? "",
       toolCalls: callsOf(transcript),
@@ -174,6 +183,7 @@ const claudeCode: Harness = {
           : null,
       },
       error: result ? failure : "no result event",
+      hitMaxTurns,
     };
   },
 

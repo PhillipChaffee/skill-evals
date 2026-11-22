@@ -7,7 +7,7 @@ import {
   resultPart,
   textPart,
 } from "../transcript.js";
-import type { Harness, ToolKind } from "./shared.js";
+import type { Harness, ToolKind, TurnState } from "./shared.js";
 import {
   NOT_REPORTED,
   ANTHROPIC_ENV,
@@ -50,6 +50,7 @@ interface Message {
 /** The events of `pi --mode json` that the adapter reads. */
 type Event =
   | { type: "session"; id?: string }
+  | { type: "turn_start" }
   | { type: "turn_end"; message?: Message }
   | { type: "message_end"; message?: Message }
   | {
@@ -102,6 +103,15 @@ function transcriptParts(events: Event[]): EventInput[] {
   });
 }
 
+/**
+ * Counts the turns of a stream as its lines arrive: one for each `turn_start`. Pi has no subagents.
+ * @param line - One parsed line of the stream.
+ * @param state - Raises `turns`.
+ */
+function countTurns(line: unknown, state: TurnState): void {
+  if ((Object(line) as Event).type === "turn_start") state.turns += 1;
+}
+
 const pi: Harness = {
   id: "pi",
   bin: "pi",
@@ -137,6 +147,8 @@ const pi: Harness = {
       env: { PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" },
     };
   },
+
+  countTurns,
 
   parse(stdout) {
     const events = jsonLines(stdout) as Event[];

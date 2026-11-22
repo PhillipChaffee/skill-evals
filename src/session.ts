@@ -2,13 +2,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { childEnv } from "./env.js";
+import type { ExecResult } from "./exec.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
+import type { OnTimeout, StoppedBy } from "./session-end.js";
+import { endOf } from "./session-end.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
+import { turnWatch } from "./turn-watch.js";
 import type { Layers, PreparedRun } from "./workspace.js";
 import { copyHome, prepareRun } from "./workspace.js";
 
@@ -22,6 +26,8 @@ export interface SessionInput {
   prompt: string;
   model?: string | undefined;
   maxTurns?: number | undefined;
+  /** What a run that hits `timeoutSeconds` is: "invalid" (the default), or "score" to score what it left. */
+  onTimeout?: OnTimeout | undefined;
   /** Start the harness with nothing loaded but the subject. */
   isolated?: boolean | undefined;
   timeoutSeconds: number;
@@ -42,6 +48,12 @@ export interface SessionResult {
   /** The harness's own message when it produced a stream, else why the process failed. */
   error: string | null;
   durationMs: number;
+  /** Who ended the run: "agent" unless the runner stopped the process at the turn limit or the time limit. */
+  stoppedBy: StoppedBy;
+  /** The main-thread turns begun, counted from the stream; null for a harness that cannot count turns. */
+  turns: number | null;
+  /** Milliseconds from the start of the prompt to the first byte of output; null when none came. */
+  firstOutputMs: number | null;
   workspace: string;
   /**
    * What the run changed in the copies of the skills that the adapter placed in the home, as paths inside the
@@ -185,10 +197,27 @@ const notStarted = (failure: string, home: string) => ({
   stdout: "",
   failure,
   durationMs: 0,
+  exec: { kind: null, stopped: false } as const,
+  turns: null,
+  firstOutputMs: null,
   placedChanges: null,
   placed: undefined,
   homeSeed: snapshot(home),
 });
+
+/** What running the prompt left, before the stream is read. */
+interface Attempt {
+  stdout: string;
+  failure: string | null;
+  durationMs: number;
+  /** How the process ended: its failure kind, and whether the runner stopped it. */
+  exec: Pick<ExecResult, "kind" | "stopped">;
+  turns: number | null;
+  firstOutputMs: number | null;
+  placedChanges: ChangedFiles | null;
+  placed?: Record<string, string> | undefined;
+  homeSeed: Snapshot;
+}
 
 /**
  * Prepares the harness and runs the prompt.
@@ -199,14 +228,7 @@ const notStarted = (failure: string, home: string) => ({
 async function attempt(
   session: SessionInput,
   input: RunInput,
-): Promise<{
-  stdout: string;
-  failure: string | null;
-  durationMs: number;
-  placedChanges: ChangedFiles | null;
-  placed?: Record<string, string> | undefined;
-  homeSeed: Snapshot;
-}> {
+): Promise<Attempt> {
   const { harness, bin, timeoutSeconds } = session;
   let invocation;
   try {
@@ -227,12 +249,9 @@ async function attempt(
   const failure = await setupFailure(bin, invocation.setup ?? [], options);
   if (failure) {
     return {
-      stdout: "",
-      failure,
-      durationMs: 0,
+      ...notStarted(failure, input.home),
       placedChanges: placedChanges(),
       placed: invocation.placed,
-      homeSeed: snapshot(input.home),
     };
   }
   const late = afterSetup(harness, input);
@@ -240,15 +259,19 @@ async function attempt(
   if (clash) return notStarted(clash, input.home);
   const homeSeed = snapshot(input.home);
   const started = Date.now();
+  const watch = turnWatch(harness, session.maxTurns);
   const result = await exec(bin, invocation.args, {
     ...options,
     env: environment(session.env ?? {}),
     stdin: invocation.stdin,
     // Whatever the agent left running goes with it, so a background process cannot hold the run until its time limit.
     reapOnExit: true,
+    onStdout: watch?.onStdout,
   });
   return {
     ...result,
+    exec: result,
+    turns: watch?.turns() ?? null,
     durationMs: Date.now() - started,
     placedChanges: joined(placedChanges(), late.changes()),
     placed: { ...invocation.placed, ...late.placed },
@@ -290,8 +313,7 @@ export async function session<T>(
   run: SessionInput,
   use: (result: SessionResult) => T | Promise<T>,
 ): Promise<T> {
-  const { harness, subject, prompt, model, maxTurns } = run;
-  const { isolated } = run;
+  const { harness, subject, prompt, model, maxTurns, isolated } = run;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
   let prepared: PreparedRun | null = null;
@@ -315,21 +337,25 @@ export async function session<T>(
       isolated,
     };
     // A failed setup step means the harness never starts.
-    const { stdout, failure, durationMs, placedChanges, placed, homeSeed } =
-      prepared?.failure
-        ? notStarted(prepared.failure, home.dir)
-        : await attempt(run, input);
+    const ran = prepared?.failure
+      ? notStarted(prepared.failure, home.dir)
+      : await attempt(run, input);
+    const { stdout, durationMs, placedChanges, placed, homeSeed } = ran;
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
     const graderDir = prepared?.copies?.copyGrader() ?? null;
-    const parsed = parseStream(harness, stdout);
-    // The harness's own message is the most specific one, but only when it produced a stream at all.
-    const error =
-      (stdout.trim() && parsed.error) || failure || parsed.error || null;
+    const { stoppedBy, error, parsed } = endOf({
+      ...ran,
+      parsed: parseStream(harness, stdout),
+      onTimeout: run.onTimeout,
+    });
     return await use({
       stdout,
       parsed,
       error,
       durationMs,
+      stoppedBy,
+      turns: ran.turns,
+      firstOutputMs: ran.firstOutputMs,
       workspace: workspace.dir,
       seed,
       placedChanges,

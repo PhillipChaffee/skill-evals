@@ -115,7 +115,9 @@ type FakeStep =
   /** Ends the run with an error. */
   | { fail: string }
   /** Sets the final text of the run. */
-  | { final: string };
+  | { final: string }
+  /** Ends the run as Claude Code does at its own `--max-turns`: an `error_max_turns` result with no text, exit code 1. */
+  | { limit: true };
 
 /** A transcript for the fake harness to play, in place of its default behaviour. */
 export interface FakeScript {

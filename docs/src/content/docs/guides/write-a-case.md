@@ -36,7 +36,26 @@ A case file can also say what a harness must be able to do to run it. These keys
 
 In every harness, "loaded a skill" means that the agent called the harness's skill tool with that skill's name, or that any tool call pointed at `skills/<name>/SKILL.md`.
 
-`timeoutSeconds` defaults to 600. `maxTurns` has no default, and only Claude Code has a flag for it. The time limit alone bounds the other harnesses.
+`timeoutSeconds` defaults to 600. `maxTurns` has no default. See [Limits](#limits) for what each does.
+
+## Limits
+
+`maxTurns` is the most turns the agent may take. A turn is one assistant turn of the main agent, as the harness's own turn grouping has it, and a subagent's turns never count. The runner counts turns in the stream as it arrives, on every harness that has `turnGrouping` (Claude Code, OpenCode, Pi), and stops the harness's whole process group as turn `maxTurns + 1` begins. A partial extra turn may therefore show in the transcript; nothing seen is cut. Claude Code is also given its own `--max-turns`, and its `error_max_turns` result is read as the same stop. The run is valid and scored. Its record says `stoppedBy: "maxTurns"`, its final text is the last thing the main agent said, and `tokens` and `costUsd` may be null where the harness writes its totals only at the end.
+
+A harness without `turnGrouping` cannot count turns. The case still runs, as before, bounded by the time limit; the record says `maxTurnsEnforced: false`, and the report lists the pair under "Limits not enforced".
+
+A run that reaches `timeoutSeconds` is invalid, with `stoppedBy: "timeout"`. For a case where stalling is the behaviour under test, `onTimeout: "score"` scores such a run on what it left instead (`"invalid"` is the default):
+
+```json
+{
+  "maxTurns": 6,
+  "timeoutSeconds": 120,
+  "onTimeout": "score",
+  "checks": [{ "type": "output_not_contains", "text": "all done" }]
+}
+```
+
+Every run record gains `stoppedBy` (`"agent"` unless the runner stopped the process; a crash is `"agent"`, and `error` says why), `maxTurnsEnforced` (null when the case sets no `maxTurns`), `turns` (the main-thread turns counted; null on a harness without `turnGrouping`) and `firstOutputMs` (milliseconds from the start of the prompt to the first byte of output; null when there was none). Records from earlier versions do not have them.
 
 A prompt can start with any character. One that starts with a dash reaches the agent as the prompt and is not read as a flag of the harness.
 

@@ -9,6 +9,8 @@ import type { SkillEvent } from "./skill-events.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { failedRecord } from "./run-failed.js";
+import type { LimitFields } from "./run-limits.js";
+import { limitFields } from "./run-limits.js";
 import { messageOf } from "./scope.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
@@ -25,7 +27,7 @@ import { failedCalls, writeTranscript } from "./transcript.js";
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
 
 /** Everything kept about one run. */
-export interface RunRecord extends Usage {
+export interface RunRecord extends Usage, LimitFields {
   harness: string;
   /** The subject's label. */
   subject: string;
@@ -146,6 +148,17 @@ function totalUsage(replies: Usage[]): Usage & { calls: number } {
 }
 
 /**
+ * Sums what the judge cost for one run.
+ * @param replies - Every reply of the judge.
+ * @param hits - How many answers came from the cache.
+ * @returns The totals, with `cacheHits` when there were any; null when the judge was never asked.
+ */
+const judgeUsage = (replies: Usage[], hits: number): RunRecord["judge"] =>
+  replies.length || hits
+    ? { ...totalUsage(replies), ...(hits ? { cacheHits: hits } : {}) }
+    : null;
+
+/**
  * Writes the run's stream, final text and transcript under the output directory.
  * @param plan - The run that was made.
  * @param ran - What the session produced.
@@ -233,6 +246,7 @@ async function record(
     skillEvents: events,
     transcriptFile: transcript.relative,
     ...startupRecord(plan, ran, copy),
+    ...limitFields(harness, caseDef, ran),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
     changedFiles: files.changed,
@@ -261,10 +275,7 @@ async function record(
   return {
     ...judged,
     score: invalidReason(judged) ? null : weightedMean(checks),
-    judge:
-      replies.length || hits
-        ? { ...totalUsage(replies), ...(hits ? { cacheHits: hits } : {}) }
-        : null,
+    judge: judgeUsage(replies, hits),
     decision: requests.length ? totalUsage(requests) : null,
   };
 }
@@ -290,6 +301,7 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
         model: caseDef.model ?? plan.model,
         env: caseDef.env,
         maxTurns,
+        onTimeout: caseDef.onTimeout,
         isolated: plan.isolated,
         timeoutSeconds,
         layers: caseDef,

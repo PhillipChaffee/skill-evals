@@ -1,6 +1,7 @@
 import type { RunRecord } from "./run.js";
 import type { RunPlan } from "./run-plan.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
+import { limitFields } from "./run-limits.js";
 
 /**
  * Makes the record of a run that broke while it was being scored, so that one bad run never ends the suite.
@@ -23,6 +24,7 @@ export function failedRecord(plan: RunPlan, message: string): RunRecord {
     skillsLoaded: [],
     skillEvents: [],
     transcriptFile: null,
+    ...limitFields(harness, caseDef),
     subjectLoaded: null,
     loaded: NOT_REPORTED,
     isolated: plan.isolated ?? false,

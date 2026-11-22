@@ -139,6 +139,16 @@ export interface Parsed {
   /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */
   loaded: Loaded;
   error: string | null;
+  /** True when the harness's own result says it stopped at its turn limit. Such a stop is no error. Absent: false. */
+  hitMaxTurns?: boolean;
+}
+
+/** What the runner keeps while it counts the turns of a stream. */
+export interface TurnState {
+  /** The main-thread turns begun so far. */
+  turns: number;
+  /** Scratch for an adapter that has to tell one turn's events from the next's, such as message ids already seen. */
+  seen: Set<string>;
 }
 
 /** How to start a harness for one prompt. */
@@ -225,6 +235,14 @@ export interface Harness {
   placedAfterSetup?: (input: RunInput) => Record<string, string>;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
+  /**
+   * Counts turns as the stream arrives, so that the runner can stop a run at `maxTurns`. Present exactly for an adapter
+   * with the `turnGrouping` capability. A turn is a main-thread assistant turn as that adapter's `turn` numbering has
+   * it; a subagent's turns never count. Called once per line of standard output that is a JSON value, in order.
+   * @param line - One parsed line of the stream.
+   * @param state - Raises `turns` when the line begins a turn that the stream has not shown before.
+   */
+  countTurns?: (line: unknown, state: TurnState) => void;
   /**
    * Names what the harness reported that does not come from the subject, for a harness whose report needs more than
    * the shared rule. Absent: `foreignDefault`.
@@ -410,6 +428,22 @@ export function jsonLines(stdout: string): unknown[] {
   }
   return events;
 }
+
+/**
+ * Finds what the main agent last said, for a run that was stopped before its harness wrote a final answer.
+ * @param transcript - The run's transcript.
+ * @returns The text of the last main-thread assistant text event; empty when there is none.
+ */
+export const lastAssistantText = (transcript: TranscriptEvent[]): string =>
+  transcript
+    .filter(
+      (event) =>
+        event.role === "assistant" &&
+        event.type === "text" &&
+        event.agent.depth === 0 &&
+        event.text,
+    )
+    .at(-1)?.text ?? "";
 
 /**
  * Picks the directory to hand to a harness's own plugin loader.

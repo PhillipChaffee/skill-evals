@@ -20,6 +20,11 @@ export interface ExecOptions {
   reapOnExit?: boolean | undefined;
   /** The most bytes kept of each of standard output and standard error; the rest is read and dropped. Default: all. */
   maxBytes?: number | undefined;
+  /**
+   * Called with each chunk of standard output as it arrives. Returning "stop" kills the whole process group, as a
+   * timeout does, and the result is no failure: `stopped` is true. Output that arrives before the pipes close is kept.
+   */
+  onStdout?: ((chunk: string) => "continue" | "stop") | undefined;
 }
 
 /** What a finished command left behind. */
@@ -36,6 +41,10 @@ export interface ExecResult {
   signal: string | null;
   /** True when more than `maxBytes` came out of either stream and the end was dropped. */
   truncated: boolean;
+  /** True when `onStdout` asked for a stop and the process group was killed for it. Such a stop has no `failure`. */
+  stopped: boolean;
+  /** Milliseconds from the start of the command to its first byte on standard output; null when it wrote none. */
+  firstOutputMs: number | null;
 }
 
 // After the process group is killed, a process outside it may still hold the pipes open. The output that is already
@@ -46,12 +55,18 @@ const DRAIN_MS = 250;
  * Keeps the start of a stream, up to a limit of bytes, and reads and drops the rest.
  * @param stream - A readable stream of the child process.
  * @param limit - The most bytes to keep.
+ * @param seen - Called with every chunk, before it is kept or dropped.
  * @returns What is kept so far: its `text`, its size in `bytes`, and whether anything was dropped (`cut`).
  */
-function keeper(stream: Readable, limit: number) {
+function keeper(
+  stream: Readable,
+  limit: number,
+  seen?: (chunk: string) => void,
+) {
   const kept = { text: "", bytes: 0, cut: false };
   stream.setEncoding("utf8");
   stream.on("data", (chunk: string) => {
+    seen?.(chunk);
     const size = Buffer.byteLength(chunk);
     if (kept.bytes + size <= limit) {
       kept.text += chunk;
@@ -98,6 +113,8 @@ interface Ending {
   spawnError: string | undefined;
   timedOut: boolean;
   timeoutSeconds: number;
+  /** True when `onStdout` asked for the stop. */
+  stopped: boolean;
 }
 
 /**
@@ -106,19 +123,26 @@ interface Ending {
  * @param kept.stdout - The kept start of standard output.
  * @param kept.stderr - The kept start of standard error.
  * @param kept.truncated - Whether either stream was cut.
+ * @param kept.firstOutputMs - When the first byte of standard output came, or null.
  * @param how - How it ended.
  * @returns The result, with the failure text that matches the ending.
  */
 function concluded(
-  kept: { stdout: string; stderr: string; truncated: boolean },
+  kept: {
+    stdout: string;
+    stderr: string;
+    truncated: boolean;
+    firstOutputMs: number | null;
+  },
   how: Ending,
 ): ExecResult {
   const { code, signal } = how;
-  const base = { ...kept, exit: code, signal };
+  const base = { ...kept, exit: code, signal, stopped: how.stopped };
   if (how.spawnError !== undefined) {
     const failure = how.spawnError;
     return { ...base, exit: null, signal: null, failure, kind: "spawn" };
   }
+  if (how.stopped) return { ...base, failure: null, kind: null };
   if (how.timedOut) {
     const failure = `timed out after ${String(how.timeoutSeconds)} s`;
     return { ...base, failure, kind: "timeout" };
@@ -176,37 +200,91 @@ export function exec(
 ): Promise<ExecResult> {
   const started = tryStart(bin, args, options);
   if (typeof started !== "string") return watch(started, options);
-  const none = { stdout: "", stderr: "", truncated: false };
+  const none = {
+    stdout: "",
+    stderr: "",
+    truncated: false,
+    firstOutputMs: null,
+  };
   const { timeoutSeconds } = options;
-  const how = { code: null, signal: null, timedOut: false, timeoutSeconds };
+  const how = {
+    ...{ code: null, signal: null, timedOut: false, stopped: false },
+    timeoutSeconds,
+  };
   return Promise.resolve(concluded(none, { ...how, spawnError: started }));
 }
 
 /**
- * Waits for a started command to end, kills its process group on a timeout, and lets go of pipes that a process outside
- * the group holds open.
+ * Starts reading both streams of a command. Standard output is also watched for its first byte and for the caller's
+ * request to stop.
  * @param child - The started process.
- * @param options - How long it may run, how much of its output to keep, and whether to reap it on exit.
+ * @param options - How much to keep, and who may stop the command.
+ * @param stop - Stops the command; called once, on the first "stop".
+ * @returns `kept` for what was read so far, and `stopped` for whether a stop was asked for.
+ */
+function readers(
+  child: ReturnType<typeof start>,
+  options: ExecOptions,
+  stop: () => void,
+) {
+  const { maxBytes = Infinity, onStdout } = options;
+  const began = Date.now();
+  let first: number | null = null;
+  let asked = false;
+  const out = keeper(child.stdout, maxBytes, (chunk) => {
+    first ??= Date.now() - began;
+    if (asked || onStdout?.(chunk) !== "stop") return;
+    asked = true;
+    stop();
+  });
+  const err = keeper(child.stderr, maxBytes);
+  return {
+    kept: () => ({
+      ...{ stdout: out.text, stderr: err.text },
+      truncated: out.cut || err.cut,
+      firstOutputMs: first,
+    }),
+    stopped: (): boolean => asked,
+  };
+}
+
+/**
+ * Waits for a started command to end, kills its process group on a timeout or a stop that `onStdout` asks for, and
+ * lets go of pipes that a process outside the group holds open.
+ * @param child - The started process.
+ * @param options - How long it may run, how much of its output to keep, whether to reap it on exit, and who may stop it.
  * @returns How it ended.
  */
 function watch(
   child: ReturnType<typeof start>,
   options: ExecOptions,
 ): Promise<ExecResult> {
-  const { timeoutSeconds, maxBytes = Infinity } = options;
+  const { timeoutSeconds } = options;
   return new Promise((resolve) => {
     const kill = (): void => {
       killGroup(child.pid);
     };
     // Runs when the child closes too, so nothing the command left in the background outlives the run.
     const reap = onDispose(kill);
-    const out = keeper(child.stdout, maxBytes);
-    const err = keeper(child.stderr, maxBytes);
     let timedOut = false;
     let ended: { code: number | null; signal: string | null } | null = null;
-    const timers: NodeJS.Timeout[] = [];
     let finished = false;
-    const finish = (
+    const timers: NodeJS.Timeout[] = [];
+    const killAndDrain = (): void => {
+      kill();
+      timers.push(
+        setTimeout(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          settle(ended?.code ?? null, ended?.signal ?? null);
+        }, DRAIN_MS),
+      );
+    };
+    const read = readers(child, options, () => {
+      for (const timer of timers) clearTimeout(timer);
+      killAndDrain();
+    });
+    const settle = (
       code: number | null,
       signal: string | null,
       spawnError?: string,
@@ -215,38 +293,25 @@ function watch(
       finished = true;
       for (const timer of timers) clearTimeout(timer);
       reap();
-      const kept = {
-        ...{ stdout: out.text, stderr: err.text },
-        truncated: out.cut || err.cut,
+      const how = {
+        ...{ code, signal, spawnError, timedOut, timeoutSeconds },
+        stopped: read.stopped(),
       };
-      const how = { code, signal, spawnError, timedOut, timeoutSeconds };
-      resolve(concluded(kept, how));
-    };
-    const drain = (): void => {
-      timers.push(
-        setTimeout(() => {
-          child.stdout.destroy();
-          child.stderr.destroy();
-          finish(ended?.code ?? null, ended?.signal ?? null);
-        }, DRAIN_MS),
-      );
+      resolve(concluded(read.kept(), how));
     };
     timers.push(
       setTimeout(() => {
         timedOut = true;
-        kill();
-        drain();
+        killAndDrain();
       }, timeoutSeconds * MS_PER_SECOND),
     );
     child.on("error", (error) => {
-      finish(null, null, error.message);
+      settle(null, null, error.message);
     });
     child.on("exit", (code, signal) => {
       ended = { code, signal };
-      if (!options.reapOnExit) return;
-      kill();
-      drain();
+      if (options.reapOnExit) killAndDrain();
     });
-    child.on("close", finish);
+    child.on("close", settle);
   });
 }

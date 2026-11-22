@@ -197,8 +197,12 @@ test.each(FAILURES)(
 const FAILED_WITHOUT_TEXT: [string, string, string][] = [
   [
     CLAUDE_CODE,
-    lines({ type: "result", subtype: "error_max_turns", is_error: true }),
-    "error_max_turns",
+    lines({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+    }),
+    "error_during_execution",
   ],
   [
     "cursor",

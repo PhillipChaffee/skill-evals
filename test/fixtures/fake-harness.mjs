@@ -11,6 +11,8 @@
 // - Started with `--mode json` (the arguments of the Pi adapter) it is Pi-shaped instead: the prompt comes from standard
 //   input, the plugin directory from `-e`, and the stream is Pi's (`tool_execution_start`, `turn_end`). It plays the
 //   same scripts, for `text`, `final`, `call`, and `parallel` steps; it has no judge, no agents, and no hooks.
+// - A script step `{ "limit": true }` ends the turn as Claude Code does at its own `--max-turns`: an `error_max_turns`
+//   result with `is_error` true and no text, and exit code 1. The fake ignores `--max-turns` itself.
 // - A script's `initOmit` names init fields to leave out, and `noInit` leaves the init event out.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
@@ -185,6 +187,7 @@ const perform = ({ input, output = "", exec, write, isError = false }) => {
  * Plays one turn of a script as a stream.
  * @param steps - The turn's steps.
  * @param turn - The index of the turn, which keeps ids unique across a session.
+ * @returns True when the turn ended at the CLI's turn limit, which exits with code 1.
  */
 function play(steps, turn) {
   let count = 0;
@@ -281,10 +284,13 @@ function play(steps, turn) {
       });
     } else if ("fail" in one) {
       throw new Error(one.fail);
+    } else if ("limit" in one) {
+      limited = true;
     } else {
       final = one.final;
     }
   };
+  let limited = false;
   try {
     for (const one of steps) step(one, null);
   } catch (error) {
@@ -294,9 +300,20 @@ function play(steps, turn) {
       is_error: true,
       result: error.message,
     });
-    return;
+    return false;
   }
-  finish(final);
+  if (!limited) {
+    finish(final);
+    return false;
+  }
+  // The CLI's own turn limit: an error result with no `result` text, and a non-zero exit.
+  emit({
+    type: "result",
+    subtype: "error_max_turns",
+    is_error: true,
+    usage: { input_tokens: 100, output_tokens: 50 },
+  });
+  return true;
 }
 
 /**
@@ -316,6 +333,7 @@ function playPi(steps) {
   };
   // Pi states a message at its end, and again at the end of its turn.
   const turnEnd = (message) => {
+    emit({ type: "turn_start" });
     emit({ type: "message_end", message });
     emit({ type: "turn_end", message });
   };
@@ -399,8 +417,7 @@ if (played?.found.syncSkill) {
 }
 if (played) {
   const turn = turnIndex(played.file);
-  play(played.found.turns[turn] ?? [], turn);
-  process.exit(0);
+  process.exit(play(played.found.turns[turn] ?? [], turn) ? 1 : 0);
 }
 const used = [
   ...(behavior.skill ? [`plugin:${behavior.skill}`] : []),

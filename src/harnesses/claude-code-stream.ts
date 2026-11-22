@@ -1,7 +1,13 @@
 import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
 import type { EventInput } from "../transcript.js";
 import { callPart, resultPart, textPart } from "../transcript.js";
-import type { AgentRef, Dispatch, Tokens, ToolKind } from "./shared.js";
+import type {
+  AgentRef,
+  Dispatch,
+  Tokens,
+  ToolKind,
+  TurnState,
+} from "./shared.js";
 import { joinText } from "./shared.js";
 
 /** A content block of an `assistant` or `user` event; which fields are set depends on its type. */
@@ -190,6 +196,23 @@ export function transcriptParts(
         : [];
     });
   });
+}
+
+/**
+ * Counts the main-thread turns of a stream as its lines arrive: one for each assistant message id not seen before, and
+ * one for each assistant event with no id. An event of a subagent (it has a `parent_tool_use_id`) never counts.
+ * @param line - One parsed line of the stream.
+ * @param state - Raises `turns`; remembers the message ids in `seen`.
+ */
+export function countTurns(line: unknown, state: TurnState): void {
+  const one = Object(line) as MessageEvent;
+  if (one.type !== "assistant" || one.parent_tool_use_id) return;
+  const id = one.message?.id;
+  if (id !== undefined) {
+    if (state.seen.has(id)) return;
+    state.seen.add(id);
+  }
+  state.turns += 1;
 }
 
 /**

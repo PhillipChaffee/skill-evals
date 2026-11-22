@@ -2,6 +2,7 @@ import type { Case } from "./cases.js";
 import type { Check } from "./checks/index.js";
 import { describeCheck, isDecision, isJudged } from "./checks/index.js";
 import type { Evaluation } from "./evaluate.js";
+import { noteSections } from "./report-notes.js";
 import type { RunRecord, Usage } from "./run.js";
 import { invalidReason } from "./run.js";
 import type { SuiteScore } from "./score.js";
@@ -283,45 +284,6 @@ function coverageSection(evaluation: Evaluation): string[] {
 }
 
 /**
- * Lists the pairs of harness and case that were not run.
- * @param evaluation - What `evaluate` returned.
- * @returns The section, or nothing when every case ran on every harness.
- */
-function notApplicableSection(evaluation: Evaluation): string[] {
-  if (evaluation.notApplicable.length === 0) return [];
-  return [
-    "",
-    "## Not applicable",
-    "",
-    "These cases did not run. They have no score, and they are neither a pass nor a failure.",
-    "",
-    ...evaluation.notApplicable.map(
-      ({ harness, caseId, reason }) => `- ${harness} \`${caseId}\`: ${reason}`,
-    ),
-  ];
-}
-
-/**
- * Lists the checks that a harness dropped from a case that ran.
- * @param evaluation - What `evaluate` returned.
- * @returns The section, or nothing when no check was skipped.
- */
-function skippedSection(evaluation: Evaluation): string[] {
-  if (evaluation.skippedChecks.length === 0) return [];
-  return [
-    "",
-    "## Ran with checks skipped",
-    "",
-    "The score of these cases on that harness is over the checks that stayed, with their weights re-normalized.",
-    "",
-    ...evaluation.skippedChecks.map(
-      ({ harness, caseId, checks, missing }) =>
-        `- ${harness} \`${caseId}\`: skipped ${checks.map((check) => `\`${check}\``).join(", ")}, which need ${missing.join(", ")}`,
-    ),
-  ];
-}
-
-/**
  * Shows the score over the cases that apply to every harness, the only score that compares harnesses.
  * @param evaluation - What `evaluate` returned.
  * @returns The section, or nothing for a single harness.
@@ -381,8 +343,7 @@ export function renderReport(evaluation: Evaluation): string {
     sections.join("\n\n"),
     ...commonSection(evaluation),
     ...coverageSection(evaluation),
-    ...skippedSection(evaluation),
-    ...notApplicableSection(evaluation),
+    ...noteSections(evaluation),
     ...(belowBar.length
       ? ["", "Below the pass bar:", "", ...belowBar.map((line) => `- ${line}`)]
       : []),

@@ -8,7 +8,7 @@ import {
   resultPart,
   textPart,
 } from "../transcript.js";
-import type { Harness, ToolKind } from "./shared.js";
+import type { Harness, ToolKind, TurnState } from "./shared.js";
 import {
   NOT_REPORTED,
   ANTHROPIC_ENV,
@@ -106,6 +106,15 @@ type Event = { sessionID?: string } & (
   | { type: "error"; error?: { name?: string; data?: { message?: string } } }
 );
 
+/**
+ * Counts the turns of a stream as its lines arrive: one for each `step_start`, as the transcript's `turn` does.
+ * @param line - One parsed line of the stream.
+ * @param state - Raises `turns`.
+ */
+function countTurns(line: unknown, state: TurnState): void {
+  if ((Object(line) as Event).type === "step_start") state.turns += 1;
+}
+
 const opencode: Harness = {
   id: "opencode",
   bin: "opencode",
@@ -151,6 +160,8 @@ const opencode: Harness = {
       env: {},
     };
   },
+
+  countTurns,
 
   parse(stdout) {
     const events = jsonLines(stdout) as Event[];
