@@ -1,6 +1,6 @@
 import { commandContext } from "./command.js";
 import type { Check } from "./checks/index.js";
-import { isDecision, isJudged } from "./checks/index.js";
+import { describeCheck, isDecision, isJudged } from "./checks/index.js";
 import type { Harness } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
@@ -96,6 +96,7 @@ export function invalidReason(
     | "unexpected"
     | "judgeProblem"
     | "checks"
+    | "preconditions"
   >,
 ): string | null {
   if (record.error) return `run failed: ${record.error}`;
@@ -109,6 +110,8 @@ export function invalidReason(
     return `loaded outside the subject: ${record.unexpected.join(", ")}`;
   }
   if (record.isolated && record.judgeProblem) return record.judgeProblem;
+  const unmet = record.preconditions?.find((check) => !check.score);
+  if (unmet) return `precondition not met: ${describeCheck(unmet)}`;
   const unscored = record.checks.find(
     (check) => check.score === null && check.notScored === undefined,
   );
@@ -199,13 +202,19 @@ function guardedBy(plan: RunPlan, agentCost: number | null): RunPlan {
 export function assemble(
   base: Omit<
     RunRecord,
-    "judgeProblem" | "checks" | "score" | "judge" | "decision"
+    "judgeProblem" | "checks" | "preconditions" | "score" | "judge" | "decision"
   >,
   scored: Awaited<ReturnType<typeof scoreChecks>>,
   agentCost: number | null,
 ): { record: RunRecord; spend: Spend } {
   const { checks, replies, requests, hits, skippedGraders } = scored;
-  const judged = { ...base, judgeProblem: scored.judgeProblem, checks };
+  const { preconditions } = scored;
+  const judged = {
+    ...base,
+    judgeProblem: scored.judgeProblem,
+    checks,
+    ...(preconditions.length > 0 ? { preconditions } : {}),
+  };
   return {
     record: {
       ...judged,
@@ -219,6 +228,21 @@ export function assemble(
     spend: spendOf(agentCost, [...replies, ...requests]),
   };
 }
+
+/**
+ * Takes what the session did with the subject's rules.
+ * @param ran - What the session produced.
+ * @returns The record's `rules`; nothing when the subject names none.
+ */
+const rulesOf = (ran: SessionResult): Pick<RunRecord, "rules"> =>
+  ran.rulesInstalled
+    ? {
+        rules: {
+          installed: ran.rulesInstalled,
+          reportedLoaded: ran.parsed.loaded.rules,
+        },
+      }
+    : {};
 
 /**
  * Takes what a session knows of the turns of its case.
@@ -249,7 +273,6 @@ async function record(
   const { parsed, error, durationMs } = ran;
   const { changes, observed } = observe(copy, ran);
   const events = skillEventsOf(harness, ran, copy);
-  const loaded = skillsLoaded(events);
   const transcript = writeStreams(plan, ran);
   const files = fileState(ran);
   const turned = turnsOf(ran);
@@ -262,11 +285,12 @@ async function record(
     error,
     finalText: parsed.finalText,
     toolCalls: parsed.toolCalls,
-    skillsLoaded: loaded,
+    skillsLoaded: skillsLoaded(events),
     skillEvents: events,
     transcriptFile: transcript.relative,
     ...seenFields(plan),
     ...turned,
+    ...rulesOf(ran),
     askedUser: parsed.askedUser ?? null,
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
@@ -336,6 +360,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         maxTurns,
         onTimeout: caseDef.onTimeout,
         isolated: plan.isolated,
+        rules: copy?.rules ?? null,
         historyMode: plan.historyMode,
         timeoutSeconds,
         layers: caseDef,

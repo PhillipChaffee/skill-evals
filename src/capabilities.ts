@@ -21,9 +21,9 @@ export const CAPABILITIES = {
   childText:
     "The stream carries the text that a subagent wrote, apart from the parent's.",
   rules:
-    "The harness reads the project's rule files, so a case can plant a rule and see it obeyed.",
+    "The adapter installs the subject's rules and instruction file (the config's `rules` and `instructionFile`) the way the harness reads them, so a case can plant a rule and see it obeyed.",
   hooks:
-    "The harness runs hooks and reports that they ran, so a check can read a hook's result.",
+    "The stream shows each hook that ran, with its event, exit code and the context it added, so a check can read a hook's result.",
   history:
     "A case can start from a conversation that already happened, written into the first prompt or into the harness's own store.",
   historyNative:

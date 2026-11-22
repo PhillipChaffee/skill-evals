@@ -1,0 +1,21 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": { "command": "sh build.sh" },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": { "command": "sleep 45 && ls build" },
+          "output": "done.flag\nresult.txt"
+        }
+      },
+      { "text": "It says: build ok." }
+    ]
+  ]
+}

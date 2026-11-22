@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import type {
+  HookEvent,
   LifecycleEvent,
   ToolCall,
   ToolKind,
@@ -276,4 +277,16 @@ export const lifecyclePart = (name: LifecycleEvent): EventInput => ({
   role: "system",
   type: "lifecycle",
   name,
+});
+
+/**
+ * States a hook that ran.
+ * @param hook - What the stream says of it.
+ * @returns The event, to give to `numbered`. It is a system event with `type: "hook"`, which `callsOf` never counts.
+ */
+export const hookPart = (hook: HookEvent): EventInput => ({
+  role: "system",
+  type: "hook",
+  name: hook.event,
+  hook,
 });

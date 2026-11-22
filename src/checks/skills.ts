@@ -191,6 +191,7 @@ const LISTING_NOTE =
 export const SKILL_CHECKS = {
   skill_loaded: {
     fields: [],
+    precondition: true,
     forms: [["skill"], ["anyOf"]],
     together: { ignoring: ["first"] },
     optional: ["skill", "anyOf", "first", "ignoring", "via", "resolved", "by"],
@@ -211,6 +212,7 @@ export const SKILL_CHECKS = {
   },
   skill_available: {
     fields: ["skill"],
+    precondition: true,
     scores: "The harness listed that skill among the skills it loaded.",
     note: LISTING_NOTE,
     needs: () => ["skillListing"],

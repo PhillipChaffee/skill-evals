@@ -39,6 +39,7 @@ function fieldsCell(spec: Spec): string {
     ...spec.fields.map(code),
     ...(oneOf.length ? [`at least one of ${oneOf.map(code).join(", ")}`] : []),
     ...optional.map((field) => `optional ${code(field)}`),
+    ...(spec.precondition ? ["may be listed under `preconditions`"] : []),
   ];
   return [parts.join(", "), ...(spec.note ? [spec.note] : [])].join(". ");
 }
@@ -192,6 +193,8 @@ const CONFIG_ONLY: Record<string, string> = {
   maxJudgedWeightShare: `The share of a case's total check weight, from 0 to 1, that ${code("judge")} and ${code("decision")} checks may carry before ${code("validate")} warns. Default: 0.5.`,
   env: `Names of environment variables the harness gets besides the allowlist. ${ENV_NAME_RULE} Anything else is an error.`,
   subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,
+  rules: `A directory of the subject, such as ${code('"rules"')}, whose files are its rules. An adapter with the ${code("rules")} capability installs them the way its harness reads them, and the run record keeps what it installed. The path must stay inside the subject and may hold no link. The ${code("none")} subject has no rules. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).`,
+  instructionFile: `A file of the subject, such as ${code('"AGENTS.md"')}, that the harness reads as its instructions. It is installed with the rules, and its text counts as rule text for ${code("context_injected")}. The path must stay inside the subject and may not be a link. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).`,
 };
 
 /**

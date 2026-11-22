@@ -37,4 +37,6 @@ export const EXAMPLE_CONFIG: Record<
   keepWorkspaces: false,
   env: ["AWS_ENDPOINT_URL"],
   subjectExclude: ["evals/cases/**", "notes/**"],
+  rules: "rules",
+  instructionFile: "AGENTS.md",
 };

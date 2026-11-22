@@ -168,6 +168,17 @@ export interface RunRecord extends Usage, LimitFields {
   /** What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started. */
   changedFiles: ChangedFiles;
   checks: CheckResult[];
+  /**
+   * The case's `preconditions` with their scores. A precondition that scores 0 makes the run invalid; none counts in
+   * the run's score. Absent for a case with none.
+   */
+  preconditions?: CheckResult[];
+  /**
+   * What the run did with the subject's rules (`rules`, `instructionFile`): `installed` is where the adapter put each
+   * file, relative to the run's home or workspace, and empty for a harness that installs none; `reportedLoaded` is what
+   * the harness says it loaded, null when it reports no rule. Absent when the subject names no rules.
+   */
+  rules?: { installed: string[]; reportedLoaded: string[] | null };
   /** The run score, null when the run is invalid. */
   score: number | null;
   /** What the judged checks cost, kept apart from the run's own numbers; null when no judge ran. */

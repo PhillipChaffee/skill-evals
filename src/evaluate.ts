@@ -41,6 +41,10 @@ export interface EvaluateOptions extends SelectionOptions {
   env?: string[] | undefined;
   /** Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file. */
   subjectExclude?: string[] | undefined;
+  /** A directory of the subject whose files are its rules. Default: `rules` of the config file. */
+  rules?: string | undefined;
+  /** A file of the subject that the harness reads as its instructions. Default: `instructionFile` of the config file. */
+  instructionFile?: string | undefined;
   /** Runs for each subject and case. A case's own `reps` wins. Default: 3. */
   reps?: number | undefined;
   /** Passed to the harness. A case's own `model` wins. Default: the harness's own default. */

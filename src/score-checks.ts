@@ -1,5 +1,6 @@
 import type {
   Check,
+  DecisionCheck,
   JudgedCheck,
   Outcome,
   RuledCheck,
@@ -15,19 +16,20 @@ import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 import { apiAsker } from "./judge-api.js";
 import { notScoredFor, viewFor } from "./turn-outcome.js";
+import { scorePreconditions } from "./score-preconditions.js";
 
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
 // does not start without a decision model.
-const NOT_DECIDED = {
+const notDecided = (because: string) => ({
   score: null,
-  reason: "not decided, because the run is invalid",
-};
+  reason: `not decided, because ${because}`,
+});
 // A command check on a run that is already invalid: the commands run on a valid run only, so a harness error stays the
 // run's first reason and no command touches what a broken run left behind.
-const NOT_RUN = {
+const notRun = (because: string) => ({
   score: null,
-  reason: "not run, because the run is invalid",
-};
+  reason: `not run, because ${because}`,
+});
 /**
  * Scores a check by its rule. A rule that throws, such as a user's regular expression that overflows the stack, scores
  * its check 0 and leaves the run valid.
@@ -53,12 +55,13 @@ async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
  * @param plan - The run, whose case holds the checks and whose harness names the login files.
  * @param run - What the commands look at, and whether the run is still valid.
  * @param run.outcome - What the run left behind.
- * @param run.judgeable - False when the run is already invalid: the commands are not run.
+ * @param run.judgeable - False when the run is already invalid, or a precondition is not met: the commands are not run.
+ * @param run.because - Why, for the reason of a check that was not run.
  * @param slots - The results by place in the case; each command's place is filled in.
  */
 async function runCommands(
   plan: ScoringPlan,
-  run: { outcome: Outcome; judgeable: boolean },
+  run: { outcome: Outcome; judgeable: boolean; because: string },
   slots: (CheckResult | undefined)[],
 ): Promise<void> {
   const { checks } = plan.caseDef;
@@ -73,7 +76,7 @@ async function runCommands(
       reason: `the login could not be removed from the home: ${String(stuck)}`,
     };
     const verdict = !run.judgeable
-      ? NOT_RUN
+      ? notRun(run.because)
       : stuck === null
         ? await ruled(check, run.outcome)
         : refused;
@@ -121,7 +124,8 @@ const skipped = (reason: string) => ({ score: null, reason });
  * @param run.task - The case's prompt (`prompt.md`, or its turns written as one text). It is not the text that was sent: under
  *   `preamble` the history block in front of turn 1 is not part of it. The judge sees no history in this release.
  * @param run.outcome - What the judge reads of the run.
- * @param run.judgeable - False when the run is already invalid.
+ * @param run.judgeable - False when the run is already invalid, or a precondition is not met.
+ * @param run.because - Why, for the reason of a check that was not asked.
  * @param check - The check to score.
  * @param scored - Receives the judge's replies and cache hits, and whether the check was skipped.
  * @returns The check with its score; none when the run is invalid or a limit of the command is reached.
@@ -134,6 +138,7 @@ async function judgedSlot(
     task: string;
     outcome: Outcome;
     judgeable: boolean;
+    because: string;
   },
   check: JudgedCheck,
   scored: Scored,
@@ -142,7 +147,7 @@ async function judgedSlot(
     return {
       ...check,
       score: null,
-      reason: "not judged, because the run is invalid",
+      reason: `not judged, because ${run.because}`,
     };
   }
   const reason = skippedFor(run.plan);
@@ -186,6 +191,32 @@ function unaskedSlots(
   });
 }
 
+/**
+ * Asks the decision model about the decision checks of a case, in one request.
+ * @param plan - The run, which names the decision model and the cache.
+ * @param run - What the model is shown.
+ * @param run.task - The case's prompt.
+ * @param run.outcome - What the run left behind.
+ * @param decisions - The decision checks of the case.
+ * @returns The answers; null when the case has no decision check or no decision model is set.
+ */
+async function decideChecks(
+  plan: ScoringPlan,
+  run: { task: string; outcome: Outcome },
+  decisions: DecisionCheck[],
+) {
+  if (!plan.decision || decisions.length === 0) return null;
+  return decideAll(
+    {
+      model: plan.decision.model,
+      ...run,
+      cache: plan.cache ?? null,
+      modelId: plan.decisionModel,
+    },
+    decisions,
+  );
+}
+
 /** What the checks of a run besides its commands got. */
 interface Scored {
   replies: Usage[];
@@ -201,13 +232,14 @@ interface Scored {
  *   then not asked and has no score, with the reason "skipped: budget reached" or "skipped: duration reached". Every
  *   other check is scored.
  * @param outcome - What the deterministic checks observe.
- * @param judgeable - False when the run is already invalid, which leaves the judged checks without a score.
+ * @param judgeableRun - False when the run is already invalid, which leaves the judged checks without a score. A case's
+ *   `preconditions` are scored first; one that is not met does the same, with its own reason.
  * @returns The check results in case order, every reply of the judge, and every request to the decision model.
  */
 export async function scoreChecks(
   plan: ScoringPlan,
   outcome: Outcome,
-  judgeable: boolean,
+  judgeableRun: boolean,
 ): Promise<{
   checks: CheckResult[];
   replies: Usage[];
@@ -217,8 +249,18 @@ export async function scoreChecks(
   hits: number;
   /** True when a judged or decision check was skipped because a limit of the command was reached. */
   skippedGraders: boolean;
+  /** The case's preconditions with their scores, in case order; empty for a case with none. */
+  preconditions: CheckResult[];
 }> {
   const { prompt: task, checks: asked } = plan.caseDef;
+  // Preconditions are scored first. One that is not met leaves the judged, decision and command checks unasked, so no
+  // judge or command is spent on a run that cannot count.
+  const pre = await scorePreconditions(
+    plan.caseDef.preconditions ?? [],
+    (check) => ruled(check, outcome),
+    judgeableRun,
+  );
+  const { judgeable, because } = pre;
   const problems: string[] = [];
   const { ask, via } = judgeOf(plan, problems);
   const scored: Scored = { replies: [], hits: 0, skipped: false };
@@ -226,17 +268,8 @@ export async function scoreChecks(
   const decisions = asked.filter(isDecision);
   const early = judgeable && decisions.length ? skippedFor(plan) : null;
   const decided =
-    judgeable && plan.decision && decisions.length && early === null
-      ? await decideAll(
-          {
-            model: plan.decision.model,
-            task,
-            outcome,
-            cache: plan.cache ?? null,
-            modelId: plan.decisionModel,
-          },
-          decisions,
-        )
+    judgeable && early === null
+      ? await decideChecks(plan, { task, outcome }, decisions)
       : null;
   const slots = unaskedSlots(asked, outcome);
   // Commands run last: they may change the files that the other checks read, and a login must not be readable by
@@ -245,20 +278,21 @@ export async function scoreChecks(
     if (check.type === "command" || slots[index] !== undefined) continue;
     if (isDecision(check)) {
       const result = decided?.results.get(check);
-      const left = result ?? (early === null ? NOT_DECIDED : skipped(early));
+      const left =
+        result ?? (early === null ? notDecided(because) : skipped(early));
       scored.skipped ||= result === undefined && early !== null;
       slots[index] = { ...check, ...left };
     } else if (!isJudged(check)) {
       slots[index] = { ...check, ...(await ruled(check, outcome)) };
     } else {
       slots[index] = await judgedSlot(
-        { plan, ask, via, task, outcome, judgeable },
+        { plan, ask, via, task, outcome, judgeable, because },
         check,
         scored,
       );
     }
   }
-  await runCommands(plan, { outcome, judgeable }, slots);
+  await runCommands(plan, { outcome, judgeable, because }, slots);
   const checks = slots.filter((slot) => slot !== undefined);
   return {
     checks,
@@ -267,5 +301,6 @@ export async function scoreChecks(
     judgeProblem: problems[0] ?? null,
     hits: scored.hits,
     skippedGraders: scored.skipped,
+    preconditions: pre.results,
   };
 }

@@ -39,6 +39,23 @@ function checkNeeds(check: Check): Need[] {
 }
 
 /**
+ * Lists what a check needs at least one of, such as a source of injected text that a hook or a rule may give.
+ * @param check - Any check of a case.
+ * @returns The capabilities of which one must be present; none for a check that has no such need.
+ */
+const eitherNeeds = (check: Check): Capability[] =>
+  CHECKS[check.type]?.needsAny?.(check) ?? [];
+
+/**
+ * Picks the capabilities of a group that a harness lacks entirely.
+ * @param harness - The adapter.
+ * @param needs - Capabilities of which at least one must be present.
+ * @returns All of them when the harness has none; none when it has one.
+ */
+const lackingAll = (harness: Harness, needs: Capability[]): Need[] =>
+  needs.some((need) => harness.capabilities.has(need)) ? [] : needs;
+
+/**
  * Lists every need of a set of cases.
  * @param cases - Every loaded case.
  * @returns The needs of the cases and of their checks, with repeats.
@@ -47,7 +64,9 @@ export const askedBy = (cases: Case[]): Need[] =>
   cases.flatMap((caseDef) => [
     ...caseDef.requires,
     ...turnNeeds(caseDef),
-    ...allChecks(caseDef).flatMap(checkNeeds),
+    ...[...allChecks(caseDef), ...(caseDef.preconditions ?? [])].flatMap(
+      checkNeeds,
+    ),
   ]);
 
 /**
@@ -144,7 +163,10 @@ export function applicabilityUnder(
   const skippedMissing = new Set<Need>();
   const checks = allChecks(caseDef);
   checks.forEach((check, index) => {
-    const absent = lacking(harness, host, checkNeeds(check));
+    const absent = [
+      ...lacking(harness, host, checkNeeds(check)),
+      ...lackingAll(harness, eitherNeeds(check)),
+    ];
     if (absent.length === 0) return;
     if (check.ifUnsupported === "skip") {
       skipped.push(index);
@@ -153,6 +175,15 @@ export function applicabilityUnder(
       for (const need of absent) missing.add(need);
     }
   });
+  // A precondition is never skipped: what it needs, the whole case needs.
+  for (const one of caseDef.preconditions ?? []) {
+    for (const need of [
+      ...lacking(harness, host, checkNeeds(one)),
+      ...lackingAll(harness, eitherNeeds(one)),
+    ]) {
+      missing.add(need);
+    }
+  }
   if (missing.size === 0 && skipped.length === checks.length) {
     for (const need of skippedMissing) missing.add(need);
   }

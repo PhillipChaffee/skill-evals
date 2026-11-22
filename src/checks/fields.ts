@@ -4,6 +4,7 @@ import { CALL_FIELDS, parseBy, parseVias } from "./call-fields.js";
 import { COMMAND_FIELDS } from "./command-fields.js";
 import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
+import { HOOK_FIELDS } from "./hook-fields.js";
 import { JUDGE_FIELDS, JUDGE_PARSERS } from "./judge-fields.js";
 import { TRANSCRIPT_FIELDS } from "./transcript-fields.js";
 import { pathProblem } from "./path-problem.js";
@@ -122,6 +123,7 @@ export const FIELDS: Record<string, FieldDef> = {
   },
   ...CALL_FIELDS,
   ...TRANSCRIPT_FIELDS,
+  ...HOOK_FIELDS,
   ...FILE_FIELDS,
   ...COMMAND_FIELDS,
   ...JUDGE_FIELDS,

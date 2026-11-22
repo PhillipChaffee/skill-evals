@@ -2,6 +2,7 @@ import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
 import type { EventInput } from "../transcript.js";
 import {
   callPart,
+  hookPart,
   lifecyclePart,
   resultPart,
   textPart,
@@ -14,6 +15,7 @@ import type {
   TurnState,
 } from "./shared.js";
 import { joinText } from "./shared.js";
+import { hookOfClaude } from "./claude-code-hooks.js";
 
 /** A content block of an `assistant` or `user` event; which fields are set depends on its type. */
 interface Block {
@@ -40,6 +42,11 @@ export interface MessageEvent {
   type: string;
   /** On a `system` event: what kind; `compact_boundary` is the end of a compaction. */
   subtype?: string;
+  /** On a `system` event of subtype `hook_response`: the hook's event, output, exit code and outcome. */
+  hook_event?: string;
+  stdout?: string;
+  output?: string;
+  exit_code?: number;
   session_id?: string;
   /** The id of the dispatching call, on an event that a subagent produced; null on the main thread's. */
   parent_tool_use_id?: string | null;
@@ -136,6 +143,30 @@ function resultText(content: unknown): string {
 }
 
 /**
+ * Reads the tool results of a `user` event.
+ * @param blocks - The event's content blocks.
+ * @param whose - Finds the agent that made the call a result answers, from the call's id.
+ * @returns One part for each `tool_result` block, with its text, its agent and whether the harness marked it failed.
+ */
+function resultsOf(
+  blocks: Block[],
+  whose: (use: string | undefined) => AgentRef,
+): EventInput[] {
+  return blocks
+    .filter((block) => block.type === "tool_result")
+    .map((block) =>
+      resultPart(
+        block.tool_use_id,
+        block.content === undefined ? undefined : resultText(block.content),
+        {
+          agent: whose(block.tool_use_id),
+          ...(block.is_error === undefined ? {} : { isError: block.is_error }),
+        },
+      ),
+    );
+}
+
+/**
  * Reads the text, tool calls and tool results of a stream, with the assistant turn of each.
  * @param events - The events of the stream, in order.
  * @param kinds - The adapter's table of native tool name to kind.
@@ -167,22 +198,11 @@ export function transcriptParts(
     if (one.type === "system" && one.subtype === "compact_boundary") {
       return [lifecyclePart("compact")];
     }
-    if (one.type === "user") {
-      return blocks
-        .filter((block) => block.type === "tool_result")
-        .map((block) =>
-          resultPart(
-            block.tool_use_id,
-            block.content === undefined ? undefined : resultText(block.content),
-            {
-              agent: ofResult(block.tool_use_id),
-              ...(block.is_error === undefined
-                ? {}
-                : { isError: block.is_error }),
-            },
-          ),
-        );
+    // `--include-hook-events` makes the stream state each hook's lifecycle; its response is the hook that ran.
+    if (one.type === "system" && one.subtype === "hook_response") {
+      return [hookPart(hookOfClaude(one))];
     }
+    if (one.type === "user") return resultsOf(blocks, ofResult);
     if (one.type !== "assistant") return [];
     const id = one.message?.id;
     const known = id === undefined ? undefined : turns.get(id);

@@ -93,6 +93,16 @@ export function describeFiles(check: Check): string[] {
 }
 
 /**
+ * Names what a check of hooks or injected context looks at.
+ * @param check - Any check of a case.
+ * @returns The words for its `event` and its `source`; none for a check without them.
+ */
+export const describeHooks = (check: Check): string[] => [
+  ...(check.event === undefined ? [] : [`event ${check.event}`]),
+  ...(check.source === undefined ? [] : [`source ${check.source}`]),
+];
+
+/**
  * Names what a judge or decision check is shown and how it scores, beyond its type and rubric.
  * @param check - Any check of a case.
  * @returns The words for its scale, votes, `sees` other than the default, and `files`; none for a check without them.

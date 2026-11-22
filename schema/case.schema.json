@@ -239,10 +239,26 @@
           { "$ref": "#/$defs/check-tool_output_matches" },
           { "$ref": "#/$defs/check-tool_output_lacks" },
           { "$ref": "#/$defs/check-tool_output_size" },
+          { "$ref": "#/$defs/check-hook_fired" },
+          { "$ref": "#/$defs/check-context_injected" },
           { "$ref": "#/$defs/check-subject_unchanged" },
           { "$ref": "#/$defs/check-command" },
           { "$ref": "#/$defs/check-judge" },
           { "$ref": "#/$defs/check-decision" }
+        ]
+      }
+    },
+    "preconditions": {
+      "title": "preconditions",
+      "description": "A non-empty list of checks that say what the run must have started with, such as `{ \"type\": \"context_injected\", \"pattern\": \"...\" }`. Only a check type that is allowed as a precondition may be listed: `context_injected`, `hook_fired`, `skill_available` and `skill_loaded`. They are scored first. A precondition that scores 0 makes the run invalid, with the reason `precondition not met: <check>`, not a zero, and the judged, decision and command checks of that run are not run. A precondition never counts in the run's score. What a precondition needs makes the case not applicable on a harness that lacks it.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/check-context_injected" },
+          { "$ref": "#/$defs/check-hook_fired" },
+          { "$ref": "#/$defs/check-skill_available" },
+          { "$ref": "#/$defs/check-skill_loaded" }
         ]
       }
     },
@@ -397,6 +413,8 @@
               { "$ref": "#/$defs/check-tool_output_matches" },
               { "$ref": "#/$defs/check-tool_output_lacks" },
               { "$ref": "#/$defs/check-tool_output_size" },
+              { "$ref": "#/$defs/check-hook_fired" },
+              { "$ref": "#/$defs/check-context_injected" },
               { "$ref": "#/$defs/check-subject_unchanged" },
               { "$ref": "#/$defs/check-command" }
             ]
@@ -1200,13 +1218,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1455,13 +1473,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1632,13 +1650,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -2046,13 +2064,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -2116,13 +2134,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -3704,6 +3722,110 @@
             { "required": ["dispatches"] }
           ],
           "additionalProperties": false
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-hook_fired": {
+      "title": "hook_fired",
+      "description": "The number of hooks of that event that ran is from `min` to `max`. `min` is 1, and 0 when `max` is 0. A hook event is never a tool call, so `tool_called` does not count it. Needs a harness with `hooks`.",
+      "type": "object",
+      "required": ["type", "event"],
+      "properties": {
+        "type": { "const": "hook_fired" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "event": {
+          "title": "event",
+          "description": "The event of a hook, written as the harness names it, such as `\"SessionStart\"`. The match is exact and case-sensitive.",
+          "type": "string",
+          "minLength": 1
+        },
+        "min": {
+          "title": "min",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max": {
+          "title": "max",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-context_injected": {
+      "title": "context_injected",
+      "description": "A hook's context, or a rule or instruction text that the harness reported it loaded, matches the regular expression. It never reads the rule files that the run installed itself, which would make the check true of every run. With `source` \"hooks\" it needs `hooks`, with \"rules\" it needs `rules`, and with \"any\", the default, it needs at least one of them. A harness that reports no rule text can only satisfy it from a hook.",
+      "type": "object",
+      "required": ["type", "pattern"],
+      "properties": {
+        "type": { "const": "context_injected" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "title": "source",
+          "description": "Where `context_injected` looks: \"hooks\" (the context that hooks put in front of the model), \"rules\" (the rule and instruction text that the harness reports it loaded), or \"any\" of them. The files the run installed are never read: only what the harness reports counts.",
+          "type": "string",
+          "enum": ["hooks", "rules", "any"]
         },
         "requires": {
           "title": "requires",

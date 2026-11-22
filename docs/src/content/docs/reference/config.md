@@ -43,6 +43,8 @@ An optional `skill-evals.config.json` in the project root sets defaults. A flag 
 | `keepWorkspaces`       | boolean  | `--keep-workspaces`                 | After a run's checks, archive its workspace, the seed it started from, its remote directory and its throwaway home as <run>.workspace.tar in the output directory, with the system tar. The harness's login files are left out of the home, and the grader's copy is never in it. results.json records each archive as workspaceArchive. rejudge reads the archive to score the checks that need files again. Needs tar on PATH.                                                                                                                                                              |
 | `env`                  | string[] | none                                | Names of environment variables the harness gets besides the allowlist. An exact variable name: not empty, without `=`, not `_`, and not starting with `SKILL_EVALS_` or `npm_`. Anything else is an error.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `subjectExclude`       | string[] | none                                | Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides `.git`, `node_modules`, the cases directory and the output directory. `*` matches within one directory, `**` matches any depth, `?` one character, and `{a,b}` either. See [Subjects](../concepts/subjects.md).                                                                                                                                                                                                                                                                        |
+| `rules`                | string   | none                                | A directory of the subject, such as `"rules"`, whose files are its rules. An adapter with the `rules` capability installs them the way its harness reads them, and the run record keeps what it installed. The path must stay inside the subject and may hold no link. The `none` subject has no rules. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).                                                                                                                                                                                                         |
+| `instructionFile`      | string   | none                                | A file of the subject, such as `"AGENTS.md"`, that the harness reads as its instructions. It is installed with the rules, and its text counts as rule text for `context_injected`. The path must stay inside the subject and may not be a link. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).                                                                                                                                                                                                                                                                 |
 
 Every key is optional. `cases` resolves against the project root. `harness` narrows `check` too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
 
@@ -80,7 +82,9 @@ A file that sets every key. It shows each key's type, and is not a file to run w
   "historyMode": "preamble",
   "keepWorkspaces": false,
   "env": ["AWS_ENDPOINT_URL"],
-  "subjectExclude": ["evals/cases/**", "notes/**"]
+  "subjectExclude": ["evals/cases/**", "notes/**"],
+  "rules": "rules",
+  "instructionFile": "AGENTS.md"
 }
 ```
 

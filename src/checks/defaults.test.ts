@@ -3,8 +3,9 @@ import type { Outcome, RuledCheck } from "./index.js";
 import { CHECKS, checkScore } from "./index.js";
 import { withDefaults } from "./defaults.js";
 import { FIELDS } from "./fields.js";
-import { call, played, result } from "../testing/transcript.js";
+import { call, hook, played, result } from "../testing/transcript.js";
 import { bareOutcome, dirsWith } from "../testing/outcome.js";
+import { NOT_REPORTED } from "../harnesses/shared.js";
 
 /** One check and a run that tells a wrong default from the right one. */
 type Scenario = [check: Record<string, unknown>, outcome: () => Outcome];
@@ -60,6 +61,16 @@ const SCENARIOS: Record<string, Scenario> = {
   tool_output_lacks: [{ tool: { kind: "shell" }, pattern: "bad" }, twoOutputs],
   tool_output_size: [{ maxBytes: 1 }, twoOutputs],
   subject_unchanged: [{}, () => bareOutcome()],
+  hook_fired: [{ event: "SessionStart", max: 0 }, () => bareOutcome()],
+  // Only a rule text that the harness reported matches, so a default source of "hooks" would score 0.
+  context_injected: [
+    { pattern: "keep" },
+    () =>
+      bareOutcome({
+        ...played(hook("SessionStart", { context: "other" })),
+        loaded: { ...NOT_REPORTED, ruleTexts: ["keep it short"] },
+      }),
+  ],
   command: [{ run: "exit 3" }, () => dirsWith().run()],
 };
 // Scored by a model: no rule reads a default, and the judge and decision paths take theirs from the same table.

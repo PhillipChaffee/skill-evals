@@ -196,6 +196,7 @@ export async function check(
   const subject = resolveSubject("subject", options.subject ?? project.root, {
     ...project,
     left: exclusionsOf(options, project.cwd),
+    rules: { rules: options.rules, instructionFile: options.instructionFile },
   });
   try {
     const outDir = located.some((entry) => entry.bin)

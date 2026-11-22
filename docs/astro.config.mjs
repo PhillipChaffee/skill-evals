@@ -87,6 +87,7 @@ export default defineConfig({
             "guides/write-a-case",
             "guides/organise-a-suite",
             "guides/multi-turn",
+            "guides/rules-hooks-preconditions",
             "guides/prose-checks",
             "guides/judged-checks",
             "guides/decision-checks",

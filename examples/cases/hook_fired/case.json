@@ -1,0 +1,9 @@
+{
+  "description": "The session-start hook ran once, and the pre-tool hook did not run at all.",
+  "tags": ["hooks"],
+  "checks": [
+    { "type": "hook_fired", "event": "SessionStart" },
+    { "type": "hook_fired", "event": "Stop", "min": 0, "max": 1 },
+    { "type": "hook_fired", "event": "PreToolUse", "max": 0 }
+  ]
+}

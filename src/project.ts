@@ -80,6 +80,8 @@ export const CONFIG_KEYS: Record<
   keepWorkspaces: "boolean",
   env: "string[]",
   subjectExclude: "string[]",
+  rules: "string",
+  instructionFile: "string",
 };
 
 /** The project's optional config file. */
@@ -135,6 +137,10 @@ export interface Config {
   env?: string[];
   /** Globs, relative to the subject, of paths that a run never gets: they are left out of its copy. */
   subjectExclude?: string[];
+  /** A directory of the subject whose files are its rules, which an adapter with the `rules` capability installs. */
+  rules?: string;
+  /** A file of the subject that the harness reads as its instructions; its text counts as rule text. */
+  instructionFile?: string;
 }
 
 /**

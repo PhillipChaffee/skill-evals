@@ -29,6 +29,9 @@
 //   turn states in place of that one, and its `inits` lists fields of each turn's init event to replace.
 // - A prompt of `/compact` is a compaction: it writes a `compact_boundary` system event and no assistant turn, and it does
 //   not use up a script turn.
+// - A script's `hook` step announces a hook (`hook_started`, then `hook_response` with `hook_event`, `stdout`, `exit_code`).
+// - With `report-rules` in $FAKE_DIR it states the path and text of the rules it can read in a `rules_loaded` system event
+//   (not a Claude Code event: only a test-only harness that reads it reports rules).
 // - It reports the history it found (`foundHistory`): the count in the "Earlier in this conversation (N messages):" block of the
 //   prompt (`preamble`), or the conversational lines of the session file that `--resume <id>` names, under
 //   `projects/<cwd with every character but letters and digits as "-">/<id>.jsonl` of its config directory (`native`);
@@ -452,11 +455,19 @@ function play(steps, turn) {
       const { event, command, exit, context = "" } = one.hook;
       emit({
         type: "system",
+        subtype: "hook_started",
+        hook_event: event,
+        hook_name: command,
+      });
+      emit({
+        type: "system",
         subtype: "hook_response",
         hook_event: event,
         hook_name: command,
         exit_code: exit,
         output: context,
+        stdout: context,
+        stderr: "",
         outcome: exit === 0 ? "success" : "error",
       });
     } else if ("fail" in one) {
@@ -603,6 +614,27 @@ const init = {
 // A script can leave fields out of the init event, or the whole event.
 for (const key of played?.found.initOmit ?? []) delete init[key];
 if (!played?.found.noInit) emit(init);
+// With `report-rules` in $FAKE_DIR it states the text of every rule it can read, as a harness that reports what it loaded:
+// the files under `rules/` of its config directory, its `CLAUDE.md`, and `.agent-rules/` of its working directory.
+if (fs.existsSync(path.join(process.env.FAKE_DIR ?? "", "report-rules"))) {
+  const found = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else found.push({ path: file, text: fs.readFileSync(file, "utf8") });
+    }
+  };
+  const config = process.env.CLAUDE_CONFIG_DIR ?? "";
+  walk(path.join(config, "rules"));
+  walk(path.join(process.cwd(), ".agent-rules"));
+  const memory = path.join(config, "CLAUDE.md");
+  if (fs.existsSync(memory)) {
+    found.push({ path: memory, text: fs.readFileSync(memory, "utf8") });
+  }
+  emit({ type: "system", subtype: "rules_loaded", rules: found });
+}
 // A script's `syncSkill` is a skill that an account syncs into the config directory during the run.
 if (played?.found.syncSkill) {
   const dir = path.join(

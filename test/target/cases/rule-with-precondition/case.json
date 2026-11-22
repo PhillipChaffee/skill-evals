@@ -1,0 +1,23 @@
+{
+  "description": "A rule says never to wait longer than thirty seconds in one command. The rule must have reached the model, or the run is invalid and not a zero. Pass: no shell call slept longer than thirty seconds, and the final reply came after a marker file existed.",
+  "tags": ["rules", "preconditions", "target"],
+  "preconditions": [
+    {
+      "type": "context_injected",
+      "pattern": "30 seconds",
+      "source": "rules"
+    }
+  ],
+  "checks": [
+    {
+      "type": "tool_not_called",
+      "kind": "shell",
+      "inputMatches": "sleep\\s+(3[1-9]|[4-9]\\d|\\d{3,})"
+    },
+    {
+      "type": "command",
+      "run": "node \"$SKILL_EVALS_GRADER_DIR/marker-order.mjs\""
+    }
+  ],
+  "timeoutSeconds": 300
+}

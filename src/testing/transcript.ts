@@ -1,6 +1,14 @@
 import type { ToolKind } from "../harnesses/shared.js";
 import type { EventInput } from "../transcript.js";
-import { callPart, callsOf, numbered, resultPart } from "../transcript.js";
+import type { HookEvent } from "../harnesses/hook.js";
+import { hookEvent } from "../harnesses/hook.js";
+import {
+  callPart,
+  callsOf,
+  hookPart,
+  numbered,
+  resultPart,
+} from "../transcript.js";
 import { bareOutcome } from "./outcome.js";
 
 const KINDS: Record<string, ToolKind> = {
@@ -29,6 +37,17 @@ export const call = (name: string, input: unknown, id: string): EventInput =>
  */
 export const result = (id: string, output: string | undefined): EventInput =>
   resultPart(id, output);
+
+/**
+ * States a hook that ran in a hand-built transcript.
+ * @param event - The hook's event, such as `SessionStart`.
+ * @param more - The context, exit code and command it had; none by default.
+ * @returns The event, to give to `played`.
+ */
+export const hook = (
+  event: string,
+  more: Partial<Omit<HookEvent, "event" | "contextBytes">> = {},
+): EventInput => hookPart(hookEvent({ event, ...more }));
 
 /**
  * Makes an outcome from the events of a hand-built transcript.

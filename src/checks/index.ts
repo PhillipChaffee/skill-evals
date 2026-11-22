@@ -9,12 +9,15 @@ import { ASKED_CHECKS } from "./asked.js";
 import { COMMAND_CHECKS } from "./command.js";
 import { DISPATCH_CHECKS } from "./dispatch.js";
 import { FILE_CHECKS } from "./files.js";
+import { HOOK_CHECKS } from "./hooks.js";
+import type { Source } from "./hook-fields.js";
 import type { Mode } from "./fields.js";
 import type { Outcome } from "./rules.js";
 import { FIELDS, REGEX_FIELDS, readField } from "./fields.js";
 import {
   describeCalls,
   describeFiles,
+  describeHooks,
   describeSeen,
   describeTranscript,
 } from "./describe.js";
@@ -86,6 +89,8 @@ interface CheckFields {
   maxChars?: number;
   question?: string;
   expect?: "yes" | "no";
+  event?: string;
+  source?: Source;
   /** What the harness must be able to do for the check to apply, besides what its type implies. */
   requires?: Need[];
   /** What a harness that lacks a need does: drop this check, or exclude the whole case. Default: the whole case. */
@@ -170,6 +175,16 @@ export interface Spec {
   forms?: string[][];
   /** What a harness must be able to do for the check to apply, besides the check's own `requires`. */
   needs?: (check: Check) => Capability[];
+  /**
+   * What a harness must be able to do at least one of, for a check that can be satisfied from either of two sources.
+   * Empty: nothing. A harness with none of them makes the case not applicable.
+   */
+  needsAny?: (check: Check) => Capability[];
+  /**
+   * True for a type that a case may list under `preconditions`: it reads what the run started with, such as the context
+   * that reached the model, and not what the agent did.
+   */
+  precondition?: boolean;
   /** Fields that the type fixes, which no check of it can set: `explain` shows them with the defaults. */
   implied?: Record<string, unknown>;
   /** Looks at the fields together, once each is read, for a rule that depends on more than one. Throws a `UsageError`. */
@@ -192,6 +207,7 @@ const RULED = {
   ...ASKED_CHECKS,
   ...ORDER_CHECKS,
   ...TRANSCRIPT_CHECKS,
+  ...HOOK_CHECKS,
   ...OBSERVED_CHECKS,
   ...COMMAND_CHECKS,
 };
@@ -361,6 +377,7 @@ export function describeCheck(check: Check): string {
     ...patterns,
     ...describeCalls(check),
     ...describeTranscript(check),
+    ...describeHooks(check),
     ...describeSeen(check),
     ...weight,
   ]

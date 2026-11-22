@@ -13,6 +13,7 @@ import {
 import type { Dirs, SessionInput, SessionResult } from "./session-attempt.js";
 import type { Seeded } from "./history-plant.js";
 import { UNSEEDED, plantHistory } from "./history-plant.js";
+import { installRulesFor } from "./rules-install.js";
 import { snapshot } from "./snapshot.js";
 import { runTurns } from "./turns.js";
 import type { PreparedRun } from "./workspace.js";
@@ -135,7 +136,12 @@ export async function session<T>(
     // The order is: setup steps, login files, history and sessions, then the harness. A failed step means it never starts.
     const setupFailure = prepared?.failure ?? null;
     const seeded = setupFailure === null ? plantHistory(run, dirs) : UNSEEDED;
-    const failure = setupFailure ?? seeded.failure;
+    // The rules go in once, before the first process, so that every turn of the case reads them.
+    const rules =
+      setupFailure === null && seeded.failure === null && run.rules
+        ? installRulesFor(harness, run.rules, dirs)
+        : null;
+    const failure = setupFailure ?? seeded.failure ?? rules?.failure ?? null;
     const done = run.turns
       ? await runTurns(run, { dirs, seed, failure, seeded })
       : await single(run, { dirs, failure, seeded });
@@ -163,6 +169,7 @@ export async function session<T>(
       seedDir: prepared?.seedDir ?? null,
       remoteDir: prepared?.remoteDir ?? null,
       graderDir,
+      rulesInstalled: run.rules ? (rules?.installed ?? []) : null,
     });
   } finally {
     prepared?.dispose();

@@ -13,6 +13,7 @@ import { graderOf, workspaceOf } from "./case-dirs.js";
 import type { History, PriorSession } from "./history-types.js";
 import { allChecks } from "./case-checks.js";
 import { CASE_KEYS } from "./case-keys.js";
+import { readPreconditions } from "./case-preconditions.js";
 import { layersOf } from "./case-layers.js";
 import { limitsOf } from "./case-limits.js";
 import type { OnTimeout } from "./session-end.js";
@@ -39,6 +40,11 @@ export interface Case {
   /** The user's turns, in order; null for a case with one prompt. */
   turns: Turn[] | null;
   checks: Check[];
+  /**
+   * Checks that say what the run must have started with. They are scored first and never count in the score; one that
+   * scores 0 makes the run invalid. Absent when the case has none, so that a case without them keeps its hash.
+   */
+  preconditions?: Check[];
   weight: number;
   minScore?: number | undefined;
   /** The most main-thread turns the agent may take; the runner stops the run as the next one begins. Absent: no limit. */
@@ -150,6 +156,22 @@ function readFiles(found: Found) {
   } catch (error) {
     throw new UsageError(`case ${id}: ${messageOf(error)}`);
   }
+}
+
+/**
+ * Reads the `preconditions` key into the part of a case that holds them.
+ * @param raw - The case file.
+ * @param file - The case file's name, for the message.
+ * @param mode - How loading treats a key a check does not take.
+ * @returns `{ preconditions }`, or nothing for a case that has none.
+ */
+function preconditionsOf(
+  raw: Record<string, unknown>,
+  file: string,
+  mode: Mode,
+): { preconditions?: Check[] } {
+  const preconditions = readPreconditions(raw, file, mode);
+  return preconditions.length > 0 ? { preconditions } : {};
 }
 
 /** What every variant of a case shares, and the case's own id. */
@@ -276,11 +298,11 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
     raw?.[key] === undefined || (key === "weight" && raw[key] === null)
       ? undefined
       : readField(CASE_KEYS, key, at);
-  const workspaceDir = path.join(dir, "workspace");
   const shared = {
     checks: checks.map((check: unknown, index) =>
       readCheck(check, `${file} checks[${String(index)}]`, mode),
     ),
+    ...preconditionsOf(raw ?? {}, file, mode),
     weight: (read("weight") as number | undefined) ?? 1,
     minScore: read("minScore") as number | undefined,
     maxTurns: read("maxTurns") as number | undefined,
@@ -290,7 +312,7 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
       (read("timeoutSeconds") as number | undefined) ?? DEFAULT_TIMEOUT_SECONDS,
     ...settingsOf(read),
     dir,
-    workspaceDir: workspaceOf(workspaceDir, file),
+    workspaceDir: workspaceOf(path.join(dir, "workspace"), file),
     graderDir: graderOf(dir, file),
     ...layersOf(found, read, root),
   };

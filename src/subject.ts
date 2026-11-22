@@ -7,6 +7,8 @@ import { exportSubject, leaveOut } from "./isolate.js";
 import type { Project } from "./project.js";
 import { UsageError } from "./scope.js";
 import { hashTree } from "./tree-hash.js";
+import type { RulesOptions, SubjectRules } from "./subject-rules.js";
+import { resolveRules } from "./subject-rules.js";
 import { allChanged, diffSnapshots, snapshot } from "./snapshot.js";
 
 /** A comparison has the labels "a" and "b"; a single subject is "subject". */
@@ -40,6 +42,11 @@ export interface Subject extends SubjectSummary {
   exported: string | null;
   /** Lists what a run edited in the export, which would reach later runs; none unless one did. */
   exportChanged: () => string[];
+  /**
+   * The rules the subject names (`rules`, `instructionFile` of the config), which the adapter installs; null when the
+   * config names none, and always null for "none".
+   */
+  rules: SubjectRules | null;
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
   sourceChanges: () => string[];
   /**
@@ -202,6 +209,8 @@ function locate(label: Label, spec: string, project: Project): Located {
 export interface SubjectScope extends Project {
   /** Default: nothing besides `.git` and `node_modules`. */
   left?: Exclusions;
+  /** The config's `rules` and `instructionFile`. Default: none. */
+  rules?: RulesOptions;
 }
 
 /**
@@ -241,6 +250,7 @@ const baseline = (label: Label): Subject => ({
   commit: null,
   exported: null,
   exportChanged: () => [],
+  rules: null,
   sourceChanges: () => [],
   revision: "none",
   dispose: () => undefined,
@@ -300,6 +310,7 @@ export function resolveSubject(
       commit: source.commit,
       exported: exported.dir,
       exportChanged: exported.changed,
+      rules: resolveRules(scope.rules ?? {}, exported.dir, flag),
       sourceChanges: watchSource(source, left),
       revision: hashTree(exported.dir),
       dispose: exported.dispose,

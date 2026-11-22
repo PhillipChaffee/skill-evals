@@ -53,31 +53,31 @@ Each harness's suite score is over its own applicable cases, and it is printed a
 
 ## The capabilities
 
-| Capability      | Meaning                                                                                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `subagents`     | The stream shows when the agent starts another agent, as a tool call of the kind `subagent`.                                                                   |
-| `multiTurn`     | The harness takes more than one prompt in one session, so a case can have several turns.                                                                       |
-| `userInvoke`    | A case can invoke a skill the way a user does, with a slash command, and not through the agent's own tool call.                                                |
-| `toolOutputs`   | The stream carries what each tool returned, so a check can read a tool's output.                                                                               |
-| `assistantText` | The stream carries the agent's text between its tool calls, not only its final answer.                                                                         |
-| `turnGrouping`  | The stream says which tool calls belong to one assistant turn, so a check can ask for calls in the same turn.                                                  |
-| `childCalls`    | The stream attributes each tool call to the agent that made it, so a check can tell a subagent's calls from the parent's.                                      |
-| `childText`     | The stream carries the text that a subagent wrote, apart from the parent's.                                                                                    |
-| `rules`         | The harness reads the project's rule files, so a case can plant a rule and see it obeyed.                                                                      |
-| `hooks`         | The harness runs hooks and reports that they ran, so a check can read a hook's result.                                                                         |
-| `history`       | A case can start from a conversation that already happened, written into the first prompt or into the harness's own store.                                     |
-| `historyNative` | A case can start from a conversation written into the harness's own session store and resumed from it.                                                         |
-| `askUser`       | The stream shows when the agent asks the user a question, so a case can answer it.                                                                             |
-| `toolDurations` | The stream says how long each tool call took, so a check can bound it.                                                                                         |
-| `sessionStore`  | The harness keeps its sessions in files that a run can read after it ends.                                                                                     |
-| `compact`       | A case can compact the conversation between turns.                                                                                                             |
-| `clear`         | A case can clear the conversation between turns.                                                                                                               |
-| `resume`        | A case can resume an earlier session in a later run.                                                                                                           |
-| `mcp`           | The harness starts the MCP servers that a case configures, and the stream shows their tool calls.                                                              |
-| `skillListing`  | The harness lists the skills it loaded at startup, so a run whose subject is missing from the list is invalid.                                                 |
-| `loadedReport`  | The harness reports the plugins and skills it loaded at startup, which `--isolated` and the subject-loaded test read.                                          |
-| `isolated`      | The harness starts with nothing loaded but what the run gives it and proves that from its report, so `--isolated` can promise it. It needs `loadedReport` too. |
-| `sandbox`       | The harness can run its tools in a sandbox that denies the network and the files outside the workspace.                                                        |
+| Capability      | Meaning                                                                                                                                                                                  |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subagents`     | The stream shows when the agent starts another agent, as a tool call of the kind `subagent`.                                                                                             |
+| `multiTurn`     | The harness takes more than one prompt in one session, so a case can have several turns.                                                                                                 |
+| `userInvoke`    | A case can invoke a skill the way a user does, with a slash command, and not through the agent's own tool call.                                                                          |
+| `toolOutputs`   | The stream carries what each tool returned, so a check can read a tool's output.                                                                                                         |
+| `assistantText` | The stream carries the agent's text between its tool calls, not only its final answer.                                                                                                   |
+| `turnGrouping`  | The stream says which tool calls belong to one assistant turn, so a check can ask for calls in the same turn.                                                                            |
+| `childCalls`    | The stream attributes each tool call to the agent that made it, so a check can tell a subagent's calls from the parent's.                                                                |
+| `childText`     | The stream carries the text that a subagent wrote, apart from the parent's.                                                                                                              |
+| `rules`         | The adapter installs the subject's rules and instruction file (the config's `rules` and `instructionFile`) the way the harness reads them, so a case can plant a rule and see it obeyed. |
+| `hooks`         | The stream shows each hook that ran, with its event, exit code and the context it added, so a check can read a hook's result.                                                            |
+| `history`       | A case can start from a conversation that already happened, written into the first prompt or into the harness's own store.                                                               |
+| `historyNative` | A case can start from a conversation written into the harness's own session store and resumed from it.                                                                                   |
+| `askUser`       | The stream shows when the agent asks the user a question, so a case can answer it.                                                                                                       |
+| `toolDurations` | The stream says how long each tool call took, so a check can bound it.                                                                                                                   |
+| `sessionStore`  | The harness keeps its sessions in files that a run can read after it ends.                                                                                                               |
+| `compact`       | A case can compact the conversation between turns.                                                                                                                                       |
+| `clear`         | A case can clear the conversation between turns.                                                                                                                                         |
+| `resume`        | A case can resume an earlier session in a later run.                                                                                                                                     |
+| `mcp`           | The harness starts the MCP servers that a case configures, and the stream shows their tool calls.                                                                                        |
+| `skillListing`  | The harness lists the skills it loaded at startup, so a run whose subject is missing from the list is invalid.                                                                           |
+| `loadedReport`  | The harness reports the plugins and skills it loaded at startup, which `--isolated` and the subject-loaded test read.                                                                    |
+| `isolated`      | The harness starts with nothing loaded but what the run gives it and proves that from its report, so `--isolated` can promise it. It needs `loadedReport` too.                           |
+| `sandbox`       | The harness can run its tools in a sandbox that denies the network and the files outside the workspace.                                                                                  |
 
 ## What each harness declares
 
@@ -93,8 +93,8 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `turnGrouping`  | yes  | yes           | no       | yes        | no      |
 | `childCalls`    | no   | yes           | no       | no         | no      |
 | `childText`     | no   | yes           | no       | no         | no      |
-| `rules`         | no   | no            | no       | no         | no      |
-| `hooks`         | no   | no            | no       | no         | no      |
+| `rules`         | no   | yes           | no       | no         | no      |
+| `hooks`         | no   | yes           | no       | no         | no      |
 | `history`       | yes  | yes           | yes      | yes        | yes     |
 | `historyNative` | no   | no            | no       | no         | no      |
 | `askUser`       | no   | yes           | no       | no         | no      |

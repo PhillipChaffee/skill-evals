@@ -3,10 +3,17 @@ import path from "node:path";
 import type { Capability } from "../capabilities.js";
 import type { HistoryAdapter } from "../history-types.js";
 import type { Subject } from "../subject.js";
+import type { HookEvent } from "./hook.js";
+import type { Loaded } from "./loaded.js";
+import type { RulesFile, RulesTarget } from "./rules.js";
 import type { Invoke, TurnInput, TurnState } from "./turn-input.js";
 
 export type { Invoke, LifecycleEvent, TurnState } from "./turn-input.js";
 export { firstTurn } from "./turn-input.js";
+export type { HookEvent } from "./hook.js";
+export type { Loaded } from "./loaded.js";
+export { NOT_REPORTED } from "./loaded.js";
+export type { RulesFile, RulesTarget } from "./rules.js";
 
 // Every tool kind with what it means. The docs list the kinds from this table.
 export const TOOL_KIND_MEANINGS = {
@@ -98,6 +105,8 @@ export interface TranscriptEvent {
   isError?: boolean;
   /** On a `tool_result`, where the stream says how long the call took. */
   durationMs?: number;
+  /** On a `hook`: the hook that ran. A hook event is never a tool call, so no tool check counts it. */
+  hook?: HookEvent;
 }
 
 /** Token counts; input counts every prompt token, cached ones included. */
@@ -105,32 +114,6 @@ export interface Tokens {
   input: number;
   output: number;
 }
-
-/** What a harness says it loaded at startup. Null means the harness does not report that kind of thing. */
-export interface Loaded {
-  /** The directories of its plugins. */
-  paths: string[] | null;
-  /** The names of its skills, without any plugin prefix. */
-  skills: string[] | null;
-  agents: string[] | null;
-  rules: string[] | null;
-  hooks: string[] | null;
-  mcpServers: string[] | null;
-  /** The skill names as the harness listed them, with any plugin prefix, for an adapter that has one. */
-  rawSkills?: string[] | null;
-  /** The plugins with their names, for an adapter that reports them. */
-  plugins?: { name: string; path: string }[] | null;
-}
-
-/** What a harness that reports nothing about its startup gives. */
-export const NOT_REPORTED: Loaded = {
-  paths: null,
-  skills: null,
-  agents: null,
-  rules: null,
-  hooks: null,
-  mcpServers: null,
-};
 
 /** A harness's output stream in the one shape every harness shares. Null means the harness does not report the field. */
 export interface Parsed {
@@ -296,6 +279,27 @@ export interface Harness extends HistoryAdapter {
   isolation?: Isolation;
   /** Why a harness without `isolation` cannot run `--isolated`, for the docs. */
   isolationGap?: string;
+  /**
+   * Where each of a subject's rule files goes, for an adapter with the `rules` capability, which declares it only once
+   * the mechanism is confirmed from the CLI. A pure function: the loader uses it to refuse a rule that would land on a
+   * file of a case's workspace or home.
+   * @param files - The rule files and the instruction file.
+   * @returns One place for each file, in the same order.
+   */
+  rulesTargets?: (files: RulesFile[]) => RulesTarget[];
+  /**
+   * Installs a subject's rule files the way the harness reads them: a native rules directory, an instruction-file
+   * import, or both. Present exactly for an adapter with the `rules` capability. Called once per run, before the
+   * harness starts; it never overwrites a file.
+   * @param files - The rule files and the instruction file, in the run's copy of the subject.
+   * @param input - The run's home and workspace.
+   * @returns What it installed, as paths relative to the home or the workspace, in the order of `files`.
+   * @throws {Error} When a place is taken or a file cannot be copied; the run is then invalid.
+   */
+  installRules?: (
+    files: RulesFile[],
+    input: Pick<RunInput, "home" | "workspace">,
+  ) => string[];
   /**
    * Names what a finished run left in the run's home that the run did not place, such as skills the account synced
    * there. The report of what loaded does not show them. Called while the home still exists.

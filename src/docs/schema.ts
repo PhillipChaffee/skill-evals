@@ -1,6 +1,7 @@
 import { CASE_KEYS } from "../cases.js";
 import type { FieldDef } from "../checks/fields.js";
 import { FIELDS, WEIGHT } from "../checks/fields.js";
+import { preconditionTypes } from "../case-preconditions.js";
 import { CHECKS } from "../checks/index.js";
 import { ENV_NAME_PATTERN } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS, MAX_SEED } from "../project.js";
@@ -182,6 +183,22 @@ const variantSchema = (): Schema => ({
 const checkName = (type: string): string => `check-${type}`;
 
 /**
+ * Makes the schema of a case key that holds a list of checks.
+ * @param key - `checks` or `preconditions`.
+ * @param types - The check types the list may hold.
+ * @returns A non-empty array of the types' definitions, told apart by `type`.
+ */
+const checkList = (key: string, types: string[]): Schema => ({
+  title: key,
+  description: CASE_KEYS[key]?.meaning,
+  type: "array",
+  minItems: 1,
+  items: {
+    oneOf: types.map((type) => ({ $ref: `#/$defs/${checkName(type)}` })),
+  },
+});
+
+/**
  * Makes the JSON Schema of `case.json`.
  * @returns A 2020-12 schema. Each check type is a definition, and `checks` takes a list of them told apart by `type`.
  */
@@ -198,19 +215,15 @@ export function caseSchema(): Schema {
         type: "string",
         description: "The address of this schema, for editors.",
       },
-      ...propertiesOf(CASE_KEYS, ["checks", "variants", "turns"]),
+      ...propertiesOf(CASE_KEYS, [
+        "checks",
+        "preconditions",
+        "variants",
+        "turns",
+      ]),
       turns: turnsSchema(CASE_KEYS["turns"]?.meaning),
-      checks: {
-        title: "checks",
-        description: CASE_KEYS["checks"]?.meaning,
-        type: "array",
-        minItems: 1,
-        items: {
-          oneOf: Object.keys(CHECKS).map((type) => ({
-            $ref: `#/$defs/${checkName(type)}`,
-          })),
-        },
-      },
+      checks: checkList("checks", Object.keys(CHECKS)),
+      preconditions: checkList("preconditions", preconditionTypes()),
       variants: {
         title: "variants",
         description: CASE_KEYS["variants"]?.meaning,

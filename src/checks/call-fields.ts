@@ -78,21 +78,22 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   min: {
     type: "count",
     meaning:
-      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`.",
     default: {
       value: {
         tool_called: minOf,
         agent_dispatched: minOf,
         asked_user: minOf,
         file_count: 1,
+        hook_fired: minOf,
       },
-      note: "0 for `tool_called`, `agent_dispatched` and `asked_user` when `max` is 0",
+      note: "0 for `tool_called`, `agent_dispatched`, `asked_user` and `hook_fired` when `max` is 0",
     },
   },
   max: {
     type: "count",
     meaning:
-      "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+      "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`, hooks of the event for `hook_fired`. Default: no limit.",
   },
   sameTurn: {
     type: "bool",

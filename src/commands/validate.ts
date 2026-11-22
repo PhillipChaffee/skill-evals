@@ -270,6 +270,10 @@ export function validate(given: Options, project: Project): number {
     subject = resolveSubject("subject", spec, {
       ...project,
       left: exclusionsOf(options, project.cwd),
+      rules: {
+        rules: options.rules,
+        instructionFile: options.instructionFile,
+      },
     });
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;

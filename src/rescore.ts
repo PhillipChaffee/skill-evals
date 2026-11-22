@@ -229,7 +229,9 @@ export async function rescore(
       { env: caseDef.env, lenient: context.lenient },
     );
     const kept = Object.fromEntries(
-      Object.entries(record).filter(([name]) => name !== "skippedGraders"),
+      Object.entries(record).filter(
+        ([name]) => name !== "skippedGraders" && name !== "preconditions",
+      ),
     ) as unknown as RunRecord;
     const base = { ...kept, checks: [] as CheckResult[] };
     const judgeable = invalidReason({ ...base, judgeProblem: null }) === null;

@@ -178,6 +178,16 @@
       "description": "Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides `.git`, `node_modules`, the cases directory and the output directory. `*` matches within one directory, `**` matches any depth, `?` one character, and `{a,b}` either. See [Subjects](../concepts/subjects.md).",
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "rules": {
+      "title": "rules",
+      "description": "A directory of the subject, such as `\"rules\"`, whose files are its rules. An adapter with the `rules` capability installs them the way its harness reads them, and the run record keeps what it installed. The path must stay inside the subject and may hold no link. The `none` subject has no rules. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).",
+      "type": "string"
+    },
+    "instructionFile": {
+      "title": "instructionFile",
+      "description": "A file of the subject, such as `\"AGENTS.md\"`, that the harness reads as its instructions. It is installed with the rules, and its text counts as rule text for `context_injected`. The path must stay inside the subject and may not be a link. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).",
+      "type": "string"
     }
   },
   "additionalProperties": false

@@ -1,0 +1,21 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": { "command": "sh build.sh" },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": { "command": "ls build" },
+          "exec": true
+        }
+      },
+      { "text": "It says: build ok." }
+    ]
+  ]
+}

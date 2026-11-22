@@ -36,6 +36,7 @@ import type { PlanBase } from "./run-loop.js";
 import { requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject } from "./subject.js";
 import { resolveSubject } from "./subject.js";
+import { requireNoRulesClash } from "./rules-clash.js";
 
 /** What a command settles before it resolves any subject. */
 export interface Context {
@@ -188,8 +189,24 @@ export function resolveAll(prepared: Prepared, into: Subject[]): void {
       into.push({ ...first, label, dispose: () => undefined });
       continue;
     }
-    into.push(resolveSubject(label, spec, { ...project, left }));
+    into.push(
+      resolveSubject(label, spec, {
+        ...project,
+        left,
+        rules: {
+          rules: options.rules,
+          instructionFile: options.instructionFile,
+        },
+      }),
+    );
   }
+  requireNoRulesClash(
+    context.selection.chosen.map(({ harness }) => ({
+      harness,
+      cases: context.parts.ran[harness.id] ?? [],
+    })),
+    into,
+  );
 }
 
 /**

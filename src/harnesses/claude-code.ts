@@ -26,6 +26,8 @@ import {
   stringArg,
 } from "./shared.js";
 import { looksRateLimited } from "./rate-limit.js";
+import { placeRules } from "./rules.js";
+import type { RulesFile, RulesTarget } from "./rules.js";
 
 const KINDS: Record<string, ToolKind> = {
   Bash: "shell",
@@ -121,6 +123,23 @@ function stoppedOn(
   );
 }
 
+/**
+ * Says where Claude Code reads a subject's rules: the rules directory goes to `<config dir>/rules`, in the run's home,
+ * and the instruction file is its user memory file, `<config dir>/CLAUDE.md`. The home is where a run's `user` setting
+ * source lives, so the rules load with and without `--isolated`, and the workspace holds no extra file.
+ * @param files - The rule files and the instruction file.
+ * @returns One place for each file.
+ */
+function rulesTargets(files: RulesFile[]): RulesTarget[] {
+  return files.map((file) => ({
+    root: "home",
+    path:
+      file.role === "instruction"
+        ? ".claude/CLAUDE.md"
+        : `.claude/rules/${file.relative}`,
+  }));
+}
+
 const claudeCode: Harness = {
   id: "claude-code",
   bin: "claude",
@@ -149,6 +168,15 @@ const claudeCode: Harness = {
     "multiTurn",
     "resume",
     "clear",
+    // Confirmed from the CLI binary (2.1.330), not from a run: `claude --help` has `--include-hook-events` ("Include all
+    // hook lifecycle events in the output stream", stream-json only), and the binary's stream schema has the system
+    // events `hook_started`, `hook_progress` and `hook_response` (`hook_event`, `stdout`, `exit_code`, `outcome`).
+    "hooks",
+    // Confirmed from the binary's strings, not from a run: the user's rules directory is `<config dir>/rules` and the
+    // user memory file is `<config dir>/CLAUDE.md`, both read under the `user` setting source, which `--isolated`
+    // keeps. The project's `.claude/rules` is read only under the `project` source, which `--isolated` turns off. The
+    // stream reports no loaded rule, so `reportedLoaded` is always null for this adapter.
+    "rules",
     // Not declared: `userInvoke`. `claude --help` says "Skills still resolve via /skill-name" (`--bare`), but whether a
     // `/skill args` prompt in a `-p` process loads the skill is unconfirmed without a real model; Task 29 confirms it.
     // Not declared: `historyNative` and `sessionStore`. `claude-code-history.ts` writes a session as the binary's strings
@@ -173,6 +201,7 @@ const claudeCode: Harness = {
         "--output-format",
         "stream-json",
         "--verbose",
+        "--include-hook-events",
         "--permission-mode",
         "bypassPermissions",
         ...opt("--model", model),
@@ -184,6 +213,9 @@ const claudeCode: Harness = {
       env: { CLAUDE_CONFIG_DIR: configDir, ...(isolated && ISOLATION.env) },
     };
   },
+
+  rulesTargets,
+  installRules: (files, input) => placeRules(files, rulesTargets(files), input),
 
   countTurns,
 

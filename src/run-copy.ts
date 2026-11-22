@@ -1,5 +1,7 @@
 import path from "node:path";
 import type { LoadedSubject } from "./harnesses/shared.js";
+import type { RulesFile } from "./harnesses/rules.js";
+import { rulesFilesOf } from "./subject-rules.js";
 import type { RunCopy } from "./isolate.js";
 import { copyForRun } from "./isolate.js";
 import { UsageError } from "./scope.js";
@@ -13,6 +15,8 @@ import { hasContent } from "./subject.js";
 export interface Copy extends RunCopy {
   /** What the harness is given: the subject with every path in the copy. */
   loaded: LoadedSubject;
+  /** The subject's rule files and instruction file in the copy; null when the subject names none. */
+  rules: RulesFile[] | null;
 }
 
 /**
@@ -39,6 +43,7 @@ export function copyOf(subject: Subject): Copy | null {
   return {
     ...copy,
     loaded: { kind, dir: copy.dir, skills, skillDirs, pluginName },
+    rules: subject.rules && rulesFilesOf(subject.rules, copy.dir),
   };
 }
 

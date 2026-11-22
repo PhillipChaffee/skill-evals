@@ -1,0 +1,19 @@
+{
+  "description": "A rule about waiting is checked only on a run where the rule reached the model. If it did not, the run is invalid, not a zero.",
+  "tags": ["rules", "preconditions"],
+  "preconditions": [
+    {
+      "type": "context_injected",
+      "pattern": "never sleep longer than 30 seconds",
+      "flags": "i",
+      "source": "rules"
+    }
+  ],
+  "checks": [
+    {
+      "type": "tool_not_called",
+      "kind": "shell",
+      "inputMatches": "sleep\\s+(3[1-9]|[4-9]\\d|\\d{3,})"
+    }
+  ]
+}

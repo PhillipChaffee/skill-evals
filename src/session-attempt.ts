@@ -9,6 +9,7 @@ import type {
   RunInput,
 } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
+import type { RulesFile } from "./harnesses/rules.js";
 import type { Seeded } from "./history-plant.js";
 import { withPreamble } from "./history.js";
 import type { History, HistoryMode } from "./history-types.js";
@@ -65,6 +66,8 @@ export interface SessionInput {
   pass?: string[] | undefined;
   /** Variables a case sets for the agent, with their values. They reach the agent's process only. */
   env?: Record<string, string> | undefined;
+  /** The subject's rule files and instruction file in the run's copy; null or absent when the subject names none. */
+  rules?: RulesFile[] | null | undefined;
   /** Take the seed copy of the workspace even when the case has no `command` check, so that the run can be archived. */
   keepSeed?: boolean | undefined;
 }
@@ -110,6 +113,8 @@ export interface SessionResult {
   remoteDir: string | null;
   /** The held-out directory, copied after the agent exited; null when the case has none or has no command check. */
   graderDir: string | null;
+  /** Where the adapter put the subject's rules; null when the subject names none, empty when the harness installs none. */
+  rulesInstalled: string[] | null;
 }
 
 const SHOWN_SETUP_WORDS = 2;

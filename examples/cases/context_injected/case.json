@@ -1,0 +1,18 @@
+{
+  "description": "The text of the bootstrap hook reached the model, and the rule text that the harness reported it loaded did too.",
+  "tags": ["hooks", "rules"],
+  "checks": [
+    {
+      "type": "context_injected",
+      "pattern": "using-the-kit",
+      "source": "hooks"
+    },
+    {
+      "type": "context_injected",
+      "pattern": "never sleep longer than 30 seconds",
+      "flags": "i",
+      "source": "rules"
+    },
+    { "type": "context_injected", "pattern": "using-the-kit" }
+  ]
+}
