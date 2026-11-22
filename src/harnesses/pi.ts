@@ -20,6 +20,7 @@ import {
   sumTokens,
   stringArg,
 } from "./shared.js";
+import { looksRateLimited } from "./rate-limit.js";
 
 const KINDS: Record<string, ToolKind> = {
   bash: "shell",
@@ -121,6 +122,8 @@ const pi: Harness = {
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
   capabilities: new Set(["toolOutputs", "assistantText", "turnGrouping"]),
   status: "scripted",
+  reportsCost: true,
+  isRateLimit: looksRateLimited,
   isolationGap:
     "It is always started with discovery switched off (`-ne -ns -np`), whatever the flag says, and that stays its default. It reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded.",
 

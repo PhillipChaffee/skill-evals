@@ -18,6 +18,7 @@ import {
   samePath,
   stringArg,
 } from "./shared.js";
+import { looksRateLimited } from "./rate-limit.js";
 
 const KINDS: Record<string, ToolKind> = {
   Bash: "shell",
@@ -111,6 +112,8 @@ const claudeCode: Harness = {
     "assistantText",
   ]),
   status: "real-model",
+  reportsCost: true,
+  isRateLimit: looksRateLimited,
 
   invocation({ subject, home, prompt, model, maxTurns, isolated }) {
     const configDir = path.join(home, ".claude");

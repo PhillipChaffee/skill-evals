@@ -157,6 +157,31 @@ function concluded(
   };
 }
 
+// What stops each command that is running now.
+const killers = new Set<() => void>();
+
+/**
+ * Kills the process group of every command that `exec` is running now. Used when a signal ends the process, so that the
+ * results can be written with no harness still running.
+ */
+export function killRunning(): void {
+  for (const kill of killers) kill();
+}
+
+/**
+ * Makes a command stoppable by `killRunning`, and by the cleanup at process exit.
+ * @param kill - Kills the command's process group.
+ * @returns Ends both; call it when the command is done.
+ */
+function track(kill: () => void): () => void {
+  killers.add(kill);
+  const reap = onDispose(kill);
+  return () => {
+    killers.delete(kill);
+    reap();
+  };
+}
+
 /**
  * Stops every process of a group.
  * @param pid - The group leader's process id; none when the command never started.
@@ -274,7 +299,7 @@ function watch(
       killGroup(child.pid);
     };
     // Runs when the child closes too, so nothing the command left in the background outlives the run.
-    const reap = onDispose(kill);
+    const reap = track(kill);
     let timedOut = false;
     let ended: { code: number | null; signal: string | null } | null = null;
     let finished = false;

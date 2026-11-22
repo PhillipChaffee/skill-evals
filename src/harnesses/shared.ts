@@ -223,6 +223,16 @@ export interface Harness {
   status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
   /**
+   * Whether the adapter reads a cost from the stream. False for a harness whose stream states none: `--max-cost`
+   * cannot count its runs, so the command refuses it.
+   */
+  reportsCost: boolean;
+  /**
+   * Tells whether the error of a finished run is a rate limit, so that the run may be tried again after a wait
+   * (`--retries`). Absent: never. The patterns are not verified against real harnesses.
+   */
+  isRateLimit?: (error: string) => boolean;
+  /**
    * The file that a read-kind call targets, so that path extraction stays in the adapter.
    * @returns The path as the agent wrote it, which may be relative to the workspace; null for a call that names none,
    *   and for every call of a harness that has no read kind.

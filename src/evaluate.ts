@@ -6,6 +6,7 @@ import type { Prepared } from "./prepare.js";
 import { lockDir } from "./lock.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { Located } from "./harnesses/index.js";
+import type { Progress } from "./progress.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
@@ -70,13 +71,29 @@ export interface EvaluateOptions extends SelectionOptions {
   outDir?: string | undefined;
   /** How many runs may be in flight at once, a positive integer. Default: 1. */
   jobs?: number | undefined;
+  /** Tries after the first for a run that failed for a reason that is not the agent's: a harness crash, a rate limit, or a timeout before the harness wrote anything. A non-negative integer. Default: 0. */
+  retries?: number | undefined;
+  /** Stop starting runs once the command has spent this many US dollars, summing agent, judge and decision costs of this command's attempts; a positive number. In-flight runs finish with their judged and decision checks skipped. A usage error when a harness, the judge or a decision check reports no cost. Default: no limit. */
+  maxCost?: number | undefined;
+  /** Stop starting runs after this many minutes, a positive number; fractions are allowed. Default: no limit. */
+  maxDuration?: number | undefined;
+  /** The seconds a rate-limited run waits before its next attempt, per attempt; for tests. Default: 30 s times the attempt number, in milliseconds. */
+  rateLimitBackoffMs?: number | undefined;
   /**
    * The output directory of an earlier command, which holds `results.jsonl`. It implies `outDir`. A run whose key matches
    * a valid record there is not repeated; every other run is made and added. It also turns `useCache` on.
    */
   resume?: string | undefined;
-  /** Called with each run's record as soon as the run ends; `reused` is true for a record taken from `resume`. */
-  onRun?: ((record: RunRecord, info: { reused: boolean }) => void) | undefined;
+  /**
+   * Called with each run's record as soon as the run ends. `reused` is true for a record taken from `resume`; `progress`
+   * says how many runs are finished (reused ones included), what this command has spent, and the time left.
+   */
+  onRun?:
+    | ((
+        record: RunRecord,
+        info: { reused: boolean; progress: Progress },
+      ) => void)
+    | undefined;
 }
 
 /** What `evaluate` writes to `results.json`. */
@@ -110,9 +127,13 @@ export interface Results {
   sourceChanged: string[];
   /**
    * Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is
-   * "running"; "error" when a run threw and ended the command. The last write of a command that finished has null.
+   * "running". The last write of a command that stopped early has its reason: "error" when a run threw, "budget" at
+   * `maxCost`, "duration" at `maxDuration` (both exit 4), "interrupted" on SIGINT or SIGTERM (exit 130). A command that
+   * ran to the end has null. A run in flight at "budget" or "duration" may carry `skippedGraders`; `--resume` repeats it.
    */
-  partial: { reason: "running" | "error" } | null;
+  partial: {
+    reason: "running" | "error" | "budget" | "duration" | "interrupted";
+  } | null;
   records: RunRecord[];
 }
 
@@ -225,13 +246,16 @@ async function runSuite(
     if (resumed === undefined) requireFresh(outDir);
     const store = openStore(outDir, resumed !== undefined);
     const finished = { ...context, subjects };
-    const records = await runAll({
+    const { records, stopped } = await runAll({
       ...basePlan(context, subjects, outDir),
       useCache: resumed !== undefined || (options.useCache ?? false),
       store,
       reused:
         resumed === undefined ? new Map<string, RunRecord>() : store.load(),
-      flush: (records, reason: "running" | "error" = "running") => {
+      flush: (
+        records,
+        reason: Exclude<Results["partial"], null>["reason"] = "running",
+      ) => {
         store.flush(
           summarize({
             ...finished,
@@ -242,12 +266,13 @@ async function runSuite(
         );
       },
       onRun,
+      rateLimitBackoffMs: options.rateLimitBackoffMs,
     });
     const results = summarize({
       ...finished,
       records,
       sourceChanged: changedAtSource(subjects),
-      partial: null,
+      partial: stopped === null ? null : { reason: stopped },
     });
     store.flush(results);
     return { results, outDir };

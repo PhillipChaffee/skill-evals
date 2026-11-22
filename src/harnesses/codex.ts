@@ -18,6 +18,7 @@ import {
   pluginDir,
   sumTokens,
 } from "./shared.js";
+import { looksRateLimited } from "./rate-limit.js";
 
 /** A thread item of `codex exec --json`; which fields are set depends on its type. */
 interface Item {
@@ -199,6 +200,8 @@ const codex: Harness = {
   authEnv: OPENAI_ENV,
   capabilities: new Set(["subagents", "toolOutputs", "assistantText"]),
   status: "scripted",
+  reportsCost: false,
+  isRateLimit: looksRateLimited,
 
   invocation({ subject, home, workspace, prompt, model }) {
     const codexHome = path.join(home, ".codex");

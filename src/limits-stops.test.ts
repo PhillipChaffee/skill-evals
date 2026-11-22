@@ -146,7 +146,7 @@ test(
       "- claude-code `hello`: 1 of 1 runs stopped at maxTurns",
     );
     expect(result.stderr).toMatch(
-      /^claude-code hello subject1: score 1\.00 \(stopped at maxTurns\)$/m,
+      /^claude-code hello subject1: score 1\.00 \(stopped at maxTurns\) \[1\/1\] /m,
     );
 
     const scoredTimeout = await slowRun(sandbox(), {
@@ -159,7 +159,9 @@ test(
     expect(scoredTimeout.result.stdout).toContain(
       "- claude-code `hello`: 1 of 1 runs timed out and were scored (onTimeout: score)",
     );
-    expect(scoredTimeout.result.stderr).toMatch(/\(timed out, scored\)$/m);
+    expect(scoredTimeout.result.stderr).toMatch(
+      /\(timed out, scored\) \[1\/1\] /m,
+    );
   },
   TEST_TIMEOUT_MS,
 );

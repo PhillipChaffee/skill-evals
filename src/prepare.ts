@@ -13,6 +13,8 @@ import {
   requireUsable,
 } from "./evaluate-setup.js";
 import { exclusionsOf } from "./exclusions.js";
+import { requireLimits } from "./evaluate-limits.js";
+import type { Limits } from "./gate.js";
 import type { Located } from "./harnesses/index.js";
 import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
@@ -32,7 +34,7 @@ import { resolveSubject } from "./subject.js";
 export interface Context {
   options: Config & { cases: string } & Pick<
       EvaluateOptions,
-      "outDir" | "useCache"
+      "outDir" | "useCache" | "rateLimitBackoffMs"
     >;
   decision: DecisionService | null;
   decisionModel: string | undefined;
@@ -46,6 +48,8 @@ export interface Context {
   cases: Case[];
   parts: Partition;
   jobs: number;
+  /** The retries and the cost and time limits. */
+  limits: Limits;
   /** The directory of the earlier command to continue; undefined for a fresh run. */
   resumed: string | undefined;
   cwd: string;
@@ -86,6 +90,12 @@ export function prepare(
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
   const cases = casesOf(options);
   const { judgeApi, judgeModel } = judgeSetup(cases, options);
+  const limits = requireLimits(options, {
+    chosen: selection.chosen,
+    judgeHarness,
+    judgeApi,
+    cases,
+  });
   const context: Context = {
     options,
     decision: decisionFor(cases, options),
@@ -98,6 +108,7 @@ export function prepare(
     minScore: options.minScore,
     reps,
     jobs,
+    limits,
     resumed,
     cwd,
     cases,
@@ -175,4 +186,5 @@ export const basePlan = (
   lenient: modesOf(context.options).lenient,
   outDir,
   jobs: context.jobs,
+  limits: context.limits,
 });

@@ -41,6 +41,9 @@ export const CONFIG_KEYS: Record<
   harness: "string",
   reps: "number",
   jobs: "number",
+  retries: "number",
+  maxCost: "number",
+  maxDuration: "number",
   model: "string",
   judgeHarness: "string",
   judgeModel: "string",
@@ -67,6 +70,12 @@ export interface Config {
   reps?: number;
   /** How many runs may be in flight at once, a positive integer. Default: 1. */
   jobs?: number;
+  /** Tries after the first for a run that failed for a reason that is not the agent's, a non-negative integer. Default: 0. */
+  retries?: number;
+  /** Stop starting runs once the command has spent this many US dollars, a positive number. Default: no limit. */
+  maxCost?: number;
+  /** Stop starting runs once the command has run this many minutes, a positive number. Default: no limit. */
+  maxDuration?: number;
   model?: string;
   judgeHarness?: string;
   judgeModel?: string;

@@ -26,6 +26,8 @@ What each file here is, where it came from, and what a test may rely on it for.
 
 A script step `{ "limit": true }` ends the turn as Claude Code does at its own `--max-turns`: an `error_max_turns` result with `is_error` true and no `result` text, and exit code 1. The fake ignores the `--max-turns` flag itself, so the runner's own count is what stops a scripted run that has many turns. `src/limits.test.ts` uses the step to prove that the native limit is read as a stop and not as a failure.
 
+Three more steps and one script key serve the budget, retry and interrupt tests (`src/budget.test.ts`, `src/retries.test.ts`, `src/interrupt.test.ts`). `{ "crash": "text" }` writes the text to standard error and exits 1 with no result event, as a harness that dies does. `{ "hang": true }` never returns, so only a kill ends it. `{ "onStart": [1, 2], "step": <step> }` plays its `step` only on those starts of the script, counted from 1 in `starts/` of the sandbox's fake directory; a crash or a hang on the first start only is how a test makes a run that a retry fixes. A script's `costUsd` is the `total_cost_usd` of its result event, which `--max-cost` counts; without it the result states no cost, as before. `src/testing/budget.ts` plants cases around these. `ts-register.mjs` and `ts-resolve.mjs` let `node --import` run the sources (`src/bin.ts`) as they are, which the SIGINT test needs to send a real signal to a real process.
+
 `slow-harness.mjs` also takes `SLOW_TURNS` (write that many assistant events, one per turn, each in its own chunk, and then hang) and `SLOW_PID_FILE` (the child's process id), which `src/limits.test.ts` uses to stop a run in the middle and to look for the child afterwards.
 
 ## Streams written inside tests

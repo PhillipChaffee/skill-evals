@@ -13,6 +13,10 @@
 //   same scripts, for `text`, `final`, `call`, and `parallel` steps; it has no judge, no agents, and no hooks.
 // - A script step `{ "limit": true }` ends the turn as Claude Code does at its own `--max-turns`: an `error_max_turns`
 //   result with `is_error` true and no text, and exit code 1. The fake ignores `--max-turns` itself.
+// - A step `{ "onStart": [1, 2], "step": <step> }` plays its `step` only on those starts of this script, counted from 1
+//   across processes in `starts/` of $FAKE_DIR. A step `{ "crash": "text" }` writes the text to standard error and exits 1
+//   with no result event, as a harness that dies does. A step `{ "hang": true }` never returns, so only a kill ends it.
+// - A script's `costUsd` is the `total_cost_usd` of its result event; without it the result states no cost.
 // - A script's `initOmit` names init fields to leave out, and `noInit` leaves the init event out.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
@@ -109,6 +113,23 @@ function matchingScript() {
     }
   }
   return null;
+}
+
+/**
+ * Counts how many times this script has started, this start included. The count lives in $FAKE_DIR, which every start
+ * of a sandbox shares.
+ * @param file - The script's file name.
+ * @returns The number of this start, from 1.
+ */
+function startNumber(file) {
+  const dir = path.join(process.env.FAKE_DIR ?? "", "starts");
+  fs.mkdirSync(dir, { recursive: true });
+  const counter = path.join(dir, file);
+  const started = fs.existsSync(counter)
+    ? Number(fs.readFileSync(counter, "utf8"))
+    : 0;
+  fs.writeFileSync(counter, String(started + 1));
+  return started + 1;
 }
 
 /**
@@ -241,6 +262,10 @@ function play(steps, turn) {
     inner,
   });
   const step = (one, parent) => {
+    if ("onStart" in one) {
+      if (one.onStart.includes(startOf())) step(one.step, parent);
+      return;
+    }
     if ("text" in one) {
       assistant([{ type: "text", text: one.text }], parent, one.usage);
       final = one.text;
@@ -284,6 +309,11 @@ function play(steps, turn) {
       });
     } else if ("fail" in one) {
       throw new Error(one.fail);
+    } else if ("crash" in one) {
+      process.stderr.write(`${one.crash}\n`);
+      process.exit(1);
+    } else if ("hang" in one) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
     } else if ("limit" in one) {
       limited = true;
     } else {
@@ -303,7 +333,7 @@ function play(steps, turn) {
     return false;
   }
   if (!limited) {
-    finish(final);
+    finish(final, played.found.costUsd);
     return false;
   }
   // The CLI's own turn limit: an error result with no `result` text, and a non-zero exit.
@@ -371,6 +401,12 @@ function playPi(steps) {
 }
 
 const played = matchingScript();
+let startNo = null;
+/**
+ * Numbers this start of the matching script, once.
+ * @returns The number, from 1.
+ */
+const startOf = () => (startNo ??= startNumber(played.file));
 if (piMode) {
   if (played) {
     playPi(played.found.turns[turnIndex(played.file)] ?? []);

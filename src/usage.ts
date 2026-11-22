@@ -120,6 +120,29 @@ export const FLAGS = {
       "How many runs may be in flight at once. A positive integer. Each run has its own home, workspace and copy of the subject. results.json lists the records in plan order whatever order the runs end in; results.jsonl and the progress lines follow the order they end in.",
     default: "1",
   },
+  retries: {
+    read: Number,
+    value: "n",
+    description:
+      "Tries after the first for a run that failed for a reason that is not the agent's: a harness crash (a non-zero exit with no final event), a rate limit (the adapter says so), or a timeout before the harness wrote anything. A non-negative integer. A rate-limited run waits 30 seconds times its attempt number first. A setup failure, an isolation breach, any other invalid run and a low score are never retried. The run record's attempts lists the errors of the earlier attempts.",
+    default: "0",
+  },
+  "max-cost": {
+    as: "maxCost",
+    read: Number,
+    value: "usd",
+    description:
+      "Stop starting runs once this command has spent this many US dollars, summing agent, judge and decision costs over the attempts it made; reused runs are not counted. A positive number. Runs in flight finish, with their judged and decision checks skipped, so they are invalid and --resume repeats them. The command exits 4. A usage error when a selected harness, the judge or a decision check reports no cost.",
+    default: "no limit",
+  },
+  "max-duration": {
+    as: "maxDuration",
+    read: Number,
+    value: "minutes",
+    description:
+      "Stop starting runs after this many minutes of wall time. A positive number; fractions are allowed. Runs in flight finish, with their judged and decision checks skipped. The command exits 4.",
+    default: "no limit",
+  },
   model: {
     value: "id",
     description: "Passed to the harness unchanged.",

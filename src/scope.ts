@@ -52,7 +52,40 @@ export function runCleanups(): void {
 }
 process.on("exit", runCleanups);
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
-const interrupted = (): never => process.exit(INTERRUPTED_EXIT_CODE);
+const interruptHooks = new Set<() => void>();
+let signalled = false;
+
+/**
+ * Ends the process on SIGINT or SIGTERM. The hooks of `onInterrupt` run first, then the process exits with 130, which
+ * runs the cleanups. A second signal while this runs ends the process at once.
+ * @returns Never: the process exits.
+ */
+function interrupted(): never {
+  if (signalled) return process.exit(INTERRUPTED_EXIT_CODE);
+  signalled = true;
+  for (const hook of [...interruptHooks]) {
+    try {
+      hook();
+    } catch (error) {
+      console.error(`skill-evals: interrupt hook failed: ${messageOf(error)}`);
+    }
+  }
+  return process.exit(INTERRUPTED_EXIT_CODE);
+}
+
+/**
+ * Registers what must happen when a signal ends the process, before the cleanups run: a command writes its partial
+ * results here. The hook runs once, synchronously, and a hook that throws is reported and does not stop the others.
+ * It has effect only while a cleanup is registered, as with `onDispose`.
+ * @param hook - What to do on SIGINT or SIGTERM.
+ * @returns Unregisters the hook.
+ */
+export function onInterrupt(hook: () => void): () => void {
+  interruptHooks.add(hook);
+  return () => {
+    interruptHooks.delete(hook);
+  };
+}
 
 /**
  * Registers a cleanup that runs once: when the returned function is called, or when the process exits.
@@ -66,6 +99,7 @@ export function onDispose(cleanup: () => void): () => void {
     if (!live.delete(dispose)) return;
     if (live.size === 0) {
       for (const signal of SIGNALS) process.off(signal, interrupted);
+      signalled = false;
     }
     cleanup();
   };

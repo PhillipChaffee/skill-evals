@@ -117,7 +117,13 @@ type FakeStep =
   /** Sets the final text of the run. */
   | { final: string }
   /** Ends the run as Claude Code does at its own `--max-turns`: an `error_max_turns` result with no text, exit code 1. */
-  | { limit: true };
+  | { limit: true }
+  /** Writes the text to standard error and exits 1 with no result event, as a harness that dies does. */
+  | { crash: string }
+  /** Never returns, so that only a kill ends the run. */
+  | { hang: true }
+  /** Plays `step` only on these starts of the script, counted from 1 across the sandbox's runs. */
+  | { onStart: number[]; step: FakeStep };
 
 /** A transcript for the fake harness to play, in place of its default behaviour. */
 export interface FakeScript {
@@ -131,6 +137,8 @@ export interface FakeScript {
   noInit?: boolean;
   /** A skill that an account syncs into the config directory during the run, as `synced/org/<name>`. */
   syncSkill?: string;
+  /** The `total_cost_usd` of the result event of each run; without it the harness states no cost. */
+  costUsd?: number;
   /** The steps of each turn; turn n answers the n-th prompt of a session. */
   turns: FakeStep[][];
 }

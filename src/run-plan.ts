@@ -2,6 +2,7 @@ import type { Case } from "./cases.js";
 import type { Check, Verdict } from "./checks/index.js";
 import type { Cache } from "./cache.js";
 import type { DecisionService } from "./decision.js";
+import type { StopReason } from "./gate.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { Subject } from "./subject.js";
@@ -61,6 +62,11 @@ export interface RunPlan {
   judgeApi?: JudgeApi | undefined;
   /** What the judge answered before, in this output directory; none for no cache. */
   cache?: Cache | undefined;
+  /**
+   * Tells whether a cost or time limit of the command is reached now. When it is, the run's judged and decision checks
+   * are not asked: they get no score, the run is invalid and carries `skippedGraders`. Absent: never.
+   */
+  breached?: (() => StopReason | null) | undefined;
 }
 
 /**

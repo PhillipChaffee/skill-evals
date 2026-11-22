@@ -1,12 +1,18 @@
 import type { Case } from "./cases.js";
 import type { DecisionService } from "./decision.js";
 import { openCache, scopedCache } from "./cache.js";
+import { killRunning } from "./exec.js";
+import type { Gate, Limits, StopReason } from "./gate.js";
+import { createGate } from "./gate.js";
 import type { Located } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import { runKey } from "./run-key.js";
+import type { Progress } from "./progress.js";
+import { etaOf } from "./progress.js";
 import type { Judge, RunPlan, RunRecord } from "./run.js";
-import { runOnce } from "./run.js";
+import { runWithRetries } from "./run-retry.js";
 import { pool } from "./schedule.js";
+import { onInterrupt } from "./scope.js";
 import { throttled } from "./throttle.js";
 import type { Store } from "./store.js";
 import { slotName } from "./store.js";
@@ -62,6 +68,8 @@ export interface PlanBase {
   judgeApi: JudgeApi | null;
   /** How many runs may be in flight at once. */
   jobs: number;
+  /** The retries and the cost and time limits of the command. */
+  limits: Limits;
 }
 
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */
@@ -75,9 +83,27 @@ export interface Plan extends PlanBase {
    * Called with every record so far, in plan order, so that `results.json` can be rewritten; with "error" when a run
    * threw and the command ends.
    */
-  flush: (records: RunRecord[], reason?: "error") => void;
-  /** Called with each run's record as soon as the run ends, in the order the runs end. */
-  onRun: ((record: RunRecord, info: { reused: boolean }) => void) | undefined;
+  flush: (records: RunRecord[], reason?: "error" | "interrupted") => void;
+  /**
+   * Called with each run's record as soon as the run ends, in the order the runs end: whether it was reused, and how
+   * far the command has got.
+   */
+  onRun:
+    | ((
+        record: RunRecord,
+        info: { reused: boolean; progress: Progress },
+      ) => void)
+    | undefined;
+  /** The wait after a rate limit, per attempt, in milliseconds. Default: `RATE_LIMIT_BACKOFF_MS`. For tests. */
+  rateLimitBackoffMs?: number | undefined;
+}
+
+/** What `runAll` returns. */
+export interface Ran {
+  /** The finished runs in plan order. A run that never started, because a limit was reached, is not here. */
+  records: RunRecord[];
+  /** Why the command stopped before the end, or ended with graders skipped; null when it ran to the end. */
+  stopped: StopReason | null;
 }
 
 /** One run of a plan with its key. */
@@ -116,59 +142,175 @@ export const runsOf = (plan: PlanBase): Planned[] =>
     return { subject, run, key: runKey(run) };
   });
 
+/** What a command knows while it runs. */
+interface Tally {
+  planned: Planned[];
+  /** The record of each planned run, in plan order; undefined until the run is finished or reused. */
+  finished: (RunRecord | undefined)[];
+  gate: Gate;
+  /** The wall time of each run that this command finished, retries included. */
+  durations: number[];
+  /** How many of those runs reported no cost. */
+  unreported: number;
+}
+
 /**
- * Makes every run of a plan, `jobs` at a time. Each run has its own home, workspace and copy of the subject; the
- * records, the judge cache and the results files are written from this process only. `flush` is called once after
- * the reused records are placed, then at most every `FLUSH_INTERVAL_MS`; the caller writes the last one.
- * @param plan - What to run.
- * @param clock - The time in milliseconds, for the rate of `flush`. Default: the system clock.
- * @returns The records in plan order, whatever order the runs ended in.
+ * Lists the finished runs.
+ * @param tally - What the command knows.
+ * @returns The records so far, in plan order.
  */
-export async function runAll(
+const sofar = (tally: Tally): RunRecord[] =>
+  tally.finished.filter((each) => each !== undefined);
+
+/**
+ * Tells how far the command has got.
+ * @param tally - What the command knows.
+ * @param jobs - How many runs are in flight at once.
+ * @param done - How many runs are finished. Default: every one that is.
+ * @returns The progress, with the spend of this command's attempts only.
+ */
+const progressOf = (
+  tally: Tally,
+  jobs: number,
+  done = sofar(tally).length,
+): Progress => ({
+  done,
+  total: tally.planned.length,
+  spentUsd: tally.gate.spent(),
+  etaMs: etaOf(tally.planned.length - done, tally.durations, jobs),
+});
+
+/**
+ * Makes the job of each run that is not reused: it makes the run with its retries, writes its line, and tells the caller.
+ * @param plan - What to run.
+ * @param tally - What the command knows; each job adds to it.
+ * @param shared - The judge cache, the throttled flush of `results.json`, and the clock.
+ * @param shared.cache - The judge cache, read at the start.
+ * @param shared.flushSoon - Rewrites `results.json` when the interval has passed.
+ * @param shared.clock - The time in milliseconds.
+ * @returns The jobs, in plan order.
+ */
+const jobsOf = (
   plan: Plan,
-  clock: () => number = Date.now,
-): Promise<RunRecord[]> {
-  const { store, reused } = plan;
-  // Read at the start, and added to after each judged answer.
-  const cache = openCache(plan.outDir, plan.useCache);
-  const planned = runsOf(plan);
-  const finished = planned.map(({ key, subject }) =>
-    reused.get(slotName(key, subject.label)),
-  );
-  const sofar = (): RunRecord[] =>
-    finished.filter((each) => each !== undefined);
-  plan.flush(sofar());
-  for (const record of sofar()) plan.onRun?.(record, { reused: true });
-  const flushSoon = throttled(
-    (records: RunRecord[]) => {
-      plan.flush(records);
-    },
-    FLUSH_INTERVAL_MS,
-    clock,
-  );
-  const jobs = planned.flatMap(({ run, key, subject }, index) =>
-    finished[index] !== undefined
+  tally: Tally,
+  shared: {
+    cache: ReturnType<typeof openCache>;
+    flushSoon: (records: RunRecord[]) => void;
+    clock: () => number;
+  },
+): (() => Promise<void>)[] =>
+  tally.planned.flatMap(({ run, key, subject }, index) =>
+    tally.finished[index] !== undefined
       ? []
       : [
           async (): Promise<void> => {
             const slot = slotName(key, subject.label);
-            const record = await runOnce({
-              ...run,
-              cache: scopedCache(cache, slot),
+            const began = shared.clock();
+            const { record, attempt } = await runWithRetries(
+              {
+                ...run,
+                cache: scopedCache(shared.cache, slot),
+                breached: tally.gate.reached,
+              },
+              {
+                retries: plan.limits.retries,
+                gate: tally.gate,
+                backoffMs: plan.rateLimitBackoffMs,
+              },
+            );
+            tally.durations.push(shared.clock() - began);
+            if (record.costUsd === null) tally.unreported += 1;
+            plan.store.append({ ...record, key, attempt });
+            tally.finished[index] = record;
+            shared.flushSoon(sofar(tally));
+            plan.onRun?.(record, {
+              reused: false,
+              progress: progressOf(tally, plan.jobs),
             });
-            store.append({ ...record, key, attempt: 1 });
-            finished[index] = record;
-            flushSoon(sofar());
-            plan.onRun?.(record, { reused: false });
           },
         ],
   );
+
+/**
+ * Sums up a command whose runs are over.
+ * @param plan - What was run.
+ * @param tally - What the command knows.
+ * @returns The records, and why the command stopped early, if it did: the reason that `check` said "stop" with, or the
+ *   reached limit when a run in flight had its graders skipped. Warns once when a budget counted runs with no cost.
+ */
+function ended(plan: Plan, tally: Tally): Ran {
+  if (plan.limits.maxCost !== undefined && tally.unreported > 0) {
+    console.error(
+      `skill-evals: warning: ${String(tally.unreported)} runs reported no cost; the budget counts only reported costs`,
+    );
+  }
+  const records = sofar(tally);
+  const skipped = records.some((record) => record.skippedGraders === true);
+  const { gate } = tally;
+  return {
+    records,
+    stopped: gate.stopped() ?? (skipped ? gate.reached() : null),
+  };
+}
+
+/**
+ * Makes every run of a plan, `jobs` at a time. Each run has its own home, workspace and copy of the subject; the
+ * records, the judge cache and the results files are written from this process only. `flush` is called once after
+ * the reused records are placed, then at most every `FLUSH_INTERVAL_MS`; the caller writes the last one. Before each
+ * launch and each retry the gate of `plan.limits` is asked: after it says "stop" no run starts, and those in flight
+ * finish, with their judged and decision checks skipped. On SIGINT or SIGTERM the harness processes are killed and
+ * `flush` is called with "interrupted" before the process exits.
+ * @param plan - What to run.
+ * @param clock - The time in milliseconds, for the rate of `flush`, the time limit and the estimate. Default: the system clock.
+ * @returns The records in plan order, whatever order the runs ended in, and why the command stopped early, if it did.
+ */
+export async function runAll(
+  plan: Plan,
+  clock: () => number = Date.now,
+): Promise<Ran> {
+  const planned = runsOf(plan);
+  const tally: Tally = {
+    planned,
+    finished: planned.map(({ key, subject }) =>
+      plan.reused.get(slotName(key, subject.label)),
+    ),
+    gate: createGate(plan.limits, clock),
+    durations: [],
+    unreported: 0,
+  };
+  plan.flush(sofar(tally));
+  for (const [index, record] of sofar(tally).entries()) {
+    const progress = progressOf(tally, plan.jobs, index + 1);
+    plan.onRun?.(record, { reused: true, progress });
+  }
+  const shared = {
+    // Read at the start, and added to after each judged answer.
+    cache: openCache(plan.outDir, plan.useCache),
+    flushSoon: throttled(
+      (records: RunRecord[]) => {
+        plan.flush(records);
+      },
+      FLUSH_INTERVAL_MS,
+      clock,
+    ),
+    clock,
+  };
+  // The harnesses go first, so that nothing writes while the results are; the lock is released when the process exits.
+  const off = onInterrupt(() => {
+    killRunning();
+    plan.flush(sofar(tally), "interrupted");
+    console.error(
+      `skill-evals: interrupted after ${String(sofar(tally).length)} of ${String(planned.length)} runs; continue with --resume ${plan.outDir}`,
+    );
+  });
   try {
-    await pool(jobs, plan.jobs, () => "go");
+    await pool(jobsOf(plan, tally, shared), plan.jobs, tally.gate.check);
   } catch (error) {
     // The file must not go on saying "running" for a command that has ended.
-    plan.flush(sofar(), "error");
+    plan.flush(sofar(tally), "error");
     throw error;
+  } finally {
+    off();
   }
-  return sofar();
+  return ended(plan, tally);
 }

@@ -20,6 +20,7 @@ import {
   sumTokens,
   stringArg,
 } from "./shared.js";
+import { looksRateLimited } from "./rate-limit.js";
 
 const KINDS: Record<string, ToolKind> = {
   bash: "shell",
@@ -138,6 +139,8 @@ const opencode: Harness = {
     "turnGrouping",
   ]),
   status: "scripted",
+  reportsCost: true,
+  isRateLimit: looksRateLimited,
 
   invocation({ subject, home, workspace, prompt, model }) {
     const configDir = path.join(home, ".config", "opencode");

@@ -6,6 +6,7 @@ import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
+import type { RetryKind } from "./retry.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { failedRecord } from "./run-failed.js";
@@ -69,6 +70,17 @@ export interface RunRecord extends Usage, LimitFields {
   judge: (Usage & { calls: number; cacheHits?: number }) | null;
   /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
   decision: (Usage & { calls: number }) | null;
+  /**
+   * The error of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
+   * before the harness wrote anything. This record is the last attempt; its `attempt` in `results.jsonl` is the number
+   * of the attempt. Absent when the run was made once.
+   */
+  attempts?: { error: string }[];
+  /**
+   * True when the command reached its `--max-cost` or `--max-duration` while this run was in flight, so its judged and
+   * decision checks were not asked. Such a run is invalid, and `--resume` makes it again in full. Absent otherwise.
+   */
+  skippedGraders?: true;
 }
 
 /**
@@ -255,38 +267,48 @@ async function record(
     agentTokens: parsed.agentTokens ?? null,
     costUsd: parsed.costUsd,
   };
-  const { checks, replies, requests, judgeProblem, hits } = await scoreChecks(
-    plan,
-    {
-      ...parsed,
-      skillEvents: events,
-      legacySkillLoads: plan.lenient ?? false,
-      ...files,
-      command: commandContext(ran, caseDef.env, transcript.absolute),
-      subject: {
-        dir: copy?.loaded.dir ?? null,
-        mutated: changes ? allChanged(changes) : [],
-        observed,
+  const { checks, replies, requests, judgeProblem, hits, skippedGraders } =
+    await scoreChecks(
+      plan,
+      {
+        ...parsed,
+        skillEvents: events,
+        legacySkillLoads: plan.lenient ?? false,
+        ...files,
+        command: commandContext(ran, caseDef.env, transcript.absolute),
+        subject: {
+          dir: copy?.loaded.dir ?? null,
+          mutated: changes ? allChanged(changes) : [],
+          observed,
+        },
       },
-    },
-    invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
-  );
+      invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
+    );
   const judged = { ...base, judgeProblem, checks };
   return {
     ...judged,
     score: invalidReason(judged) ? null : weightedMean(checks),
     judge: judgeUsage(replies, hits),
     decision: requests.length ? totalUsage(requests) : null,
+    ...(skippedGraders ? { skippedGraders } : {}),
   };
 }
 
+/** One attempt at a run: its record, and whether the failure that it shows is worth another attempt. */
+export interface Attempted {
+  record: RunRecord;
+  /** Why the run may be tried again; null for a run that passed, failed for the agent's reasons, or never got going. */
+  retry: RetryKind | null;
+}
+
 /**
- * Makes one run: one prompt, one harness, one subject. It runs the prompt, normalizes the output, scores every
- * check, and cleans up.
+ * Makes one attempt at a run: one prompt, one harness, one subject. It runs the prompt, normalizes the output, scores
+ * every check, and cleans up.
  * @param plan - What to run and where to write its files.
- * @returns The record of the run. A failed run is a record with an error, never a rejection.
+ * @returns The record of the attempt, and whether to try again. A failed run is a record with an error, never a
+ *   rejection.
  */
-export async function runOnce(plan: RunPlan): Promise<RunRecord> {
+export async function runAttempt(plan: RunPlan): Promise<Attempted> {
   const { harness, bin, subject, caseDef } = plan;
   const { prompt, maxTurns, timeoutSeconds } = caseDef;
   const copy = copyOf(subject);
@@ -308,12 +330,24 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
         withhold: withheld(plan),
         pass: plan.pass,
       },
-      (ran) => record(plan, ran, copy),
+      async (ran) => ({
+        record: await record(plan, ran, copy),
+        retry: ran.retry,
+      }),
     );
   } catch (error) {
     // Anything unexpected while the run was made or scored is this run's problem, never the suite's.
-    return failedRecord(plan, messageOf(error));
+    return { record: failedRecord(plan, messageOf(error)), retry: null };
   } finally {
     copy?.dispose();
   }
+}
+
+/**
+ * Makes one run once: one prompt, one harness, one subject.
+ * @param plan - What to run and where to write its files.
+ * @returns The record of the run. A failed run is a record with an error, never a rejection.
+ */
+export async function runOnce(plan: RunPlan): Promise<RunRecord> {
+  return (await runAttempt(plan)).record;
 }

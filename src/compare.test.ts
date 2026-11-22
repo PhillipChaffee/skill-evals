@@ -83,7 +83,13 @@ test("run reports the difference between the two subjects and keeps each run's s
   expect(row).toMatch(/\$0\.0100 \/ \$0\.0300 \(\+\$0\.0200\)/);
   expect(row).toMatch(/1000 \/ 1000 \(\+0\)/);
   expect(result.stdout).toMatch(/^- Harness: claude-code \(default/m);
-  expect(result.stderr.trim().split("\n")).toEqual(
+  // Each line ends with the progress text, whose spend and time are not fixed.
+  expect(
+    result.stderr
+      .trim()
+      .split("\n")
+      .map((line) => line.replace(/ \[\d+\/\d+\] .*$/, "")),
+  ).toEqual(
     ["a1", "b1", "a2", "b2"].map(
       (run, index) =>
         `claude-code restate ${run}: score ${index % 2 ? "0.57" : "0.43"}`,

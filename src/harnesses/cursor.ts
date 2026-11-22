@@ -17,6 +17,7 @@ import {
   stringArg,
   toolCall,
 } from "./shared.js";
+import { looksRateLimited } from "./rate-limit.js";
 
 const KINDS: Record<string, ToolKind> = {
   shell: "shell",
@@ -119,6 +120,8 @@ const cursor: Harness = {
   authEnv: ["CURSOR_API_KEY"],
   capabilities: new Set(["subagents"]),
   status: "unverified",
+  reportsCost: false,
+  isRateLimit: looksRateLimited,
 
   invocation({ subject, home, workspace, prompt, model }) {
     const placed = placeSkills(subject, path.join(home, ".cursor", "skills"));

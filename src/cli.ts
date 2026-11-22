@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import type { ParseArgsOptionDescriptor } from "node:util";
 import { parseArgs } from "node:util";
-import type { EvaluateOptions } from "./evaluate.js";
+import type { Evaluation, EvaluateOptions } from "./evaluate.js";
 import { evaluate } from "./evaluate.js";
 import { HARNESSES, findBin } from "./harnesses/index.js";
 import { check } from "./probe.js";
+import type { Progress } from "./progress.js";
+import { progressText } from "./progress.js";
 import type { Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import { renderCoverage, renderReport } from "./report.js";
@@ -20,6 +22,8 @@ import { plan, printPlan } from "./commands/plan.js";
 import { validate } from "./commands/validate.js";
 
 const USAGE_EXIT_CODE = 2;
+/** The exit code of a command that stopped at `--max-cost` or `--max-duration`. It wins over exit code 1. */
+const PARTIAL_EXIT_CODE = 4;
 // What the progress line of a scored run says when the runner ended it.
 const STOPS = {
   agent: "",
@@ -28,11 +32,24 @@ const STOPS = {
 };
 
 /**
+ * Words why a command stopped before the end.
+ * @param evaluation - What the command made; its `partial` is set.
+ * @returns One line: the limit that was reached, how many runs finished, and how to continue.
+ */
+function stoppedMessage(
+  evaluation: Pick<Evaluation, "partial" | "records" | "outDir">,
+): string {
+  const limit =
+    evaluation.partial?.reason === "budget" ? "--max-cost" : "--max-duration";
+  return `skill-evals: stopped at ${limit} after ${String(evaluation.records.length)} finished runs; continue with --resume ${evaluation.outDir}`;
+}
+
+/**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
  * @param options - What to evaluate; with `dryRun`, the plan is printed and nothing runs.
  * @param project - Where the config file and the default cases directory are.
- * @returns The exit code: 0 for `dryRun`; else 1 when any run is invalid, a pass bar is not reached, or the subject directory changed
- *   during the command, else 0.
+ * @returns The exit code: 0 for `dryRun`; else 4 when `--max-cost` or `--max-duration` stopped the command, which wins over
+ *   1; else 1 when any run is invalid, a pass bar is not reached, or the subject directory changed during the command, else 0.
  */
 async function suite(
   options: EvaluateOptions & { dryRun?: boolean | undefined },
@@ -40,16 +57,23 @@ async function suite(
 ): Promise<number> {
   const { dryRun, ...given } = options;
   if (dryRun) return printPlan({ ...given, cwd: project.cwd }, false);
-  const onRun = (record: RunRecord, info: { reused: boolean }): void => {
+  const onRun = (
+    record: RunRecord,
+    info: { reused: boolean; progress: Progress },
+  ): void => {
     const outcome =
       invalidReason(record) ??
       `score ${formatScore(record.score)}${STOPS[record.stoppedBy ?? "agent"]}`;
     console.error(
-      `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}${info.reused ? " (reused)" : ""}`,
+      `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}${info.reused ? " (reused)" : ""} ${progressText(info.progress)}`,
     );
   };
   const evaluation = await evaluate({ ...given, onRun });
   console.log(renderReport(evaluation));
+  if (evaluation.partial !== null) {
+    console.error(stoppedMessage(evaluation));
+    return PARTIAL_EXIT_CODE;
+  }
   if (evaluation.sourceChanged.length > 0) {
     console.error(
       `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
@@ -115,6 +139,9 @@ const SUITE_FLAGS: Flag[] = [
   "cases",
   "reps",
   "jobs",
+  "retries",
+  "max-cost",
+  "max-duration",
   "model",
   "min-score",
   "judge-harness",
@@ -280,9 +307,10 @@ function help(name: string | undefined): number {
 /**
  * Runs one command line.
  * @param argv - The command and its flags, without the node and script paths.
- * @returns The exit code: 0, 1 when a run is invalid or a pass bar is not reached, or 2 with one line on standard
- *   error for a wrong command line, case file, config file, or platform. `--help` and `help` print to standard output
- *   and give 0; `--help` wins over every other flag. It never calls process.exit.
+ * @returns The exit code: 0, 1 when a run is invalid or a pass bar is not reached, 4 when `--max-cost` or `--max-duration`
+ *   stopped the command, or 2 with one line on standard error for a wrong command line, case file, config file, or
+ *   platform. `--help` and `help` print to standard output and give 0; `--help` wins over every other flag. It never
+ *   calls process.exit; a signal does, with 130, after the results are written.
  */
 export async function main(argv: string[]): Promise<number> {
   const [name, ...args] = argv;

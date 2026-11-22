@@ -10,6 +10,8 @@ import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { OnTimeout, StoppedBy } from "./session-end.js";
 import { endOf } from "./session-end.js";
+import type { RetryKind } from "./retry.js";
+import { retryKind } from "./retry.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
 import { turnWatch } from "./turn-watch.js";
@@ -54,6 +56,8 @@ export interface SessionResult {
   turns: number | null;
   /** Milliseconds from the start of the prompt to the first byte of output; null when none came. */
   firstOutputMs: number | null;
+  /** Why the run may be tried again, when it failed for a reason that is not the agent's; null when it must not be. */
+  retry: RetryKind | null;
   workspace: string;
   /**
    * What the run changed in the copies of the skills that the adapter placed in the home, as paths inside the
@@ -308,6 +312,27 @@ function parseStream(harness: Harness, stdout: string): Parsed {
 }
 
 /**
+ * Gathers what the adapter builds the command line from.
+ * @param run - The harness, the prompt, and what to load.
+ * @param home - The run's throwaway home.
+ * @param workspace - The run's workspace.
+ * @returns The input of `invocation`.
+ */
+const inputOf = (
+  run: SessionInput,
+  home: string,
+  workspace: string,
+): RunInput => ({
+  subject: run.subject,
+  home,
+  workspace,
+  prompt: run.prompt,
+  model: run.model,
+  maxTurns: run.maxTurns,
+  isolated: run.isolated,
+});
+
+/**
  * Runs one prompt in one harness, in a fresh home and workspace that are removed afterwards.
  * @param run - The harness, the prompt, and what to load.
  * @param use - Reads the result while the workspace still exists.
@@ -317,7 +342,7 @@ export async function session<T>(
   run: SessionInput,
   use: (result: SessionResult) => T | Promise<T>,
 ): Promise<T> {
-  const { harness, subject, prompt, model, maxTurns, isolated } = run;
+  const { harness } = run;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
   let prepared: PreparedRun | null = null;
@@ -331,15 +356,7 @@ export async function session<T>(
       : null;
     const seed = prepared?.seed ?? snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
-    const input = {
-      subject,
-      home: home.dir,
-      workspace: workspace.dir,
-      prompt,
-      model,
-      maxTurns,
-      isolated,
-    };
+    const input = inputOf(run, home.dir, workspace.dir);
     // A failed setup step means the harness never starts.
     const ran = prepared?.failure
       ? notStarted(prepared.failure, home.dir)
@@ -360,6 +377,13 @@ export async function session<T>(
       stoppedBy,
       turns: ran.turns,
       firstOutputMs: ran.firstOutputMs,
+      retry: retryKind(harness, {
+        error,
+        stoppedBy,
+        firstOutputMs: ran.firstOutputMs,
+        unfinished: parsed.unfinished === true,
+        exec: ran.exec,
+      }),
       workspace: workspace.dir,
       seed,
       placedChanges,
