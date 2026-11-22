@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { exec } from "./exec.js";
-import { tempDir } from "./scope.js";
+import { messageOf, tempDir } from "./scope.js";
 
 /** Where a command check runs, and what it may read. */
 export interface CommandContext {
@@ -150,28 +150,30 @@ export interface CommandCopies {
 // A neutral name: the agent may list the temp directory while it runs, and a name like "grader" would tell it what
 // the directory is for.
 const COPY_PREFIX = "copy-";
-const READ_ONLY_FILE = 0o444;
-const READ_ONLY_DIR = 0o555;
-const WRITABLE_DIR = 0o755;
-const WRITABLE_FILE = 0o644;
+const WRITE_BITS = 0o222;
+const OWNER_WRITE = 0o200;
+const PERMISSION_BITS = 0o7777;
 
 /**
- * Switches the write permission of every file and directory of a tree, best effort: a link is left alone, and a user
- * who may write anyway (root) is not stopped. The seed snapshot is what catches a change.
+ * Switches the write permission of every file and directory of a tree, best effort: a link is left alone, execute
+ * bits stay, and a user who may write anyway (root) is not stopped. The seed snapshot is what catches a change.
  * @param dir - The tree.
- * @param writable - True to allow writing again, so that the tree can be removed.
+ * @param writable - True to let the owner write again, so that the tree can be removed.
  */
 function setWritable(dir: string, writable: boolean): void {
+  const change = (entry: string): void => {
+    const mode = fs.lstatSync(entry).mode & PERMISSION_BITS;
+    fs.chmodSync(entry, writable ? mode | OWNER_WRITE : mode & ~WRITE_BITS);
+  };
   try {
-    if (writable) fs.chmodSync(dir, WRITABLE_DIR);
+    // A directory must be writable before its entries can change, and is locked last.
+    if (writable) change(dir);
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) setWritable(full, writable);
-      else if (entry.isFile()) {
-        fs.chmodSync(full, writable ? WRITABLE_FILE : READ_ONLY_FILE);
-      }
+      else if (entry.isFile()) change(full);
     }
-    if (!writable) fs.chmodSync(dir, READ_ONLY_DIR);
+    if (!writable) change(dir);
   } catch {
     // Best effort.
   }
@@ -187,7 +189,10 @@ export function copiesForCommands(
   workspace: string,
   graderDir: string | null,
 ): CommandCopies {
-  const seed = tempDir(COPY_PREFIX);
+  // The seed copy removes itself with its own cleanup, which restores the write bits first, also at process exit.
+  const seed = tempDir(COPY_PREFIX, (dir) => {
+    setWritable(dir, true);
+  });
   try {
     fs.cpSync(workspace, seed.dir, { recursive: true, verbatimSymlinks: true });
   } catch (error) {
@@ -208,7 +213,6 @@ export function copiesForCommands(
       return grader.dir;
     },
     dispose: () => {
-      setWritable(seed.dir, true);
       seed.dispose();
       grader?.dispose();
     },
@@ -219,9 +223,15 @@ export function copiesForCommands(
  * Removes the harness's login files from the throwaway home, so that a command cannot read them through `$HOME`.
  * @param authFiles - The adapter's login files, relative to a home directory.
  * @param home - The run's throwaway home.
+ * @returns Why a file could not be removed, or null when none is left.
  */
-export function removeLogin(authFiles: string[], home: string): void {
-  for (const relative of authFiles) {
-    fs.rmSync(path.join(home, relative), { force: true });
+export function removeLogin(authFiles: string[], home: string): string | null {
+  try {
+    for (const relative of authFiles) {
+      fs.rmSync(path.join(home, relative), { recursive: true, force: true });
+    }
+    return null;
+  } catch (error) {
+    return messageOf(error);
   }
 }

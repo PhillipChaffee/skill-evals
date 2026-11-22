@@ -29,9 +29,20 @@ export function requireSupportedPlatform(): void {
 const INTERRUPTED_EXIT_CODE = 130;
 
 const live = new Set<() => void>();
-process.on("exit", () => {
-  for (const dispose of [...live]) dispose();
-});
+/**
+ * Runs every registered cleanup. One that throws is reported on standard error and does not stop the others: a later
+ * cleanup may be what kills a process that is still running.
+ */
+export function runCleanups(): void {
+  for (const dispose of [...live]) {
+    try {
+      dispose();
+    } catch (error) {
+      console.error(`skill-evals: cleanup failed: ${messageOf(error)}`);
+    }
+  }
+}
+process.on("exit", runCleanups);
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 const interrupted = (): never => process.exit(INTERRUPTED_EXIT_CODE);
 
@@ -73,13 +84,18 @@ export function outputDir(requested: string | undefined, cwd: string): string {
 /**
  * Makes a temp directory whose name gives the agent no hint about why it exists.
  * @param prefix - The start of the directory name; random characters follow it.
+ * @param beforeRemove - Runs just before the directory is removed, at the end of the run and at process exit.
  * @returns The real path of the directory, and a `dispose` that removes it and also runs at process exit.
  */
-export function tempDir(prefix: string): { dir: string; dispose: () => void } {
+export function tempDir(
+  prefix: string,
+  beforeRemove?: (dir: string) => void,
+): { dir: string; dispose: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
   return {
     dir,
     dispose: onDispose(() => {
+      beforeRemove?.(dir);
       fs.rmSync(dir, { recursive: true, force: true });
     }),
   };

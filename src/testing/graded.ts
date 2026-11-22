@@ -5,6 +5,8 @@ import type { FakeScript } from "./plant.js";
 import type { Sandbox } from "./sandbox.js";
 import { readResults } from "./sandbox.js";
 
+const EXECUTABLE = 0o755;
+
 /** What a scripted run of a case with held-out files needs besides its checks. */
 export interface Graded {
   checks: unknown[];
@@ -12,6 +14,8 @@ export interface Graded {
   grader?: Record<string, string>;
   /** Files of the case's `workspace/`, besides `notes.txt`. */
   workspace?: Record<string, string>;
+  /** Paths of `workspace/` to make executable. */
+  executable?: string[];
   /** What the agent does before it ends. */
   agent?: FakeScript["turns"][number];
   /** Extra environment of the command line, such as a key that must not reach the commands. */
@@ -31,6 +35,12 @@ export async function scoreGraded(box: Sandbox, graded: Graded) {
   }
   for (const [name, content] of Object.entries(graded.workspace ?? {})) {
     box.write(`cases/restate/workspace/${name}`, content);
+  }
+  for (const name of graded.executable ?? []) {
+    fs.chmodSync(
+      path.join(box.root, "cases/restate/workspace", name),
+      EXECUTABLE,
+    );
   }
   script(box, "agent", {
     turns: [[...(graded.agent ?? []), { final: "done" }]],

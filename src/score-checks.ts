@@ -52,12 +52,21 @@ async function runCommands(
   slots: (CheckResult | undefined)[],
 ): Promise<void> {
   const { checks } = plan.caseDef;
-  if (run.judgeable && checks.some((check) => check.type === "command")) {
-    removeLogin(plan.harness.authFiles, run.outcome.home);
-  }
+  const stuck =
+    run.judgeable && checks.some((check) => check.type === "command")
+      ? removeLogin(plan.harness.authFiles, run.outcome.home)
+      : null;
   for (const [index, check] of checks.entries()) {
     if (check.type !== "command") continue;
-    const verdict = run.judgeable ? await ruled(check, run.outcome) : NOT_RUN;
+    const refused = {
+      score: 0,
+      reason: `the login could not be removed from the home: ${String(stuck)}`,
+    };
+    const verdict = !run.judgeable
+      ? NOT_RUN
+      : stuck === null
+        ? await ruled(check, run.outcome)
+        : refused;
     slots[index] = { ...check, ...verdict };
   }
 }

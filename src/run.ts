@@ -8,6 +8,8 @@ import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
+import { failedRecord } from "./run-failed.js";
+import { messageOf } from "./scope.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
@@ -276,6 +278,9 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
       },
       (ran) => record(plan, ran, copy),
     );
+  } catch (error) {
+    // Anything unexpected while the run was made or scored is this run's problem, never the suite's.
+    return failedRecord(plan, messageOf(error));
   } finally {
     copy?.dispose();
   }
