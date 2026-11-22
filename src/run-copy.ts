@@ -17,6 +17,8 @@ export interface Copy extends RunCopy {
   loaded: LoadedSubject;
   /** The subject's rule files and instruction file in the copy; null when the subject names none, empty under `rules=off`. */
   rules: RulesFile[] | null;
+  /** The agents and skills that the subject's options removed from the copy. */
+  stripped: Subject["stripped"];
 }
 
 /**
@@ -42,6 +44,7 @@ export function copyOf(subject: Subject): Copy | null {
   );
   return {
     ...copy,
+    stripped: subject.stripped,
     loaded: { kind, dir: copy.dir, skills, skillDirs, pluginName },
     // `rules=off` installs none, which is an empty list and not "the subject names no rules".
     rules:

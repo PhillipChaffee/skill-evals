@@ -169,6 +169,8 @@ export interface DiscriminationRow {
   caseId: string;
   /** The label of the subject whose arm this is; the subject under comparison, or the baseline when the other is none. */
   arm: string;
+  /** The label of the "none" subject that this row's none arm is. */
+  noneArm: string;
   /** The mean score of the none arm; null for no valid run. */
   none: number | null;
   /** The mean score of the arm with the subject; null for no valid run. */
@@ -179,14 +181,15 @@ export interface DiscriminationRow {
 /**
  * Lists the discrimination of every case that has one: only when a subject is "none", and never for a guard case.
  * @param evaluation - What `evaluate` returned.
- * @returns One row for each such case of each comparison: each subject other than "none" against the none arm.
+ * @returns One row for each such case of each comparison: each subject other than "none" against the none arm, which
+ *   the row names. A pair of arms that two comparisons share gives one row.
  */
 export function discriminationRows(
   evaluation: Evaluation,
 ): DiscriminationRow[] {
   const kindOf = (label: string): string =>
     evaluation.subjects.find((one) => one.label === label)?.kind ?? "";
-  return evaluation.comparisons.flatMap((compared) => {
+  const rows = evaluation.comparisons.flatMap((compared) => {
     const [a, b] = [compared.baseline, compared.subject];
     const arms = armsOf(
       { label: a, kind: kindOf(a) },
@@ -212,6 +215,7 @@ export function discriminationRows(
             harness,
             caseId: one.id,
             arm: arms.subject,
+            noneArm: arms.none,
             none: mean(arms.none),
             subject: mean(arms.subject),
             label: one.discrimination,
@@ -220,6 +224,12 @@ export function discriminationRows(
       }),
     );
   });
+  // A none arm that two comparisons share gives one row; the none arm is named, so rows of two none subjects stay apart.
+  const key = (row: DiscriminationRow): string =>
+    [row.harness, row.caseId, row.arm, row.noneArm].join("\u0000");
+  return rows.filter(
+    (row, at) => rows.findIndex((o) => key(o) === key(row)) === at,
+  );
 }
 
 /**

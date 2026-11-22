@@ -1,6 +1,6 @@
 import type { CheckChange } from "./diff-checks.js";
 import { checkChanges } from "./diff-checks.js";
-import { labelPairs, warningsOf } from "./diff-warnings.js";
+import { labelPairs, subjectWarnings, warningsOf } from "./diff-warnings.js";
 import type { Results } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
 
@@ -181,7 +181,7 @@ function sectionOf(
 export function diffResults(a: Results, b: Results): Diff {
   const { pairs, warnings } = labelPairs(a, b);
   return {
-    warnings: [...warningsOf(a, b), ...warnings],
+    warnings: [...warningsOf(a, b), ...subjectWarnings(a, b), ...warnings],
     sections: pairs.map((labels) => sectionOf({ a, b }, labels)),
   };
 }

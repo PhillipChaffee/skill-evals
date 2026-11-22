@@ -95,6 +95,7 @@ export function invalidReason(
     | "isolated"
     | "reportMissing"
     | "unexpected"
+    | "strippedLoaded"
     | "judgeProblem"
     | "checks"
     | "preconditions"
@@ -103,6 +104,9 @@ export function invalidReason(
   if (record.error) return `run failed: ${record.error}`;
   if (record.subjectLoaded === false) {
     return "the harness did not load the subject: it is not among the plugins and skills it reported";
+  }
+  if (record.strippedLoaded?.length) {
+    return `stripped but still loaded: ${record.strippedLoaded.join(", ")}`;
   }
   if (record.isolated && record.reportMissing) {
     return "the harness did not report what it loaded";

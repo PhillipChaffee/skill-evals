@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Capability } from "../capabilities.js";
 import type { HistoryAdapter } from "../history-types.js";
 import type { Subject } from "../subject.js";
-import type { SubjectOptions } from "../subject-options.js";
+import type { Stripped, SubjectOptions } from "../subject-options.js";
 import type { HookEvent } from "./hook.js";
 import type { Loaded } from "./loaded.js";
 import type { RulesFile, RulesTarget } from "./rules.js";
@@ -313,9 +313,10 @@ export interface Harness extends HistoryAdapter {
    * definitions from; a spec that asks for such an option is a usage error for a harness without it.
    * @param dir - The export.
    * @param options - The options of the subject spec.
+   * @returns The names of the agents and skills it removed, which a run checks the harness did not load anyway.
    * @throws {UsageError} When a file that holds hooks or agents cannot be read as it must be.
    */
-  strip?: (dir: string, options: SubjectOptions) => void;
+  strip?: (dir: string, options: SubjectOptions) => Stripped;
   /**
    * Names what a finished run left in the run's home that the run did not place, such as skills the account synced
    * there. The report of what loaded does not show them. Called while the home still exists.

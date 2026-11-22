@@ -72,7 +72,11 @@ function stubCase(id: string, source: Results): Case {
     .flatMap((suite) => suite.cases)
     .find((one) => one.id === id) ?? { weight: 1, minScore: undefined };
   // The case's own bar is kept in the comparison, which the stand-in must not lose.
-  const minDelta = source.comparison?.harnesses
+  // Every comparison carries the case's bar; results from before `comparisons` have `comparison` only.
+  const compared = (source as { comparisons?: Results["comparisons"] })
+    .comparisons ?? [source.comparison ?? { harnesses: [] }];
+  const minDelta = compared
+    .flatMap((one) => one.harnesses)
     .flatMap((one) => one.cases)
     .find((one) => one.id === id)?.minDelta;
   const results = source.records.find((one) => one.caseId === id)?.checks ?? [];

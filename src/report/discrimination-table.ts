@@ -22,12 +22,14 @@ export function discriminationLines(
     discriminationRule(),
     "",
     many
-      ? "| Case | Subject arm | None | Subject | Discrimination |"
+      ? "| Case | Subject arm | None arm | None | Subject | Discrimination |"
       : "| Case | None | Subject | Discrimination |",
-    many ? "| --- | --- | --- | --- | --- |" : "| --- | --- | --- | --- |",
+    many
+      ? "| --- | --- | --- | --- | --- | --- |"
+      : "| --- | --- | --- | --- |",
     ...discrimination.map(
       (row) =>
-        `| ${escape(row.caseId)} | ${many ? `${escape(row.arm)} | ` : ""}${formatScore(row.none)} | ${formatScore(row.subject)} | ${row.label} |`,
+        `| ${escape(row.caseId)} | ${many ? `${escape(row.arm)} | ${escape(row.noneArm)} | ` : ""}${formatScore(row.none)} | ${formatScore(row.subject)} | ${row.label} |`,
     ),
   ];
 }

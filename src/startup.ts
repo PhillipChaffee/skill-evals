@@ -1,5 +1,6 @@
 import type { Harness, Loaded, LoadedSubject } from "./harnesses/shared.js";
 import { foreignOf, reportMissing, samePath } from "./harnesses/shared.js";
+import type { Stripped } from "./subject-options.js";
 import type { Copy } from "./run-copy.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
@@ -26,6 +27,28 @@ export interface StartupRecord {
   reportMissing: boolean;
   /** The names of what does not come from the subject. */
   unexpected: string[];
+  /** Agents and skills that the subject's options removed and the harness reported as loaded anyway. Absent when there are none. */
+  strippedLoaded?: string[];
+}
+
+/**
+ * Finds what the options removed from the subject and a harness still reports as loaded.
+ * @param stripped - The agents and skills removed from the copy.
+ * @param reported - What each harness process said it loaded.
+ * @returns The removed names that were reported, once each; a plugin prefix (`plugin:name`) is ignored.
+ */
+function stillLoaded(stripped: Stripped, reported: Loaded[]): string[] {
+  const last = (name: string): string => name.slice(name.lastIndexOf(":") + 1);
+  const seen = (names: string[] | null, gone: string[]): string[] =>
+    (names ?? []).map(last).filter((name) => gone.includes(name));
+  return [
+    ...new Set(
+      reported.flatMap((each) => [
+        ...seen(each.agents, stripped.agents),
+        ...seen(each.skills, stripped.skills),
+      ]),
+    ),
+  ];
 }
 
 /**
@@ -61,7 +84,9 @@ export function startupRecord(
     foreignOf(run.harness, each, subject),
   );
   const unexpected = [...foreign, ...(run.harness.strays?.(ran) ?? [])];
+  const strippedLoaded = copy ? stillLoaded(copy.stripped, reported) : [];
   return {
+    ...(strippedLoaded.length > 0 && { strippedLoaded }),
     subjectLoaded: loads.includes(false)
       ? false
       : (loads.find(Boolean) ?? null),

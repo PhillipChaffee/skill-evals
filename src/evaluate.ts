@@ -19,6 +19,7 @@ import { lockDir } from "./lock.js";
 import type { Progress } from "./progress.js";
 import type { RunRecord } from "./run.js";
 import { runAll } from "./run-loop.js";
+import { warnOptionsChanged } from "./resume-options.js";
 import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import type { SelectionOptions } from "./select.js";
@@ -33,7 +34,7 @@ export interface EvaluateOptions extends SelectionOptions {
   cwd?: string;
   /** One or two of a directory, a git ref of the project, or "none"; with `labels`, two to eight. Each may end in `:` and options, such as `.:hooks=off`. */
   subjects: string[];
-  /** One label for each of `subjects`, which `--subjects name=spec,...` sets: unique, lowercase letters, digits and hyphens, starting with a letter. The first subject is the baseline. Default: "subject" for one subject, "a" and "b" for two. */
+  /** One label for each of `subjects`, which `--subjects name=spec,...` sets: unique, lowercase letters, digits and hyphens, starting and ending with a letter. The first subject is the baseline. Default: "subject" for one subject, "a" and "b" for two. */
   labels?: string[] | undefined;
   /** The label of the subject that `minScore`, `minDelta` and the cases' bars apply to. A usage error when it is not a label. Default: the last subject. */
   barSubject?: string | undefined;
@@ -256,6 +257,7 @@ async function runLocked(
   // Every check that can refuse the command comes before the files of the earlier command are removed.
   const reused =
     resumed === undefined ? new Map<string, RunRecord>() : store.load();
+  if (resumed !== undefined) warnOptionsChanged(outDir, subjects);
   const finished = {
     ...context,
     subjects,

@@ -9,10 +9,19 @@ export interface SubjectOptions {
   hooks?: "off";
   /** `rules=on` installs the subject's rules; `rules=off` installs none. Absent: the configured behaviour. */
   rules?: "on" | "off";
-  /** `agents=off` removes every agent definition; `agents=except:<glob>` removes those whose name matches the glob. */
-  agents?: "off" | { except: string };
+  /**
+   * `agents=off` removes every agent definition; `agents=except:<glob>` removes those whose name matches the glob, and
+   * `agents=only:<glob>` removes those whose name does not.
+   */
+  agents?: "off" | { except: string } | { only: string };
   /** `skills=only:<glob>` keeps the skills whose name matches; `skills=except:<glob>` removes those that match. */
   skills?: { mode: "only" | "except"; glob: string };
+}
+
+/** The names of what an export lost to the options of its spec. */
+export interface Stripped {
+  agents: string[];
+  skills: string[];
 }
 
 /** A spec as the user typed it, taken apart. */
@@ -25,7 +34,7 @@ export interface ParsedSpec {
 }
 
 const OPTIONS_HELP =
-  "hooks=off, rules=on, rules=off, agents=off, agents=except:<glob>, skills=only:<glob>, skills=except:<glob>";
+  "hooks=off, rules=on, rules=off, agents=off, agents=except:<glob>, agents=only:<glob>, skills=only:<glob>, skills=except:<glob>";
 
 /**
  * Splits at the commas that are not inside braces, so that a glob such as `{a,b}` stays whole.
@@ -91,9 +100,10 @@ function readOption(into: SubjectOptions, option: string, spec: string): void {
   } else if (option === "agents=off") {
     had("agents");
     into.agents = "off";
-  } else if (key === "agents" && kind === "except") {
+  } else if (key === "agents" && (kind === "except" || kind === "only")) {
     had("agents");
-    into.agents = { except: requireGlob(option, glob) };
+    const given = requireGlob(option, glob);
+    into.agents = kind === "except" ? { except: given } : { only: given };
   } else if (key === "skills" && (kind === "only" || kind === "except")) {
     had("skills");
     into.skills = { mode: kind, glob: requireGlob(option, glob) };
@@ -116,7 +126,11 @@ function optionsText(options: SubjectOptions): string {
     ...(rules ? [`rules=${rules}`] : []),
     ...(agents === undefined
       ? []
-      : [agents === "off" ? "agents=off" : `agents=except:${agents.except}`]),
+      : [
+          agents === "off"
+            ? "agents=off"
+            : `agents=${"except" in agents ? `except:${agents.except}` : `only:${agents.only}`}`,
+        ]),
     ...(skills ? [`skills=${skills.mode}:${skills.glob}`] : []),
   ].join(",");
 }
@@ -167,28 +181,28 @@ export const matches = (glob: string, name: string): boolean =>
  * Removes the skills that a `skills` option does not keep, from an export.
  * @param found - The export's skills: name to directory.
  * @param filter - The `skills` option.
- * @param where - The export's root, and what the user named, for the message.
- * @param where.root - The export's root; a skill that is the root itself loses its SKILL.md only.
- * @param where.flag - How the user named the subject.
+ * @param root - The export's root; a skill that is the root itself loses its SKILL.md only.
+ * @returns The names of the skills that were removed.
  * @throws {UsageError} When the option would leave no skill.
  */
 export function pareSkills(
   found: Record<string, string>,
   filter: NonNullable<SubjectOptions["skills"]>,
-  where: { root: string; flag: string },
-): void {
+  root: string,
+): string[] {
   const kept = (name: string): boolean =>
     matches(filter.glob, name) === (filter.mode === "only");
   const names = Object.keys(found);
   if (!names.some(kept)) {
     throw new UsageError(
-      `${where.flag}: skills=${filter.mode}:${filter.glob} leaves no skill; the subject has ${names.join(", ") || "none"}`,
+      `skills=${filter.mode}:${filter.glob} leaves no skill; the subject has ${names.join(", ") || "none"}`,
     );
   }
-  for (const [name, dir] of Object.entries(found)) {
-    if (kept(name)) continue;
-    if (dir === where.root)
-      fs.rmSync(path.join(dir, "SKILL.md"), { force: true });
+  const removed = names.filter((name) => !kept(name));
+  for (const name of removed) {
+    const dir = found[name] ?? "";
+    if (dir === root) fs.rmSync(path.join(dir, "SKILL.md"), { force: true });
     else fs.rmSync(dir, { recursive: true, force: true });
   }
+  return removed;
 }

@@ -62,23 +62,25 @@ function comparisonHtml(evaluation: Evaluation): string {
   const note = footnote(evaluation);
   if (note === null) return "";
   const found = discriminationRows(evaluation);
+  // Two subjects have one comparison, so the table needs no column to say which subject a row is for.
+  const many = evaluation.comparisons.length > 1;
   const discrimination =
     found.length === 0
       ? ""
       : `<h2>Discrimination</h2><p>${e(discriminationRule())}</p>${table(
           [
-            "Harness",
-            "Case",
-            "Subject arm",
-            "None",
-            "Subject",
-            "Discrimination",
+            ...[
+              "Harness",
+              "Case",
+              ...(many ? ["Subject arm", "None arm"] : []),
+            ],
+            ...["None", "Subject", "Discrimination"],
           ],
           found.map((row) => ({
             cells: [
               row.harness,
               row.caseId,
-              row.arm,
+              ...(many ? [row.arm, row.noneArm] : []),
               formatScore(row.none),
               formatScore(row.subject),
               row.label,

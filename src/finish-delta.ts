@@ -79,13 +79,18 @@ export const deltaFields = (
  * Takes the comparison that the delta bars apply to.
  * @param comparisons - What `comparisonsOf` returned.
  * @param barSubject - The label the bars apply to.
- * @returns The bar subject's comparison with the baseline, without its labels, as `results.json` has always held it;
- *   null when the bar subject is the baseline, or there is one subject.
+ * @returns The comparison of B against A for two subjects, whatever the bar subject. For more, the bar subject's
+ *   comparison with the baseline; null when that is the baseline. The labels are left out, as `results.json` has always
+ *   held it. Null for one subject.
  */
 function barComparison(
   comparisons: SubjectComparison[],
   barSubject: string,
 ): Comparison | null {
-  const found = comparisons.find((one) => one.subject === barSubject);
+  // Two subjects have one comparison, B against A, whatever the bar subject is.
+  const found =
+    comparisons.length === 1
+      ? comparisons[0]
+      : comparisons.find((one) => one.subject === barSubject);
   return found === undefined ? null : { harnesses: found.harnesses };
 }

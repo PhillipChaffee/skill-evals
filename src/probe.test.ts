@@ -11,6 +11,7 @@ import {
 } from "./testing/sandbox.js";
 
 const CLAUDE_CODE = "claude-code";
+const LOGGED_OUT = { SKILL_EVALS_BIN_PI: fixture("logged-out-harness.mjs") };
 const SAY_HELLO = "Say hello.\n";
 const GREET_SKILL = "skills/greet/SKILL.md";
 const cells = (stdout: string, id: string) =>
@@ -136,7 +137,15 @@ test("check --json parses and names every capability", async () => {
   for (const entry of probed) {
     expect(Object.keys(entry).sort()).toEqual(
       [
-        ...["harness", "installed", "status", "capabilities", "loaded"],
+        ...[
+          "harness",
+          "installed",
+          "ran",
+          "error",
+          "adapterStatus",
+          "capabilities",
+          "loaded",
+        ],
         ...["pluginLoaded", "skills", "agents", "rules", "hooksFired"],
         ...["mcpServers"],
       ].sort(),
@@ -149,10 +158,12 @@ test("check --json parses and names every capability", async () => {
       Object.values(capabilities).every((has) => typeof has === "boolean"),
     ).toBe(true);
   }
-  const [claude, pi] = probed;
+  const [claude] = probed;
   expect(claude).toMatchObject({
     installed: true,
-    status: "real-model",
+    adapterStatus: "real-model",
+    ran: true,
+    error: null,
     pluginLoaded: true,
     skills: 1,
     // The harness lists no agent, rule or MCP server in its init event: it reports none.
@@ -170,14 +181,6 @@ test("check --json parses and names every capability", async () => {
     sandbox: false,
     compact: false,
   });
-  // A harness that is not installed is in the list, with nothing reported.
-  expect(pi).toMatchObject({
-    installed: false,
-    pluginLoaded: null,
-    skills: null,
-    hooksFired: null,
-    loaded: { paths: null, skills: null, hooks: null },
-  });
 });
 
 test("the check table has the columns of check --json", async () => {
@@ -188,7 +191,7 @@ test("the check table has the columns of check --json", async () => {
     ...["--out", path.join(box.root, "probe-table")],
   ]);
   expect(table.stdout).toContain(
-    "| Status | Capabilities | Skills reported | Agents reported | Rules reported | Hooks fired | MCP servers reported |",
+    "| Adapter status | Capabilities | Skills reported | Agents reported | Rules reported | Hooks fired | MCP servers reported |",
   );
   expect(cells(table.stdout, CLAUDE_CODE).slice(7, 14)).toEqual([
     "real-model",
@@ -227,5 +230,65 @@ test("check --json counts the hooks that ran in the probe, and what the harness 
     hooksFired: 2,
     agents: 2,
     mcpServers: 1,
+  });
+});
+
+test("check --subject with options is probed in the installed harnesses only", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  const args = [
+    ...["check", "--json", "--harness", "pi", "--subject", "skills:hooks=off"],
+    ...["--out", path.join(box.root, "probe")],
+  ];
+  // Pi cannot remove hooks, and it is installed here, so the option is refused.
+  const refused = await box.cli(args, LOGGED_OUT);
+  expect(refused.status).toBe(2);
+  expect(refused.stderr).toContain("cannot be applied for pi, which does not");
+  // Not installed: the option is no one's to refuse.
+  const absent = await box.cli(args);
+  expect(absent.status, absent.stderr).toBe(0);
+});
+
+test("check --json tells a failed login from a pass", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  const failed = await box.cli(
+    [
+      ...["check", "--json", "--harness", "pi"],
+      ...["--out", path.join(box.root, "probe")],
+    ],
+    LOGGED_OUT,
+  );
+  const [pi] = JSON.parse(failed.stdout) as Record<string, unknown>[];
+  expect(pi).toMatchObject({ installed: true, ran: false });
+  expect(pi?.["error"]).toMatch(/Authentication required/);
+});
+
+test("check --json lists a harness that is not installed with every key and nothing reported", async () => {
+  const box = sandbox();
+  box.write(GREET_SKILL, SAY_HELLO);
+  const result = await box.cli([
+    ...["check", "--json", "--harness", `${CLAUDE_CODE},pi`],
+    ...["--out", path.join(box.root, "probe")],
+  ]);
+  const [, pi] = JSON.parse(result.stdout) as Record<string, unknown>[];
+  // A harness that is not installed is in the list, with nothing reported.
+  expect(pi).toMatchObject({
+    installed: false,
+    ran: null,
+    error: null,
+    pluginLoaded: null,
+    skills: null,
+    hooksFired: null,
+  });
+  // Its `loaded` has every key of the shape, null for what is not reported.
+  expect(pi?.["loaded"]).toEqual({
+    ...["paths", "skills", "agents", "rules", "hooks", "mcpServers"].reduce(
+      (all, kind) => ({ ...all, [kind]: null }),
+      {},
+    ),
+    ruleTexts: null,
+    rawSkills: null,
+    plugins: null,
   });
 });

@@ -79,6 +79,8 @@ export interface Prepared {
   context: Context;
   project: Project;
   pairs: { label: Label; spec: string }[];
+  /** True when the subjects came from `--subjects`. */
+  named: boolean;
 }
 
 /**
@@ -190,7 +192,7 @@ export function prepare(
     cases,
     parts: partitionApplicable(selection.chosen, cases, historyMode),
   };
-  return { context, project, pairs };
+  return { context, project, pairs, named: names !== undefined };
 }
 
 /**
@@ -243,6 +245,7 @@ export function resolveAll(prepared: Prepared, into: Subject[]): void {
           instructionFile: options.instructionFile,
         },
         strippers: context.selection.chosen.map(({ harness }) => harness),
+        named: prepared.named,
       }),
     );
   }

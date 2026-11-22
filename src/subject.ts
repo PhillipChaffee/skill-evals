@@ -4,6 +4,7 @@ import path from "node:path";
 import { NO_EXCLUSIONS, globsFor } from "./exclusions.js";
 import type { Exclusions } from "./exclusions.js";
 import { exportSubject, leaveOut } from "./isolate.js";
+import type { Stripped } from "./subject-options.js";
 import { parseSpec } from "./subject-options.js";
 import { findSkills } from "./subject-skills.js";
 import type { Stripper } from "./subject-variant.js";
@@ -64,6 +65,8 @@ export interface Subject extends SubjectSummary {
   rules: SubjectRules | null;
   /** The options of the spec in one canonical text; "" for none. */
   options: string;
+  /** The agents and skills that the options removed from the export, which a harness must not report as loaded. */
+  stripped: Stripped;
   /** Whether the spec said `rules=on` or `rules=off`; null when it said neither, so the configured behaviour applies. */
   rulesOption: "on" | "off" | null;
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
@@ -200,6 +203,8 @@ export interface SubjectScope extends Project {
   rules?: RulesOptions;
   /** The harnesses that will run, which remove the hooks and agents that a spec switches off. Default: none is asked. */
   strippers?: Stripper[];
+  /** True when the subject came from `--subjects`, which names it in errors as `--subjects <label>`. Default: false. */
+  named?: boolean;
 }
 
 /**
@@ -243,6 +248,7 @@ const baseline = (label: Label): Subject => ({
   exportChanged: () => [],
   rules: null,
   options: "",
+  stripped: { agents: [], skills: [] },
   rulesOption: null,
   sourceChanges: () => [],
   revision: "none",
@@ -253,13 +259,13 @@ const baseline = (label: Label): Subject => ({
  * Names how the user gave a subject, for an error message.
  * @param label - The subject's label.
  * @param given - The spec as typed, options included.
- * @returns `--a <spec>`, `--b <spec>` or `--subject <spec>` for the labels those flags set, else `--subjects
- *   <label>=<spec>`.
+ * @param named - True for a subject of `--subjects`.
+ * @returns `--subjects <label>=<spec>` for a named subject; else `--a <spec>`, `--b <spec>` or `--subject <spec>`.
  */
-const flagOf = (label: Label, given: string): string =>
-  ["a", "b", "subject"].includes(label)
-    ? `--${label} ${given}`
-    : `--subjects ${label}=${given}`;
+const flagOf = (label: Label, given: string, named: boolean): string =>
+  named || !["a", "b", "subject"].includes(label)
+    ? `--subjects ${label}=${given}`
+    : `--${label} ${given}`;
 
 /**
  * Turns what the user named into something a harness can load. A subject is never loaded in place: it is exported
@@ -279,7 +285,7 @@ export function resolveSubject(
   given: string,
   scope: SubjectScope,
 ): Subject {
-  const flag = flagOf(label, given);
+  const flag = flagOf(label, given, scope.named ?? false);
   const { spec, options, text } = parseSpec(given, scope.cwd);
   if (spec === "none") {
     if (text !== "") {
@@ -296,10 +302,11 @@ export function resolveSubject(
     scope.left ?? NO_EXCLUSIONS,
   );
   const ownName = path.basename(source.dir);
+  let stripped: Stripped = { agents: [], skills: [] };
   const shape = {
     globs: left,
     modify: (dir: string): void => {
-      applyOptions(dir, {
+      stripped = applyOptions(dir, {
         ...{ options, flag, strippers: scope.strippers },
         ...{ ownName, shown: source.dir },
       });
@@ -314,7 +321,7 @@ export function resolveSubject(
     return {
       ...contentOf(exported.dir, { source, flag, ownName, spec }),
       ...{ label, spec, options: text, rulesOption: options.rules ?? null },
-      ...{ commit: source.commit, exported: exported.dir },
+      ...{ commit: source.commit, exported: exported.dir, stripped },
       exportChanged: exported.changed,
       rules: rulesUnder(options.rules, {
         config: scope.rules ?? {},

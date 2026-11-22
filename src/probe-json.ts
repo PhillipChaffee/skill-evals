@@ -5,17 +5,23 @@ import { CAPABILITIES } from "./capabilities.js";
 import type { Harness, Loaded } from "./harnesses/shared.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
 import type { RunRecord } from "./run.js";
+import { invalidReason } from "./run.js";
 
 /** What `check --json` says of one harness. */
 export interface Probed {
   harness: string;
   /** Whether its executable was found. */
   installed: boolean;
-  status: Harness["status"];
+  /** Whether the probe run finished without an error; null when the harness is not installed, so nothing ran. */
+  ran: boolean | null;
+  /** Why the probe run is not a pass, such as a failed login; null when it passed, and when nothing ran. */
+  error: string | null;
+  /** How far the adapter is confirmed: `real-model`, `scripted` or `unverified`. It says nothing of the probe run. */
+  adapterStatus: Harness["status"];
   /** A boolean for every capability of the vocabulary: whether this harness declares it. */
   capabilities: Record<Capability, boolean>;
-  /** What the probe run's harness said it loaded; every kind null when it did not run or reports none. */
-  loaded: Loaded;
+  /** What the probe run's harness said it loaded, always with every key: a kind that is not reported, or a harness that did not run, is null. */
+  loaded: Required<Loaded>;
   /** Whether the harness reported the subject as loaded; null when it reports nothing, or the probe did not run. */
   pluginLoaded: boolean | null;
   /** How many skills, agents and rules the harness reported, and MCP servers; null where it does not report that kind. */
@@ -29,7 +35,7 @@ export interface Probed {
 
 /** The titles of the columns that `check` adds to its table, in the order of `extraCells`. */
 export const EXTRA_COLUMNS = [
-  "Status",
+  "Adapter status",
   "Capabilities",
   "Skills reported",
   "Agents reported",
@@ -52,6 +58,13 @@ const capabilitiesOf = (
       harness.capabilities.has(name),
     ]),
   ) as Record<Capability, boolean>;
+
+const FULL_NULL: Required<Loaded> = {
+  ...NOT_REPORTED,
+  ruleTexts: null,
+  rawSkills: null,
+  plugins: null,
+};
 
 const countOf = (names: string[] | null): number | null =>
   names === null ? null : names.length;
@@ -85,11 +98,19 @@ export function probedOf(
   harness: Harness,
   ran: { record: RunRecord; outDir: string } | null,
 ): Probed {
-  const loaded = ran?.record.loaded ?? NOT_REPORTED;
+  const reported = ran?.record.loaded;
+  const loaded = Object.fromEntries(
+    Object.entries(FULL_NULL).map(([kind]) => [
+      kind,
+      reported?.[kind as keyof Loaded] ?? null,
+    ]),
+  ) as Required<Loaded>;
   return {
     harness: harness.id,
     installed: ran !== null,
-    status: harness.status,
+    ran: ran === null ? null : ran.record.error === null,
+    error: ran === null ? null : invalidReason(ran.record),
+    adapterStatus: harness.status,
     capabilities: capabilitiesOf(harness),
     loaded,
     pluginLoaded: ran?.record.subjectLoaded ?? null,
@@ -116,7 +137,7 @@ export function extraCells(probed: Probed): string[] {
     .filter(([, has]) => has)
     .map(([name]) => name);
   return [
-    probed.status,
+    probed.adapterStatus,
     declared.join(", ") || "none",
     shown(probed.skills),
     shown(probed.agents),

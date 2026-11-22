@@ -157,6 +157,8 @@ export interface RunRecord extends Usage, LimitFields {
    * earlier records.
    */
   historyMode?: HistoryMode | null;
+  /** Agents and skills that the subject's options removed and the harness reported as loaded anyway; the run is invalid. Absent when there are none. */
+  strippedLoaded?: string[];
   /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
   unexpected: string[];
   /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */

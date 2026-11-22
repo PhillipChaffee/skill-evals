@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { UsageError } from "./scope.js";
-import type { SubjectOptions } from "./subject-options.js";
+import type { Stripped, SubjectOptions } from "./subject-options.js";
 import { needsHarness, pareSkills } from "./subject-options.js";
 import { findSkills } from "./subject-skills.js";
 import type { RulesOptions, SubjectRules } from "./subject-rules.js";
@@ -10,8 +10,8 @@ import { resolveRules } from "./subject-rules.js";
 /** A harness, as far as an export's options are concerned. */
 export interface Stripper {
   id: string;
-  /** Removes hooks and agents from an export; absent for a harness that cannot. */
-  strip?: ((dir: string, options: SubjectOptions) => void) | undefined;
+  /** Removes hooks and agents from an export, and says which agents and skills it removed; absent for a harness that cannot. */
+  strip?: ((dir: string, options: SubjectOptions) => Stripped) | undefined;
 }
 
 /** What shapes the export of one subject. */
@@ -44,30 +44,34 @@ export function requireStrippable(
     ...(options.agents ? ["agents"] : []),
   ].join(" and ");
   throw new UsageError(
-    `${flag}: ${asked} cannot be applied for ${unable.map((one) => one.id).join(", ")}, which does not say where it reads hooks and agents from; pick another harness with --harness`,
+    `${flag}: ${asked} cannot be applied for ${unable.map((one) => one.id).join(", ")}, ${unable.length === 1 ? "which does" : "which do"} not say where ${unable.length === 1 ? "it reads" : "they read"} hooks and agents from; pick another harness with --harness`,
   );
 }
 
 /**
- * Applies the options of a subject spec to its export, a copy of the source: each harness removes what it owns, then
- * the skills are filtered by name.
+ * Applies the options of a subject spec to its export, a copy of the source: the skills are filtered by name, then each
+ * harness removes what it owns.
  * @param root - The export.
  * @param variant - The options and what they need.
+ * @returns The names of the agents and skills that were removed.
  * @throws {UsageError} When a skills option leaves no skill, or a file that holds hooks or agents cannot be read.
  */
-export function applyOptions(root: string, variant: Variant): void {
+export function applyOptions(root: string, variant: Variant): Stripped {
   const { options, strippers } = variant;
-  for (const one of strippers ?? []) one.strip?.(root, options);
-  if (options.skills) {
-    pareSkills(
-      findSkills(root, variant.ownName, variant.shown),
-      options.skills,
-      {
+  const skills = options.skills
+    ? pareSkills(
+        findSkills(root, variant.ownName, variant.shown),
+        options.skills,
         root,
-        flag: variant.flag,
-      },
-    );
-  }
+      )
+    : [];
+  const stripped = (strippers ?? []).map(
+    (one) => one.strip?.(root, options) ?? { agents: [], skills: [] },
+  );
+  return {
+    agents: [...new Set(stripped.flatMap((one) => one.agents))],
+    skills: [...new Set([...skills, ...stripped.flatMap((one) => one.skills)])],
+  };
 }
 
 /**

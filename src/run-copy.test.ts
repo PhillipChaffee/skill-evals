@@ -11,6 +11,7 @@ const copy = (kind: "plugin" | "skills"): Copy => ({
   dispose: () => undefined,
   loaded: { kind, dir: "/copy", skills: [], skillDirs: {} },
   rules: null,
+  stripped: { agents: [], skills: [] },
 });
 const ran = (placedChanges: SessionResult["placedChanges"]) =>
   ({ placedChanges }) as SessionResult;

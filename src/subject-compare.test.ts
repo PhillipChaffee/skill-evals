@@ -67,7 +67,9 @@ test("the four-subject report has a verdict column for each subject after the ba
   const { ran, out } = await fourWays();
   expect(ran.stdout).toContain("# Skill comparison");
   expect(ran.stdout).toContain("Score, FULL / LEAN / ONE / NONE");
-  expect(ran.stdout).toContain("| Case | Subject arm | None | Subject |");
+  expect(ran.stdout).toContain(
+    "| Case | Subject arm | None arm | None | Subject |",
+  );
   expect(ran.stdout).toContain(", with hooks=off");
   for (const name of ["lean", "one", "none"]) {
     expect(ran.stdout).toContain(`Verdict ${name}`);
@@ -108,7 +110,9 @@ test.each([
     /takes 2 to 8 subjects, not 9/,
   ],
   ["X=none,y=none", /lowercase letters, digits and hyphens/],
-  ["1x=none,y=none", /starting with a letter/],
+  ["1x=none,y=none", /starting and ending with a letter/],
+  ["x-=none,y=none", /starting and ending with a letter/],
+  ["k=none,k1=none", /"k1" must be/],
   ["hooks=none,y=none", /name of a subject option/],
   ["x=none,y", /"y" is not one/],
   ["x=none,y=", /"y=" is not one/],

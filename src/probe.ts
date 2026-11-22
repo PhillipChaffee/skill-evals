@@ -254,7 +254,8 @@ export async function check(
     ...project,
     left: exclusionsOf(options, project.cwd),
     rules: { rules: options.rules, instructionFile: options.instructionFile },
-    strippers: located.map((entry) => entry.harness),
+    // A harness that is not installed runs nothing, so it has no say in which options the subject may have.
+    strippers: located.flatMap((entry) => (entry.bin ? [entry.harness] : [])),
   });
   try {
     const outDir = located.some((entry) => entry.bin)

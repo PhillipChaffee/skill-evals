@@ -76,11 +76,44 @@ export function warningsOf(a: Results, b: Results): string[] {
 }
 
 /**
+ * Says what differs in the subjects that two results share by label: their options, and the revision of what they loaded.
+ * @param a - The earlier results.
+ * @param b - The later results.
+ * @returns One line for each shared label whose options or revision differ, so that a `kit` run set against a
+ *   `kit:hooks=off` run is not mistaken for a pair of the same subject.
+ */
+export function subjectWarnings(a: Results, b: Results): string[] {
+  const revisionOf = (results: Results, label: string): string | undefined =>
+    (results.meta as RunMeta | undefined)?.subjects.find(
+      (one) => one.label === label,
+    )?.revision;
+  const optionsOf = (results: Results, label: string): string =>
+    results.subjects.find((one) => one.label === label)?.options ?? "";
+  const shared = a.subjects
+    .map((one) => one.label)
+    .filter((label) => b.subjects.some((one) => one.label === label));
+  return shared.flatMap((label) => {
+    const [before, after] = [optionsOf(a, label), optionsOf(b, label)];
+    const [from, to] = [revisionOf(a, label), revisionOf(b, label)];
+    return [
+      ...(before === after
+        ? []
+        : [
+            `the options of subject ${label} differ: A ${before || "none"}; B ${after || "none"}`,
+          ]),
+      ...(from !== undefined && to !== undefined && from !== to
+        ? [`the revision of subject ${label} differs: A ${from}; B ${to}`]
+        : []),
+    ];
+  });
+}
+
+/**
  * Pairs the subject labels of two results.
  * @param a - The earlier results.
  * @param b - The later results.
  * @returns The labels both have, each compared with itself, and a warning for each label that only one has. When they
- *   share none, the last subject of each, which is the one under test, with a warning.
+ *   share none, the bar subject of each (the last unless `--bar-subject` said another), with a warning.
  */
 export function labelPairs(
   a: Results,
@@ -90,8 +123,13 @@ export function labelPairs(
   const labelsB = b.subjects.map((one) => one.label);
   const common = labelsA.filter((label) => labelsB.includes(label));
   if (common.length === 0) {
-    const lastA = labelsA.at(-1) ?? "subject";
-    const lastB = labelsB.at(-1) ?? "subject";
+    // Results from before comparisons of more than two subjects have no bar subject: the bars were on the last.
+    const barOf = (results: Results, labels: string[]): string =>
+      (results as { barSubject?: string }).barSubject ??
+      labels.at(-1) ??
+      "subject";
+    const lastA = barOf(a, labelsA);
+    const lastB = barOf(b, labelsB);
     return {
       pairs: [{ a: lastA, b: lastB }],
       warnings: [

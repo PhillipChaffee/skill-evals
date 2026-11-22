@@ -78,7 +78,7 @@ export const FLAGS = {
     kind: "switch",
     value: "",
     description:
-      "Print the result as JSON, an array with one entry for each harness: its id, whether it is installed, its status, a boolean for each capability, what it reported as loaded, whether the subject loaded, and the counts of skills, agents, rules, hooks fired and MCP servers the probe saw (null where the harness cannot report them), instead of the table.",
+      "Print the result as JSON, an array with one entry for each harness: its id, whether it is installed, its adapter status, whether the probe ran and why not, a boolean for each capability, what it reported as loaded, whether the subject loaded, and the counts of skills, agents, rules, hooks fired and MCP servers the probe saw (null where the harness cannot report them), instead of the table.",
     default: "off: a table",
   },
   targets: {

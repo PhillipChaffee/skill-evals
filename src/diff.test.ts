@@ -45,7 +45,9 @@ test("diff lists a newly failing check", async () => {
   expect(ran.stdout).toContain("newly failing: restate: `output_contains");
   expect(ran.stdout).toContain("1.00 -> 0.00");
   expect(ran.stdout).toContain("| restate | 1.00 (1/1) | 0.00 (1/1) | -1.00 |");
-  expect(ran.stdout).not.toContain(WARNINGS);
+  // The two runs loaded different plugins, which is the one thing that differs, and the diff says so.
+  expect(ran.stdout).toContain("the revision of subject subject differs");
+  expect(ran.stdout.match(/^- the /gm)).toHaveLength(1);
   const back = await box.cli(["diff", path.join(b, "results.json"), a]);
   expect(back.stdout).toContain("newly passing: restate");
 });

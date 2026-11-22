@@ -5,7 +5,8 @@ import { UsageError } from "./scope.js";
 const MIN_NAMED = 2;
 const MAX_NAMED = 8;
 
-const LABEL = /^[a-z][a-z0-9-]*$/;
+// A label ends in a letter, so that `<label><rep>` in a file name names one pair: `k` with rep 11 is never `k1` with rep 1.
+const LABEL = /^[a-z]([a-z0-9-]*[a-z])?$/;
 // The first words of the options of a spec: a label with one of these names would read as an option of the subject before it.
 const OPTION_WORDS = ["hooks", "rules", "agents", "skills"];
 
@@ -72,7 +73,7 @@ export function requireNamed(named: NamedSubject[]): NamedSubject[] {
   for (const { label } of named) {
     if (!LABEL.test(label)) {
       throw new UsageError(
-        `subject label "${label}" must be lowercase letters, digits and hyphens, starting with a letter`,
+        `subject label "${label}" must be lowercase letters, digits and hyphens, starting and ending with a letter`,
       );
     }
     if (OPTION_WORDS.includes(label)) {
