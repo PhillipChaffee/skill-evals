@@ -213,6 +213,11 @@
           { "$ref": "#/$defs/check-tool_not_called" },
           { "$ref": "#/$defs/check-first_tool" },
           { "$ref": "#/$defs/check-tool_order" },
+          { "$ref": "#/$defs/check-transcript_matches" },
+          { "$ref": "#/$defs/check-transcript_lacks" },
+          { "$ref": "#/$defs/check-tool_output_matches" },
+          { "$ref": "#/$defs/check-tool_output_lacks" },
+          { "$ref": "#/$defs/check-tool_output_size" },
           { "$ref": "#/$defs/check-subject_unchanged" },
           { "$ref": "#/$defs/check-command" },
           { "$ref": "#/$defs/check-judge" },
@@ -2005,6 +2010,945 @@
         { "required": ["before", "after"] },
         { "required": ["sequence"] }
       ],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-transcript_matches": {
+      "title": "transcript_matches",
+      "description": "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "type": "object",
+      "required": ["type", "pattern"],
+      "properties": {
+        "type": { "const": "transcript_matches" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "where": {
+          "title": "where",
+          "description": "What the pattern tests: \"assistant_text\" (the default), \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
+          "type": "string",
+          "enum": ["assistant_text", "tool_input", "tool_output", "all"]
+        },
+        "scope": {
+          "title": "scope",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call).",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["first_message", "final_message", "any"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "before": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["before"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["after"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "first_message": { "const": true },
+                "before": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["first_message", "before"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-transcript_lacks": {
+      "title": "transcript_lacks",
+      "description": "None of the tested texts matches the regular expression. A `scope` that holds no text to test, such as `first_message` of a run with no assistant text, scores 0. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "type": "object",
+      "required": ["type", "pattern"],
+      "properties": {
+        "type": { "const": "transcript_lacks" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "where": {
+          "title": "where",
+          "description": "What the pattern tests: \"assistant_text\" (the default), \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
+          "type": "string",
+          "enum": ["assistant_text", "tool_input", "tool_output", "all"]
+        },
+        "scope": {
+          "title": "scope",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call).",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["first_message", "final_message", "any"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "before": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["before"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["after"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "first_message": { "const": true },
+                "before": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "title": "kind",
+                      "description": "What the tool does, with the same word in every harness.",
+                      "type": "string",
+                      "enum": [
+                        "shell",
+                        "read",
+                        "write",
+                        "edit",
+                        "search",
+                        "web",
+                        "skill",
+                        "subagent",
+                        "other"
+                      ]
+                    },
+                    "name": {
+                      "title": "name",
+                      "description": "A regular expression for the harness's own tool name.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputMatches": {
+                      "title": "inputMatches",
+                      "description": "A regular expression for the tool call's input, written as JSON.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "flags": {
+                      "title": "flags",
+                      "description": "The flags of the check's regular expressions.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "inputLinesMax": {
+                      "title": "inputLinesMax",
+                      "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "inputLinesMin": {
+                      "title": "inputLinesMin",
+                      "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "minDurationMs": {
+                      "title": "minDurationMs",
+                      "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "maxDurationMs": {
+                      "title": "maxDurationMs",
+                      "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "anyOf": [
+                    { "required": ["kind"] },
+                    { "required": ["name"] },
+                    { "required": ["inputMatches"] }
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["first_message", "before"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-tool_output_matches": {
+      "title": "tool_output_matches",
+      "description": "The output of a call that fits `tool` matches the regular expression: any such call, or with `which` the first or the last. A call with no result does not match, and no such call scores 0. The output is the tool's own result, as the stream carried it, never the agent's account of it. A pattern sees at most the first 1,000,000 characters of an output. `flags` belong to `pattern`; the matcher has its own.",
+      "type": "object",
+      "required": ["type", "tool", "pattern"],
+      "properties": {
+        "type": { "const": "tool_output_matches" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "tool": {
+          "title": "tool",
+          "description": "The matcher for the calls whose outputs are tested. For `tool_output_size` it is optional: without it every output counts.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "title": "kind",
+              "description": "What the tool does, with the same word in every harness.",
+              "type": "string",
+              "enum": [
+                "shell",
+                "read",
+                "write",
+                "edit",
+                "search",
+                "web",
+                "skill",
+                "subagent",
+                "other"
+              ]
+            },
+            "name": {
+              "title": "name",
+              "description": "A regular expression for the harness's own tool name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputMatches": {
+              "title": "inputMatches",
+              "description": "A regular expression for the tool call's input, written as JSON.",
+              "type": "string",
+              "minLength": 1
+            },
+            "flags": {
+              "title": "flags",
+              "description": "The flags of the check's regular expressions.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "anyOf": [
+            { "required": ["kind"] },
+            { "required": ["name"] },
+            { "required": ["inputMatches"] }
+          ],
+          "additionalProperties": false
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "which": {
+          "title": "which",
+          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. Default: \"any\". A chosen call with no output scores 0.",
+          "type": "string",
+          "enum": ["first", "last", "any"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-tool_output_lacks": {
+      "title": "tool_output_lacks",
+      "description": "No chosen call's output matches the regular expression. A chosen call with no result cannot be shown to lack the pattern, and no call that fits `tool` scores 0. Same fields as `tool_output_matches`.",
+      "type": "object",
+      "required": ["type", "tool", "pattern"],
+      "properties": {
+        "type": { "const": "tool_output_lacks" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "tool": {
+          "title": "tool",
+          "description": "The matcher for the calls whose outputs are tested. For `tool_output_size` it is optional: without it every output counts.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "title": "kind",
+              "description": "What the tool does, with the same word in every harness.",
+              "type": "string",
+              "enum": [
+                "shell",
+                "read",
+                "write",
+                "edit",
+                "search",
+                "web",
+                "skill",
+                "subagent",
+                "other"
+              ]
+            },
+            "name": {
+              "title": "name",
+              "description": "A regular expression for the harness's own tool name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputMatches": {
+              "title": "inputMatches",
+              "description": "A regular expression for the tool call's input, written as JSON.",
+              "type": "string",
+              "minLength": 1
+            },
+            "flags": {
+              "title": "flags",
+              "description": "The flags of the check's regular expressions.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "anyOf": [
+            { "required": ["kind"] },
+            { "required": ["name"] },
+            { "required": ["inputMatches"] }
+          ],
+          "additionalProperties": false
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "which": {
+          "title": "which",
+          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. Default: \"any\". A chosen call with no output scores 0.",
+          "type": "string",
+          "enum": ["first", "last", "any"]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-tool_output_size": {
+      "title": "tool_output_size",
+      "description": "No tool output, or none of the calls that fit `tool`, is over `maxBytes` bytes. A call with no result is ignored.",
+      "type": "object",
+      "required": ["type", "maxBytes"],
+      "properties": {
+        "type": { "const": "tool_output_size" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "maxBytes": {
+          "title": "maxBytes",
+          "description": "The most bytes that one tool output may have, as UTF-8 text. A call with no result is ignored.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "tool": {
+          "title": "tool",
+          "description": "The matcher for the calls whose outputs are tested. For `tool_output_size` it is optional: without it every output counts.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "title": "kind",
+              "description": "What the tool does, with the same word in every harness.",
+              "type": "string",
+              "enum": [
+                "shell",
+                "read",
+                "write",
+                "edit",
+                "search",
+                "web",
+                "skill",
+                "subagent",
+                "other"
+              ]
+            },
+            "name": {
+              "title": "name",
+              "description": "A regular expression for the harness's own tool name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputMatches": {
+              "title": "inputMatches",
+              "description": "A regular expression for the tool call's input, written as JSON.",
+              "type": "string",
+              "minLength": 1
+            },
+            "flags": {
+              "title": "flags",
+              "description": "The flags of the check's regular expressions.",
+              "type": "string",
+              "minLength": 1
+            },
+            "inputLinesMax": {
+              "title": "inputLinesMax",
+              "description": "The most lines that the call's input may have, counted in its longest string value, found at any depth. A call with no string value has none.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "inputLinesMin": {
+              "title": "inputLinesMin",
+              "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "anyOf": [
+            { "required": ["kind"] },
+            { "required": ["name"] },
+            { "required": ["inputMatches"] }
+          ],
+          "additionalProperties": false
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },

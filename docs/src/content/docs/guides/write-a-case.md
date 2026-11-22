@@ -184,6 +184,41 @@ Until checks can tell agents apart, every one of these sees all the calls of the
 
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
 
+## What the agent said and what its tools returned
+
+Four checks read the [transcript](../concepts/transcript.md) of the run. They need a harness that carries the part they read: `assistantText` for the agent's text between tool calls, `toolOutputs` for what each tool returned. Elsewhere the case is not applicable.
+
+`transcript_matches` scores 1 when a regular expression matches one of the tested texts, and `transcript_lacks` when none does. `where` says what is tested: `assistant_text` (the default), `tool_input` (each call's input, written as JSON, as a matcher reads it), `tool_output`, or `all`. `scope` says which events: `any` (the default), `first_message`, `final_message`, `{ "before": matcher }` or `{ "after": matcher }`.
+
+`first_message` is the main agent's first non-empty text, wherever it falls. In a kit whose correct first action is a tool call, the text before the first tool call is usually empty, so "the first message" is not "the text before any call". The first text may come after a skill load and a read and still count. To bound it, give `{ "first_message": true, "before": matcher }`: it scores 0, and says so, when that text comes after the matcher's first call, and otherwise tests the text. A matcher that matches no call leaves the text before it. `final_message` is the last non-empty text.
+
+```json
+{
+  "type": "transcript_matches",
+  "pattern": "timeout.*30",
+  "flags": "i",
+  "scope": { "first_message": true, "before": { "kind": "edit" } }
+}
+```
+
+`{ "before": matcher }` and `{ "after": matcher }` cut at the first call that fits the matcher: the events before that call, or after it. A matcher that matches no call scores the check 0, and the reason names the matcher, for `transcript_lacks` as well. `by`, which would pick one agent's events, is not yet supported: it is a load error, even with `--lenient`.
+
+`tool_output_matches` and `tool_output_lacks` read the result of the calls that fit `tool`, a matcher. With `which: "first"` or `"last"` they look at one call; with `"any"` (the default) at all of them. The output is what the tool returned, not what the agent said it returned, so "red before green" is two checks, and an agent that only claims success, or runs `true`, scores 0:
+
+```json
+{
+  "type": "tool_output_matches",
+  "tool": { "kind": "shell", "inputMatches": "npm test" },
+  "which": "first",
+  "pattern": "\\bfail",
+  "flags": "i"
+}
+```
+
+A call that fits `tool` but has no result event is not a match for `tool_output_matches`; with `which` set to the one that is chosen, the check scores 0 with `call #<i> has no output`. `tool_output_lacks` fails closed: a chosen call with no output cannot be shown to lack the pattern. No call that fits `tool` scores 0 for both. `tool_output_size` takes `maxBytes` and an optional `tool`, and scores 0 when any output is larger; a call with no result is ignored.
+
+Patterns run on the first 1,000,000 characters of each event's text, input or output, and are compiled once for the check, so the `g` and `y` flags behave. A failing reason quotes the events it is about, one line each: `#<index> <type> <first 120 characters>`. The full cases are in `examples/cases/transcript-matches` and `examples/cases/tool-output-matches`.
+
 ## How a skill load is detected
 
 Each skill event has a mechanism (`via`), a position in the run's call list, and whether the skill is one of the loaded subject (`resolved`). Three mechanisms are real:

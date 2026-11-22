@@ -4,6 +4,7 @@ import { CALL_FIELDS, parseVias } from "./call-fields.js";
 import { COMMAND_FIELDS } from "./command-fields.js";
 import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
+import { TRANSCRIPT_FIELDS } from "./transcript-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
 import { readSteps } from "../setup-steps.js";
@@ -37,6 +38,7 @@ export type FieldType =
   | "matcher"
   | "matchers"
   | "vias"
+  | "scope"
   | "object";
 
 /** One field of a check, or one top-level key of a case file. */
@@ -102,6 +104,7 @@ export const FIELDS: Record<string, FieldDef> = {
     meaning: "The flags of the check's regular expressions.",
   },
   ...CALL_FIELDS,
+  ...TRANSCRIPT_FIELDS,
   ...FILE_FIELDS,
   ...COMMAND_FIELDS,
   rubric: {
@@ -313,6 +316,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
   needs: (value, at) => readNeeds(value, at.where),
   steps: (value, at) => readSteps(value, at.where),
   vias: parseVias,
+  scope: (value, at) => PARSERS.object(value, at),
   matcher: (value, at) => PARSERS.object(value, at),
   matchers: (value, at) => objects(value, at),
   object: (value, at) => {

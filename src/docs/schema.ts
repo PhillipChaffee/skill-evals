@@ -136,6 +136,31 @@ function matcherSchema(extras: Record<string, FieldDef> = {}): Schema {
 }
 
 /**
+ * Makes the schema of a transcript scope.
+ * @returns A word, or an object with exactly one of `before` and `after`, or `first_message: true` with `before`.
+ */
+function scopeSchema(): Schema {
+  const matcher = matcherSchema();
+  const strict = (properties: Schema, required: string[]): Schema => ({
+    type: "object",
+    properties,
+    required,
+    additionalProperties: false,
+  });
+  return {
+    anyOf: [
+      { type: "string", enum: ["first_message", "final_message", "any"] },
+      strict({ before: matcher }, ["before"]),
+      strict({ after: matcher }, ["after"]),
+      strict({ first_message: { const: true }, before: matcher }, [
+        "first_message",
+        "before",
+      ]),
+    ],
+  };
+}
+
+/**
  * Makes the schema of one field.
  * @param name - The field's key.
  * @param def - The field's entry in its table.
@@ -156,11 +181,13 @@ function valueSchema(name: string, def: FieldDef): Schema {
               },
             ],
           }
-        : def.type === "matcher"
-          ? matcherSchema(def.extras)
-          : def.type === "matchers"
-            ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
-            : (BY_TYPE[def.type] ?? {});
+        : def.type === "scope"
+          ? scopeSchema()
+          : def.type === "matcher"
+            ? matcherSchema(def.extras)
+            : def.type === "matchers"
+              ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
+              : (BY_TYPE[def.type] ?? {});
   return { title: name, description: def.meaning, ...base };
 }
 

@@ -90,6 +90,10 @@ A tool matcher or a check on tool calls can bound a call's duration with ${code(
 
 A skill-tool call whose tool result was an error is not resolved, on a harness that has ${code("toolOutputs")}. Elsewhere the rule is the one it was.
 
+## Checks that read it
+
+${code("transcript_matches")}, ${code("transcript_lacks")}, ${code("tool_output_matches")}, ${code("tool_output_lacks")} and ${code("tool_output_size")} read these events. They need ${code("assistantText")} or ${code("toolOutputs")}, as the table says. A pattern sees at most the first 1,000,000 characters of one event's text, input or output. See [Write a case](../guides/write-a-case.md#what-the-agent-said-and-what-its-tools-returned).
+
 ## Size and bad bytes
 
 The copy of the transcript that is handed to a judge cuts any single ${code("text")} or ${code("output")} longer than 20,000 bytes. A cut event has ${code("truncated: true")} and keeps its original ${code("bytes")}. The file on disk is never cut.

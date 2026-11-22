@@ -59,6 +59,10 @@ A tool matcher or a check on tool calls can bound a call's duration with `minDur
 
 A skill-tool call whose tool result was an error is not resolved, on a harness that has `toolOutputs`. Elsewhere the rule is the one it was.
 
+## Checks that read it
+
+`transcript_matches`, `transcript_lacks`, `tool_output_matches`, `tool_output_lacks` and `tool_output_size` read these events. They need `assistantText` or `toolOutputs`, as the table says. A pattern sees at most the first 1,000,000 characters of one event's text, input or output. See [Write a case](../guides/write-a-case.md#what-the-agent-said-and-what-its-tools-returned).
+
 ## Size and bad bytes
 
 The copy of the transcript that is handed to a judge cuts any single `text` or `output` longer than 20,000 bytes. A cut event has `truncated: true` and keeps its original `bytes`. The file on disk is never cut.

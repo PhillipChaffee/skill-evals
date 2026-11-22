@@ -104,7 +104,7 @@ export function numbered(parts: EventInput[]): TranscriptEvent[] {
  *   `callId` after it and before the next call with that id. A result that matches none, and an empty `callId`, pair
  *   with nothing.
  */
-function resultsByCall(
+export function resultsByCall(
   events: TranscriptEvent[],
 ): Map<number, TranscriptEvent> {
   const open = new Map<string, number>();

@@ -5,12 +5,15 @@ import { onTestFinished } from "vitest";
 import type { CommandContext } from "../command.js";
 import type { Outcome, RuledCheck, Verdict } from "../checks/index.js";
 import { checkScore } from "../checks/index.js";
+import type { TranscriptEvent } from "../harnesses/shared.js";
 import { NOT_REPORTED } from "../harnesses/shared.js";
 import { fileState } from "../run-files.js";
 import { snapshot } from "../snapshot.js";
 
 /** The state of the files of a run that changed nothing. */
 export const NO_FILES = {
+  // Not a file, but every outcome built by hand starts from this object: a run with no events.
+  transcript: [] as TranscriptEvent[],
   seed: new Map<string, string>(),
   changed: { created: [], modified: [], deleted: [] },
   unlisted: [] as string[],
@@ -35,7 +38,7 @@ export const NO_FILES = {
  * @param more - Fields to set besides the empty ones.
  * @returns An outcome with no calls, no skills and empty seeds, and the fields given.
  */
-const bareOutcome = (more: Partial<Outcome> = {}): Outcome => ({
+export const bareOutcome = (more: Partial<Outcome> = {}): Outcome => ({
   finalText: "",
   toolCalls: [],
   skillEvents: [],

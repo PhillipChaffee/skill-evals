@@ -1,6 +1,11 @@
 import type { Capability, Need } from "../capabilities.js";
 import type { CommandContext } from "../command.js";
-import type { Loaded, ToolCall, ToolKind } from "../harnesses/shared.js";
+import type {
+  Loaded,
+  ToolCall,
+  ToolKind,
+  TranscriptEvent,
+} from "../harnesses/shared.js";
 import type { SkillEvent, SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
@@ -10,13 +15,20 @@ import { COMMAND_CHECKS } from "./command.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
 import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
-import { describeCalls, describeFiles } from "./describe.js";
+import {
+  describeCalls,
+  describeFiles,
+  describeTranscript,
+} from "./describe.js";
 import { extensionsOf } from "./extensions.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
 import { ORDER_CHECKS } from "./order.js";
 import { SKILL_CHECKS } from "./skills.js";
 import { TOOL_CHECKS } from "./tools.js";
+import { TRANSCRIPT_CHECKS } from "./transcript.js";
+import type { Scope } from "./transcript-slice.js";
+import type { Where } from "./transcript-fields.js";
 
 /** The fields a check may carry beside its type and weight; which ones it takes depends on the type. */
 interface CheckFields {
@@ -45,6 +57,11 @@ interface CheckFields {
   inputLinesMin?: number;
   minDurationMs?: number;
   maxDurationMs?: number;
+  where?: Where;
+  scope?: Scope;
+  which?: "first" | "last" | "any";
+  tool?: ToolMatcher;
+  maxBytes?: number;
   quantifier?: "any" | "all";
   root?: "workspace" | "home";
   created?: boolean;
@@ -98,6 +115,8 @@ export type Check = RuledCheck | JudgedCheck | DecisionCheck;
 export interface Outcome {
   finalText: string;
   toolCalls: ToolCall[];
+  /** The run's events: the assistant's text, each call and each result, in order. */
+  transcript: TranscriptEvent[];
   /** Every call that gave the agent a skill or a file of one, with its mechanism and position. */
   skillEvents: SkillEvent[];
   /** What the harness said it loaded at startup; `skills` is null for a harness that lists none. */
@@ -186,6 +205,7 @@ const RULED = {
   ...FILE_CHECKS,
   ...TOOL_CHECKS,
   ...ORDER_CHECKS,
+  ...TRANSCRIPT_CHECKS,
   ...OBSERVED_CHECKS,
   ...COMMAND_CHECKS,
 };
@@ -368,6 +388,7 @@ export function describeCheck(check: Check): string {
     ...answers,
     ...patterns,
     ...describeCalls(check),
+    ...describeTranscript(check),
     ...weight,
   ]
     .filter(Boolean)

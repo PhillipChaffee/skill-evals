@@ -125,8 +125,14 @@ const inputJson = (call: ToolCall): string => {
   return text;
 };
 
-// A pattern that tests a text. `g` and `y` flags stay legal, so the position is reset before each test.
-const tester = (
+/**
+ * Compiles a pattern once, for a check that tests many texts. `g` and `y` flags stay legal, so the position is reset
+ * before each test.
+ * @param pattern - The source of a regular expression; absent for a test that every text passes.
+ * @param flags - Its flags.
+ * @returns A test of one text.
+ */
+export const tester = (
   pattern: string | undefined,
   flags: string | undefined,
 ): ((text: string) => boolean) => {

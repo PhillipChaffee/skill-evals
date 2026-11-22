@@ -1,0 +1,25 @@
+{
+  "description": "The first thing the agent says restates the goal, and it says it before the first edit; no shell command deletes anything; no tool output is larger than 20,000 bytes.",
+  "tags": ["process", "transcript"],
+  "checks": [
+    {
+      "type": "transcript_matches",
+      "pattern": "timeout.*30",
+      "flags": "i",
+      "scope": "first_message"
+    },
+    {
+      "type": "transcript_matches",
+      "pattern": "\\bfallback\\b",
+      "scope": { "first_message": true, "before": { "kind": "edit" } }
+    },
+    {
+      "type": "transcript_lacks",
+      "pattern": "rm -rf",
+      "where": "tool_input",
+      "scope": { "after": { "kind": "edit" } }
+    },
+    { "type": "tool_output_size", "maxBytes": 20000 }
+  ],
+  "timeoutSeconds": 300
+}

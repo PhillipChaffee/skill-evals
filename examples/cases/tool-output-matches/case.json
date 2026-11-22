@@ -1,0 +1,27 @@
+{
+  "description": "The suite's own output shows a failure on its first run and a pass on its last run, so a claim of success without a run scores 0.",
+  "tags": ["process", "transcript"],
+  "checks": [
+    {
+      "type": "tool_output_matches",
+      "tool": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "which": "first",
+      "pattern": "\\bfail",
+      "flags": "i"
+    },
+    {
+      "type": "tool_output_matches",
+      "tool": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "which": "last",
+      "pattern": "all passed"
+    },
+    {
+      "type": "tool_output_lacks",
+      "tool": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "which": "last",
+      "pattern": "\\bfail",
+      "flags": "i"
+    }
+  ],
+  "timeoutSeconds": 300
+}

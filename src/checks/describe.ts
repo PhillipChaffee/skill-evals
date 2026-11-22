@@ -45,6 +45,24 @@ export function describeCalls(check: Check): string[] {
 }
 
 /**
+ * Names what distinguishes a check of assistant text or tool outputs.
+ * @param check - Any check of a case.
+ * @returns The words for its scope, where, tool, which and size bound; none for a check without them.
+ */
+export function describeTranscript(check: Check): string[] {
+  const { scope, tool, which, maxBytes } = check;
+  return [
+    ...(scope === undefined
+      ? []
+      : [`scope ${typeof scope === "string" ? scope : JSON.stringify(scope)}`]),
+    ...(check.where ? [`where ${check.where}`] : []),
+    ...(tool ? [`tool ${describeMatcher(tool)}`] : []),
+    ...(which ? [`which ${which}`] : []),
+    ...(maxBytes === undefined ? [] : [`maxBytes ${String(maxBytes)}`]),
+  ];
+}
+
+/**
  * Names what distinguishes a check that looks at files, beyond its type and path.
  * @param check - Any check of a case.
  * @returns The words for its quantifier, root, `created`, `allow` and `ignore`; none for a check without them.
