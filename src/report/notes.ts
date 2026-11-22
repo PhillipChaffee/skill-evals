@@ -5,6 +5,7 @@ const LIMIT_FLAGS: Record<string, string | undefined> = {
   duration: "--max-duration",
 };
 const COST_DECIMALS = 4;
+import { unblindedOf } from "../blinding.js";
 import type { Evaluation } from "../evaluate.js";
 import type { RunRecord } from "../run.js";
 import { invalidReason } from "../run.js";
@@ -219,8 +220,32 @@ function deltaBarsSection(evaluation: Evaluation): string[] {
 }
 
 /**
+ * Lists the cases that show the agent a word that hints at a test, and why.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when no case has an `x-unblinded`.
+ */
+function unblindedSection(evaluation: Evaluation): string[] {
+  const unblinded = evaluation.cases.flatMap((one) => {
+    const given = unblindedOf(one.extensions);
+    return given === null ? [] : [{ id: one.id, ...given }];
+  });
+  if (unblinded.length === 0) return [];
+  return [
+    "",
+    "## Unblinded cases",
+    "",
+    "These cases may show the agent a word that hints at a test, which `validate` would warn about. Each says why.",
+    "",
+    ...unblinded.map(
+      ({ id, words, why }) =>
+        `- \`${id}\`: ${words.map((word) => `\`${word}\``).join(", ")}: ${why}`,
+    ),
+  ];
+}
+
+/**
  * The report's notes on what did not run as written: the checks that were skipped, the limits that were not enforced,
- * and the cases that were not applicable.
+ * the cases that were not applicable, and the cases that are unblinded.
  * @param evaluation - What `evaluate` returned.
  * @returns The sections that apply, in that order; nothing when none does.
  */
@@ -231,5 +256,6 @@ export const noteSections = (evaluation: Evaluation): string[] => [
   ...limitsSection(evaluation),
   ...stoppedSection(evaluation),
   ...notApplicableSection(evaluation),
+  ...unblindedSection(evaluation),
   ...deltaBarsSection(evaluation),
 ];

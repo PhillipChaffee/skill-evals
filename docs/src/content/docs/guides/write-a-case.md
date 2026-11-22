@@ -109,7 +109,27 @@ Repeat steps 2 and 3 until the check says what you mean, then run the case with 
 skill-evals validate --subject ./my-skills
 ```
 
-It takes `--subject` (default: the project; `none` skips the skill names), `--cases`, `--lenient` (an unknown key becomes a warning), `--heldout` and the selection flags. A directory name with `@` or `,` is reported even for a case that the selection leaves out, because no case id can be formed for it. Each line reads `problem <case id>: <message>` or `warning <case id>: <message>`, problems first, then `<n> cases, <p> problems, <w> warnings`.
+It takes `--subject` (default: the project; `none` skips the skill names), `--cases`, `--lenient` (an unknown key becomes a warning), `--deep`, `--heldout` and the selection flags. A directory name with `@` or `,` is reported even for a case that the selection leaves out, because no case id can be formed for it. Each line reads `problem <case id>: <message>` or `warning <case id>: <message>`, problems first, then `<n> cases, <p> problems, <w> warnings`.
+
+## Keep the agent from knowing it is tested
+
+An agent that reads "eval", "benchmark" or "judge" in a prompt, a file name or a variable may act differently from one that does not. `validate` warns about these words in everything the agent reads from a case: the prompt, each turn, `history.json` and the earlier sessions, the names, descriptions, schemas and responses of mock MCP tools, and the names (not the contents) of the files under `workspace/`, the shared fixtures and `home/`. The words are `blindingWords` in the [config](../reference/config.md), which replaces the default list. A warning does not change the exit code. Skill names, rules, agent definitions and the judge's prompt belong to the subject and are not looked at.
+
+Plain `validate` never runs a setup step, so it cannot see the paths that a step makes. `validate --deep` runs the steps of each case in a throwaway directory and looks at those paths too. `score` and `run` look at the real workspace each case starts with, and print a warning for each hit once for each case.
+
+`run` and `score` also look at the machine before the first run: the temp directory (set `TMPDIR`), the names of the variables the agent gets, and whether any variable names this tool. A hit ends the command with exit 2 and says where it found the word and what to set.
+
+When the word is the point of a case, say so and keep it. `x-unblinded` silences the words you list for that case only, and the report lists the case with your reason. A missing or empty `why` is a load error, even under `--lenient`.
+
+```json
+{
+  "x-unblinded": {
+    "words": ["test"],
+    "why": "The task is to write tests, so the word cannot be avoided."
+  },
+  "checks": [{ "type": "file_exists", "path": "tests/basic.test.ts" }]
+}
+```
 
 ## Needs and not-applicable cases
 

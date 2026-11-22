@@ -124,13 +124,36 @@ export function outputDir(requested: string | undefined, cwd: string): string {
 }
 
 /**
+ * The start of the name of every temp directory this tool makes. The agent may see them in a path, so none may hold a
+ * blinding word, and a test checks that. A new prefix goes here first: `tempDir` takes nothing else.
+ */
+export const TEMP_PREFIXES = [
+  "assets-",
+  "copy-",
+  "home-",
+  "kit-",
+  "path-",
+  "proj-",
+  "runs-",
+  "skills-",
+  "stage-",
+  "store-",
+  "svc-",
+  "tmp-",
+  "unpack-",
+] as const;
+
+/** One of `TEMP_PREFIXES`. */
+export type TempPrefix = (typeof TEMP_PREFIXES)[number];
+
+/**
  * Makes a temp directory whose name gives the agent no hint about why it exists.
- * @param prefix - The start of the directory name; random characters follow it.
+ * @param prefix - The start of the directory name, one of `TEMP_PREFIXES`; random characters follow it.
  * @param beforeRemove - Runs just before the directory is removed, at the end of the run and at process exit.
  * @returns The real path of the directory, and a `dispose` that removes it and also runs at process exit.
  */
 export function tempDir(
-  prefix: string,
+  prefix: TempPrefix,
   beforeRemove?: (dir: string) => void,
 ): { dir: string; dispose: () => void } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));

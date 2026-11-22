@@ -41,4 +41,5 @@ export const EXAMPLE_CONFIG: Record<
   subjectExclude: ["evals/cases/**", "notes/**"],
   rules: "rules",
   instructionFile: "AGENTS.md",
+  blindingWords: ["benchmark", "grader", "rubric"],
 };

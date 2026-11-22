@@ -1,3 +1,6 @@
+import { scanCases } from "../blinding-case.js";
+import { deepLints } from "../blinding-deep.js";
+import { DEFAULT_BLINDING_WORDS } from "../blinding.js";
 import { QUESTION_CHECKS } from "../question.js";
 import { allChecks } from "../case-checks.js";
 import { applicabilityUnder, hostCapabilities } from "../applicability.js";
@@ -41,6 +44,8 @@ export interface LintContext {
   maxJudgedWeightShare?: number;
   /** The `historyMode` of the config or `--history-mode`; undefined leaves each harness its own. */
   historyMode?: HistoryMode | undefined;
+  /** The config's `blindingWords`; absent: `DEFAULT_BLINDING_WORDS`. */
+  blindingWords?: string[] | undefined;
 }
 
 /** A check of the loaded cases. */
@@ -244,6 +249,16 @@ function rulesClash(cases: Case[], context: LintContext): Lint[] {
 }
 
 /**
+ * Warns about words that tell the agent it is being evaluated, in what it reads from the case.
+ * @param cases - The loaded cases.
+ * @param context - The config's `blindingWords`.
+ * @returns One warning for each word in each place: prompts, turns, history, mock servers and paths. A case's
+ *   `x-unblinded` silences its listed words.
+ */
+const blinding = (cases: Case[], context: LintContext): Lint[] =>
+  scanCases(cases, context.blindingWords ?? DEFAULT_BLINDING_WORDS);
+
+/**
  * Every lint, in the order its lines are written. A later task adds a lint by appending a function here.
  */
 export const LINTS: LintRule[] = [
@@ -254,19 +269,61 @@ export const LINTS: LintRule[] = [
   judgedShare,
   filesOutside,
   rulesClash,
+  blinding,
 ];
 
 const line = ({ level, caseId, text }: Lint): string =>
   `${level} ${caseId}: ${text}`;
 
 /**
+ * Runs every lint on the loaded cases, and the deep scan of the setup paths when `--deep` is set.
+ * @param cases - The loaded cases.
+ * @param given - The resolved subject, the project, and the options after the config file was applied.
+ * @param given.subject - The subject, or null when it did not resolve.
+ * @param given.project - Where the config file and the default cases directory are.
+ * @param given.options - The options of the command, with the config's `blindingWords`, `deep` and the limits.
+ * @returns What the lints found.
+ */
+async function lintsOf(
+  cases: Case[],
+  given: {
+    subject: Subject | null;
+    project: Project;
+    options: ReturnType<typeof withConfig<Options>>;
+  },
+): Promise<Lint[]> {
+  const { subject, project, options } = given;
+  const context: LintContext = {
+    subject,
+    harnesses: installedOf(),
+    project,
+    casesDir: options.cases,
+    historyMode: requireHistoryMode(options),
+    blindingWords: options.blindingWords,
+    ...(options.maxJudgedWeightShare === undefined
+      ? {}
+      : { maxJudgedWeightShare: options.maxJudgedWeightShare }),
+  };
+  return [
+    ...LINTS.flatMap((lint) => lint(cases, context)),
+    ...(options.deep === true
+      ? await deepLints(cases, options.blindingWords ?? DEFAULT_BLINDING_WORDS)
+      : []),
+  ];
+}
+
+/**
  * Checks a suite without running it, and prints every problem and warning at once. No harness is started and no model
  * is called.
- * @param given - The options of the command line: `subject`, `cases`, `lenient`, `heldout` and the selection.
+ * @param given - The options of the command line: `subject`, `cases`, `lenient`, `deep`, `heldout` and the selection.
  * @param project - Where the config file and the default cases directory are.
- * @returns The exit code: 2 when any case does not load or a lint finds a problem, else 0.
+ * @returns The exit code: 2 when any case does not load or a lint finds a problem, else 0. A blinding word is a warning;
+ *   an `x-unblinded` without a `why` does not load.
  */
-export function validate(given: Options, project: Project): number {
+export async function validate(
+  given: Options,
+  project: Project,
+): Promise<number> {
   const options = withConfig(project, given);
   const casesDir = options.cases;
   const found: Lint[] = [];
@@ -296,18 +353,7 @@ export function validate(given: Options, project: Project): number {
     problem(spec, error.message);
   }
   try {
-    const harnesses = installedOf();
-    const context: LintContext = {
-      subject,
-      harnesses,
-      project,
-      casesDir,
-      historyMode: requireHistoryMode(options),
-      ...(options.maxJudgedWeightShare === undefined
-        ? {}
-        : { maxJudgedWeightShare: options.maxJudgedWeightShare }),
-    };
-    for (const lint of LINTS) found.push(...lint(cases, context));
+    found.push(...(await lintsOf(cases, { subject, project, options })));
   } finally {
     subject?.dispose();
   }

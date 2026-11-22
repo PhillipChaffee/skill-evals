@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Need } from "./capabilities.js";
-import type { Mode } from "./checks/fields.js";
+import type { FieldAt, Mode } from "./checks/fields.js";
 import { extensionsOf } from "./checks/extensions.js";
 import { readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
@@ -12,6 +12,7 @@ import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
 import type { History, PriorSession } from "./history-types.js";
 import type { McpSource } from "./mcp/types.js";
+import { readUnblinded } from "./blinding.js";
 import { allChecks } from "./case-checks.js";
 import { CASE_KEYS } from "./case-keys.js";
 import { readPreconditions } from "./case-preconditions.js";
@@ -274,6 +275,23 @@ function listedChecks(raw: Record<string, unknown>, file: string): unknown[] {
 }
 
 /**
+ * Reads the `x-` keys of a case file. A case that is unblinded must say why, whatever the mode.
+ * @param at - The case file and its keys.
+ * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
+ * @returns The keys that start with `x-` and their values.
+ * @throws {UsageError} For a key the case file does not take, in strict mode, or an `x-unblinded` that is not valid.
+ */
+function caseExtensions(at: FieldAt, mode: Mode): Record<string, unknown> {
+  const extensions = extensionsOf(
+    [...Object.keys(CASE_KEYS), SCHEMA_KEY],
+    at,
+    mode,
+  );
+  readUnblinded(extensions, at.where);
+  return extensions;
+}
+
+/**
  * Loads one case from its directory.
  * @param found - The case's id and its directory, which holds `prompt.md`, `case.json`, and an optional `workspace/`.
  * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
@@ -294,11 +312,7 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
   const checks = listedChecks(raw ?? {}, file);
   const at = { where: file, owner: "a case", siblings: raw ?? {} };
   checkSchemaKey(file, at.siblings);
-  const extensions = extensionsOf(
-    [...Object.keys(CASE_KEYS), SCHEMA_KEY],
-    at,
-    mode,
-  );
+  const extensions = caseExtensions(at, mode);
   // A null weight counts as none, as it did before keys were typed.
   const read: Read = (key) =>
     raw?.[key] === undefined || (key === "weight" && raw[key] === null)

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { requireBlindingWords } from "./blinding.js";
 import { requireEnvNames } from "./env.js";
 import { reportFormats } from "./report/formats.js";
 import { globToRegExp } from "./glob.js";
@@ -84,6 +85,7 @@ export const CONFIG_KEYS: Record<
   subjectExclude: "string[]",
   rules: "string",
   instructionFile: "string",
+  blindingWords: "string[]",
 };
 
 /** The project's optional config file. */
@@ -147,6 +149,8 @@ export interface Config {
   rules?: string;
   /** A file of the subject that the harness reads as its instructions; its text counts as rule text. */
   instructionFile?: string;
+  /** The words that `validate` and the start of a command look for in what the agent can see. Replaces the default list. Each is a non-empty lowercase word. */
+  blindingWords?: string[];
 }
 
 /**
@@ -219,6 +223,10 @@ function checkValue(file: string, key: string, value: unknown): void {
   }
   if (key === "report") {
     reportFormats({ report: value as string[] }, `${file}: "${key}"`);
+    return;
+  }
+  if (key === "blindingWords") {
+    requireBlindingWords(value as string[], `${file}: "${key}"`);
     return;
   }
   requireEnvNames(value as string[], `${file}: "${key}"`);

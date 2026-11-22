@@ -206,6 +206,8 @@ export function sandbox(): Sandbox {
   const env = {
     PATH: tools,
     HOME: root,
+    // A temp directory whose path holds no blinding word, which a command checks before it starts a run.
+    TMPDIR: os.tmpdir(),
     // Outside the root, which a run copies as a subject. No test reads or writes the real state directory.
     SKILL_EVALS_STATE_DIR: path.join(tools, "state"),
     SKILL_EVALS_BIN_CLAUDE_CODE: launcher,

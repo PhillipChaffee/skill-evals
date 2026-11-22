@@ -1,3 +1,4 @@
+import type { SeedBlinding } from "./blinding-seed.js";
 import type { Case } from "./cases.js";
 import type { DecisionService } from "./decision.js";
 import { openCache, scopedCache } from "./cache.js";
@@ -54,6 +55,8 @@ export interface PlanBase {
   sandboxExpose?: string[] | undefined;
   /** The project root, for the `no_writes_outside_workspace` check; absent: the check watches no project. */
   projectRoot?: string | undefined;
+  /** The blinding words that each case's seed workspace is checked against. */
+  blinding?: SeedBlinding | undefined;
 }
 
 /** The runs to make, in order: for each harness, each case, each rep, each subject. */
@@ -130,6 +133,7 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       projectRoot: plan.projectRoot,
       casesDir: plan.casesDir,
       sandboxExpose: plan.sandboxExpose,
+      blinding: plan.blinding,
     };
     return { subject, run, key: runKey(run) };
   });

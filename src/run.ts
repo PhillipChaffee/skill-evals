@@ -23,6 +23,7 @@ import { startupRecord } from "./startup.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
+import { warnSeed } from "./blinding-seed.js";
 import { fileState } from "./run-files.js";
 import { keptArchive, stageKept } from "./run-archive.js";
 import { seenFields } from "./run-seen.js";
@@ -363,6 +364,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         ...confinementOf(plan, copy?.loaded.dir),
       },
       async (ran) => {
+        warnSeed(caseDef, ran.seed, plan.blinding);
         const made = await record(plan, ran, copy);
         return {
           ...made,

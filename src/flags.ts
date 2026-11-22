@@ -236,6 +236,13 @@ export const FLAGS = {
     default: "off: an unknown key is an error",
     defaultIn: { rejudge: "what the earlier command used" },
   },
+  deep: {
+    kind: "switch",
+    value: "",
+    description:
+      "Also run the setup steps of each case in a throwaway directory, and look for blinding words in the paths they make. Plain validate never runs a setup step and looks only at the files the case holds. The steps can take time and touch the network.",
+    default: "off: setup is not run",
+  },
   isolated: {
     kind: "switch",
     value: "",

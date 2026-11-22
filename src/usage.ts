@@ -17,6 +17,7 @@ export type Options = Omit<
     targets?: boolean;
     showPrompts?: boolean;
     dryRun?: boolean;
+    deep?: boolean;
     strict?: boolean;
     kind?: string;
     rep?: number;

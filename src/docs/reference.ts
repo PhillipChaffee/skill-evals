@@ -7,6 +7,7 @@ import { CHECKS } from "../checks/index.js";
 import { COMMANDS } from "../cli.js";
 import { HARNESSES, overrideVar } from "../harnesses/index.js";
 import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
+import { DEFAULT_BLINDING_WORDS } from "../blinding.js";
 import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import { TURN_KEYS } from "../turn-spec.js";
@@ -195,6 +196,7 @@ const CONFIG_ONLY: Record<string, string> = {
   subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,
   sandboxExpose: `Absolute paths that ${code("--sandbox")} binds back, read-only, into the directories it hides (your home, the temp directories, ${code("/run")}, the cases, output and project directories), for a layout it does not know: a Node or harness install in an unusual place, a certificate file, a resolver socket. Each path must exist, and none may be your real home or the cases directory. A path outside the hidden directories is already visible and is left alone. See [Safety](../safety.md).`,
   rules: `A directory of the subject, such as ${code('"rules"')}, whose files are its rules. An adapter with the ${code("rules")} capability installs them the way its harness reads them, and the run record keeps what it installed. The path must stay inside the subject and may hold no link. The ${code("none")} subject has no rules. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).`,
+  blindingWords: `The words that hint to the agent that it is being tested, which ${code("validate")} looks for in prompts, turns, history, mock MCP servers and the names of files, and which every ${code("run")} and ${code("score")} looks for in the temp directory, the environment variable names and the workspace paths. It replaces the default list, so list every word you want. Each is a non-empty lowercase word; a word matches whole, with the endings ${code("s")}, ${code("ed")}, ${code("ing")}, ${code("er")} and ${code("ation")}, in any case, and in the segments of a path split at ${code("-")}, ${code("_")}, ${code(".")} and ${code("/")}. The default words are: ${DEFAULT_BLINDING_WORDS.map((word) => code(word)).join(", ")}. A hit in a case is a warning; a hit in the temp directory or the environment ends the command with exit 2, and the fix is to set ${code("TMPDIR")} or this key. A case may silence words for itself with ${code("x-unblinded")}. See [Write a case](../guides/write-a-case.md).`,
   instructionFile: `A file of the subject, such as ${code('"AGENTS.md"')}, that the harness reads as its instructions. It is installed with the rules, and its text counts as rule text for ${code("context_injected")}. The path must stay inside the subject and may not be a link. See [Rules, hooks and preconditions](../guides/rules-hooks-preconditions.md).`,
 };
 

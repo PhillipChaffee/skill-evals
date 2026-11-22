@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { requireBlindRun } from "./blinding-runtime.js";
+import { DEFAULT_BLINDING_WORDS } from "./blinding.js";
 import type { Partition } from "./applicability.js";
 import { requireTar } from "./archive.js";
 import { partitionApplicable } from "./applicability.js";
@@ -35,6 +37,7 @@ import { reportFormats } from "./report/formats.js";
 import { resumeDir } from "./resume.js";
 import { requireFresh } from "./store.js";
 import { modesOf } from "./run.js";
+import { withheld } from "./run-plan.js";
 import type { PlanBase } from "./run-loop.js";
 import { requireSupportedPlatform } from "./scope.js";
 import type { Label, Subject } from "./subject.js";
@@ -76,6 +79,8 @@ export interface Context {
   sandbox: SandboxCapability | null;
   /** The project root, which the `no_writes_outside_workspace` check watches. */
   projectRoot: string;
+  /** The words that tell the agent it is being evaluated: the config's `blindingWords`, or the default list. */
+  blindingWords: readonly string[];
   /** The directory of the earlier command to continue; undefined for a fresh run. */
   resumed: string | undefined;
   cwd: string;
@@ -181,6 +186,10 @@ export function prepare(
   const delta = requireDeltaSetup(options, { subjects: pairs.length, same });
   requireSubjectsFit({ names, pairs, barSubject, delta, cases });
   const { judgeApi, judgeModel } = judgeSetup(cases, options);
+  const decision = decisionFor(cases, options);
+  const blindingWords = blindingOf(options, look, {
+    ...{ cases, selection, judgeApi, decision },
+  });
   const limits = requireLimits(options, {
     chosen: selection.chosen,
     judgeHarness,
@@ -189,7 +198,7 @@ export function prepare(
   });
   const context: Context = {
     options,
-    decision: decisionFor(cases, options),
+    decision,
     decisionModel: options.decisionModel,
     selection,
     judgeHarness,
@@ -203,12 +212,47 @@ export function prepare(
     ...settings,
     limits,
     projectRoot: project.root,
+    blindingWords,
     resumed,
     cwd,
     cases,
     parts: partitionApplicable(selection.chosen, cases, settings),
   };
   return { context, project, pairs, named: names !== undefined };
+}
+
+/**
+ * Settles the blinding words, and, for a command that runs, checks what the agent could see of the machine.
+ * @param options - The options after the config file was applied.
+ * @param look - How the command uses the output directory; `inspect` is true for `plan`, which starts nothing and so
+ *   checks nothing.
+ * @param look.inspect - True for `plan`.
+ * @param run - What the command settled so far.
+ * @param run.cases - The cases, whose `env` the agent gets.
+ * @param run.selection - The harnesses that run.
+ * @param run.judgeApi - The judge API, whose key no harness gets.
+ * @param run.decision - The decision service, whose key no harness gets.
+ * @returns The config's `blindingWords`, or the default list.
+ * @throws {UsageError} When the temp directory or an environment variable would tell the agent that it is being evaluated.
+ */
+function blindingOf(
+  options: Context["options"],
+  look: { inspect?: boolean },
+  run: Pick<Context, "cases" | "selection" | "judgeApi" | "decision">,
+): readonly string[] {
+  const words = options.blindingWords ?? DEFAULT_BLINDING_WORDS;
+  const { decision, judgeApi } = run;
+  if (look.inspect !== true) {
+    requireBlindRun({
+      words,
+      pass: options.env ?? [],
+      cases: run.cases,
+      chosen: run.selection.chosen,
+      withheldBy: (harness) =>
+        withheld({ decision, judgeApi: judgeApi ?? undefined, harness }),
+    });
+  }
+  return words;
 }
 
 /**
@@ -309,6 +353,7 @@ export const basePlan = (
   limits: context.limits,
   sandbox: context.sandbox,
   projectRoot: context.projectRoot,
+  blinding: { words: context.blindingWords, warned: new Set<string>() },
   casesDir: context.options.cases,
   sandboxExpose: context.options.sandboxExpose,
 });

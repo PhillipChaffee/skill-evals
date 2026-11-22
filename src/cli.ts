@@ -90,12 +90,13 @@ export const COMMANDS: Record<string, Command> = {
   },
   validate: {
     description:
-      "Check a suite without running it: report every case that does not load and every skill name the subject lacks. Spends nothing.",
+      "Check a suite without running it: report every case that does not load, every skill name the subject lacks, and every word in what the agent reads that hints at a test (a warning; see blindingWords). It never runs a setup step: --deep runs them in a throwaway directory and also looks at the paths they make. Spends nothing.",
     handler: validate,
     flags: [
       "subject",
       "cases",
       "lenient",
+      "deep",
       "case",
       "not-case",
       "tag",

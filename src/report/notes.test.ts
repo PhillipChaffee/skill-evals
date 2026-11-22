@@ -61,3 +61,26 @@ test("the retried-runs total has a lower bound when some failed attempts reporte
   expect(lines([0.5, null])).toContain(", ≥$0.5000 in total");
   expect(lines([null])).not.toContain("$");
 });
+
+test("the cases that are unblinded are listed with their reasons", () => {
+  const given = (id: string, extensions: Record<string, unknown>) => ({
+    id,
+    extensions,
+  });
+  const text = noteSections(
+    evaluation({
+      cases: [
+        given("a", {
+          "x-unblinded": { words: ["test"], why: "tests are the task" },
+        }),
+        given("b", {}),
+        given("c", { "x-unblinded": { words: ["test"] } }),
+      ],
+    }),
+  ).join("\n");
+  expect(text).toContain("## Unblinded cases");
+  expect(text).toContain("- `a`: `test`: tests are the task");
+  expect(text).not.toContain("`b`");
+  expect(text).not.toContain("`c`");
+  expect(noteSections(evaluation({})).join("\n")).not.toContain("Unblinded");
+});

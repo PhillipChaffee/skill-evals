@@ -1,4 +1,5 @@
 import type { FieldDef, Mode } from "./checks/fields.js";
+import { readUnblinded } from "./blinding.js";
 import { extensionsOf } from "./checks/extensions.js";
 import { readField } from "./checks/fields.js";
 import { UsageError } from "./scope.js";
@@ -179,6 +180,7 @@ export function readVariants(
     const where = `${at.file} variants[${String(index)}]`;
     const here = { where, owner: "a variant", siblings: raw };
     const extensions = extensionsOf(Object.keys(VARIANT_KEYS), here, at.mode);
+    readUnblinded(extensions, where);
     const read = (key: string) =>
       raw[key] === undefined || key === "id"
         ? undefined

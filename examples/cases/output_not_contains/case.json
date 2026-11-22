@@ -5,5 +5,9 @@
       "type": "output_not_contains",
       "text": "as an AI"
     }
-  ]
+  ],
+  "x-unblinded": {
+    "words": ["test"],
+    "why": "The prompt is about software tests (running, fixing or explaining them), so the word is the task and not a hint that the agent is being evaluated."
+  }
 }

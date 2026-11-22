@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    setupFiles: ["src/testing/neutral-env.ts"], // The tests' TMPDIR and PATH are neutral, so the blinding check at the start of a run passes on any machine
     include: ["src/**/*.test.ts"], // Tests live beside their sources; `include` narrowed from the default so `node_modules` never houses a stray test runner target
     coverage: {
       enabled: true, // `npm test` never runs without the gate

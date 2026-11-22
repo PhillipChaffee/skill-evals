@@ -1,3 +1,4 @@
+import type { SeedBlinding } from "./blinding-seed.js";
 import type { Case } from "./cases.js";
 import type { Check, Verdict } from "./checks/index.js";
 import type { Cache } from "./cache.js";
@@ -86,6 +87,8 @@ export interface RunPlan {
   sandboxExpose?: string[] | undefined;
   /** The project root, which `no_writes_outside_workspace` watches before and after the run. */
   projectRoot?: string | undefined;
+  /** The blinding words that the seed workspace is checked against, once for each case; absent: not checked. */
+  blinding?: SeedBlinding | undefined;
   /** What the judge answered before, in this output directory; none for no cache. */
   cache?: Cache | undefined;
   /**
