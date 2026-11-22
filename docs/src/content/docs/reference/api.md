@@ -201,6 +201,17 @@ One of the values of `EXIT`.
 type ExitCode = (typeof EXIT)[keyof typeof EXIT];
 ```
 
+### Exiting
+
+The part of the results that decides the exit code: what `results.json` holds, and what `evaluate` returns. `schemaVersion` is read only to name the version in an error.
+
+```ts
+type Exiting = Pick<
+  Results,
+  "partial" | "sourceChanged" | "belowBar" | "records" | "suites"
+> & { schemaVersion?: number };
+```
+
 ### Evaluation
 
 What `evaluate` returns. The evaluation succeeded when `exit` is 0, that is when `belowBar`, `sourceChanged` and `invalid` (within `maxInvalid`) are clear, every case has a valid run, and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished.

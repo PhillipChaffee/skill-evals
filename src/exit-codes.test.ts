@@ -304,3 +304,20 @@ test("exitCodeOf refuses a fraction that is not from 0 to 1, and results without
     /schemaVersion 0/,
   );
 });
+
+test("a comparison whose baseline has no valid run exits 3 with --max-invalid 0.9", async () => {
+  const box = sandbox();
+  // The first start of the script crashes: that is the baseline's run, which goes first.
+  scriptedCase(box, ALPHA, { before: CRASH_ONCE });
+  const ran = await box.cli([
+    ...["run", "--a", "none", "--b", "none", "--reps", "1"],
+    ...["--cases", path.join(box.root, "suite")],
+    ...["--out", path.join(box.root, RESULTS), MAX_INVALID, "0.9"],
+  ]);
+  expect(ran.status, ran.stderr).toBe(EXIT.invalid);
+  const summary = summaryOf(path.join(box.root, RESULTS));
+  expect(summary.suites.map((one) => [one.label, one.validRuns])).toEqual([
+    ["a", 0],
+    ["b", 1],
+  ]);
+});

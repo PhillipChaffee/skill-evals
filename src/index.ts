@@ -5,7 +5,7 @@ export type { CaseMeta } from "./case-meta.js";
 export type { Check } from "./checks/index.js";
 export { evaluate } from "./evaluate.js";
 export { EXIT, exitCodeOf } from "./exit-codes.js";
-export type { ExitCode } from "./exit-codes.js";
+export type { ExitCode, Exiting } from "./exit-codes.js";
 export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";
 export { HARNESSES } from "./harnesses/index.js";
 export type {

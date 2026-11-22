@@ -206,18 +206,21 @@ async function runLocked(
   const { options, resumed } = context;
   // Another command may have filled the directory while the subjects were exported, and before it was locked.
   if (resumed === undefined) requireFresh(outDir);
-  clearStale(outDir);
   const store = openStore(outDir, resumed !== undefined);
+  // Every check that can refuse the command comes before the files of the earlier command are removed.
+  const reused =
+    resumed === undefined ? new Map<string, RunRecord>() : store.load();
   const finished = {
     ...context,
     subjects,
     meta: await metaOfCommand(context, subjects),
   };
+  clearStale(outDir);
   const { records, stopped } = await runAll({
     ...basePlan(context, subjects, outDir),
     useCache: resumed !== undefined || (options.useCache ?? false),
     store,
-    reused: resumed === undefined ? new Map<string, RunRecord>() : store.load(),
+    reused,
     flush: (
       records,
       reason: Exclude<Results["partial"], null>["reason"] = "running",
