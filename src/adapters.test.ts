@@ -289,15 +289,16 @@ test("only claude-code declares turnGrouping", () => {
 });
 
 test.each([
-  [CLAUDE_CODE, "Read", { file_path: "/a/SKILL.md" }, "/a/SKILL.md"],
-  ["pi", "read", { path: "/b/SKILL.md" }, "/b/SKILL.md"],
-  ["cursor", "read", { path: "c/SKILL.md" }, "c/SKILL.md"],
-  ["opencode", "read", { filePath: "/d/SKILL.md" }, "/d/SKILL.md"],
-  ["opencode", "read", { path: "/e/SKILL.md" }, "/e/SKILL.md"],
-  [CLAUDE_CODE, "Read", { path: "/f/SKILL.md" }, null],
-  [CLAUDE_CODE, "Read", { file_path: "" }, null],
-  ["pi", "read", "/g/SKILL.md", null],
-  ["codex", "command_execution", { command: "cat /h/SKILL.md" }, null],
-])("%s pathOf reads the path of a %s call", (id, name, input, expected) => {
-  expect(harnessOf(id).pathOf({ name, kind: "read", input })).toBe(expected);
+  [CLAUDE_CODE, { file_path: "/a/SKILL.md" }, "/a/SKILL.md"],
+  ["pi", { path: "/b/SKILL.md" }, "/b/SKILL.md"],
+  ["cursor", { path: "c/SKILL.md" }, "c/SKILL.md"],
+  ["opencode", { filePath: "/d/SKILL.md" }, "/d/SKILL.md"],
+  ["opencode", { path: "/e/SKILL.md" }, "/e/SKILL.md"],
+  [CLAUDE_CODE, { path: "/f/SKILL.md" }, null],
+  [CLAUDE_CODE, { file_path: "" }, null],
+  ["pi", "/g/SKILL.md", null],
+  ["codex", { command: "cat /h/SKILL.md" }, null],
+])("%s pathOf reads the path of a read call from %j", (id, input, expected) => {
+  const call = { name: "read", kind: "read" as const, input };
+  expect(harnessOf(id).pathOf(call)).toBe(expected);
 });
