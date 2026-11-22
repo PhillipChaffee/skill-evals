@@ -32,6 +32,8 @@ export interface ToolCall {
   index?: number;
   /** The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it. */
   turn?: number;
+  /** How long the call took, from its tool result, where the stream says. Only an adapter with the `toolDurations` capability sets it. */
+  durationMs?: number;
   /** The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. */
   agent?: { id: string; type: string; parent: string | null; depth: number };
 }
@@ -64,7 +66,7 @@ export interface TranscriptEvent {
   output?: string;
   /** What the assistant said, on a `text`. */
   text?: string;
-  /** The UTF-8 size of `text` or `output` as decoded, before any cut. Invalid bytes were already replaced, three bytes each. */
+  /** The UTF-8 size of `text` or `output` as decoded, before any cut. Each invalid byte sequence was already replaced by one U+FFFD, which is three bytes. */
   bytes?: number;
   /** True when `text` or `output` was cut; `bytes` keeps the original size. */
   truncated?: boolean;
@@ -452,3 +454,16 @@ export function sumTokens(usages: Tokens[]): Tokens | null {
     { input: 0, output: 0 },
   );
 }
+
+/**
+ * Joins the text of a list of content blocks.
+ * @param blocks - Blocks of a message or a tool result; those that are not text, and a value that is no list, add nothing.
+ * @returns The text of the `text` blocks, joined without a separator.
+ */
+export const joinText = (blocks: unknown): string =>
+  Array.isArray(blocks)
+    ? (blocks as { type?: string; text?: string }[])
+        .filter((block) => block.type === "text")
+        .map((block) => block.text ?? "")
+        .join("")
+    : "";

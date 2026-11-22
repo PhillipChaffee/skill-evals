@@ -43,6 +43,8 @@ interface CheckFields {
   flags?: string;
   inputLinesMax?: number;
   inputLinesMin?: number;
+  minDurationMs?: number;
+  maxDurationMs?: number;
   quantifier?: "any" | "all";
   root?: "workspace" | "home";
   created?: boolean;

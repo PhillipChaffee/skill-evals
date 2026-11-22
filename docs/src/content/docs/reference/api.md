@@ -340,37 +340,38 @@ Token counts; input counts every prompt token, cached ones included.
 
 One tool call of the agent.
 
-| Property | Type                                                                                              | Description                                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`   | `string`                                                                                          | The harness's own tool name.                                                                                                                           |
-| `kind`   | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other"` |                                                                                                                                                        |
-| `input`  | `unknown`                                                                                         |                                                                                                                                                        |
-| `index?` | `number \| undefined`                                                                             | The call's position in the run's list, from 0. Set once, after parsing; an adapter never sets it, and a 0.0.1 record lacks it.                         |
-| `turn?`  | `number \| undefined`                                                                             | The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it.                                   |
-| `agent?` | `{ id: string; type: string; parent: string \| null; depth: number; } \| undefined`               | The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. |
+| Property      | Type                                                                                              | Description                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`        | `string`                                                                                          | The harness's own tool name.                                                                                                                           |
+| `kind`        | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other"` |                                                                                                                                                        |
+| `input`       | `unknown`                                                                                         |                                                                                                                                                        |
+| `index?`      | `number \| undefined`                                                                             | The call's position in the run's list, from 0. Set once, after parsing; an adapter never sets it, and a 0.0.1 record lacks it.                         |
+| `turn?`       | `number \| undefined`                                                                             | The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it.                                   |
+| `durationMs?` | `number \| undefined`                                                                             | How long the call took, from its tool result, where the stream says. Only an adapter with the `toolDurations` capability sets it.                      |
+| `agent?`      | `{ id: string; type: string; parent: string \| null; depth: number; } \| undefined`               | The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. |
 
 ### TranscriptEvent
 
 One step of a run, in the one shape every harness shares.
 
-| Property      | Type                                                                                                           | Description                                                                                                             |
-| ------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `index`       | `number`                                                                                                       | The event's position in the run, from 0.                                                                                |
-| `turn`        | `number \| null`                                                                                               | The assistant turn, counted from 1; null where the harness has no grouping.                                             |
-| `userTurn`    | `number`                                                                                                       | Which user message this answers, from 0; -1 for seeded history.                                                         |
-| `role`        | `"user" \| "assistant" \| "tool" \| "system"`                                                                  |                                                                                                                         |
-| `agent`       | `AgentRef`                                                                                                     |                                                                                                                         |
-| `type`        | `"text" \| "tool_call" \| "tool_result" \| "hook" \| "lifecycle"`                                              |                                                                                                                         |
-| `callId?`     | `string \| undefined`                                                                                          | Joins a `tool_call` to its `tool_result`.                                                                               |
-| `kind?`       | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other" \| undefined` |                                                                                                                         |
-| `name?`       | `string \| undefined`                                                                                          |                                                                                                                         |
-| `input?`      | `unknown`                                                                                                      |                                                                                                                         |
-| `output?`     | `string \| undefined`                                                                                          | What the tool returned, on a `tool_result`, as decoded text.                                                            |
-| `text?`       | `string \| undefined`                                                                                          | What the assistant said, on a `text`.                                                                                   |
-| `bytes?`      | `number \| undefined`                                                                                          | The UTF-8 size of `text` or `output` as decoded, before any cut. Invalid bytes were already replaced, three bytes each. |
-| `truncated?`  | `boolean \| undefined`                                                                                         | True when `text` or `output` was cut; `bytes` keeps the original size.                                                  |
-| `isError?`    | `boolean \| undefined`                                                                                         | On a `tool_result`: whether the harness marked the call as failed.                                                      |
-| `durationMs?` | `number \| undefined`                                                                                          | On a `tool_result`, where the stream says how long the call took.                                                       |
+| Property      | Type                                                                                                           | Description                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index`       | `number`                                                                                                       | The event's position in the run, from 0.                                                                                                              |
+| `turn`        | `number \| null`                                                                                               | The assistant turn, counted from 1; null where the harness has no grouping.                                                                           |
+| `userTurn`    | `number`                                                                                                       | Which user message this answers, from 0; -1 for seeded history.                                                                                       |
+| `role`        | `"user" \| "assistant" \| "tool" \| "system"`                                                                  |                                                                                                                                                       |
+| `agent`       | `AgentRef`                                                                                                     |                                                                                                                                                       |
+| `type`        | `"text" \| "tool_call" \| "tool_result" \| "hook" \| "lifecycle"`                                              |                                                                                                                                                       |
+| `callId?`     | `string \| undefined`                                                                                          | Joins a `tool_call` to its `tool_result`.                                                                                                             |
+| `kind?`       | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other" \| undefined` |                                                                                                                                                       |
+| `name?`       | `string \| undefined`                                                                                          |                                                                                                                                                       |
+| `input?`      | `unknown`                                                                                                      |                                                                                                                                                       |
+| `output?`     | `string \| undefined`                                                                                          | What the tool returned, on a `tool_result`, as decoded text.                                                                                          |
+| `text?`       | `string \| undefined`                                                                                          | What the assistant said, on a `text`.                                                                                                                 |
+| `bytes?`      | `number \| undefined`                                                                                          | The UTF-8 size of `text` or `output` as decoded, before any cut. Each invalid byte sequence was already replaced by one U+FFFD, which is three bytes. |
+| `truncated?`  | `boolean \| undefined`                                                                                         | True when `text` or `output` was cut; `bytes` keeps the original size.                                                                                |
+| `isError?`    | `boolean \| undefined`                                                                                         | On a `tool_result`: whether the harness marked the call as failed.                                                                                    |
+| `durationMs?` | `number \| undefined`                                                                                          | On a `tool_result`, where the stream says how long the call took.                                                                                     |
 
 ### CheckResult
 
@@ -393,35 +394,35 @@ type CheckResult = Check & {
 
 Everything kept about one run.
 
-| Property         | Type                                   | Description                                                                                                                     |
-| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `harness`        | `string`                               |                                                                                                                                 |
-| `subject`        | `string`                               | The subject's label.                                                                                                            |
-| `caseId`         | `string`                               |                                                                                                                                 |
-| `rep`            | `number`                               |                                                                                                                                 |
-| `ok`             | `boolean`                              |                                                                                                                                 |
-| `error`          | `string \| null`                       |                                                                                                                                 |
-| `finalText`      | `string`                               |                                                                                                                                 |
-| `toolCalls`      | `ToolCall[]`                           |                                                                                                                                 |
-| `skillsLoaded`   | `string[]`                             |                                                                                                                                 |
-| `skillEvents`    | `SkillEvent[]`                         | Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads.          |
-| `transcriptFile` | `string \| null`                       | The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records.            |
-| `subjectLoaded`  | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.  |
-| `loaded`         | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                              |
-| `isolated`       | `boolean`                              | Whether the run was started with `--isolated`.                                                                                  |
-| `unexpected`     | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                   |
-| `reportMissing`  | `boolean`                              | True when the harness should report its plugins and skills (`loadedReport`) and left one out.                                   |
-| `judgeProblem`   | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. |
-| `subjectMutated` | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                           |
-| `subjectChanges` | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                         |
-| `changedFiles`   | `ChangedFiles`                         | What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started.           |
-| `checks`         | `CheckResult[]`                        |                                                                                                                                 |
-| `score`          | `number \| null`                       | The run score, null when the run is invalid.                                                                                    |
-| `judge`          | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                     |
-| `decision`       | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                       |
-| `durationMs`     | `number`                               |                                                                                                                                 |
-| `tokens`         | `Tokens \| null`                       |                                                                                                                                 |
-| `costUsd`        | `number \| null`                       |                                                                                                                                 |
+| Property          | Type                                   | Description                                                                                                                     |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`         | `string`                               |                                                                                                                                 |
+| `subject`         | `string`                               | The subject's label.                                                                                                            |
+| `caseId`          | `string`                               |                                                                                                                                 |
+| `rep`             | `number`                               |                                                                                                                                 |
+| `ok`              | `boolean`                              |                                                                                                                                 |
+| `error`           | `string \| null`                       |                                                                                                                                 |
+| `finalText`       | `string`                               |                                                                                                                                 |
+| `toolCalls`       | `ToolCall[]`                           |                                                                                                                                 |
+| `skillsLoaded`    | `string[]`                             |                                                                                                                                 |
+| `skillEvents`     | `SkillEvent[]`                         | Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads.          |
+| `transcriptFile?` | `string \| null \| undefined`          | The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records.            |
+| `subjectLoaded`   | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.  |
+| `loaded`          | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                              |
+| `isolated`        | `boolean`                              | Whether the run was started with `--isolated`.                                                                                  |
+| `unexpected`      | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                   |
+| `reportMissing`   | `boolean`                              | True when the harness should report its plugins and skills (`loadedReport`) and left one out.                                   |
+| `judgeProblem`    | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. |
+| `subjectMutated`  | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                           |
+| `subjectChanges`  | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                         |
+| `changedFiles`    | `ChangedFiles`                         | What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started.           |
+| `checks`          | `CheckResult[]`                        |                                                                                                                                 |
+| `score`           | `number \| null`                       | The run score, null when the run is invalid.                                                                                    |
+| `judge`           | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                     |
+| `decision`        | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                       |
+| `durationMs`      | `number`                               |                                                                                                                                 |
+| `tokens`          | `Tokens \| null`                       |                                                                                                                                 |
+| `costUsd`         | `number \| null`                       |                                                                                                                                 |
 
 ### CaseScore
 

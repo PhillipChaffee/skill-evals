@@ -24,6 +24,10 @@ export interface ToolMatcher {
   inputLinesMax?: number;
   /** The fewest lines the call's input may have, counted in the same way: `inputLinesMin: 1001` fits a call with a value of more than 1000 lines. */
   inputLinesMin?: number;
+  /** The fewest milliseconds the call took, from its tool result. A call with no duration does not fit. Needs `toolDurations`. */
+  minDurationMs?: number;
+  /** The most milliseconds the call took. A call with no duration does not fit. Needs `toolDurations`. */
+  maxDurationMs?: number;
   /** Not yet supported: a load error. */
   by?: By;
 }
@@ -36,6 +40,8 @@ const KEYS = [
   "flags",
   "inputLinesMax",
   "inputLinesMin",
+  "minDurationMs",
+  "maxDurationMs",
 ];
 // The keys of the matcher shape that no check can use yet.
 const NOT_YET = ["by"];
@@ -141,7 +147,8 @@ const tester = (
 function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
   const name = tester(matcher.name, matcher.flags);
   const input = tester(matcher.inputMatches, matcher.flags);
-  const { inputLinesMax, inputLinesMin } = matcher;
+  const { inputLinesMax, inputLinesMin, minDurationMs, maxDurationMs } =
+    matcher;
   const longest = (call: ToolCall): number =>
     countLines(longestString(call.input));
   return (call) =>
@@ -149,7 +156,11 @@ function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
     name(call.name) &&
     input(inputJson(call)) &&
     (inputLinesMax === undefined || longest(call) <= inputLinesMax) &&
-    (inputLinesMin === undefined || longest(call) >= inputLinesMin);
+    (inputLinesMin === undefined || longest(call) >= inputLinesMin) &&
+    (minDurationMs === undefined ||
+      (call.durationMs !== undefined && call.durationMs >= minDurationMs)) &&
+    (maxDurationMs === undefined ||
+      (call.durationMs !== undefined && call.durationMs <= maxDurationMs));
 }
 
 /**

@@ -69,7 +69,7 @@ ${FENCE}
 
 ## The events
 
-Each event has ${code("index")}, ${code("turn")} (null where the harness does not group calls), ${code("userTurn")}, ${code("role")}, ${code("agent")}, ${code("type")} and these fields where they apply:
+Each event has ${code("index")}, ${code("turn")} (null where the harness does not group calls; a tool result has the turn of its call), ${code("userTurn")}, ${code("role")}, ${code("agent")}, ${code("type")} and these fields where they apply:
 
 - ${code("callId")} joins a tool call to its tool result.
 - ${code("kind")}, ${code("name")} and ${code("input")} describe the call. A tool result takes the name and kind of its call.
@@ -86,12 +86,14 @@ ${captured()}
 
 An adapter declares a capability only when a parser test proves it on a fixture stream. ${code("test/fixtures/README.md")} says which fixtures were captured from a real CLI and which were written from the CLI's documentation. A check that needs a part that its harness lacks makes its case not applicable there. See [Capabilities](capabilities.md).
 
+A tool matcher or a check on tool calls can bound a call's duration with ${code("minDurationMs")} and ${code("maxDurationMs")}. That needs ${code("toolDurations")}; a call whose duration is unknown never fits a bound.
+
 A skill-tool call whose tool result was an error is not resolved, on a harness that has ${code("toolOutputs")}. Elsewhere the rule is the one it was.
 
 ## Size and bad bytes
 
 The copy of the transcript that is handed to a judge cuts any single ${code("text")} or ${code("output")} longer than 20,000 bytes. A cut event has ${code("truncated: true")} and keeps its original ${code("bytes")}. The file on disk is never cut.
 
-The output of a harness is decoded as UTF-8 with replacement, so a tool that prints invalid bytes never makes a run fail. Each bad byte becomes the character U+FFFD, which is three bytes in UTF-8, so ${code("bytes")} counts the text as it was decoded and not the raw bytes the tool wrote.
+The output of a harness is decoded as UTF-8 with replacement, so a tool that prints invalid bytes never makes a run fail. Each invalid byte sequence becomes one U+FFFD character, which is three bytes in UTF-8, so a truncated sequence such as ${code("E2 82")} is one replacement character. ${code("bytes")} counts the text as it was decoded, not the raw bytes the tool wrote.
 `,
 });

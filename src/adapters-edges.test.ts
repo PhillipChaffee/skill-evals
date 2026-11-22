@@ -66,9 +66,9 @@ test("claude-code reads text blocks, string and list results, and error results"
     [TOOL_CALL, undefined, undefined, 1],
     [TOOL_CALL, undefined, undefined, 1],
     [TOOL_CALL, undefined, undefined, 1],
-    [TOOL_RESULT, "plain", true, null],
-    [TOOL_RESULT, "ab", undefined, null],
-    [TOOL_RESULT, "", undefined, null],
+    [TOOL_RESULT, "plain", true, 1],
+    [TOOL_RESULT, "ab", undefined, 1],
+    [TOOL_RESULT, undefined, undefined, 1],
   ]);
 });
 
@@ -102,9 +102,7 @@ test("codex marks a failing command's result as an error and reads items that ar
     [TOOL_CALL, undefined, undefined],
     [TOOL_RESULT, "no\n", true],
     [TOOL_CALL, undefined, undefined],
-    [TOOL_RESULT, "", false],
     [TOOL_CALL, undefined, undefined],
-    [TOOL_RESULT, "", false],
   ]);
   expect(parsed.sessionId).toBe("th");
 });
@@ -177,20 +175,27 @@ test("pi reads a result's text, its error flag and the text of a finished turn",
       },
       { type: "tool_execution_end", toolCallId: "d", toolName: "bash" },
       {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "done" }],
+        },
+      },
+      {
+        type: "message_end",
+        message: { role: "user", content: [{ type: "text", text: "no" }] },
+      },
+      {
+        type: "message_end",
+        message: { role: "assistant", content: [] },
+      },
+      {
         type: "turn_end",
         message: {
           role: "assistant",
           content: [{ type: "text", text: "done" }],
           stopReason: "stop",
         },
-      },
-      {
-        type: "turn_end",
-        message: { role: "user", content: [{ type: "text", text: "no" }] },
-      },
-      {
-        type: "turn_end",
-        message: { role: "assistant", content: [], stopReason: "stop" },
       },
     ),
   );
@@ -199,7 +204,7 @@ test("pi reads a result's text, its error flag and the text of a finished turn",
   ).toEqual([
     [TOOL_CALL, undefined, undefined],
     [TOOL_RESULT, "pq", true],
-    [TOOL_RESULT, "", false],
+    [TOOL_RESULT, undefined, false],
     ["text", "done", undefined],
   ]);
   expect(parsed.sessionId).toBe("pi-1");
@@ -235,6 +240,6 @@ test("cursor reads a completed call's result, and a result with no call that sta
   expect(parsed.transcript.map((e) => [e.type, e.name, e.output])).toEqual([
     [TOOL_CALL, "shell", undefined],
     [TOOL_RESULT, "shell", '{"success":{"stdout":"o"}}'],
-    [TOOL_RESULT, "fn", ""],
+    [TOOL_RESULT, "fn", undefined],
   ]);
 });

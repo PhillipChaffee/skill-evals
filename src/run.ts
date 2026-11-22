@@ -39,7 +39,7 @@ export interface RunRecord extends Usage {
   /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
   skillEvents: SkillEvent[];
   /** The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records. */
-  transcriptFile: string | null;
+  transcriptFile?: string | null;
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
   /** What the harness reported as loaded at startup; a kind it does not report is null. */

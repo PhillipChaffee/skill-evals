@@ -53,6 +53,7 @@ const STREAMS = [
         name: "read",
         kind: "read",
         input: { path: "/work/kit-9fq1/skills/bro/SKILL.md" },
+        turn: 0,
       },
     ],
     tokens: { input: 2400, output: 68 },
@@ -63,7 +64,15 @@ const STREAMS = [
     id: "opencode",
     name: "opencode.stream.jsonl",
     finalText: plainWords,
-    toolCalls: [{ name: "skill", kind: "skill", input: { name: "bro" } }],
+    toolCalls: [
+      {
+        name: "skill",
+        kind: "skill",
+        input: { name: "bro" },
+        turn: 1,
+        durationMs: 16,
+      },
+    ],
     tokens: { input: 2400, output: 68 },
     costUsd: 0,
     loaded: NOT_REPORTED,
@@ -253,10 +262,22 @@ test("claude-code gives every call without a message id a turn of its own", () =
   expect(toolCalls.map((call) => call.turn)).toEqual([1, 1, 2]);
 });
 
-test("only claude-code declares turnGrouping", () => {
+test("claude-code, opencode and pi declare turnGrouping, each with a fixture", () => {
   expect(
-    HARNESSES.filter((h) => h.capabilities.has("turnGrouping")).map(
-      (h) => h.id,
-    ),
-  ).toEqual([CLAUDE_CODE]);
+    HARNESSES.filter((h) => h.capabilities.has("turnGrouping"))
+      .map((h) => h.id)
+      .sort(),
+  ).toEqual([CLAUDE_CODE, "opencode", "pi"]);
 });
+
+test.each([
+  ["pi", "pi-turns.stream.jsonl", [0, 0, 1]],
+  ["opencode", "opencode-turns.stream.jsonl", [1, 1, 2]],
+])(
+  "%s puts two calls of one turn together and the next call in a later turn",
+  (id, name, turns) => {
+    const parsed = parse(id, name);
+    expect(parsed.toolCalls.map((call) => call.turn)).toEqual(turns);
+    expect(parsed.error).toBeNull();
+  },
+);

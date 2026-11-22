@@ -301,7 +301,11 @@ function playPi(steps) {
     });
     perform(one);
   };
-  const turnEnd = (message) => emit({ type: "turn_end", message });
+  // Pi states a message at its end, and again at the end of its turn.
+  const turnEnd = (message) => {
+    emit({ type: "message_end", message });
+    emit({ type: "turn_end", message });
+  };
   try {
     for (const one of steps) {
       if ("text" in one) final = one.text;

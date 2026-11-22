@@ -29,6 +29,7 @@ const FIXTURES = [
     shape: [[...CALL, "skill"], [...RESULT, "skill"], TEXT],
     session: SESSION,
     output: /^Launching skill: magic:bro$/,
+    duration: undefined,
   },
   {
     id: "codex",
@@ -36,13 +37,15 @@ const FIXTURES = [
     shape: [[...CALL, SHELL], [...RESULT, SHELL], TEXT],
     session: SESSION,
     output: SKILL_FILE_HEAD,
+    duration: undefined,
   },
   {
     id: "opencode",
     name: "opencode.stream.jsonl",
     shape: [[...CALL, "skill"], [...RESULT, "skill"], TEXT],
-    session: null,
+    session: "ses_scrubbed",
     output: /^<skill_content name="bro">/,
+    duration: 16,
   },
   {
     id: "pi",
@@ -50,6 +53,7 @@ const FIXTURES = [
     shape: [[...CALL, "read"], [...RESULT, "read"], TEXT],
     session: SESSION,
     output: SKILL_FILE_HEAD,
+    duration: undefined,
   },
   {
     id: "cursor",
@@ -65,6 +69,7 @@ const FIXTURES = [
     ],
     session: null,
     output: /# Project/,
+    duration: undefined,
   },
 ];
 
@@ -85,6 +90,7 @@ test.each(FIXTURES)(
     const texts = parsed.transcript.filter((e) => e.type === "text");
     expect(texts.at(-1)?.text).toBe(parsed.finalText);
     expect(parsed.sessionId).toBe(expected.session);
+    expect(result?.durationMs).toBe(expected.duration);
   },
 );
 

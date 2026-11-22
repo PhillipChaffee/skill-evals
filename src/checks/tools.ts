@@ -7,7 +7,8 @@ import {
   matches,
   quoteCalls,
 } from "../matchers.js";
-import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import type { Capability } from "../capabilities.js";
+import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { checkBounds, checkLineBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
 
@@ -19,6 +20,8 @@ const TOOL_FIELDS = {
     "flags",
     "inputLinesMax",
     "inputLinesMin",
+    "minDurationMs",
+    "maxDurationMs",
   ],
   oneOf: ["kind", "name"],
 } satisfies Partial<Spec>;
@@ -34,6 +37,8 @@ const ownMatcher = ({
   flags,
   inputLinesMax,
   inputLinesMin,
+  minDurationMs,
+  maxDurationMs,
 }: RuledCheck): ToolMatcher => ({
   ...(kind !== undefined && { kind }),
   ...(name !== undefined && { name }),
@@ -41,7 +46,28 @@ const ownMatcher = ({
   ...(flags !== undefined && { flags }),
   ...(inputLinesMax !== undefined && { inputLinesMax }),
   ...(inputLinesMin !== undefined && { inputLinesMin }),
+  ...(minDurationMs !== undefined && { minDurationMs }),
+  ...(maxDurationMs !== undefined && { maxDurationMs }),
 });
+
+/**
+ * Lists what a check on tool calls needs for its duration keys.
+ * @param check - A check of tool calls.
+ * @returns `toolDurations` when the check, or any matcher in it, sets `minDurationMs` or `maxDurationMs`; none otherwise.
+ */
+export function durationNeeds(check: Check): Capability[] {
+  const matchers = [
+    check,
+    ...[check.matches, check.before, check.after].flatMap((one) => one ?? []),
+    ...(check.ignoring ?? []),
+    ...(check.sequence ?? []),
+  ];
+  return matchers.some(
+    (one) => one.minDurationMs !== undefined || one.maxDurationMs !== undefined,
+  )
+    ? ["toolDurations"]
+    : [];
+}
 
 /**
  * Judges the first call that is left after dropping the ignored ones.
@@ -135,7 +161,10 @@ export const TOOL_CHECKS = {
     scores:
       "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn.",
     note: "A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
-    needs: (check) => (check.sameTurn ? ["turnGrouping"] : []),
+    needs: (check) => [
+      ...(check.sameTurn ? (["turnGrouping"] as const) : []),
+      ...durationNeeds(check),
+    ],
     notYet: ["by"],
     validate: (given, where) => {
       checkBounds(given, where);
@@ -152,12 +181,14 @@ export const TOOL_CHECKS = {
     ...TOOL_FIELDS,
     notYet: ["by"],
     validate: checkLineBounds,
+    needs: durationNeeds,
     scores: "The agent made no tool call that fits every given field.",
     rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
   },
   first_tool: {
     fields: ["matches"],
     optional: ["ignoring"],
+    needs: durationNeeds,
     scores:
       "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`.",
     note: "A subagent's calls are in the list too, because calls cannot yet be told apart by the agent that made them.",

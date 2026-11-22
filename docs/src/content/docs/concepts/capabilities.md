@@ -90,7 +90,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `userInvoke`    | no   | no            | no       | no         | no      |
 | `toolOutputs`   | yes  | yes           | no       | yes        | yes     |
 | `assistantText` | yes  | yes           | no       | yes        | yes     |
-| `turnGrouping`  | no   | yes           | no       | no         | no      |
+| `turnGrouping`  | yes  | yes           | no       | yes        | no      |
 | `childCalls`    | no   | yes           | no       | no         | no      |
 | `childText`     | no   | no            | no       | no         | no      |
 | `rules`         | no   | no            | no       | no         | no      |

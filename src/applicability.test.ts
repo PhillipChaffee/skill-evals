@@ -129,7 +129,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
     HARNESSES.map((h) => [h.id, [h.status, [...h.capabilities]]]),
   );
   expect(declared).toEqual({
-    pi: ["scripted", ["toolOutputs", "assistantText"]],
+    pi: ["scripted", ["toolOutputs", "assistantText", "turnGrouping"]],
     "claude-code": [
       "real-model",
       [
@@ -146,7 +146,13 @@ test("the adapters declare what their parsers and fixtures show today", () => {
     cursor: ["unverified", ["subagents"]],
     opencode: [
       "scripted",
-      ["subagents", "toolOutputs", "assistantText", "toolDurations"],
+      [
+        "subagents",
+        "toolOutputs",
+        "assistantText",
+        "toolDurations",
+        "turnGrouping",
+      ],
     ],
     codex: ["scripted", ["subagents", "toolOutputs", "assistantText"]],
   });

@@ -19,10 +19,10 @@ export function checkBounds(
 }
 
 /**
- * Checks that the line bounds of a call matcher can be met.
+ * Checks that the line bounds and the duration bounds of a call matcher can be met.
  * @param given - The fields that are set.
  * @param where - Names the file and the check in an error message.
- * @throws {UsageError} When `inputLinesMin` is above `inputLinesMax`.
+ * @throws {UsageError} When `inputLinesMin` is above `inputLinesMax`, or `minDurationMs` above `maxDurationMs`.
  */
 export function checkLineBounds(
   given: Record<string, unknown>,
@@ -32,6 +32,12 @@ export function checkLineBounds(
   if (typeof low === "number" && typeof high === "number" && low > high) {
     throw new UsageError(
       `${where}: "inputLinesMin" ${String(low)} is above "inputLinesMax" ${String(high)}`,
+    );
+  }
+  const { minDurationMs: slow, maxDurationMs: fast } = given;
+  if (typeof slow === "number" && typeof fast === "number" && slow > fast) {
+    throw new UsageError(
+      `${where}: "minDurationMs" ${String(slow)} is above "maxDurationMs" ${String(fast)}`,
     );
   }
 }

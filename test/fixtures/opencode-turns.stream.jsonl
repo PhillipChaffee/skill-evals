@@ -1,0 +1,10 @@
+{"type":"step_start","sessionID":"ses_turns","part":{"type":"step-start"}}
+{"type":"tool_use","sessionID":"ses_turns","part":{"type":"tool","tool":"bash","callID":"call_a","state":{"status":"completed","input":{"command":"ls"},"output":"a.txt\n","time":{"start":1000,"end":1010}}}}
+{"type":"tool_use","sessionID":"ses_turns","part":{"type":"tool","tool":"read","callID":"call_b","state":{"status":"completed","input":{"filePath":"a.txt"},"output":"hello\n","time":{"start":1010,"end":1020}}}}
+{"type":"step_finish","sessionID":"ses_turns","part":{"reason":"tool-calls","type":"step-finish","tokens":{"total":15,"input":10,"output":5,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}
+{"type":"step_start","sessionID":"ses_turns","part":{"type":"step-start"}}
+{"type":"tool_use","sessionID":"ses_turns","part":{"type":"tool","tool":"bash","callID":"call_c","state":{"status":"completed","input":{"command":"pwd"},"output":"/tmp\n","time":{"start":2000,"end":2005}}}}
+{"type":"step_finish","sessionID":"ses_turns","part":{"reason":"tool-calls","type":"step-finish","tokens":{"total":15,"input":10,"output":5,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}
+{"type":"step_start","sessionID":"ses_turns","part":{"type":"step-start"}}
+{"type":"text","sessionID":"ses_turns","part":{"type":"text","text":"Done."}}
+{"type":"step_finish","sessionID":"ses_turns","part":{"reason":"stop","type":"step-finish","tokens":{"total":15,"input":10,"output":5,"reasoning":0,"cache":{"write":0,"read":0}},"cost":0}}

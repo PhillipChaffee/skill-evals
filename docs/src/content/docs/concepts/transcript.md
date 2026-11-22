@@ -32,7 +32,7 @@ A `command` check gets the absolute path of the file in `SKILL_EVALS_TRANSCRIPT`
 
 ## The events
 
-Each event has `index`, `turn` (null where the harness does not group calls), `userTurn`, `role`, `agent`, `type` and these fields where they apply:
+Each event has `index`, `turn` (null where the harness does not group calls; a tool result has the turn of its call), `userTurn`, `role`, `agent`, `type` and these fields where they apply:
 
 - `callId` joins a tool call to its tool result.
 - `kind`, `name` and `input` describe the call. A tool result takes the name and kind of its call.
@@ -50,10 +50,12 @@ Every event is attributed to the main agent for now: `{ "id": "main", "type": "m
 | Tool calls with their input       | yes  | yes           | yes      | yes        | yes     |
 | Assistant text between tool calls | yes  | yes           | no       | yes        | yes     |
 | Tool outputs                      | yes  | yes           | no       | yes        | yes     |
-| Assistant turn on each event      | no   | yes           | no       | no         | no      |
+| Assistant turn on each event      | yes  | yes           | no       | yes        | no      |
 | Tool duration                     | no   | no            | no       | yes        | no      |
 
 An adapter declares a capability only when a parser test proves it on a fixture stream. `test/fixtures/README.md` says which fixtures were captured from a real CLI and which were written from the CLI's documentation. A check that needs a part that its harness lacks makes its case not applicable there. See [Capabilities](capabilities.md).
+
+A tool matcher or a check on tool calls can bound a call's duration with `minDurationMs` and `maxDurationMs`. That needs `toolDurations`; a call whose duration is unknown never fits a bound.
 
 A skill-tool call whose tool result was an error is not resolved, on a harness that has `toolOutputs`. Elsewhere the rule is the one it was.
 
@@ -61,4 +63,4 @@ A skill-tool call whose tool result was an error is not resolved, on a harness t
 
 The copy of the transcript that is handed to a judge cuts any single `text` or `output` longer than 20,000 bytes. A cut event has `truncated: true` and keeps its original `bytes`. The file on disk is never cut.
 
-The output of a harness is decoded as UTF-8 with replacement, so a tool that prints invalid bytes never makes a run fail. Each bad byte becomes the character U+FFFD, which is three bytes in UTF-8, so `bytes` counts the text as it was decoded and not the raw bytes the tool wrote.
+The output of a harness is decoded as UTF-8 with replacement, so a tool that prints invalid bytes never makes a run fail. Each invalid byte sequence becomes one U+FFFD character, which is three bytes in UTF-8, so a truncated sequence such as `E2 82` is one replacement character. `bytes` counts the text as it was decoded, not the raw bytes the tool wrote.

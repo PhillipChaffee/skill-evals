@@ -1,6 +1,7 @@
 import type { EventInput } from "../transcript.js";
-import { callPart, joinText, resultPart, textPart } from "../transcript.js";
+import { callPart, resultPart, textPart } from "../transcript.js";
 import type { ToolKind } from "./shared.js";
+import { joinText } from "./shared.js";
 
 /** A content block of an `assistant` or `user` event; which fields are set depends on its type. */
 interface Block {
@@ -36,7 +37,7 @@ function resultText(content: unknown): string {
  * @param kinds - The adapter's table of native tool name to kind.
  * @returns The parts of the transcript, a subagent's included. A turn is one assistant message: the counter, from 1,
  *   moves on at each `message.id` it has not seen, so the blocks of one message share a turn even when the stream splits
- *   them over several events. An assistant event without an id is a turn of its own. A tool result has no turn.
+ *   them over several events. An assistant event without an id is a turn of its own. A tool result takes the turn of its call, in `numbered`.
  */
 export function transcriptParts(
   events: MessageEvent[],
@@ -52,11 +53,15 @@ export function transcriptParts(
       return blocks
         .filter((block) => block.type === "tool_result")
         .map((block) =>
-          resultPart(block.tool_use_id, resultText(block.content), {
-            ...(block.is_error === undefined
-              ? {}
-              : { isError: block.is_error }),
-          }),
+          resultPart(
+            block.tool_use_id,
+            block.content === undefined ? undefined : resultText(block.content),
+            {
+              ...(block.is_error === undefined
+                ? {}
+                : { isError: block.is_error }),
+            },
+          ),
         );
     }
     if (one.type !== "assistant") return [];

@@ -300,9 +300,9 @@ test("sameTurn on a harness without turn grouping makes the case not applicable"
   const ran = await box.cli(
     [
       ...["score", "--subject", "none", "--reps", "1", "--out", out],
-      ...["--cases", cases, "--harness", "claude-code,pi"],
+      ...["--cases", cases, "--harness", "claude-code,codex"],
     ],
-    { SKILL_EVALS_BIN_PI: box.pi },
+    { SKILL_EVALS_BIN_CODEX: box.pi },
   );
   expect(ran.status, ran.stderr).toBe(0);
   const results = readResults(out);

@@ -48,7 +48,7 @@ type Event =
       type: "tool_call";
       subtype: string;
       call_id?: string;
-      tool_call: Record<string, CallBody & { result?: unknown }>;
+      tool_call?: Record<string, CallBody & { result?: unknown }> | null;
     };
 
 /**
@@ -98,13 +98,13 @@ function transcriptParts(events: Event[]): EventInput[] {
     if (e.type !== "tool_call") return [];
     const started = e.subtype === "started";
     // A completed event that names no tool has nothing to report; a started one that names none is a stream error.
-    if (!started && Object.keys(e.tool_call).length === 0) return [];
-    const { name, input, result } = nativeCall(e.tool_call);
+    if (!started && Object.keys(e.tool_call ?? {}).length === 0) return [];
+    const { name, input, result } = nativeCall(e.tool_call ?? {});
     if (started) {
       return [callPart(KINDS, { name, input, callId: e.call_id })];
     }
     if (e.subtype !== "completed") return [];
-    const output = result === undefined ? "" : JSON.stringify(result);
+    const output = result === undefined ? undefined : JSON.stringify(result);
     const { kind } = toolCall(KINDS, name, input);
     return [resultPart(e.call_id, output, { name, kind })];
   });

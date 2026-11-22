@@ -358,6 +358,18 @@
                 "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
                 "type": "integer",
                 "minimum": 1
+              },
+              "minDurationMs": {
+                "title": "minDurationMs",
+                "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDurationMs": {
+                "title": "maxDurationMs",
+                "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+                "type": "integer",
+                "minimum": 1
               }
             },
             "anyOf": [
@@ -1396,6 +1408,18 @@
           "type": "integer",
           "minimum": 1
         },
+        "minDurationMs": {
+          "title": "minDurationMs",
+          "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDurationMs": {
+          "title": "maxDurationMs",
+          "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+          "type": "integer",
+          "minimum": 1
+        },
         "min": {
           "title": "min",
           "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
@@ -1499,6 +1523,18 @@
           "type": "integer",
           "minimum": 1
         },
+        "minDurationMs": {
+          "title": "minDurationMs",
+          "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDurationMs": {
+          "title": "maxDurationMs",
+          "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+          "type": "integer",
+          "minimum": 1
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -1584,6 +1620,18 @@
               "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
               "type": "integer",
               "minimum": 1
+            },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+              "type": "integer",
+              "minimum": 1
             }
           },
           "anyOf": [
@@ -1644,6 +1692,18 @@
               "inputLinesMin": {
                 "title": "inputLinesMin",
                 "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "minDurationMs": {
+                "title": "minDurationMs",
+                "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDurationMs": {
+                "title": "maxDurationMs",
+                "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                 "type": "integer",
                 "minimum": 1
               }
@@ -1741,6 +1801,18 @@
               "type": "integer",
               "minimum": 1
             },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+              "type": "integer",
+              "minimum": 1
+            },
             "which": {
               "title": "which",
               "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
@@ -1803,6 +1875,18 @@
             "inputLinesMin": {
               "title": "inputLinesMin",
               "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "minDurationMs": {
+              "title": "minDurationMs",
+              "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxDurationMs": {
+              "title": "maxDurationMs",
+              "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
               "type": "integer",
               "minimum": 1
             },
@@ -1871,6 +1955,18 @@
               "inputLinesMin": {
                 "title": "inputLinesMin",
                 "description": "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "minDurationMs": {
+                "title": "minDurationMs",
+                "description": "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDurationMs": {
+                "title": "maxDurationMs",
+                "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                 "type": "integer",
                 "minimum": 1
               }

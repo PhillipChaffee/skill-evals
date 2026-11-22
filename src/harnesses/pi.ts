@@ -3,7 +3,6 @@ import type { EventInput } from "../transcript.js";
 import {
   callPart,
   callsOf,
-  joinText,
   numbered,
   resultPart,
   textPart,
@@ -14,6 +13,7 @@ import {
   ANTHROPIC_ENV,
   OPENAI_ENV,
   jsonLines,
+  joinText,
   opt,
   placeSkills,
   pluginDir,
@@ -51,6 +51,7 @@ interface Message {
 type Event =
   | { type: "session"; id?: string }
   | { type: "turn_end"; message?: Message }
+  | { type: "message_end"; message?: Message }
   | {
       type: "tool_execution_start";
       toolCallId?: string;
@@ -67,24 +68,28 @@ type Event =
 /**
  * Reads the transcript parts of a stream.
  * @param events - The events of the stream, in order.
- * @returns A call for each `tool_execution_start`, a result for each `tool_execution_end`, and the text of each
- *   assistant `turn_end`, which comes after the calls of its own turn because Pi states it at the turn's end.
+ * @returns A call for each `tool_execution_start`, a result for each `tool_execution_end` (with an `output` only when
+ *   the event has a `result`), and the text of each assistant `message_end`, where that event sits, which is before
+ *   the tool events of its message. The `turn` of an event is the number of `turn_end` events seen before it, so the
+ *   calls before the first `turn_end` are in turn 0.
  */
 function transcriptParts(events: Event[]): EventInput[] {
+  let ended = 0;
   return events.flatMap((e): EventInput[] => {
     if (e.type === "tool_execution_start") {
       const { toolName: name, args: input, toolCallId: callId } = e;
-      return [callPart(KINDS, { name, input, callId })];
+      return [callPart(KINDS, { name, input, callId }, { turn: ended })];
     }
     if (e.type === "tool_execution_end") {
-      const output = joinText(e.result?.content);
+      const output = e.result ? joinText(e.result.content) : undefined;
       return [
         resultPart(e.toolCallId, output, { isError: e.isError === true }),
       ];
     }
-    if (e.type !== "turn_end" || e.message?.role !== "assistant") return [];
+    if (e.type === "turn_end") ended += 1;
+    if (e.type !== "message_end" || e.message?.role !== "assistant") return [];
     const text = joinText(e.message.content);
-    return text ? [textPart(text)] : [];
+    return text ? [textPart(text, { turn: ended })] : [];
   });
 }
 
@@ -95,7 +100,7 @@ const pi: Harness = {
   pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
-  capabilities: new Set(["toolOutputs", "assistantText"]),
+  capabilities: new Set(["toolOutputs", "assistantText", "turnGrouping"]),
   status: "scripted",
   isolationGap:
     "It is always started with discovery switched off (`-ne -ns -np`), whatever the flag says, and that stays its default. It reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded.",

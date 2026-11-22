@@ -45,37 +45,49 @@ interface ToolPart {
     input?: unknown;
     output?: string;
     error?: string;
-    time?: { start: number; end: number };
+    time?: { start?: number; end?: number };
   };
 }
 
 /**
  * Reads the transcript parts of a stream.
  * @param events - The events of the stream, in order.
- * @returns Text parts, and for each `tool_use` a call and, when the state holds an output or an error, its result with
- *   the tool's duration from its start and end times.
+ * @returns Text parts; for each tool, one call (a `running` and a `completed` event with the same `callID` make one),
+ *   and, when the state holds an output or an error, its result with the duration from its start and end times, when
+ *   both are numbers. The `turn` of an event counts the `step_start` events seen so far.
  */
 function transcriptParts(events: Event[]): EventInput[] {
+  let turn = 0;
+  const called = new Set<string>();
   return events.flatMap((e): EventInput[] => {
-    if (e.type === "text") return e.part.text ? [textPart(e.part.text)] : [];
+    if (e.type === "step_start") turn += 1;
+    if (e.type === "text") {
+      return e.part.text ? [textPart(e.part.text, { turn })] : [];
+    }
     if (e.type !== "tool_use") return [];
     const { tool, callID: callId, state } = e.part;
-    const call = callPart(KINDS, { name: tool, input: state?.input, callId });
+    const first = !callId || !called.has(callId);
+    if (callId) called.add(callId);
+    const call = first
+      ? [callPart(KINDS, { name: tool, input: state?.input, callId }, { turn })]
+      : [];
     const output = state?.output ?? state?.error;
-    if (output === undefined) return [call];
-    const { time } = state ?? {};
+    if (output === undefined) return call;
+    const { start, end } = state?.time ?? {};
     return [
-      call,
+      ...call,
       resultPart(callId, output, {
         isError: state?.status === "error",
-        ...(time ? { durationMs: time.end - time.start } : {}),
+        ...(typeof start === "number" && typeof end === "number"
+          ? { durationMs: end - start }
+          : {}),
       }),
     ];
   });
 }
 
 /** The events of `opencode run --format json` that the adapter reads. */
-type Event =
+type Event = { sessionID?: string } & (
   | { type: "step_start" }
   | {
       type: "step_finish";
@@ -90,7 +102,8 @@ type Event =
     }
   | { type: "text"; part: { text: string } }
   | { type: "tool_use"; part: ToolPart }
-  | { type: "error"; error?: { name?: string; data?: { message?: string } } };
+  | { type: "error"; error?: { name?: string; data?: { message?: string } } }
+);
 
 const opencode: Harness = {
   id: "opencode",
@@ -106,6 +119,7 @@ const opencode: Harness = {
     "toolOutputs",
     "assistantText",
     "toolDurations",
+    "turnGrouping",
   ]),
   status: "scripted",
 
@@ -153,7 +167,7 @@ const opencode: Harness = {
         .join(""),
       toolCalls: callsOf(transcript),
       transcript,
-      sessionId: null,
+      sessionId: events.find((e) => e.sessionID)?.sessionID ?? null,
       tokens: sumTokens(
         steps.map(({ tokens }) => ({
           input: tokens.input + tokens.cache.read + tokens.cache.write,

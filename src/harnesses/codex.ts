@@ -27,6 +27,9 @@ interface Item {
   command?: unknown;
   aggregated_output?: string;
   exit_code?: number | null;
+  status?: string;
+  result?: { content?: unknown } | null;
+  error?: { message?: string } | null;
   changes?: unknown;
   server?: unknown;
   tool?: unknown;
@@ -38,6 +41,7 @@ interface Item {
 /** The events of `codex exec --json` that the adapter reads. */
 type Event =
   | { type: "thread.started"; thread_id?: string }
+  | { type: "item.started"; item: Item }
   | { type: "item.completed"; item: Item }
   | {
       type: "turn.completed";
@@ -46,8 +50,10 @@ type Event =
   | { type: "turn.failed"; error?: { message?: string } };
 
 // Thread items that are tool calls, mapped to the part of the item that is the call's input (never its output).
+const COMMAND = "command_execution";
+const MESSAGE = "agent_message";
 const TOOL_ITEMS: Record<string, (item: Item) => unknown> = {
-  command_execution: (item) => ({ command: item.command }),
+  [COMMAND]: (item) => ({ command: item.command }),
   file_change: (item) => ({ changes: item.changes }),
   mcp_tool_call: (item) => ({
     server: item.server,
@@ -58,35 +64,68 @@ const TOOL_ITEMS: Record<string, (item: Item) => unknown> = {
   web_search: (item) => ({ query: item.query }),
 };
 const KINDS: Record<string, ToolKind> = {
-  command_execution: "shell",
+  [COMMAND]: "shell",
   file_change: "edit",
   web_search: "web",
   collab_tool_call: "subagent",
 };
 
 /**
- * Reads the transcript parts of the items of a run.
- * @param items - The completed thread items, in order.
- * @returns A tool item is a call and its result, in that order, because the stream states both at once; the result is
- *   the item's aggregated output, and an error when the item has a non-zero exit code. An `agent_message` is text.
+ * Reads what a tool item reports back.
+ * @param item - A completed thread item that is a tool call.
+ * @returns Its output and whether it failed; null when the item carries no result. A command's result is its
+ *   aggregated output. An MCP call's is its `result.content`, or its `error.message`. No other item type has one, so
+ *   none is made up for them. An item fails when its status is `failed`, it has an `error`, or its exit code is not 0.
  */
-function itemParts(items: Item[]): EventInput[] {
-  return items.flatMap((item): EventInput[] => {
-    if (item.type === "agent_message") {
+function resultOf(item: Item): { output: unknown; isError: boolean } | null {
+  const output =
+    item.type === COMMAND
+      ? item.aggregated_output
+      : item.type === "mcp_tool_call"
+        ? (item.error?.message ?? item.result?.content ?? item.result)
+        : undefined;
+  if (output === undefined || output === null) return null;
+  const exit = item.exit_code ?? 0;
+  const isError = item.status === "failed" || Boolean(item.error) || exit !== 0;
+  return { output, isError };
+}
+
+/**
+ * Reads the transcript parts of a stream's items.
+ * @param events - The events of the stream, in order.
+ * @returns A tool item is a call where it started, or where it completed when no start was seen, and a result only
+ *   where the completed item carries one, so a command that started and never completed is a call with no result. An
+ *   `agent_message` is text.
+ */
+function itemParts(events: Event[]): EventInput[] {
+  const called = new Set<string>();
+  return events.flatMap((e): EventInput[] => {
+    if (!("item" in e)) return [];
+    const { item } = e;
+    const done = e.type === "item.completed";
+    if (done && item.type === MESSAGE) {
       return item.text ? [textPart(item.text)] : [];
     }
     const input = Object.hasOwn(TOOL_ITEMS, item.type)
       ? TOOL_ITEMS[item.type]
       : undefined;
-    if (!input) return [];
+    // A start without an id could never be matched to its completion, so only the completion counts.
+    if (!input || (!done && !item.id)) return [];
     const { id: callId } = item;
-    const failed =
-      item.exit_code !== undefined &&
-      item.exit_code !== null &&
-      item.exit_code !== 0;
+    const first = !callId || !called.has(callId);
+    if (callId) called.add(callId);
+    const answer = done ? resultOf(item) : null;
     return [
-      callPart(KINDS, { name: item.type, input: input(item), callId }),
-      resultPart(callId, item.aggregated_output ?? "", { isError: failed }),
+      ...(first
+        ? [callPart(KINDS, { name: item.type, input: input(item), callId })]
+        : []),
+      ...(answer
+        ? [
+            resultPart(callId, answer.output as string, {
+              isError: answer.isError,
+            }),
+          ]
+        : []),
     ];
   });
 }
@@ -193,12 +232,11 @@ const codex: Harness = {
       .filter((e) => e.type === "turn.completed")
       .map((e) => e.usage);
     const failed = events.find((e) => e.type === "turn.failed");
-    const transcript = numbered(itemParts(items));
+    const transcript = numbered(itemParts(events));
     const unfinished = usages.length ? null : "no turn.completed event";
     return {
       finalText:
-        items.filter((item) => item.type === "agent_message").at(-1)?.text ??
-        "",
+        items.filter((item) => item.type === MESSAGE).at(-1)?.text ?? "",
       toolCalls: callsOf(transcript),
       transcript,
       sessionId:

@@ -4,7 +4,7 @@ import type {
   ToolKind,
   TranscriptEvent,
 } from "./harnesses/shared.js";
-import { toolCall } from "./harnesses/shared.js";
+import { joinText, toolCall } from "./harnesses/shared.js";
 
 /** The main agent, which every event is attributed to until subagents are told apart. */
 const MAIN_AGENT = { id: "main", type: "main", parent: null, depth: 0 };
@@ -20,6 +20,26 @@ export type EventInput = Pick<TranscriptEvent, "role" | "type"> &
   Partial<Omit<TranscriptEvent, "index" | "role" | "type">>;
 
 /**
+ * Turns whatever a stream held in a text field into text.
+ * @param value - A string, a list of content blocks, or anything else a stream may carry.
+ * @returns A string as it is; a list of blocks as its joined text; undefined as undefined; any other value as JSON, or
+ *   as `String(value)` when JSON cannot write it. It never throws.
+ */
+function asText(value: unknown): string | undefined {
+  if (typeof value === "string" || value === undefined) return value;
+  if (Array.isArray(value)) return joinText(value);
+  // Only a function, a symbol or a bigint is left that JSON cannot write whole.
+  const plain = value as bigint | (() => unknown);
+  try {
+    // JSON.stringify gives undefined, whatever its declared type, for a function or a symbol.
+    const json: unknown = JSON.stringify(value);
+    return typeof json === "string" ? json : String(plain);
+  } catch {
+    return String(plain);
+  }
+}
+
+/**
  * Completes one event.
  * @param partial - What the adapter read.
  * @param index - The event's position in the run.
@@ -27,31 +47,36 @@ export type EventInput = Pick<TranscriptEvent, "role" | "type"> &
  *   set to the UTF-8 size of its `text` or `output` as decoded.
  */
 export function event(partial: EventInput, index = 0): TranscriptEvent {
-  const text = partial.text ?? partial.output;
+  const { text: rawText, output: rawOutput, ...rest } = partial;
+  const text = asText(rawText);
+  const output = asText(rawOutput);
+  const sized = text ?? output;
   return {
     turn: null,
     userTurn: 0,
     agent: { ...MAIN_AGENT },
-    ...partial,
+    ...rest,
+    ...(text === undefined ? {} : { text }),
+    ...(output === undefined ? {} : { output }),
     index,
-    ...(text === undefined ? {} : { bytes: Buffer.byteLength(text) }),
+    ...(sized === undefined ? {} : { bytes: Buffer.byteLength(sized) }),
   };
 }
 
 /**
  * Builds a run's events in order.
  * @param parts - What the adapter read, in the order it happened.
- * @returns The events, each with its position. A `tool_result` without a name or kind takes them from the earlier call
- *   that has its `callId`.
+ * @returns The events, each with its position. A `tool_result` without a name, kind or turn takes them from the
+ *   earlier call that has its `callId`; an empty `callId` joins nothing.
  */
 export function numbered(parts: EventInput[]): TranscriptEvent[] {
   const calls = new Map<string, EventInput>();
   return parts.map((part, position) => {
-    if (part.type === "tool_call" && part.callId !== undefined) {
+    if (part.type === "tool_call" && part.callId) {
       calls.set(part.callId, part);
     }
     const made =
-      part.type === "tool_result" && part.callId !== undefined
+      part.type === "tool_result" && part.callId
         ? calls.get(part.callId)
         : undefined;
     return event(
@@ -63,6 +88,9 @@ export function numbered(parts: EventInput[]): TranscriptEvent[] {
         ...(part.kind === undefined && made?.kind !== undefined
           ? { kind: made.kind }
           : {}),
+        ...(part.turn === undefined && made?.turn !== undefined
+          ? { turn: made.turn }
+          : {}),
       },
       position,
     );
@@ -70,41 +98,65 @@ export function numbered(parts: EventInput[]): TranscriptEvent[] {
 }
 
 /**
+ * Pairs each tool call with its tool result.
+ * @param events - The run's events.
+ * @returns For the position of a call in `callsOf(events)`, the result that answers it: the first with the call's
+ *   `callId` after it and before the next call with that id. A result that matches none, and an empty `callId`, pair
+ *   with nothing.
+ */
+function resultsByCall(
+  events: TranscriptEvent[],
+): Map<number, TranscriptEvent> {
+  const open = new Map<string, number>();
+  const paired = new Map<number, TranscriptEvent>();
+  let count = 0;
+  for (const one of events) {
+    if (one.type === "tool_call") {
+      if (one.callId) open.set(one.callId, count);
+      count += 1;
+    } else if (one.type === "tool_result" && one.callId) {
+      const position = open.get(one.callId);
+      if (position !== undefined && !paired.has(position)) {
+        paired.set(position, one);
+      }
+    }
+  }
+  return paired;
+}
+
+/**
  * Lists the tool calls of a transcript.
  * @param events - The run's events.
- * @returns One call for each `tool_call` event, in order. It has a `turn` only when its event has one.
+ * @returns One call for each `tool_call` event, in order. It has a `turn` only when its event has one, and a
+ *   `durationMs` only when its result has one.
  */
-export const callsOf = (events: TranscriptEvent[]): ToolCall[] =>
-  events
+export function callsOf(events: TranscriptEvent[]): ToolCall[] {
+  const paired = resultsByCall(events);
+  return events
     .filter((e) => e.type === "tool_call")
-    .map((e) => ({
-      name: e.name ?? "",
-      kind: e.kind ?? "other",
-      input: e.input,
-      ...(e.turn === null ? {} : { turn: e.turn }),
-    }));
+    .map((e, position) => {
+      const durationMs = paired.get(position)?.durationMs;
+      return {
+        name: e.name ?? "",
+        kind: e.kind ?? "other",
+        input: e.input,
+        ...(e.turn === null ? {} : { turn: e.turn }),
+        ...(durationMs === undefined ? {} : { durationMs }),
+      };
+    });
+}
 
 /**
  * Finds the calls whose tool result was an error.
  * @param events - The run's events.
- * @returns The positions, in `callsOf(events)`, of the calls whose result had `isError`. A result belongs to the latest
- *   earlier call with its `callId`; one that matches none is ignored.
+ * @returns The positions, in `callsOf(events)`, of the calls whose result had `isError`.
  */
-export function failedCalls(events: TranscriptEvent[]): Set<number> {
-  const positions = new Map<string, number>();
-  const failed = new Set<number>();
-  let count = 0;
-  for (const one of events) {
-    if (one.type === "tool_call") {
-      if (one.callId !== undefined) positions.set(one.callId, count);
-      count += 1;
-    } else if (one.type === "tool_result" && one.isError && one.callId) {
-      const position = positions.get(one.callId);
-      if (position !== undefined) failed.add(position);
-    }
-  }
-  return failed;
-}
+export const failedCalls = (events: TranscriptEvent[]): Set<number> =>
+  new Set(
+    [...resultsByCall(events)]
+      .filter(([, result]) => result.isError)
+      .map(([position]) => position),
+  );
 
 /**
  * Writes the whole transcript, never cut.
@@ -184,19 +236,19 @@ export const callPart = (
 /**
  * States what a tool returned.
  * @param callId - The id of the call it answers; absent when the stream has none.
- * @param output - The tool's output as text.
+ * @param output - The tool's output as text; undefined when the stream carries none, so the result has no `output`.
  * @param extra - Fields to set besides, such as `isError` and `durationMs`.
  * @returns The event, to give to `numbered`.
  */
 export const resultPart = (
   callId: string | undefined,
-  output: string,
+  output: string | undefined,
   extra: Partial<EventInput> = {},
 ): EventInput => ({
   role: "tool",
   type: "tool_result",
   ...(callId === undefined ? {} : { callId }),
-  output,
+  ...(output === undefined ? {} : { output }),
   ...extra,
 });
 
@@ -210,16 +262,3 @@ export const textPart = (
   text: string,
   extra: Partial<EventInput> = {},
 ): EventInput => ({ role: "assistant", type: "text", text, ...extra });
-
-/**
- * Joins the text of a list of content blocks.
- * @param blocks - Blocks of a message or a tool result; those that are not text, and a value that is no list, add nothing.
- * @returns The text of the `text` blocks, joined without a separator.
- */
-export const joinText = (blocks: unknown): string =>
-  Array.isArray(blocks)
-    ? (blocks as { type?: string; text?: string }[])
-        .filter((block) => block.type === "text")
-        .map((block) => block.text ?? "")
-        .join("")
-    : "";

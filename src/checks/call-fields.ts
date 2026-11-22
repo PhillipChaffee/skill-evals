@@ -25,6 +25,16 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
     meaning:
       "The fewest lines that the call's input must have, counted in the same way as `inputLinesMax`. `inputLinesMin: 1001` fits a call with a value of more than 1000 lines, so `tool_not_called` with it says that no single write was that long.",
   },
+  minDurationMs: {
+    type: "int",
+    meaning:
+      "The fewest milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`; elsewhere the case is not applicable.",
+  },
+  maxDurationMs: {
+    type: "int",
+    meaning:
+      "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
+  },
   anyOf: {
     type: "texts",
     meaning:
