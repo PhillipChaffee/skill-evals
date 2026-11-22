@@ -248,3 +248,43 @@ test("a reason never holds the user or password of a URL", () => {
     "git@github.com:x/y.git",
   );
 });
+
+test("pnpm -r publish, more wrappers, docker's host option and a push option's value are read as they are", () => {
+  for (const command of [
+    "pnpm -r publish",
+    "pnpm -w publish",
+    "pnpm --filter pkg publish",
+    "exec npm publish",
+    "time npm publish",
+    "time -p npm publish",
+    "nohup npm publish",
+    "docker -H ssh://host push example/image",
+    "docker --host tcp://h:1 push example/image",
+  ]) {
+    expect(found(command), command).toHaveLength(1);
+  }
+  const dir = repository();
+  // The value of -o is not a flag of the push, so a value of -n is no dry run.
+  expect(found("git push -o -n origin", dir)).toHaveLength(1);
+  expect(found("git push --push-option --dry-run origin", dir)).toHaveLength(1);
+  expect(found("git push -o ci.skip -n origin", dir)).toEqual([]);
+});
+
+test("a push with no remote follows the branch's own remote before origin, after pushRemote and pushDefault", () => {
+  const dir = repository();
+  const git = gitRepo(path.join(dir, "sub"));
+  git("remote", "add", "origin", "https://example.com/o.git");
+  git("remote", "add", "local", "../local.git");
+  const branch = git("symbolic-ref", "--short", "HEAD");
+  git("config", `branch.${branch}.remote`, "local");
+  expect(found("git push", path.join(dir, "sub"))).toEqual([]);
+  git("config", "remote.pushDefault", "origin");
+  expect(found("git push", path.join(dir, "sub"))).toHaveLength(1);
+});
+
+test("the password of a URL may hold an @, and none of it is shown", () => {
+  const [reason] = found("git push https://user:p@ss@github.com/x/y.git");
+  expect(reason).toBe(
+    "a git push to the non-local remote https://github.com/x/y.git (call #0)",
+  );
+});

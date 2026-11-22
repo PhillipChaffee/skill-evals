@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, onTestFinished, test, vi } from "vitest";
-import { maskingOf } from "./sandbox-masks.js";
+import { maskingOf, requireExposable } from "./sandbox-masks.js";
 
 const EXECUTABLE = 0o755;
 const LOCAL = ".local/bin";
@@ -102,17 +102,125 @@ test("what the harness needs is bound back: its package, its directory on PATH, 
   );
 });
 
-test("the resolver's directory is bound back when resolv.conf points into it", () => {
+test("the directory that resolv.conf points into is bound back whenever it is hidden, whoever manages it", () => {
   const box = machine();
-  const dir = path.join(box.home, "resolve");
-  fs.mkdirSync(dir);
-  fs.writeFileSync(path.join(dir, "stub"), "");
+  const dir = path.join(box.home, "resolvconf/run");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "resolv.conf"), "");
   fs.mkdirSync(box.at("etc"));
-  fs.symlinkSync(path.join(dir, "stub"), box.at("etc/resolv.conf"));
-  const dns = { conf: box.at("etc/resolv.conf"), dir };
-  expect(maskingOf({ outDir: GONE, bin: "tool", dns }).exposed).toContain(dir);
-  const plain = { conf: box.at("etc/none"), dir };
+  fs.symlinkSync(path.join(dir, "resolv.conf"), box.at("etc/resolv.conf"));
+  const resolvConf = box.at("etc/resolv.conf");
   expect(
-    maskingOf({ outDir: GONE, bin: "tool", dns: plain }).exposed,
+    maskingOf({ outDir: GONE, bin: "tool", resolvConf }).exposed,
+  ).toContain(dir);
+  // A configuration file that is not hidden, or is not there, needs nothing.
+  const plain = box.at("etc/plain.conf");
+  fs.writeFileSync(plain, "");
+  const visible = maskingOf({
+    outDir: GONE,
+    bin: "tool",
+    resolvConf: plain,
+  }).exposed;
+  expect(visible).not.toContain(box.at("etc"));
+  expect(
+    maskingOf({ outDir: GONE, bin: "tool", resolvConf: box.at("etc/none") })
+      .exposed,
   ).not.toContain(dir);
+});
+
+test("a file that a variable names is bound back as the file, not its directory", () => {
+  const box = machine();
+  const bundle = path.join(box.home, ".ccr/ca-bundle.crt");
+  fs.mkdirSync(path.dirname(bundle));
+  fs.writeFileSync(bundle, "");
+  fs.writeFileSync(path.join(box.home, ".ccr/secret"), "");
+  const own = path.join(box.home, "own-ca.pem");
+  fs.writeFileSync(own, "");
+  vi.stubEnv("NODE_EXTRA_CA_CERTS", bundle);
+  vi.stubEnv("MY_CA", own);
+  vi.stubEnv("SSL_CERT_FILE", box.at("not-there"));
+  const { exposed } = maskingOf({
+    outDir: GONE,
+    bin: "tool",
+    pass: ["MY_CA", "UNSET_ONE"],
+  });
+  expect(exposed).toContain(bundle);
+  expect(exposed).toContain(own);
+  expect(exposed).not.toContain(path.dirname(bundle));
+});
+
+test("the Node that runs the harness, behind a shim or not, is bound back with its install root", () => {
+  const box = machine();
+  const image = path.join(box.home, ".volta/tools/image/node/20");
+  const real = path.join(image, "bin/node");
+  fs.mkdirSync(path.dirname(real), { recursive: true });
+  fs.writeFileSync(real, "", { mode: EXECUTABLE });
+  fs.mkdirSync(path.join(box.home, ".volta/bin"), { recursive: true });
+  fs.symlinkSync(real, path.join(box.home, ".volta/bin/node"));
+  vi.stubEnv("PATH", `${path.join(box.home, ".volta/bin")}:/usr/bin`);
+  const { exposed } = maskingOf({ outDir: GONE, bin: "tool" });
+  expect(exposed).toContain(image);
+  const own = path.join(box.home, "asdf/installs/nodejs/22/bin/node");
+  fs.mkdirSync(path.dirname(own), { recursive: true });
+  fs.writeFileSync(own, "", { mode: EXECUTABLE });
+  const before = process.execPath;
+  Object.defineProperty(process, "execPath", {
+    value: own,
+    configurable: true,
+  });
+  onTestFinished(() => {
+    Object.defineProperty(process, "execPath", {
+      value: before,
+      configurable: true,
+    });
+  });
+  const running = maskingOf({ outDir: GONE, bin: "tool" }).exposed;
+  expect(running).toContain(path.join(box.home, "asdf/installs/nodejs/22"));
+  // A node that is a loose file in a directory without bin/ is bound with its directory.
+  const loose = path.join(box.home, "node-here/node");
+  fs.mkdirSync(path.dirname(loose));
+  fs.writeFileSync(loose, "", { mode: EXECUTABLE });
+  Object.defineProperty(process, "execPath", {
+    value: loose,
+    configurable: true,
+  });
+  expect(maskingOf({ outDir: GONE, bin: "tool" }).exposed).toContain(
+    path.dirname(loose),
+  );
+});
+
+test("a PATH entry that is the home, a relative entry or the cases directory is not bound back, and is warned about once", () => {
+  const box = machine();
+  const cases = box.at(ELSEWHERE);
+  vi.stubEnv("PATH", `${box.home}:.::${cases}:/usr/bin:${box.at("absent")}`);
+  const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const where = { casesDir: cases, outDir: GONE, bin: "tool" };
+  const { exposed } = maskingOf(where);
+  maskingOf(where);
+  const said = warn.mock.calls.map((call) => String(call[0]));
+  warn.mockRestore();
+  expect(exposed).not.toContain(box.home);
+  expect(exposed).not.toContain(cases);
+  expect(said).toHaveLength(4);
+  expect(said.join("\n")).toContain(`"${box.home}"`);
+  expect(said.join("\n")).toContain('"."');
+  expect(said.join("\n")).toContain("(empty)");
+});
+
+test("sandboxExpose paths are bound back, and none may be the home or the cases directory", () => {
+  const box = machine();
+  const tool = path.join(box.home, "opt/tool");
+  fs.mkdirSync(tool, { recursive: true });
+  expect(
+    maskingOf({ outDir: GONE, bin: "tool", expose: [tool] }).exposed,
+  ).toContain(tool);
+  const cases = box.at(ELSEWHERE);
+  const check = (paths: string[]) => () => {
+    requireExposable(paths, cases);
+  };
+  expect(check([tool, box.at(SUBJECT_DIR)])).not.toThrow();
+  expect(check(["relative/dir"])).toThrow(/absolute path that exists/);
+  expect(check([box.at("missing")])).toThrow(/absolute path that exists/);
+  expect(check([box.home])).toThrow(/your home or the cases directory/);
+  expect(check([cases])).toThrow(/your home or the cases directory/);
 });

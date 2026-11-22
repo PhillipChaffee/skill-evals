@@ -3,6 +3,15 @@ import { UsageError } from "./scope.js";
 
 // What a harness needs to run at all, to reach the network through a proxy, and to trust the same certificates as the
 // user's shell. Nothing else of this process's environment is inherited.
+/** The variables that name a certificate file or directory, which a sandbox must leave readable. */
+export const CA_VARIABLES = [
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "NODE_EXTRA_CA_CERTS",
+  "REQUESTS_CA_BUNDLE",
+  "CURL_CA_BUNDLE",
+  "GIT_SSL_CAINFO",
+];
 const ALLOWED = new Set([
   "PATH",
   "SHELL",
@@ -17,12 +26,7 @@ const ALLOWED = new Set([
     name,
     name.toLowerCase(),
   ]),
-  "SSL_CERT_FILE",
-  "SSL_CERT_DIR",
-  "NODE_EXTRA_CA_CERTS",
-  "REQUESTS_CA_BUNDLE",
-  "CURL_CA_BUNDLE",
-  "GIT_SSL_CAINFO",
+  ...CA_VARIABLES,
 ]);
 const LOCALE = /^LC_/;
 // This tool's own variables, and the ones npm and the shell set that name the command that is running.

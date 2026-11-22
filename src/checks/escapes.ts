@@ -41,13 +41,18 @@ const TOOL_VALUE_OPTIONS = new Set([
   "--package",
   "--target-dir",
   "--repository",
-  "-r",
   "--repository-url",
   "--config-file",
   "-u",
   "--username",
   "--index-url",
   "--token",
+  "-H",
+  "--host",
+  "--context",
+  "--config",
+  "--filter",
+  "-F",
 ]);
 const PUBLISH_SUBCOMMANDS = new Map(
   Object.entries({
@@ -71,6 +76,9 @@ const WRAPPERS: Record<string, Set<string>> = {
   nice: new Set(["-n", "--adjustment"]),
   sudo: new Set(["-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U"]),
   npx: new Set(["-p", "--package"]),
+  exec: new Set(["-a"]),
+  time: new Set(["-f", "-o", "--format", "--output"]),
+  nohup: new Set(),
 };
 // A publish that says it changes nothing.
 const DRY_RUN = "--dry-run";
@@ -150,8 +158,22 @@ const configOf = (dir: string, key: string): string | null =>
   gitAnswer(dir, ["config", "--local", "--get", key]);
 
 /**
+ * Tells whether a push says that it sends nothing, which the value of `-o` cannot say for it.
+ * @param rest - The words after `push`.
+ * @returns True for `--dry-run` or `-n`, alone or among short options.
+ */
+function looksOnly(rest: string[]): boolean {
+  for (let at = 0; at < rest.length; at++) {
+    const word = rest[at] as string;
+    if (PUSH_VALUE_OPTIONS.has(word)) at += 1;
+    else if (word === DRY_RUN || SHORT_DRY_RUN.test(word)) return true;
+  }
+  return false;
+}
+
+/**
  * Finds where a push with no remote on the command line goes: the branch's `pushRemote`, else `remote.pushDefault`, else
- * `origin`.
+ * the branch's `remote`, else `origin`.
  * @param dir - The repository.
  * @returns The remote's name.
  */
@@ -160,6 +182,7 @@ function defaultRemote(dir: string): string {
   return (
     (branch === null ? null : configOf(dir, `branch.${branch}.pushRemote`)) ??
     configOf(dir, "remote.pushDefault") ??
+    (branch === null ? null : configOf(dir, `branch.${branch}.remote`)) ??
     "origin"
   );
 }
@@ -230,7 +253,7 @@ function remoteOf(rest: string[]): string | null {
  * @returns The remote without the user and password of a URL.
  */
 const shown = (remote: string): string =>
-  remote.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]*@/i, "$1");
+  remote.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/i, "$1");
 
 /**
  * Names what one command publishes or pushes off this machine.
@@ -243,10 +266,7 @@ function escapeOf(command: string[], dir: string): string | null {
   const tool = path.basename(first);
   if (tool === "git") {
     const push = pushOf(args);
-    if (
-      push === null ||
-      push.rest.some((word) => word === DRY_RUN || SHORT_DRY_RUN.test(word))
-    ) {
+    if (push === null || looksOnly(push.rest)) {
       return null;
     }
     const where = path.resolve(dir, push.dir);
@@ -262,7 +282,11 @@ function escapeOf(command: string[], dir: string): string | null {
   for (let at = 0; at < own.length; at++) {
     const word = own[at] as string;
     if (!word.startsWith("-")) operands.push(word);
-    else if (TOOL_VALUE_OPTIONS.has(word)) at += 1;
+    else if (
+      TOOL_VALUE_OPTIONS.has(word) &&
+      !(name === "pnpm" && word === "-w")
+    )
+      at += 1;
   }
   const published = (PUBLISH_SUBCOMMANDS.get(name) ?? []).find((sub) =>
     sub.split(" ").every((part, at) => operands[at] === part),

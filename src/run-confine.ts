@@ -26,6 +26,8 @@ export function confinementOf(
     | "bin"
     | "projectRoot"
     | "casesDir"
+    | "pass"
+    | "sandboxExpose"
     | "outDir"
   >,
   subjectDir?: string,
@@ -39,7 +41,7 @@ export function confinementOf(
       sandbox: {
         backend: sandbox.backend,
         network: caseDef.network ?? "open",
-        ...maskingOf({ ...plan, subjectDir }),
+        ...maskingOf({ ...plan, expose: plan.sandboxExpose, subjectDir }),
       },
     }),
     ...(watched && {

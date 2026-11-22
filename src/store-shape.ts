@@ -58,7 +58,14 @@ const OPTIONAL_FIELDS: Record<string, Shape> = {
   ),
   skippedGraders: optional((value) => value === true),
   inputHash: optional(text),
-  canaryChanges: optional(isObject),
+  canaryChanges: optional(
+    (value) =>
+      isObject(value) &&
+      Array.isArray(value["changed"]) &&
+      value["changed"].every((each) => typeof each === "string") &&
+      Array.isArray(value["problems"]) &&
+      value["problems"].every((each) => typeof each === "string"),
+  ),
   historyMode: optional(orNull(text)),
   workspaceArchive: optional(
     orNull((value) => isObject(value) && text(value["path"])),

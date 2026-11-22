@@ -206,3 +206,32 @@ test.skipIf(!ON_LINUX)(
     expect(startsOf(box)).toBe(2);
   },
 );
+
+test.skipIf(!ON_LINUX)(
+  "a sandboxExpose entry that does not exist exits 2 before any run",
+  async () => {
+    const box = sandbox();
+    fakeBwrap(box);
+    box.write("skill-evals.config.json", {
+      sandboxExpose: [path.join(box.root, "missing")],
+    });
+    const ran = await scoreSubject(box, {
+      subject: NONE,
+      cases: plantWith(box, { open: {} }),
+      flags: ["--sandbox"],
+    });
+    expect(ran.status).toBe(2);
+    expect(ran.stderr).toMatch(
+      /sandboxExpose: ".*missing" must be an absolute path that exists/,
+    );
+    expect(startsOf(box)).toBe(0);
+    box.write("skill-evals.config.json", { sandboxExpose: ["relative"] });
+    const relative = await scoreSubject(box, {
+      subject: NONE,
+      cases: plantWith(box, { open: {} }),
+    });
+    expect(relative.stderr).toContain(
+      '"sandboxExpose" needs absolute paths, not "relative"',
+    );
+  },
+);

@@ -159,6 +159,12 @@
       "description": "Run each harness process in an OS sandbox: bwrap on Linux, sandbox-exec on macOS. The workspace, the throwaway home and the run's own temp directory are writable and everything else is read-only; a case with `network: \"off\"` gets no network. Setup steps and `command` checks run outside it. It exits 2 when no backend is installed. A case with `network: \"off\"` or `\"provider-only\"` is not applicable without it, and `provider-only` is not applicable with it.",
       "type": "boolean"
     },
+    "sandboxExpose": {
+      "title": "sandboxExpose",
+      "description": "Absolute paths that `--sandbox` binds back, read-only, into the directories it hides (your home, the temp directories, `/run`, the cases, output and project directories), for a layout it does not know: a Node or harness install in an unusual place, a certificate file, a resolver socket. Each path must exist, and none may be your real home or the cases directory. A path outside the hidden directories is already visible and is left alone. See [Safety](../safety.md).",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
     "historyMode": {
       "title": "historyMode",
       "description": "How a case's history.json reaches the agent. preamble renders it as a block in front of the first message, which every harness can do. native writes it as the harness's own session and resumes it, and only a harness that declares historyNative can: where it is forced on one that cannot, a case with a history is not applicable. Each run record keeps the mode. Results of the two modes are not comparable.",

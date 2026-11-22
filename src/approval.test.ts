@@ -97,7 +97,7 @@ test("a terminal is asked once, the answer is remembered, and a change to the co
     { terminal: first, env },
   );
   expect(first.asked).toEqual([
-    `${cases} has not been approved (see them with "skill-evals list --show-prompts"). Run these 3 cases? [y/N] `,
+    `${cases} has not been approved (see them with "skill-evals list --cases ${cases} --show-prompts"). Run these 3 cases? [y/N] `,
   ]);
   const stored = remembered(env);
   expect(stored).toEqual({ [digestOf(cases)]: cases });

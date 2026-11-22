@@ -85,7 +85,20 @@ export function sandboxCapability(
 }
 
 const PROBES: Record<Backend, string[]> = {
-  bwrap: ["--ro-bind", "/", "/", "--unshare-all", "true"],
+  bwrap: [
+    ...[
+      "--ro-bind",
+      "/",
+      "/",
+      "--tmpfs",
+      "/tmp",
+      "--dev",
+      "/dev",
+      "--proc",
+      "/proc",
+    ],
+    ...["--unshare-all", "true"],
+  ],
   "sandbox-exec": ["-p", "(version 1)(allow default)", "true"],
 };
 const PROBE_MS = 10_000;

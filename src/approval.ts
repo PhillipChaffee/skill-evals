@@ -135,12 +135,12 @@ export async function requireApproved(
   const terminal = how.terminal ?? processTerminal();
   if (!terminal.interactive) {
     throw new UsageError(
-      `${what.casesDir} has not been approved: its prompts run unattended with full permissions. Read them with "skill-evals list --show-prompts", then run again with --yes`,
+      `${what.casesDir} has not been approved: its prompts run unattended with full permissions. Read them with "skill-evals list --cases ${what.casesDir} --show-prompts", then run again with --yes`,
     );
   }
   const cases = `${String(what.count)} ${what.count === 1 ? "case" : "cases"}`;
   const answer = await terminal.ask(
-    `${what.casesDir} has not been approved (see them with "skill-evals list --show-prompts"). Run these ${cases}? [y/N] `,
+    `${what.casesDir} has not been approved (see them with "skill-evals list --cases ${what.casesDir} --show-prompts"). Run these ${cases}? [y/N] `,
   );
   if (!YES.test(answer)) throw new UsageError("not approved; nothing was run");
   try {

@@ -82,6 +82,8 @@ export interface RunPlan {
   sandbox?: SandboxCapability | undefined;
   /** The cases directory, which the sandbox hides from the agent. */
   casesDir?: string | undefined;
+  /** The config's `sandboxExpose`: paths the sandbox binds back read-only. */
+  sandboxExpose?: string[] | undefined;
   /** The project root, which `no_writes_outside_workspace` watches before and after the run. */
   projectRoot?: string | undefined;
   /** What the judge answered before, in this output directory; none for no cache. */

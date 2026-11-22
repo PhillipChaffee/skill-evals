@@ -262,6 +262,6 @@ test("--sandbox starts the backend once, and a backend that cannot start is a us
   );
   requireSandbox({ PATH: probe }, "linux");
   expect(fs.readFileSync(path.join(probe, "args"), "utf8").trim()).toBe(
-    "--ro-bind / / --unshare-all true",
+    "--ro-bind / / --tmpfs /tmp --dev /dev --proc /proc --unshare-all true",
   );
 });

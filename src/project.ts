@@ -77,6 +77,7 @@ export const CONFIG_KEYS: Record<
   lenient: "boolean",
   isolated: "boolean",
   sandbox: "boolean",
+  sandboxExpose: "string[]",
   historyMode: "string",
   keepWorkspaces: "boolean",
   env: "string[]",
@@ -132,6 +133,8 @@ export interface Config {
   isolated?: boolean;
   /** Run the harness process in an OS sandbox. Default: false. */
   sandbox?: boolean;
+  /** Absolute paths that `--sandbox` binds back read-only into the directories it hides, for a layout it does not know. */
+  sandboxExpose?: string[];
   /** How a case's `history.json` reaches the agent: "native" or "preamble". Default: each harness's own, which is "preamble". */
   historyMode?: string;
   /** Archive each run's workspace, seed, remotes and home, less the login files, next to its other files. Default: false. */
@@ -165,6 +168,27 @@ function checkRange(file: string, key: string, value: number): void {
 }
 
 /**
+ * Checks a list of globs or of paths.
+ * @param file - The config file, for the message.
+ * @param key - `subjectExclude`, whose entries are globs, or `sandboxExpose`, whose entries are absolute paths.
+ * @param list - The entries.
+ * @throws {UsageError} For an empty or invalid glob, or a path that is not absolute.
+ */
+function checkPaths(file: string, key: string, list: string[]): void {
+  for (const one of list) {
+    if (key === "subjectExclude") {
+      if (one === "")
+        throw new UsageError(`${file}: "${key}" has an empty glob`);
+      globToRegExp(one);
+    } else if (!path.isAbsolute(one)) {
+      throw new UsageError(
+        `${file}: "${key}" needs absolute paths, not "${one}"`,
+      );
+    }
+  }
+}
+
+/**
  * Checks the value of one config key.
  * @param file - The config file, for the message.
  * @param key - A known key.
@@ -189,12 +213,8 @@ function checkValue(file: string, key: string, value: unknown): void {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new UsageError(`${file}: "${key}" must be a list of strings`);
   }
-  if (key === "subjectExclude") {
-    for (const glob of value as string[]) {
-      if (glob === "")
-        throw new UsageError(`${file}: "${key}" has an empty glob`);
-      globToRegExp(glob);
-    }
+  if (key === "subjectExclude" || key === "sandboxExpose") {
+    checkPaths(file, key, value as string[]);
     return;
   }
   if (key === "report") {

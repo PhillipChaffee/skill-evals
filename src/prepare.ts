@@ -26,6 +26,7 @@ import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { SandboxCapability } from "./os-sandbox.js";
 import { requireSandbox } from "./os-sandbox.js";
+import { requireExposable } from "./sandbox-masks.js";
 import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
 import type { Config, Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
@@ -129,6 +130,7 @@ function settingsOf(options: Context["options"]) {
   reportFormats(options);
   if (options.keepWorkspaces) requireTar();
   const sandbox = options.sandbox ? requireSandbox() : null;
+  if (sandbox) requireExposable(options.sandboxExpose ?? [], options.cases);
   return { reps, jobs, maxInvalid, historyMode, sandbox };
 }
 
@@ -308,4 +310,5 @@ export const basePlan = (
   sandbox: context.sandbox,
   projectRoot: context.projectRoot,
   casesDir: context.options.cases,
+  sandboxExpose: context.options.sandboxExpose,
 });

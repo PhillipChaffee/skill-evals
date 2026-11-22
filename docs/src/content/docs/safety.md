@@ -14,7 +14,7 @@ The harness also gets only an allowlist of your environment variables, so a secr
 
 ## Code that runs on your machine
 
-Four parts of a suite run code that the case author wrote. All of them run as you. None of them runs in the sandbox.
+Three parts of a suite run code that the case author wrote: command checks, setup scripts and mock MCP servers. All of them run as you. The mock servers run inside the sandbox, with the harness. Command checks and setup scripts do not; neither does the harness's own setup nor the judge.
 
 ### Command checks
 
@@ -45,7 +45,7 @@ The servers are sealed: the tool hashes every file they run from before the harn
 | Linux    | `bwrap` (bubblewrap) | an executable of that name on `PATH` |
 | macOS    | `sandbox-exec`       | an executable of that name on `PATH` |
 
-With no backend, the command exits 2 with `no sandbox backend found (looked for bwrap, sandbox-exec)`. It also starts the backend once before any run (`bwrap --ro-bind / / --unshare-all true`) and exits 2 when that fails, as it does where user namespaces are off. It never runs unsandboxed when you asked for the sandbox.
+With no backend, the command exits 2 with `no sandbox backend found (looked for bwrap, sandbox-exec)`. It also starts the backend once before any run, with the same mounts a run uses (`bwrap --ro-bind / / --tmpfs /tmp --dev /dev --proc /proc --unshare-all true`) and exits 2 when that fails, as it does where user namespaces are off. It never runs unsandboxed when you asked for the sandbox.
 
 ### What it does on Linux
 
@@ -53,7 +53,7 @@ The filesystem is bound read-only, in this order, and then these parts are put b
 
 1. `/` is read-only.
 2. An empty temporary filesystem hides your real home, the temp directories, `/run` (and `/var/run`), the cases directory, the output directory and the project root. That takes the credentials in your home, the cases and grader files, the output of other runs, and the Unix sockets under `/run` and `/tmp` out of the agent's view: the Docker socket, the user bus and ssh-agent.
-3. What the harness needs is bound back, read-only: its own install, the directories of `PATH` that were hidden, the run's copy of the subject, and the resolver's directory when `resolv.conf` points into `/run/systemd/resolve`.
+3. What the harness needs is bound back, read-only: its own install; Node (the one that runs this tool and the one on `PATH`, behind a shim or not) with its install root; the directories of `PATH` that were hidden, unless one is your home, `.`, the cases directory or another hidden directory, which is warned about once; each file that a certificate variable (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE` and the others) or a variable of `env` names, as the file itself; the directory that `/etc/resolv.conf` points into; the run's copy of the subject; and the paths of `sandboxExpose`.
 4. A fresh `/dev` and `/proc`, with every namespace unshared. The process dies with the command.
 5. Writable: the run's workspace, its throwaway home, a temp directory of its own (the agent gets it as `TMPDIR`), the run's fixture remotes, and the mock servers' log file.
 6. The mock servers' own directory is read-only, and then the log inside it is writable again.
@@ -64,7 +64,7 @@ The filesystem is bound read-only, in this order, and then these parts are put b
 - **It hides only what is listed.** Your system directories, `/etc`, and everything outside the hidden directories stay readable. The login of the harness is in the throwaway home, so the agent has it. With the network open, the agent can use it.
 - **`provider-only` is unsupported.** Neither backend can allow one set of hosts and deny the rest, so a case with `"network": "provider-only"` is not applicable under `--sandbox`, with the reason `the sandbox cannot enforce provider-only`.
 - **macOS hides nothing.** The `sandbox-exec` profile only denies writes outside the writable set and, for `off`, the network. Your home, the cases and the sockets stay readable. The profile allows `/dev/null`, `/dev/tty`, `/dev/ptmx` and the terminal devices; a harness that needs XPC or mach helpers to start may fail under it, and Apple deprecates `sandbox-exec`. Test your suite on the machine that runs it.
-- **Directories that you named for it are bound as they are.** A harness installed in a hidden directory has its install and its `PATH` directories visible, read-only.
+- **What is bound back stays visible.** A harness installed in a hidden directory has its install and its `PATH` directories readable. For a layout the sandbox does not know, list absolute paths in `sandboxExpose` in the config file: each is bound back read-only, and none may be your real home or the cases directory.
 
 ### Network policy
 

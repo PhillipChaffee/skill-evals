@@ -50,6 +50,8 @@ export interface PlanBase {
   sandbox?: SandboxCapability | null | undefined;
   /** The cases directory, which the sandbox hides from the agent. */
   casesDir?: string | undefined;
+  /** The config's `sandboxExpose`. */
+  sandboxExpose?: string[] | undefined;
   /** The project root, for the `no_writes_outside_workspace` check; absent: the check watches no project. */
   projectRoot?: string | undefined;
 }
@@ -127,6 +129,7 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       sandbox: plan.sandbox ?? undefined,
       projectRoot: plan.projectRoot,
       casesDir: plan.casesDir,
+      sandboxExpose: plan.sandboxExpose,
     };
     return { subject, run, key: runKey(run) };
   });

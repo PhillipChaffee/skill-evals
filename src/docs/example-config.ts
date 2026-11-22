@@ -34,6 +34,7 @@ export const EXAMPLE_CONFIG: Record<
   lenient: false,
   isolated: false,
   sandbox: false,
+  sandboxExpose: ["/opt/tools/bin"],
   historyMode: "preamble",
   keepWorkspaces: false,
   env: ["AWS_ENDPOINT_URL"],
