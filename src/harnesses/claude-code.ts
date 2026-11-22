@@ -99,6 +99,7 @@ const claudeCode: Harness = {
     "subagents",
     "turnGrouping",
     "childCalls",
+    "childText",
     "loadedReport",
     "skillListing",
     "isolated",

@@ -35,6 +35,11 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
     meaning:
       "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
   },
+  by: {
+    type: "by",
+    meaning:
+      'Whose calls, skill loads or text count: `"main"` (the main thread), `"subagent"` (any subagent, at any depth), or `{ "agent": "<name>" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.',
+  },
   anyOf: {
     type: "texts",
     meaning:
@@ -43,7 +48,7 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   min: {
     type: "count",
     meaning:
-      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
   },
   max: {
     type: "count",
@@ -58,19 +63,19 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   first: {
     type: "bool",
     meaning:
-      "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+      "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
   },
   before: {
     type: "matcher",
     extras: WHICH,
     meaning:
-      "The calls that must come first, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included.",
+      "The calls that must come first, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included, unless the matcher says `by`.",
   },
   after: {
     type: "matcher",
     extras: WHICH,
     meaning:
-      "The calls that must come second, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included.",
+      "The calls that must come second, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included, unless the matcher says `by`.",
   },
   sequence: {
     type: "matchers",

@@ -1,3 +1,5 @@
+import type { By } from "../agents.js";
+import { fitsBy } from "../agents.js";
 import type { ToolMatcher } from "../matchers.js";
 import { describeMatcher, hitsOf } from "../matchers.js";
 import type { TranscriptEvent } from "../harnesses/shared.js";
@@ -57,13 +59,13 @@ export function quotePieces(pieces: Piece[], limit = 5): string {
   return (left > 0 ? [...lines, `... ${String(left)} more`] : lines).join("\n");
 }
 
-// The main agent's assistant texts that say something, in order.
-const spoken = (events: TranscriptEvent[]): TranscriptEvent[] =>
+// The assistant texts of the agents `by` names that say something, in order. No `by` is the main agent.
+const spoken = (events: TranscriptEvent[], by?: By): TranscriptEvent[] =>
   events.filter(
     (one) =>
       one.type === "text" &&
       one.role === "assistant" &&
-      one.agent.parent === null &&
+      fitsBy(by ?? "main", one.agent) &&
       (one.text ?? "").trim() !== "",
   );
 
@@ -90,7 +92,7 @@ function firstCall(
 /**
  * Tests the bounded form of `first_message`.
  * @param events - The run's events.
- * @param first - The first non-empty text of the main agent, if any.
+ * @param first - The first non-empty text of the agent the check names, if any.
  * @param matcher - The calls that must not come before it.
  * @returns That text alone, or why it cannot be tested: there is none, or it comes after the matcher's first call.
  */
@@ -113,14 +115,16 @@ function boundedFirst(
  * Cuts the events a scope names.
  * @param events - The run's events.
  * @param scope - Which events to keep.
+ * @param by - Whose first or last message the message scopes read; default: the main agent.
  * @returns The events, or the reason the scope holds none that a check can test.
  */
 function scoped(
   events: TranscriptEvent[],
   scope: Scope,
+  by?: By,
 ): { events: TranscriptEvent[] } | { problem: string } {
   if (scope === "any") return { events };
-  const texts = spoken(events);
+  const texts = spoken(events, by);
   if (typeof scope === "string") {
     const one = scope === "first_message" ? texts[0] : texts.at(-1);
     return one ? { events: [one] } : { problem: "no assistant text" };
@@ -161,25 +165,35 @@ function textOf(one: TranscriptEvent, where: Where): string | undefined {
     : undefined;
 }
 
+/** What a check tests: which events, which text of them, and whose. */
+export interface Cut {
+  /** Which events to look at. */
+  scope: Scope;
+  /** What to take from them. */
+  where: Where;
+  /** Whose events to keep, after the scope has cut them; the message scopes read the first or last text of these agents, and the main agent without `by`. */
+  by?: By | undefined;
+}
+
 /**
  * Picks the texts a check tests.
  * @param events - The run's events.
- * @param scope - Which events to look at.
- * @param where - What to take from them.
+ * @param cut - The scope, what to take, and whose.
  * @returns The texts, each with its event and cut to the first million characters; or the reason the scope cannot
  *   be applied: no assistant text, no call that fits a `before` or `after` matcher, or a first text that comes after
  *   the bounding call.
  */
-export function pieces(
-  events: TranscriptEvent[],
-  scope: Scope,
-  where: Where,
-): Sliced {
-  const cut = scoped(events, scope);
-  if ("problem" in cut) return cut;
+export function pieces(events: TranscriptEvent[], cut: Cut): Sliced {
+  const { scope, where, by } = cut;
+  const scopedEvents = scoped(events, scope, by);
+  if ("problem" in scopedEvents) return scopedEvents;
+  const window =
+    by === undefined
+      ? scopedEvents.events
+      : scopedEvents.events.filter((one) => fitsBy(by, one.agent));
   return {
-    window: cut.events,
-    pieces: cut.events.flatMap((event) => {
+    window,
+    pieces: window.flatMap((event) => {
       const text = textOf(event, where);
       return text === undefined ? [] : [{ event, text }];
     }),
@@ -198,6 +212,6 @@ export const slice = (
   scope: Scope,
   where: Where,
 ): string[] => {
-  const cut = pieces(events, scope, where);
+  const cut = pieces(events, { scope, where });
   return "pieces" in cut ? cut.pieces.map(({ text }) => text) : [];
 };

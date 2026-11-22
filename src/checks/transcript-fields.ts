@@ -10,10 +10,6 @@ const WHERE_VALUES = [
 /** What a check tests. */
 export type Where = (typeof WHERE_VALUES)[number];
 
-/** Task 16 (subagent attribution) deletes this sentence here and its twin in docs/src/content/docs/guides/write-a-case.md (search "Until subagent attribution lands"); the checks page and the schema take it from here. */
-export const SUBAGENT_CAVEAT =
-  "Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.";
-
 // The fields of the checks of assistant text and tool outputs, in the order the docs list them.
 export const TRANSCRIPT_FIELDS: Record<string, FieldDef> = {
   where: {
@@ -25,8 +21,7 @@ export const TRANSCRIPT_FIELDS: Record<string, FieldDef> = {
   scope: {
     type: "scope",
     meaning:
-      'Which events are tested: "any" (the default), "first_message" (the main agent\'s first non-empty text, wherever it falls), "final_message" (its last non-empty text), `{ "before": matcher }` or `{ "after": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ "first_message": true, "before": matcher }` (the first text, which scores 0 when it comes after the matcher\'s first call). ' +
-      SUBAGENT_CAVEAT,
+      'Which events are tested: "any" (the default), "first_message" (the main agent\'s first non-empty text, wherever it falls), "final_message" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ "before": matcher }` or `{ "after": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ "first_message": true, "before": matcher }` (the first text, which scores 0 when it comes after the matcher\'s first call). ',
   },
   which: {
     type: "enum",

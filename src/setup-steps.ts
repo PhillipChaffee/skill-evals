@@ -24,7 +24,12 @@ const BRANCH = /^[A-Za-z0-9_][A-Za-z0-9._/-]*$/;
 const REMOTE = /^[A-Za-z0-9_-]+$/;
 const SAFE_WORD = /^[A-Za-z0-9_./-]+$/;
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
+/**
+ * Tells whether a value is a plain object, and not a list or null.
+ * @param value - Any parsed value.
+ * @returns True for an object that is neither an array nor null.
+ */
+export const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**

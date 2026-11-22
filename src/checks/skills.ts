@@ -1,9 +1,11 @@
+import { fitsBy } from "../agents.js";
 import { globToRegExp } from "../glob.js";
 import { firstOutside, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { SkillLoad, SkillVia } from "../skill-events.js";
 import { REAL_VIAS, legacySkillLoads } from "../skill-events.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import { byNeeds } from "./by-needs.js";
 import { PASS } from "./rules.js";
 
 const positions = (loads: SkillLoad[]): number[] =>
@@ -24,7 +26,7 @@ const viasOf = (check: RuledCheck): readonly SkillVia[] =>
  * @param outcome - What the run left behind.
  * @returns Under `--lenient`, and with neither `via` nor `resolved`, the loads of the 0.0.1 rule: any input that
  *   mentions `skills/<name>/SKILL.md`. Otherwise the `load` events of the run, of the check's `via` and, with
- *   `resolved`, of that kind.
+ *   `resolved`, of that kind. With `by`, only the loads made by those agents.
  */
 function loadsOf(check: RuledCheck, outcome: Outcome): SkillLoad[] {
   if (
@@ -32,12 +34,15 @@ function loadsOf(check: RuledCheck, outcome: Outcome): SkillLoad[] {
     check.via === undefined &&
     check.resolved === undefined
   ) {
-    return legacySkillLoads(outcome.toolCalls);
+    return legacySkillLoads(outcome.toolCalls).filter(({ agent }) =>
+      fitsBy(check.by, agent),
+    );
   }
   const vias = viasOf(check);
   return outcome.skillEvents.filter(
     (event) =>
       event.type === "load" &&
+      fitsBy(check.by, event.agent) &&
       vias.includes(event.via) &&
       (check.resolved === undefined || event.resolved === check.resolved),
   );
@@ -47,7 +52,8 @@ const loadedNames = (loads: SkillLoad[]): string =>
   list([...new Set(loads.map(({ skill }) => skill))].sort()) || "none";
 
 /**
- * Scores `first`: the first skill load is a named skill, and no call outside `ignoring` comes before it.
+ * Scores `first`: the first skill load is a named skill, and no call outside `ignoring` comes before it. With `by`,
+ * both are about that agent: its first load, and the calls it made before it.
  * @param check - A `skill_loaded` check with `first` set.
  * @param outcome - What the run left behind.
  * @returns 1 when both hold, and the reason one does not.
@@ -65,7 +71,15 @@ function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
       reason: `the first skill load is "${first.skill}" (call #${String(first.index)}), not ${names.length === 1 ? `"${list(names)}"` : `one of ${list(names)}`}\n${quoteCalls(all, [first.index])}`,
     };
   }
-  const before = firstOutside(all.slice(0, first.index), check.ignoring ?? []);
+  const earlier = all
+    .slice(0, first.index)
+    .map((call, position) => ({ call, position }))
+    .filter(({ call }) => fitsBy(check.by, call.agent));
+  const found = firstOutside(
+    earlier.map(({ call }) => call),
+    check.ignoring ?? [],
+  );
+  const before = earlier[found]?.position ?? -1;
   if (before < 0) return PASS;
   return {
     score: 0,
@@ -175,18 +189,20 @@ export const SKILL_CHECKS = {
     fields: [],
     forms: [["skill"], ["anyOf"]],
     together: { ignoring: ["first"] },
-    optional: ["skill", "anyOf", "first", "ignoring", "via", "resolved"],
+    optional: ["skill", "anyOf", "first", "ignoring", "via", "resolved", "by"],
+    needs: byNeeds,
     scores:
       "The agent loaded that skill, or any of the skills in `anyOf`, through the skill tool, a read of its `SKILL.md`, or a shell command that reads it.",
-    note: "A load is a real one: a skill-kind call that names the skill, or a read-kind or `cat`-style shell call of `SKILL.md` in the loaded subject's own copy of the skill. A `grep`, a listing, and a path in the workspace that merely looks like `skills/<name>/SKILL.md` are not loads. With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, because calls cannot yet be told apart by the agent that made them. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`. Under `--lenient`, a check with neither `via` nor `resolved` keeps the 0.0.1 rule for one release: any tool input that mentions `skills/<name>/SKILL.md`, in any case.",
+    note: "A load is a real one: a skill-kind call that names the skill, or a read-kind or `cat`-style shell call of `SKILL.md` in the loaded subject's own copy of the skill. A `grep`, a listing, and a path in the workspace that merely looks like `skills/<name>/SKILL.md` are not loads. With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, unless `by` limits both the loads and the calls to one agent. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`. Under `--lenient`, a check with neither `via` nor `resolved` keeps the 0.0.1 rule for one release: any tool input that mentions `skills/<name>/SKILL.md`, in any case.",
     validate: checkSkillFields,
     rule: skillLoaded,
   },
   skill_not_loaded: {
     fields: ["skill"],
-    optional: ["via", "resolved"],
+    optional: ["via", "resolved", "by"],
+    needs: byNeeds,
     scores: "The agent did not load that skill.",
-    note: "It counts loads as `skill_loaded` does, including `via` and `resolved`, and keeps the 0.0.1 rule under `--lenient` in the same way.",
+    note: "It counts loads as `skill_loaded` does, including `via`, `resolved` and `by`, and keeps the 0.0.1 rule under `--lenient` in the same way.",
     rule: skillNotLoaded,
   },
   skill_available: {

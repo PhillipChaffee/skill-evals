@@ -1,3 +1,5 @@
+import type { By } from "../agents.js";
+import { describeBy, fitsBy } from "../agents.js";
 import type { ToolCall } from "../harnesses/shared.js";
 import type { ToolMatcher } from "../matchers.js";
 import {
@@ -11,6 +13,7 @@ import type { Capability } from "../capabilities.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { checkBounds, checkLineBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
+import { byNeeds } from "./by-needs.js";
 
 const TOOL_FIELDS = {
   optional: [
@@ -22,8 +25,9 @@ const TOOL_FIELDS = {
     "inputLinesMin",
     "minDurationMs",
     "maxDurationMs",
+    "by",
   ],
-  oneOf: ["kind", "name"],
+  oneOf: ["kind", "name", "by"],
 } satisfies Partial<Spec>;
 
 const calls = (n: number): string =>
@@ -39,6 +43,7 @@ const ownMatcher = ({
   inputLinesMin,
   minDurationMs,
   maxDurationMs,
+  by,
 }: RuledCheck): ToolMatcher => ({
   ...(kind !== undefined && { kind }),
   ...(name !== undefined && { name }),
@@ -48,6 +53,7 @@ const ownMatcher = ({
   ...(inputLinesMin !== undefined && { inputLinesMin }),
   ...(minDurationMs !== undefined && { minDurationMs }),
   ...(maxDurationMs !== undefined && { maxDurationMs }),
+  ...(by !== undefined && { by }),
 });
 
 /**
@@ -73,19 +79,26 @@ export function durationNeeds(check: Check): Capability[] {
  * Judges the first call that is left after dropping the ignored ones.
  * @param all - Every tool call of the run.
  * @param matcher - What that call must be.
- * @param ignoring - Calls to drop first.
+ * @param drop - The calls to leave out, or the agent whose first call it is.
+ * @param drop.ignoring - Calls to drop first.
+ * @param drop.by - Whose first call it is: the first call made by that agent, with nothing ignored. Absent: the run's.
  * @returns 1 when the first call left fits the matcher, and the reason it does not otherwise.
  */
 function firstCallFits(
   all: ToolCall[],
   matcher: ToolMatcher,
-  ignoring: ToolMatcher[],
+  drop: { ignoring: ToolMatcher[]; by?: By | undefined },
 ): Verdict {
-  const at = firstOutside(all, ignoring);
+  const { ignoring, by } = drop;
+  const at =
+    by === undefined
+      ? firstOutside(all, ignoring)
+      : all.findIndex((call) => fitsBy(by, call.agent));
   if (at < 0) {
+    const who = by === undefined ? "the run" : describeBy(by);
     return {
       score: 0,
-      reason: `${all.length === 0 ? "the run made no tool calls" : "no tool call is left after ignoring"}\n${quoteCalls(all, [])}`,
+      reason: `${all.length === 0 || by !== undefined ? `${who} made no tool calls` : "no tool call is left after ignoring"}\n${quoteCalls(all, [])}`,
     };
   }
   if (matches(matcher, all[at] as ToolCall)) return PASS;
@@ -130,7 +143,8 @@ function counted(
   const matcher = ownMatcher(check);
   const all = outcome.toolCalls;
   if (check.first) {
-    const first = firstCallFits(all, matcher, []);
+    const { by, ...own } = matcher;
+    const first = firstCallFits(all, own, { ignoring: [], by });
     if (first.score === 0) return first;
   }
   const hits = hitsOf(all, matcher);
@@ -160,43 +174,40 @@ export const TOOL_CHECKS = {
     optional: [...TOOL_FIELDS.optional, "min", "max", "sameTurn", "first"],
     scores:
       "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn.",
-    note: "A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
+    note: "A count sees every call of the run, a subagent's included, unless `by` names the agent. With `by` alone (no `kind` or `name`) it counts every call of that agent, so `{ by: { agent: \"research-planner\" }, max: 0 }` says the planner made no tool call; `min` then defaults to 0 when `max` is 0. With `first` and `by`, the first call that agent made must fit, and with no `by` the run's first call. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable. `by` needs `childCalls`.",
     needs: (check) => [
       ...(check.sameTurn ? (["turnGrouping"] as const) : []),
       ...durationNeeds(check),
+      ...byNeeds(check),
     ],
-    notYet: ["by"],
     validate: (given, where) => {
       checkBounds(given, where);
       checkLineBounds(given, where);
     },
     rule: (check, outcome) =>
       counted(check, outcome, {
-        min: check.min ?? 1,
+        min: check.min ?? (check.max === 0 ? 0 : 1),
         max: check.max ?? Infinity,
       }),
   },
   tool_not_called: {
     fields: [],
     ...TOOL_FIELDS,
-    notYet: ["by"],
     validate: checkLineBounds,
-    needs: durationNeeds,
+    needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
     scores: "The agent made no tool call that fits every given field.",
     rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
   },
   first_tool: {
     fields: ["matches"],
     optional: ["ignoring"],
-    needs: durationNeeds,
+    needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
     scores:
       "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`.",
-    note: "A subagent's calls are in the list too, because calls cannot yet be told apart by the agent that made them.",
+    note: "A subagent's calls are in the list too, unless `matches` or an `ignoring` matcher says `by`: `matches` with `by: \"main\"` fails when a subagent's call comes first.",
     rule: (check, outcome) =>
-      firstCallFits(
-        outcome.toolCalls,
-        check.matches as ToolMatcher,
-        check.ignoring ?? [],
-      ),
+      firstCallFits(outcome.toolCalls, check.matches as ToolMatcher, {
+        ignoring: check.ignoring ?? [],
+      }),
   },
 } satisfies Record<string, Spec>;

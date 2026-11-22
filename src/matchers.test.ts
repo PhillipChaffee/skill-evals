@@ -30,7 +30,7 @@ test("a matcher reads the keys it knows, with its own flags", () => {
 });
 
 test.each([
-  [{}, /needs at least one of "kind", "name", "inputMatches"/],
+  [{}, /needs at least one of "kind", "name", "inputMatches", "by"/],
   [{ flags: "i" }, /needs at least one of/],
   [[], /must be an object/],
   [null, /must be an object/],
@@ -39,12 +39,12 @@ test.each([
   [{ name: "(" }, /Invalid regular expression/],
   [{ name: "a", flags: "zz" }, /Invalid regular expression|flags/],
   [
-    { by: { agent: "x" }, kind: "shell" },
-    /case.json.*"by" is not yet supported/,
+    { by: { agent: "x", extra: 1 }, kind: "shell" },
+    /case.json.*"by" must be one of "main", "subagent"/,
   ],
   [
     { inputLinesMax: 3 },
-    /needs at least one of "kind", "name", "inputMatches"/,
+    /needs at least one of "kind", "name", "inputMatches", "by"/,
   ],
   [
     { inputLinesMax: "3", kind: "shell" },

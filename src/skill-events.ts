@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ToolCall } from "./harnesses/shared.js";
+import type { AgentRef, ToolCall } from "./harnesses/shared.js";
 import { skillNameArg } from "./harnesses/shared.js";
 import { shellWords } from "./shell-words.js";
 
@@ -34,6 +34,8 @@ export interface SkillEvent {
   type: "load" | "file_read";
   /** For `file_read`: the file's path relative to the skill's directory, with `/`. */
   file?: string;
+  /** The agent whose call produced the event; absent for a call with no agent, which is the main thread's. */
+  agent?: AgentRef;
 }
 
 /** What the run loaded, as the rule needs it. */
@@ -64,6 +66,8 @@ export interface SkillPaths {
 export interface SkillLoad {
   skill: string;
   index: number;
+  /** The agent whose call it was; absent for a call with no agent. */
+  agent?: AgentRef;
 }
 
 const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
@@ -290,7 +294,7 @@ function readsOf(call: ToolCall, paths: SkillPaths, roots: Root[]): Read[] {
  * @param calls - Every tool call of a run.
  * @param subject - What the run loaded.
  * @param paths - The run's directories, and the adapter's way to read a path and a skill name from a call.
- * @returns The events in the order of the calls. A skill-kind call that names a skill is a `skill_tool` load, with
+ * @returns The events in the order of the calls, each with the agent of its call. A skill-kind call that names a skill is a `skill_tool` load, with
  *   any `plugin:` prefix dropped from `skill`; it is resolved when the skill is the subject's, the name has no
  *   prefix or the subject's own plugin name as the prefix, and its tool result was not an error. A read-kind call, or a shell call whose command reads
  *   (`cat`, `head`, `tail`, `less`, `bat`, `nl`, `sed -n`), of an existing file in a skill directory of the subject
@@ -307,6 +311,7 @@ export function skillEvents(
   const skillOf = paths.skillOf ?? skillNameArg;
   return calls.flatMap((call, position): SkillEvent[] => {
     const index = call.index ?? position;
+    const agent = call.agent === undefined ? {} : { agent: call.agent };
     if (call.kind === "skill") {
       const named = skillOf(call);
       if (!named) return [];
@@ -317,12 +322,14 @@ export function skillEvents(
         !paths.failed?.has(index) &&
         own.has(skill) &&
         (prefix === null || prefix === (subject.pluginName ?? undefined));
-      return [{ skill, via: "skill_tool", index, resolved, type: "load" }];
+      return [
+        { skill, via: "skill_tool", index, resolved, type: "load", ...agent },
+      ];
     }
     const via = call.kind === "read" ? "file_read" : "shell_read";
     return readsOf(call, paths, roots).map(({ skill, relative }) =>
       relative === SKILL_FILE
-        ? { skill, via, index, resolved: true, type: "load" }
+        ? { skill, via, index, resolved: true, type: "load", ...agent }
         : {
             skill,
             via,
@@ -330,6 +337,7 @@ export function skillEvents(
             resolved: true,
             type: "file_read",
             file: relative,
+            ...agent,
           },
     );
   });
@@ -365,6 +373,10 @@ export function legacySkillLoads(toolCalls: ToolCall[]): SkillLoad[] {
     )) {
       names.push(String(match[1]));
     }
-    return names.map((skill) => ({ skill, index }));
+    return names.map((skill) => ({
+      skill,
+      index,
+      ...(call.agent === undefined ? {} : { agent: call.agent }),
+    }));
   });
 }

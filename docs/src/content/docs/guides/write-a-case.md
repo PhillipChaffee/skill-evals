@@ -118,15 +118,15 @@ A skipped check changes what the case's score means on that harness, so the repo
 
 ### Count, order and first action
 
-A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. `inputLinesMax` and `inputLinesMin` bound the lines of a call's input, counted in the longest string value found anywhere in it, so `{ "kind": "edit", "inputLinesMax": 20 }` fits only small edits. They are matcher keys, so they are also fields of `tool_called` and `tool_not_called`. A call matches when it fits every key, so `inputLinesMax` on `tool_not_called` says that no _small_ call was made, which is rarely what you want. To say that no single write was long, use `inputLinesMin` with one more than the limit:
+A tool check can say how many calls, in what order, and what came first. They all describe a call with the same shape, a matcher: `kind`, `name`, `inputMatches` and `flags`, with at least one of the first three, or `by`. The `flags` of a matcher apply to that matcher's own `name` and `inputMatches`. `inputLinesMax` and `inputLinesMin` bound the lines of a call's input, counted in the longest string value found anywhere in it, so `{ "kind": "edit", "inputLinesMax": 20 }` fits only small edits. They are matcher keys, so they are also fields of `tool_called` and `tool_not_called`. A call matches when it fits every key, so `inputLinesMax` on `tool_not_called` says that no _small_ call was made, which is rarely what you want. To say that no single write was long, use `inputLinesMin` with one more than the limit:
 
 ```json
 { "type": "tool_not_called", "kind": "write", "inputLinesMin": 1001 }
 ```
 
-The key `by` is reserved for later; a matcher that sets it is a load error (`"by" is not yet supported`), never ignored.
+A matcher also takes `by`, which says whose calls fit: see [Subagents](#subagents-scope-a-check-with-by).
 
-`tool_called` takes `min` (default 1) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` requires every matching call to have been issued in one assistant turn, so `min` and `max` count calls that were launched together: two researchers in one message and a third one later fails it, and a matching call with no turn fails it unless it is the only match. It needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
+`tool_called` takes `min` (default 1, or 0 when `max` is 0) and `max` (default none) for the number of matching calls, so a 0.0.1 `tool_called` with neither still means "at least one". `min` above `max` is a load error. `sameTurn: true` requires every matching call to have been issued in one assistant turn, so `min` and `max` count calls that were launched together: two researchers in one message and a third one later fails it, and a matching call with no turn fails it unless it is the only match. It needs a harness with the `turnGrouping` capability (Claude Code today); on any other harness the case is not applicable. `tool_not_called` is `tool_called` with `max: 0`.
 
 ```json
 {
@@ -180,9 +180,45 @@ A `sequence` is a list of matchers that must match calls in that order, with oth
 }
 ```
 
-Until checks can tell agents apart, every one of these sees all the calls of the run, those of a subagent included. Claude Code flattens a subagent's calls into the list. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
+Without `by`, every one of these sees all the calls of the run, those of a subagent included. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
 
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
+
+### Subagents: scope a check with `by`
+
+Every event of a Claude Code run belongs to the agent that produced it: an event with a `parent_tool_use_id` belongs to the agent that the dispatch call of that id started. The agent's `type` is the dispatch's `subagent_type` with any plugin prefix dropped (`magic:comment-sicko:comment-sicko` is `comment-sicko`; a dispatch with no type is `general-purpose`), and its `depth` is 0 for the main thread, 1 for an agent it started, 2 for that agent's own. The dispatch call and its result belong to the dispatcher. An event whose parent id names no known dispatch belongs to an agent of type `unknown`.
+
+`by` takes `"main"` (depth 0), `"subagent"` (depth 1 or more) or `{ "agent": "<name>" }` (agents of that type; the name is normalized the same way). It is a key of every matcher, so it works in `tool_called`, `tool_not_called`, `first_tool`, `tool_order` (in `before`, `after` and `sequence`), in the `tool` of the `tool_output_*` checks and in the `before` and `after` of a `scope`; and it is a field of `skill_loaded`, `skill_not_loaded`, `transcript_matches` and `transcript_lacks`. A matcher with no `by` matches every agent, as in 0.0.1.
+
+```json
+{
+  "checks": [
+    {
+      "type": "tool_not_called",
+      "kind": "edit",
+      "by": { "agent": "researcher" }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit",
+      "inputMatches": "src/",
+      "by": "main"
+    },
+    {
+      "type": "tool_called",
+      "kind": "read",
+      "inputMatches": "workflow/SKILL\\.md",
+      "by": { "agent": "delegate" },
+      "first": true
+    },
+    { "type": "tool_called", "by": { "agent": "planner" }, "max": 0 }
+  ]
+}
+```
+
+`by` alone is enough for `tool_called` and `tool_not_called` (and for a matcher): the last check says the planner made no tool call at all. With `max: 0`, `min` defaults to 0, so that check passes when the planner made none. `tool_called` with `first: true` and `by` asks that the first call that agent made fits; without `by` it is the run's first call, as before. `skill_loaded` with `first: true` and `by` asks for that agent's first load, and that none of that agent's earlier calls fall outside `ignoring`. `first_message` and `final_message` read the main agent; with `by` they read that agent's first and last non-empty text. A `transcript_lacks` with a `by` that fits no event of the tested kind scores 0, as an empty run does, so a delegate that never ran cannot pass "the delegate never said X".
+
+`by` needs capabilities: any `by` on a matcher or a skill check needs `childCalls`, and `by` on `transcript_matches` or `transcript_lacks` needs `childText`. Claude Code declares both. A harness that lacks one cannot tell the main thread from a subagent, so `by: "main"` would silently mean every agent; the case is not applicable there instead. `examples/cases/by-agent` is a whole case. A role that has no agent type (a "collector" that the kit describes only in the dispatch's brief) cannot be named with `by`; match its dispatch with `tool_called { kind: "subagent", inputMatches }` and order it with `tool_order`.
 
 ## What the agent said and what its tools returned
 
@@ -190,7 +226,7 @@ Four checks read the [transcript](../concepts/transcript.md) of the run. They ne
 
 `transcript_matches` scores 1 when a regular expression matches one of the tested texts, and `transcript_lacks` when none does. `where` says what is tested: `assistant_text` (the default), `tool_input` (each call's input, written as JSON, as a matcher reads it), `tool_output`, or `all`. `scope` says which events: `any` (the default), `first_message`, `final_message`, `{ "before": matcher }` or `{ "after": matcher }`.
 
-`first_message` is the main agent's first non-empty text, wherever it falls. In a kit whose correct first action is a tool call, the text before the first tool call is usually empty, so "the first message" is not "the text before any call". The first text may come after a skill load and a read and still count. To bound it, give `{ "first_message": true, "before": matcher }`: it scores 0, and says so, when that text comes after the matcher's first call, and otherwise tests the text. A matcher that matches no call leaves the text before it. `final_message` is the last non-empty text. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.
+`first_message` is the main agent's first non-empty text, wherever it falls. In a kit whose correct first action is a tool call, the text before the first tool call is usually empty, so "the first message" is not "the text before any call". The first text may come after a skill load and a read and still count. To bound it, give `{ "first_message": true, "before": matcher }`: it scores 0, and says so, when that text comes after the matcher's first call, and otherwise tests the text. A matcher that matches no call leaves the text before it. `final_message` is the last non-empty text. Both read the main agent only; with `by: { "agent": "researcher" }` they read that agent's first and last non-empty text instead.
 
 ```json
 {
@@ -201,7 +237,7 @@ Four checks read the [transcript](../concepts/transcript.md) of the run. They ne
 }
 ```
 
-`{ "before": matcher }` and `{ "after": matcher }` cut at the first call that fits the matcher: the events before that call, or after it. A matcher that matches no call scores the check 0, and the reason names the matcher, for `transcript_lacks` as well. `transcript_lacks` scores 0 when the whole run has no events of the chosen `where` (no assistant text, no tool results, no calls), with the reason `the run has no <where> text to test`, because that usually means the capture is broken and an empty run does not show that the agent wrote nothing like the pattern. With `where` set to `tool_output` or `all`, a call in the window with no result also scores 0, with `call #<i> has no output, so it cannot be shown to lack the pattern`. When the run has such events but a found `before` or `after` cut leaves an empty window (the edit was the last call), it passes. `first_message` and `final_message` read assistant text, so giving them another `where` is a load error. `by`, which would pick one agent's events, is not yet supported: it is a load error, even with `--lenient`.
+`{ "before": matcher }` and `{ "after": matcher }` cut at the first call that fits the matcher: the events before that call, or after it. A matcher that matches no call scores the check 0, and the reason names the matcher, for `transcript_lacks` as well. `transcript_lacks` scores 0 when the whole run has no events of the chosen `where` (no assistant text, no tool results, no calls), with the reason `the run has no <where> text to test`, because that usually means the capture is broken and an empty run does not show that the agent wrote nothing like the pattern. With `where` set to `tool_output` or `all`, a call in the window with no result also scores 0, with `call #<i> has no output, so it cannot be shown to lack the pattern`. When the run has such events but a found `before` or `after` cut leaves an empty window (the edit was the last call), it passes. `first_message` and `final_message` read assistant text, so giving them another `where` is a load error. `by` picks one agent's events: see [Subagents](#subagents-scope-a-check-with-by).
 
 `tool_output_matches` and `tool_output_lacks` read the result of the calls that fit `tool`, a matcher. With `which: "first"` or `"last"` they look at one call; with `"any"` (the default) at all of them. The output is what the tool returned, not what the agent said it returned, so "red before green" is two checks, and an agent that only claims success, or runs `true`, scores 0:
 

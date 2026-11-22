@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import type { RuledCheck } from "./checks/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
 import { legacySkillLoads } from "./skill-events.js";
-import { lines, parse, parseText } from "./testing/streams.js";
+import { lines, parse, parseText, withoutAgent } from "./testing/streams.js";
 import { NO_FILES, scoredNow } from "./testing/outcome.js";
 
 const CODEX_STREAM = "codex.stream.jsonl";
@@ -126,7 +126,7 @@ test("codex reads every kind of tool item, and no other item, as a tool call", (
       item({ type: "toString" }),
     ),
   );
-  expect(toolCalls).toEqual([
+  expect(withoutAgent(toolCalls)).toEqual([
     { name: "file_change", kind: "edit", input: { changes: ["a.txt"] } },
     {
       name: "mcp_tool_call",
@@ -159,7 +159,7 @@ test("cursor reads an MCP tool call, whose arguments are JSON text when they par
       { type: "result", subtype: "success", result: "all of it" },
     ),
   );
-  expect(parsed.toolCalls).toEqual([
+  expect(withoutAgent(parsed.toolCalls)).toEqual([
     { name: "lookup", kind: "other", input: { q: 1 } },
     { name: "lookup", kind: "other", input: "not json" },
   ]);

@@ -7,7 +7,7 @@ import { FILE_FIELDS } from "./file-fields.js";
 import { TRANSCRIPT_FIELDS } from "./transcript-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
-import { readSteps } from "../setup-steps.js";
+import { isObject, readSteps } from "../setup-steps.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { UsageError, messageOf } from "../scope.js";
 
@@ -38,6 +38,7 @@ export type FieldType =
   | "matcher"
   | "matchers"
   | "vias"
+  | "by"
   | "scope"
   | "object";
 
@@ -139,9 +140,6 @@ export const REGEX_FIELDS = Object.entries(FIELDS)
   .filter(([, def]) => def.type === "regex")
   .map(([name]) => name);
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 /**
  * Reads a value that must be a non-empty string.
  * @param value - The parsed value.
@@ -194,7 +192,7 @@ const whole =
 
 // A parser for a list of objects.
 const objects: FieldParser = (value, at) => {
-  if (!Array.isArray(value) || !value.every(isPlainObject)) {
+  if (!Array.isArray(value) || !value.every(isObject)) {
     throw failure(at, `"${at.name}" must be a list of objects`);
   }
   return value;
@@ -304,7 +302,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     return objects(value, at);
   },
   envvars: (value, at) => {
-    if (!isPlainObject(value)) {
+    if (!isObject(value)) {
       throw failure(at, `"${at.name}" must be an object of variable values`);
     }
     const problem = Object.entries(value)
@@ -316,11 +314,12 @@ const PARSERS: Record<FieldType, FieldParser> = {
   needs: (value, at) => readNeeds(value, at.where),
   steps: (value, at) => readSteps(value, at.where),
   vias: parseVias,
+  by: (value, at) => PARSERS.object(value, at),
   scope: (value, at) => PARSERS.object(value, at),
   matcher: (value, at) => PARSERS.object(value, at),
   matchers: (value, at) => objects(value, at),
   object: (value, at) => {
-    if (!isPlainObject(value)) {
+    if (!isObject(value)) {
       throw failure(
         at,
         `"${at.name}" must be ${at.def.expected ?? "an object"}`,

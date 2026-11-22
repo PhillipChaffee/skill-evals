@@ -78,9 +78,15 @@ test("callsOf lists the tool calls with a turn only where the event has one", ()
     { role: "assistant", type: "tool_call", name: "x" },
   ]);
   expect(callsOf(events)).toEqual([
-    { name: "Bash", kind: "shell", input: { command: "ls" }, turn: 2 },
-    { name: "", kind: "read", input: 1 },
-    { name: "x", kind: "other", input: undefined },
+    {
+      name: "Bash",
+      kind: "shell",
+      input: { command: "ls" },
+      agent: MAIN,
+      turn: 2,
+    },
+    { name: "", kind: "read", input: 1, agent: MAIN },
+    { name: "x", kind: "other", input: undefined, agent: MAIN },
   ]);
 });
 
@@ -177,6 +183,7 @@ test("the transcript file is written beside the stream file, relative in the rec
   // The results file keeps the inputs of the calls and no output.
   expect(JSON.stringify(record?.toolCalls)).not.toContain("boom\\n");
   expect(Object.keys(record?.toolCalls[0] ?? {}).sort()).toEqual([
+    "agent",
     "index",
     "input",
     "kind",

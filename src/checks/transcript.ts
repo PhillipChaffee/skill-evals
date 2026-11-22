@@ -4,16 +4,16 @@ import { resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { UsageError } from "../scope.js";
 import { PASS } from "./rules.js";
-import { SUBAGENT_CAVEAT } from "./transcript-fields.js";
+import { byNeeds } from "./by-needs.js";
+import { describeBy } from "../agents.js";
 import type { Piece } from "./transcript-slice.js";
 import { pieces, quotePieces } from "./transcript-slice.js";
 import { outputLacks, outputMatches, outputSize } from "./transcript-output.js";
 import "./transcript-scope.js";
 
-const FIELDS_OF_TEXT = { optional: ["flags", "where", "scope"] };
+const FIELDS_OF_TEXT = { optional: ["flags", "where", "scope", "by"] };
 const CAP_NOTE =
-  SUBAGENT_CAVEAT +
-  " A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.";
+  'A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent\'s first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. With `by`, only the events of those agents are tested, and `first_message` and `final_message` are those agents\' first and last non-empty text: `by: { "agent": "researcher" }` with `first_message` is the researcher\'s first line. With a `by` that no event of the chosen `where` fits, `transcript_lacks` scores 0 and not 1, as when the run has no such events at all. `by` needs `childText`.';
 
 /**
  * Lists what a check of text needs.
@@ -66,11 +66,11 @@ function tested(
   check: RuledCheck,
   outcome: Outcome,
 ): { all: Piece[]; hits: Piece[] } | { problem: string } {
-  const cut = pieces(
-    outcome.transcript,
-    check.scope ?? "any",
-    check.where ?? "assistant_text",
-  );
+  const cut = pieces(outcome.transcript, {
+    scope: check.scope ?? "any",
+    where: check.where ?? "assistant_text",
+    by: check.by,
+  });
   if ("problem" in cut) return cut;
   const fits = tester(check.pattern, check.flags);
   return { all: cut.pieces, hits: cut.pieces.filter(({ text }) => fits(text)) };
@@ -99,7 +99,11 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
  * @returns The position, among the calls, of the first call of the window with no result; -1 for none.
  */
 function silentCall(check: RuledCheck, outcome: Outcome): number {
-  const cut = pieces(outcome.transcript, check.scope ?? "any", "all");
+  const cut = pieces(outcome.transcript, {
+    scope: check.scope ?? "any",
+    where: "all",
+    by: check.by,
+  });
   if ("problem" in cut) return -1;
   const results = resultsByCall(outcome.transcript);
   let position = -1;
@@ -122,13 +126,21 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   const found = tested(check, outcome);
   if ("problem" in found) return { score: 0, reason: found.problem };
   const where = check.where ?? "assistant_text";
-  const anywhere = pieces(outcome.transcript, "any", where);
+  const anywhere = pieces(outcome.transcript, {
+    scope: "any",
+    where,
+    by: check.by,
+  });
   if (
     found.all.length === 0 &&
     "pieces" in anywhere &&
     anywhere.pieces.length === 0
   ) {
-    return { score: 0, reason: `the run has no ${where} text to test` };
+    const whose = check.by === undefined ? "" : ` by ${describeBy(check.by)}`;
+    return {
+      score: 0,
+      reason: `the run has no ${where} text${whose} to test`,
+    };
   }
   const silent =
     where === "tool_output" || where === "all"
@@ -150,7 +162,7 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
 const OUTPUT_FIELDS = {
   fields: ["tool", "pattern"],
   optional: ["flags", "which"],
-  needs: (): Capability[] => ["toolOutputs"],
+  needs: (check: Check): Capability[] => ["toolOutputs", ...byNeeds(check)],
 } satisfies Partial<Spec>;
 
 // The checks of what the agent said and what its tools returned.
@@ -158,9 +170,8 @@ export const TRANSCRIPT_CHECKS = {
   transcript_matches: {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
-    notYet: ["by"],
     validate: checkMessageWhere,
-    needs: textNeeds,
+    needs: (check) => [...textNeeds(check), ...byNeeds(check)],
     scores:
       "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names.",
     note: CAP_NOTE,
@@ -169,9 +180,8 @@ export const TRANSCRIPT_CHECKS = {
   transcript_lacks: {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
-    notYet: ["by"],
     validate: checkMessageWhere,
-    needs: textNeeds,
+    needs: (check) => [...textNeeds(check), ...byNeeds(check)],
     scores:
       "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results or no calls, as `where` says) scores 0, since that usually means the capture is broken. With `tool_output` or `all`, a call in the window with no result also scores 0, as for `tool_output_lacks`. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0.",
     note: CAP_NOTE,
@@ -194,7 +204,7 @@ export const TRANSCRIPT_CHECKS = {
   tool_output_size: {
     fields: ["maxBytes"],
     optional: ["tool"],
-    needs: (): Capability[] => ["toolOutputs"],
+    needs: (check: Check): Capability[] => ["toolOutputs", ...byNeeds(check)],
     scores:
       "No tool output, or none of the calls that fit `tool`, is over `maxBytes` bytes. A call with no result is ignored.",
     rule: outputSize,

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { expect, test } from "vitest";
 import type { FakeScript } from "./testing/plant.js";
+import { MAIN_AGENT } from "./agents.js";
 import { plantCase, plugin, script, skillsFolder } from "./testing/plant.js";
 import { scoreSubject } from "./testing/runs.js";
 import { readResults, sandbox, seenBy } from "./testing/sandbox.js";
@@ -168,7 +169,7 @@ test("a grep across skills is not a load, and a cat of the skill is, through she
     [FOO, { ...FOO, via: "shell_read" }, { ...FOO, via: "skill_tool" }],
   );
   expect(scoresOf(cat)).toEqual([1, 1, 0]);
-  expect(cat.skillEvents).toEqual([
+  expect(cat.skillEvents).toMatchObject([
     { skill: "foo", via: "shell_read", index: 0, resolved: true, type: "load" },
   ]);
   expect(cat.skillsLoaded).toEqual(["foo"]);
@@ -208,6 +209,7 @@ test("the none arm calling the skill tool with a name is an unresolved skill_too
       index: 0,
       resolved: false,
       type: "load",
+      agent: MAIN_AGENT,
     },
   ]);
 });
@@ -266,6 +268,7 @@ test("skill_file_read sees references/bug-fix.md, through a read or a shell read
       resolved: true,
       type: "file_read",
       file: "references/bug-fix.md",
+      agent: MAIN_AGENT,
     },
   ]);
   expect(viaRead.skillsLoaded).toEqual([]);

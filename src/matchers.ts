@@ -2,12 +2,11 @@ import type { FieldDef, FieldParser } from "./checks/fields.js";
 import { FIELDS, readField, registerParser } from "./checks/fields.js";
 import { checkLineBounds } from "./checks/bounds.js";
 import { regex } from "./checks/rules.js";
+import type { By } from "./agents.js";
+import { fitsBy, parseBy } from "./agents.js";
 import type { ToolCall, ToolKind } from "./harnesses/shared.js";
 import { countLines, longestString } from "./lines.js";
 import { UsageError } from "./scope.js";
-
-/** Who made a call. The shape lands with subagent attribution; until then no matcher may name it. */
-type By = Record<string, unknown>;
 
 /**
  * Describes tool calls: the one shape that every check that looks at calls uses. Every key that is set must fit.
@@ -28,7 +27,7 @@ export interface ToolMatcher {
   minDurationMs?: number;
   /** The most milliseconds the call took. A call with no duration does not fit. Needs `toolDurations`. */
   maxDurationMs?: number;
-  /** Not yet supported: a load error. */
+  /** Whose calls fit: the main thread, any subagent, or the agents of one type. Absent: every agent. Needs `childCalls`. */
   by?: By;
 }
 
@@ -42,10 +41,9 @@ const KEYS = [
   "inputLinesMin",
   "minDurationMs",
   "maxDurationMs",
+  "by",
 ];
-// The keys of the matcher shape that no check can use yet.
-const NOT_YET = ["by"];
-const SUBJECT_KEYS = ["kind", "name", "inputMatches"];
+const SUBJECT_KEYS = ["kind", "name", "inputMatches", "by"];
 
 /** The keys of a matcher that load, each with its definition. The JSON Schema is written from this. */
 export const MATCHER_KEYS = Object.fromEntries(
@@ -59,8 +57,8 @@ export const MATCHER_KEYS = Object.fromEntries(
  * @param extras - Keys the matcher takes besides its own, such as `which`, with their definitions. They come back
  *   in the result, read with their types.
  * @returns The matcher, and the extras that were set.
- * @throws {UsageError} For a value that is not an object, a key that is unknown or not yet supported, a value of the
- *   wrong type, or a matcher that names none of `kind`, `name` and `inputMatches`.
+ * @throws {UsageError} For a value that is not an object, a key that is unknown, a value of the wrong type, or a
+ *   matcher that names none of `kind`, `name`, `inputMatches` and `by`.
  */
 export function parseMatcher(
   raw: unknown,
@@ -71,10 +69,6 @@ export function parseMatcher(
     throw new UsageError(`${where}: a matcher must be an object`);
   }
   const given = raw as Record<string, unknown>;
-  const unsupported = NOT_YET.find((key) => key in given);
-  if (unsupported) {
-    throw new UsageError(`${where}: "${unsupported}" is not yet supported`);
-  }
   const defs = { ...MATCHER_KEYS, ...extras };
   const at = { where, owner: "a matcher", siblings: given };
   const unknown = Object.keys(given).find((key) => !Object.hasOwn(defs, key));
@@ -106,6 +100,7 @@ const parseMatchers: FieldParser = (value, at) => {
   );
 };
 
+registerParser("by", (value, at) => parseBy(value, at.where));
 registerParser("matcher", (value, at) =>
   parseMatcher(value, `${at.where}.${at.name}`, at.def.extras),
 );
@@ -153,11 +148,12 @@ export const tester = (
 function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
   const name = tester(matcher.name, matcher.flags);
   const input = tester(matcher.inputMatches, matcher.flags);
-  const { inputLinesMax, inputLinesMin, minDurationMs, maxDurationMs } =
+  const { inputLinesMax, inputLinesMin, minDurationMs, maxDurationMs, by } =
     matcher;
   const longest = (call: ToolCall): number =>
     countLines(longestString(call.input));
   return (call) =>
+    fitsBy(by, call.agent) &&
     (matcher.kind === undefined || call.kind === matcher.kind) &&
     name(call.name) &&
     input(inputJson(call)) &&

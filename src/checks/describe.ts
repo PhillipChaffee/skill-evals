@@ -1,3 +1,4 @@
+import { describeBy } from "../agents.js";
 import { describeMatcher } from "../matchers.js";
 import type { EndMatcher } from "../matchers.js";
 import type { Check } from "./index.js";
@@ -5,6 +6,23 @@ import type { Check } from "./index.js";
 // A matcher of `before` or `after`, with the end of the matching calls that counts.
 const end = (name: string, matcher: EndMatcher): string =>
   `${name} ${describeMatcher(matcher)}${matcher.which === undefined ? "" : ` (${matcher.which})`}`;
+
+/**
+ * Names the bounds on a call's input lines and duration.
+ * @param check - Any check of a case.
+ * @returns The words for `inputLinesMax`, `inputLinesMin`, `minDurationMs` and `maxDurationMs`; none for a check without them.
+ */
+const describeLimits = (check: Check): string[] =>
+  (
+    [
+      "inputLinesMax",
+      "inputLinesMin",
+      "minDurationMs",
+      "maxDurationMs",
+    ] as const
+  ).flatMap((key) =>
+    check[key] === undefined ? [] : [`${key} ${String(check[key])}`],
+  );
 
 /**
  * Names what distinguishes a check that looks at tool calls, beyond its type and the fields every check shows.
@@ -29,18 +47,8 @@ export function describeCalls(check: Check): string[] {
     ...(check.max === undefined ? [] : [`max ${String(check.max)}`]),
     ...(check.sameTurn ? ["sameTurn"] : []),
     ...(check.first ? ["first"] : []),
-    ...(check.inputLinesMax === undefined
-      ? []
-      : [`inputLinesMax ${String(check.inputLinesMax)}`]),
-    ...(check.inputLinesMin === undefined
-      ? []
-      : [`inputLinesMin ${String(check.inputLinesMin)}`]),
-    ...(check.minDurationMs === undefined
-      ? []
-      : [`minDurationMs ${String(check.minDurationMs)}`]),
-    ...(check.maxDurationMs === undefined
-      ? []
-      : [`maxDurationMs ${String(check.maxDurationMs)}`]),
+    ...(check.by === undefined ? [] : [`by ${describeBy(check.by)}`]),
+    ...describeLimits(check),
   ];
 }
 

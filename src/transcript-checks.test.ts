@@ -212,14 +212,14 @@ test("a failing reason quotes events by index, type and the first 120 characters
   expect(lacks.reason).toContain("... 4 more");
 });
 
-test("by is rejected, in every mode", () => {
+test("a bad by is rejected, in every mode", () => {
   for (const type of ["transcript_matches", "transcript_lacks"]) {
     for (const lenient of [false, true]) {
       expect(() =>
-        readCheck({ type, pattern: "a", by: { agent: "x" } }, "case.json", {
+        readCheck({ type, pattern: "a", by: "child" }, "case.json", {
           lenient,
         }),
-      ).toThrow(/"by" is not yet supported/);
+      ).toThrow(/"by" must be one of/);
     }
   }
 });

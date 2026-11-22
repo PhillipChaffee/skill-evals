@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { HARNESSES } from "../harnesses/index.js";
-import type { Parsed } from "../harnesses/shared.js";
+import type { Parsed, ToolCall } from "../harnesses/shared.js";
 import { fixture } from "./sandbox.js";
 
 /**
@@ -32,3 +32,15 @@ export const parse = (id: string, name: string): Parsed =>
  */
 export const lines = (...events: unknown[]): string =>
   events.map((event) => JSON.stringify(event)).join("\n");
+
+/**
+ * Drops the agent of each call, for a test of what a stream's calls say besides who made them.
+ * @param calls - The calls an adapter read.
+ * @returns The calls without `agent`.
+ */
+export const withoutAgent = (calls: ToolCall[]): Partial<ToolCall>[] =>
+  calls.map((call) => {
+    const rest: Partial<ToolCall> = { ...call };
+    delete rest.agent;
+    return rest;
+  });

@@ -6,6 +6,7 @@ import type {
   ToolKind,
   TranscriptEvent,
 } from "../harnesses/shared.js";
+import type { By } from "../agents.js";
 import type { SkillEvent, SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
@@ -57,6 +58,7 @@ interface CheckFields {
   inputLinesMin?: number;
   minDurationMs?: number;
   maxDurationMs?: number;
+  by?: By;
   where?: Where;
   scope?: Scope;
   which?: "first" | "last" | "any";
@@ -179,8 +181,6 @@ export interface Spec {
   rule?: Rule;
   /** Fields that may only be given with others: field to the fields it needs. The JSON Schema says so. */
   together?: Record<string, string[]>;
-  /** Keys of the matcher shape that no check can use yet: naming one is a load error in every mode, never dropped. */
-  notYet?: string[];
   /**
    * Sets of fields of which exactly one set is given, for a check with more than one form. The JSON Schema says so;
    * `validate` gives the loader's message.
@@ -311,10 +311,6 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
     throw new UsageError(
       `${where}: unknown check type ${JSON.stringify(type)}; known: ${Object.keys(CHECKS).join(", ")}`,
     );
-  }
-  const unsupported = (spec.notYet ?? []).find((key) => key in record);
-  if (unsupported) {
-    throw new UsageError(`${where}: "${unsupported}" is not yet supported`);
   }
   const optional = (spec.optional ?? []).filter(
     (field) => record[field] !== undefined,

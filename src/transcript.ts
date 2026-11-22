@@ -5,9 +5,7 @@ import type {
   TranscriptEvent,
 } from "./harnesses/shared.js";
 import { joinText, toolCall } from "./harnesses/shared.js";
-
-/** The main agent, which every event is attributed to until subagents are told apart. */
-const MAIN_AGENT = { id: "main", type: "main", parent: null, depth: 0 };
+import { MAIN_AGENT } from "./agents.js";
 
 /** The default cut of `forRecord`: the most bytes of one `text` or `output`. */
 const RECORD_CAP_BYTES = 20_000;
@@ -43,7 +41,7 @@ function asText(value: unknown): string | undefined {
  * Completes one event.
  * @param partial - What the adapter read.
  * @param index - The event's position in the run.
- * @returns The event with its position, the main agent, the first user turn and no turn unless given, and `bytes`
+ * @returns The event with its position, the main agent unless it names one, the first user turn and no turn unless given, and `bytes`
  *   set to the UTF-8 size of its `text` or `output` as decoded.
  */
 export function event(partial: EventInput, index = 0): TranscriptEvent {
@@ -127,7 +125,7 @@ export function resultsByCall(
 /**
  * Lists the tool calls of a transcript.
  * @param events - The run's events.
- * @returns One call for each `tool_call` event, in order. It has a `turn` only when its event has one, and a
+ * @returns One call for each `tool_call` event, in order, with the agent of its event. It has a `turn` only when its event has one, and a
  *   `durationMs` only when its result has one.
  */
 export function callsOf(events: TranscriptEvent[]): ToolCall[] {
@@ -140,6 +138,7 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
         name: e.name ?? "",
         kind: e.kind ?? "other",
         input: e.input,
+        agent: e.agent,
         ...(e.turn === null ? {} : { turn: e.turn }),
         ...(durationMs === undefined ? {} : { durationMs }),
       };

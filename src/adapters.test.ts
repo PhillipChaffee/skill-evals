@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
-import { lines, parse, parseText } from "./testing/streams.js";
+import { lines, parse, parseText, withoutAgent } from "./testing/streams.js";
 
 const plainWords =
   /^In plain words: it keeps fixing things until they match\.$/;
@@ -121,7 +121,10 @@ test.each(STREAMS)("$id adapter normalizes a successful stream", (expected) => {
   const parsed = parse(expected.id, expected.name);
   expect(parsed.error).toBeNull();
   expect(parsed.finalText).toMatch(expected.finalText);
-  expect(parsed.toolCalls).toEqual(expected.toolCalls);
+  expect(parsed.toolCalls.every((call) => call.agent?.id === "main")).toBe(
+    true,
+  );
+  expect(withoutAgent(parsed.toolCalls)).toEqual(expected.toolCalls);
   expect(parsed.tokens).toEqual(expected.tokens);
   expect(parsed.costUsd).toBe(expected.costUsd);
   expect(parsed.loaded).toEqual(expected.loaded);

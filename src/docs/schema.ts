@@ -11,6 +11,7 @@ import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import { SCHEMA_KEY } from "../schema-key.js";
 import { VARIANT_KEYS } from "../variants.js";
 import { configMeaning } from "./reference.js";
+import { BY_SCHEMA, STEPS_SCHEMA } from "./schema-values.js";
 
 // The JSON Schemas of the case file and of the config file, written from the tables the loaders read: CASE_KEYS,
 // FIELDS, CHECKS, VARIANT_KEYS and CONFIG_KEYS. They use these keywords and no others, and the validator in
@@ -70,46 +71,7 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
   tags: { type: "array", items: { type: "string", pattern: SLUG_PATTERN } },
   texts: { type: "array", minItems: 1, items: PLAIN_TEXT },
   needs: { type: "array", items: { type: "string", pattern: NEED_PATTERN } },
-  steps: {
-    type: "array",
-    minItems: 1,
-    items: {
-      oneOf: [
-        {
-          type: "object",
-          required: ["run"],
-          properties: {
-            run: PLAIN_TEXT,
-            timeoutSeconds: { type: "integer", minimum: 1 },
-          },
-          additionalProperties: false,
-        },
-        {
-          type: "object",
-          required: ["git"],
-          properties: {
-            git: {
-              type: "object",
-              minProperties: 1,
-              // The loader also needs `init` to be true; the schema cannot say that.
-              dependentRequired: { branch: ["init"] },
-              properties: {
-                init: { type: "boolean" },
-                branch: {
-                  type: "string",
-                  pattern: "^[A-Za-z0-9_][A-Za-z0-9._/-]*$",
-                },
-                commitAll: PLAIN_TEXT,
-                remote: { type: "string", pattern: "^[A-Za-z0-9_-]+$" },
-              },
-              additionalProperties: false,
-            },
-          },
-          additionalProperties: false,
-        },
-      ],
-    },
-  },
+  steps: STEPS_SCHEMA,
   envvars: {
     type: "object",
     patternProperties: {
@@ -117,20 +79,22 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
     },
     additionalProperties: false,
   },
+  by: BY_SCHEMA,
   object: { type: "object" },
 };
 
 /**
  * Makes the schema of a matcher.
  * @param extras - The keys of the field besides the matcher keys.
- * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name` and `inputMatches`.
- *   `by` is left out, because the loader rejects it.
+ * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name`, `inputMatches` and `by`.
  */
 function matcherSchema(extras: Record<string, FieldDef> = {}): Schema {
   return {
     type: "object",
     properties: propertiesOf({ ...MATCHER_KEYS, ...extras }),
-    anyOf: ["kind", "name", "inputMatches"].map((key) => ({ required: [key] })),
+    anyOf: ["kind", "name", "inputMatches", "by"].map((key) => ({
+      required: [key],
+    })),
     additionalProperties: false,
   };
 }

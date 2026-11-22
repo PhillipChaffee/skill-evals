@@ -279,7 +279,7 @@
     },
     "check-skill_loaded": {
       "title": "skill_loaded",
-      "description": "The agent loaded that skill, or any of the skills in `anyOf`, through the skill tool, a read of its `SKILL.md`, or a shell command that reads it. A load is a real one: a skill-kind call that names the skill, or a read-kind or `cat`-style shell call of `SKILL.md` in the loaded subject's own copy of the skill. A `grep`, a listing, and a path in the workspace that merely looks like `skills/<name>/SKILL.md` are not loads. With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, because calls cannot yet be told apart by the agent that made them. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`. Under `--lenient`, a check with neither `via` nor `resolved` keeps the 0.0.1 rule for one release: any tool input that mentions `skills/<name>/SKILL.md`, in any case.",
+      "description": "The agent loaded that skill, or any of the skills in `anyOf`, through the skill tool, a read of its `SKILL.md`, or a shell command that reads it. A load is a real one: a skill-kind call that names the skill, or a read-kind or `cat`-style shell call of `SKILL.md` in the loaded subject's own copy of the skill. A `grep`, a listing, and a path in the workspace that merely looks like `skills/<name>/SKILL.md` are not loads. With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, unless `by` limits both the loads and the calls to one agent. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`. Under `--lenient`, a check with neither `via` nor `resolved` keeps the 0.0.1 rule for one release: any tool input that mentions `skills/<name>/SKILL.md`, in any case.",
       "type": "object",
       "required": ["type"],
       "properties": {
@@ -307,7 +307,7 @@
         },
         "first": {
           "title": "first",
-          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
           "type": "boolean"
         },
         "ignoring": {
@@ -375,12 +375,28 @@
                 "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                 "type": "integer",
                 "minimum": 1
+              },
+              "by": {
+                "title": "by",
+                "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                "oneOf": [
+                  { "enum": ["main", "subagent"] },
+                  {
+                    "type": "object",
+                    "required": ["agent"],
+                    "properties": {
+                      "agent": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               }
             },
             "anyOf": [
               { "required": ["kind"] },
               { "required": ["name"] },
-              { "required": ["inputMatches"] }
+              { "required": ["inputMatches"] },
+              { "required": ["by"] }
             ],
             "additionalProperties": false
           }
@@ -408,6 +424,19 @@
           "description": "For `skill_loaded` and `skill_not_loaded`: true counts only a load of a skill of the loaded subject, so a run with no subject that calls the skill tool with a name does not count; false counts only the loads that are not. Default: both count.",
           "type": "boolean"
         },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          ]
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -431,7 +460,7 @@
     },
     "check-skill_not_loaded": {
       "title": "skill_not_loaded",
-      "description": "The agent did not load that skill. It counts loads as `skill_loaded` does, including `via` and `resolved`, and keeps the 0.0.1 rule under `--lenient` in the same way.",
+      "description": "The agent did not load that skill. It counts loads as `skill_loaded` does, including `via`, `resolved` and `by`, and keeps the 0.0.1 rule under `--lenient` in the same way.",
       "type": "object",
       "required": ["type", "skill"],
       "properties": {
@@ -472,6 +501,19 @@
           "title": "resolved",
           "description": "For `skill_loaded` and `skill_not_loaded`: true counts only a load of a skill of the loaded subject, so a run with no subject that calls the skill tool with a name does not count; false counts only the loads that are not. Default: both count.",
           "type": "boolean"
+        },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          ]
         },
         "requires": {
           "title": "requires",
@@ -1015,7 +1057,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
@@ -1270,7 +1312,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
@@ -1354,7 +1396,7 @@
     },
     "check-tool_called": {
       "title": "tool_called",
-      "description": "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn. A count sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable.",
+      "description": "The agent made tool calls that fit every given field, and their number is from `min` to `max`. With `sameTurn`, they were all issued in one assistant turn. A count sees every call of the run, a subagent's included, unless `by` names the agent. With `by` alone (no `kind` or `name`) it counts every call of that agent, so `{ by: { agent: \"research-planner\" }, max: 0 }` says the planner made no tool call; `min` then defaults to 0 when `max` is 0. With `first` and `by`, the first call that agent made must fit, and with no `by` the run's first call. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable. `by` needs `childCalls`.",
       "type": "object",
       "required": ["type"],
       "properties": {
@@ -1425,9 +1467,22 @@
           "type": "integer",
           "minimum": 1
         },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          ]
+        },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
@@ -1444,7 +1499,7 @@
         },
         "first": {
           "title": "first",
-          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
           "type": "boolean"
         },
         "requires": {
@@ -1463,7 +1518,11 @@
           "enum": ["skip", "not-applicable"]
         }
       },
-      "anyOf": [{ "required": ["kind"] }, { "required": ["name"] }],
+      "anyOf": [
+        { "required": ["kind"] },
+        { "required": ["name"] },
+        { "required": ["by"] }
+      ],
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },
@@ -1540,6 +1599,19 @@
           "type": "integer",
           "minimum": 1
         },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          ]
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -1556,13 +1628,17 @@
           "enum": ["skip", "not-applicable"]
         }
       },
-      "anyOf": [{ "required": ["kind"] }, { "required": ["name"] }],
+      "anyOf": [
+        { "required": ["kind"] },
+        { "required": ["name"] },
+        { "required": ["by"] }
+      ],
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },
     "check-first_tool": {
       "title": "first_tool",
-      "description": "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`. A subagent's calls are in the list too, because calls cannot yet be told apart by the agent that made them.",
+      "description": "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`. A subagent's calls are in the list too, unless `matches` or an `ignoring` matcher says `by`: `matches` with `by: \"main\"` fails when a subagent's call comes first.",
       "type": "object",
       "required": ["type", "matches"],
       "properties": {
@@ -1637,12 +1713,28 @@
               "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
               "type": "integer",
               "minimum": 1
+            },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
             }
           },
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },
@@ -1711,12 +1803,28 @@
                 "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                 "type": "integer",
                 "minimum": 1
+              },
+              "by": {
+                "title": "by",
+                "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                "oneOf": [
+                  { "enum": ["main", "subagent"] },
+                  {
+                    "type": "object",
+                    "required": ["agent"],
+                    "properties": {
+                      "agent": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               }
             },
             "anyOf": [
               { "required": ["kind"] },
               { "required": ["name"] },
-              { "required": ["inputMatches"] }
+              { "required": ["inputMatches"] },
+              { "required": ["by"] }
             ],
             "additionalProperties": false
           }
@@ -1742,7 +1850,7 @@
     },
     "check-tool_order": {
       "title": "tool_order",
-      "description": "The calls come in the order given: with `before` and `after`, the chosen `before` call is earlier than the chosen `after` call; with `sequence`, the matchers match calls in that order. It takes exactly one of the pair `before` and `after`, and `sequence`. With `strict: true` a sequence also forbids a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match: `[researcher, synthesizer]` allows two researchers, then the synthesizer, and no researcher after it. The check sees every call of the run, a subagent's included: calls cannot yet be told apart by the agent that made them.",
+      "description": "The calls come in the order given: with `before` and `after`, the chosen `before` call is earlier than the chosen `after` call; with `sequence`, the matchers match calls in that order. It takes exactly one of the pair `before` and `after`, and `sequence`. With `strict: true` a sequence also forbids a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match: `[researcher, synthesizer]` allows two researchers, then the synthesizer, and no researcher after it. The check sees every call of the run, a subagent's included, unless a matcher says `by`: `before: { kind: \"read\", by: { agent: \"delegate\" } }` is the delegate's read.",
       "type": "object",
       "required": ["type"],
       "properties": {
@@ -1757,7 +1865,7 @@
         },
         "before": {
           "title": "before",
-          "description": "The calls that must come first, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included.",
+          "description": "The calls that must come first, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included, unless the matcher says `by`.",
           "type": "object",
           "properties": {
             "kind": {
@@ -1818,6 +1926,21 @@
               "type": "integer",
               "minimum": 1
             },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
             "which": {
               "title": "which",
               "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
@@ -1828,13 +1951,14 @@
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },
         "after": {
           "title": "after",
-          "description": "The calls that must come second, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included.",
+          "description": "The calls that must come second, as a matcher, with `which` for the first or last of them. Every call counts, a subagent's included, unless the matcher says `by`.",
           "type": "object",
           "properties": {
             "kind": {
@@ -1895,6 +2019,21 @@
               "type": "integer",
               "minimum": 1
             },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            },
             "which": {
               "title": "which",
               "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
@@ -1905,7 +2044,8 @@
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },
@@ -1974,12 +2114,28 @@
                 "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                 "type": "integer",
                 "minimum": 1
+              },
+              "by": {
+                "title": "by",
+                "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                "oneOf": [
+                  { "enum": ["main", "subagent"] },
+                  {
+                    "type": "object",
+                    "required": ["agent"],
+                    "properties": {
+                      "agent": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               }
             },
             "anyOf": [
               { "required": ["kind"] },
               { "required": ["name"] },
-              { "required": ["inputMatches"] }
+              { "required": ["inputMatches"] },
+              { "required": ["by"] }
             ],
             "additionalProperties": false
           }
@@ -2015,7 +2171,7 @@
     },
     "check-transcript_matches": {
       "title": "transcript_matches",
-      "description": "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "description": "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. With `by`, only the events of those agents are tested, and `first_message` and `final_message` are those agents' first and last non-empty text: `by: { \"agent\": \"researcher\" }` with `first_message` is the researcher's first line. With a `by` that no event of the chosen `where` fits, `transcript_lacks` scores 0 and not 1, as when the run has no such events at all. `by` needs `childText`.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
@@ -2048,7 +2204,7 @@
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
           "anyOf": [
             {
               "type": "string",
@@ -2117,12 +2273,28 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
@@ -2193,12 +2365,28 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
@@ -2270,17 +2458,46 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
               },
               "required": ["first_message", "before"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
               "additionalProperties": false
             }
           ]
@@ -2306,7 +2523,7 @@
     },
     "check-transcript_lacks": {
       "title": "transcript_lacks",
-      "description": "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results or no calls, as `where` says) scores 0, since that usually means the capture is broken. With `tool_output` or `all`, a call in the window with no result also scores 0, as for `tool_output_lacks`. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "description": "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results or no calls, as `where` says) scores 0, since that usually means the capture is broken. With `tool_output` or `all`, a call in the window with no result also scores 0, as for `tool_output_lacks`. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. With `by`, only the events of those agents are tested, and `first_message` and `final_message` are those agents' first and last non-empty text: `by: { \"agent\": \"researcher\" }` with `first_message` is the researcher's first line. With a `by` that no event of the chosen `where` fits, `transcript_lacks` scores 0 and not 1, as when the run has no such events at all. `by` needs `childText`.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
@@ -2339,7 +2556,7 @@
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
           "anyOf": [
             {
               "type": "string",
@@ -2408,12 +2625,28 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
@@ -2484,12 +2717,28 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
@@ -2561,17 +2810,46 @@
                       "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
                       "type": "integer",
                       "minimum": 1
+                    },
+                    "by": {
+                      "title": "by",
+                      "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+                      "oneOf": [
+                        { "enum": ["main", "subagent"] },
+                        {
+                          "type": "object",
+                          "required": ["agent"],
+                          "properties": {
+                            "agent": { "type": "string", "minLength": 1 }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
                     }
                   },
                   "anyOf": [
                     { "required": ["kind"] },
                     { "required": ["name"] },
-                    { "required": ["inputMatches"] }
+                    { "required": ["inputMatches"] },
+                    { "required": ["by"] }
                   ],
                   "additionalProperties": false
                 }
               },
               "required": ["first_message", "before"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
               "additionalProperties": false
             }
           ]
@@ -2672,12 +2950,28 @@
               "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
               "type": "integer",
               "minimum": 1
+            },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
             }
           },
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },
@@ -2795,12 +3089,28 @@
               "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
               "type": "integer",
               "minimum": 1
+            },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
             }
           },
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },
@@ -2924,12 +3234,28 @@
               "description": "The most milliseconds that the call took, as its tool result says. A call whose duration is unknown does not fit. Needs a harness with `toolDurations`.",
               "type": "integer",
               "minimum": 1
+            },
+            "by": {
+              "title": "by",
+              "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+              "oneOf": [
+                { "enum": ["main", "subagent"] },
+                {
+                  "type": "object",
+                  "required": ["agent"],
+                  "properties": {
+                    "agent": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              ]
             }
           },
           "anyOf": [
             { "required": ["kind"] },
             { "required": ["name"] },
-            { "required": ["inputMatches"] }
+            { "required": ["inputMatches"] },
+            { "required": ["by"] }
           ],
           "additionalProperties": false
         },

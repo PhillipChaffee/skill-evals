@@ -37,9 +37,9 @@ const BAD: [string, unknown, RegExp][] = [
     /skill_file_read needs a string "path"/,
   ],
   [
-    "a matcher with a key that is not supported yet",
+    "a matcher with a by that is not a by",
     { type: ORDER, before: { kind: "edit", by: {} }, after: READ },
-    /"by" is not yet supported/,
+    /"by" must be one of "main", "subagent"/,
   ],
   [
     "an inputLinesMax that is not a whole number",
@@ -54,7 +54,7 @@ const BAD: [string, unknown, RegExp][] = [
   [
     "a matcher with only an inputLinesMax",
     { type: "first_tool", matches: { inputLinesMax: 3 } },
-    /needs at least one of "kind", "name", "inputMatches"/,
+    /needs at least one of "kind", "name", "inputMatches", "by"/,
   ],
   [
     "a file_lines with neither min nor max",
@@ -162,9 +162,9 @@ const BAD: [string, unknown, RegExp][] = [
     /"ignoring" only applies with "first"/,
   ],
   [
-    "a check-level by on tool_called",
-    { type: CALLED, kind: "edit", by: {} },
-    /"by" is not yet supported/,
+    "a check-level by on tool_called that is not a by",
+    { type: CALLED, kind: "edit", by: "child" },
+    /"by" must be one of "main", "subagent"/,
   ],
   [
     "a check-level inputLinesMax of 0 on tool_not_called",
@@ -174,7 +174,7 @@ const BAD: [string, unknown, RegExp][] = [
   [
     "a matcher that names nothing",
     { type: "first_tool", matches: { flags: "i" } },
-    /needs at least one of "kind", "name", "inputMatches"/,
+    /needs at least one of "kind", "name", "inputMatches", "by"/,
   ],
 ];
 
@@ -186,14 +186,14 @@ test.each(BAD)("%s is a load error", async (_what, check, message) => {
   expect(ran.stderr).toMatch(message);
 });
 
-test("a key that is not yet supported is an error under --lenient too, never dropped with a warning", async () => {
+test("a bad by is an error under --lenient too, never dropped with a warning", async () => {
   const box = sandbox();
   const cases = plantCase(box, [{ type: CALLED, kind: "edit", by: {} }]);
   const ran = await box.cli([
     ...["score", "--subject", "none", "--cases", cases, "--lenient"],
   ]);
   expect(ran.status).toBe(2);
-  expect(ran.stderr).toMatch(/"by" is not yet supported/);
+  expect(ran.stderr).toMatch(/"by" must be one of/);
   expect(ran.stderr).not.toMatch(/ignored unknown key/);
 });
 

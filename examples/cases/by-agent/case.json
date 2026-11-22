@@ -1,0 +1,37 @@
+{
+  "description": "The researcher never edits, the main thread makes no source edit, and the delegate does.",
+  "tags": ["routing", "agents"],
+  "checks": [
+    {
+      "type": "tool_not_called",
+      "kind": "edit",
+      "by": { "agent": "researcher" }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit",
+      "inputMatches": "src/",
+      "by": "main"
+    },
+    {
+      "type": "tool_called",
+      "kind": "edit",
+      "inputMatches": "src/",
+      "by": { "agent": "delegate" }
+    },
+    {
+      "type": "tool_called",
+      "kind": "read",
+      "by": { "agent": "delegate" },
+      "first": true
+    },
+    {
+      "type": "transcript_matches",
+      "pattern": "\\S",
+      "scope": "first_message",
+      "by": { "agent": "researcher" }
+    },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

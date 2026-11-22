@@ -34,8 +34,8 @@ export interface ToolCall {
   turn?: number;
   /** How long the call took, from its tool result, where the stream says. Only an adapter with the `toolDurations` capability sets it. */
   durationMs?: number;
-  /** The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. */
-  agent?: { id: string; type: string; parent: string | null; depth: number };
+  /** The agent that made the call (depth 0 is the main agent, id `main`). Absent in a 0.0.1 record, which means the main agent. */
+  agent?: AgentRef;
 }
 
 /** Who produced an event. Depth 0 is the main agent, whose id is `main`. */

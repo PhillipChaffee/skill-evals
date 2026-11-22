@@ -136,6 +136,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "subagents",
         "turnGrouping",
         "childCalls",
+        "childText",
         "loadedReport",
         "skillListing",
         "isolated",
