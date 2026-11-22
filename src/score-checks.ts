@@ -3,7 +3,7 @@ import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import { removeLogin } from "./command.js";
 import { decideAll, judgedResult } from "./score-models.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
-import { bare, withheld } from "./run-plan.js";
+import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 
@@ -118,7 +118,7 @@ export async function scoreChecks(
       slots[index] = { ...check, ...(await ruled(check, outcome)) };
     } else if (!judgeable) {
       const reason = "not judged, because the run is invalid";
-      slots[index] = { ...bare(check), score: null, reason };
+      slots[index] = { ...check, score: null, reason };
     } else {
       const judged = await judgedResult(ask, { task, outcome }, check);
       replies.push(...judged.replies);

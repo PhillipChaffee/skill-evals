@@ -35,7 +35,11 @@ export function tally(votes: Vote[], scale: Scale): Vote {
   const usable = votes.flatMap(({ score }) => (score === null ? [] : [score]));
   const unusable = votes.length - usable.length;
   if (usable.length === 0) {
-    return { score: null, reason: votes.at(-1)?.reason ?? "" };
+    const last = votes.at(-1)?.reason ?? "";
+    return {
+      score: null,
+      reason: `none of ${plural(votes.length, "vote")} gave a usable answer; the last: ${last}`,
+    };
   }
   const left =
     unusable > 0 ? `; ${plural(unusable, "vote")} gave no usable answer` : "";

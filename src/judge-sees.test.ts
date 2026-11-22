@@ -7,6 +7,7 @@ import { sandbox } from "./testing/sandbox.js";
 
 const RAN = "Ran a command.";
 const TRANSCRIPT = "transcript";
+const OPEN_TRANSCRIPT = "<transcript>";
 
 const SCRIPTED = {
   turns: [
@@ -44,7 +45,7 @@ test("sees without final leaves the answer section out", async () => {
     [SCORE_ONE],
     { plant: (box) => script(box, "agent", SCRIPTED) },
   );
-  expect(prompts[0]).toContain("<transcript>");
+  expect(prompts[0]).toContain(OPEN_TRANSCRIPT);
   expect(prompts[0]).not.toContain("<answer>");
 });
 
@@ -93,36 +94,54 @@ test("a rendering over maxChars says what it left out", async () => {
   expect(prompts[0]).toMatch(/\[… \d+ tool outputs omitted …\]/);
 });
 
-test("decision with sees transcript carries the rendering; with final only the request is unchanged", async () => {
+/**
+ * Scores a case of decision checks against the stand-in API, with a scripted agent that runs one command.
+ * @param checks - The case's checks, each answered "yes" with certainty.
+ * @returns The `state` of each request the API got.
+ */
+async function statesSent(checks: unknown[]): Promise<string[]> {
   const box = sandbox();
-  const server = await decisionServer([{ answers: { q1: yesNo(1) } }]);
+  const server = await decisionServer([
+    { answers: { q1: yesNo(1), q2: yesNo(1) } },
+  ]);
   const owned = plugin(box, "plugin-owned", { answer: "x" });
   script(box, "agent", SCRIPTED);
-  const cases = plantCase(box, [
-    {
-      type: "decision",
-      question: "Did it run?",
-      expect: "yes",
-      sees: ["final", "transcript"],
-    },
-  ]);
+  const cases = plantCase(box, checks);
   box.write(CONFIG_FILE, { env: ["BASETEN_API_KEY"] });
+  const flags = ["--decision-model", "d", "--decision-url", server.url];
   const ran = await box.cli(
     [
       ...["score", "--subject", owned, "--cases", cases, "--reps", "1"],
-      ...[
-        "--out",
-        `${box.root}/o`,
-        "--decision-model",
-        "d",
-        "--decision-url",
-        server.url,
-      ],
+      ...["--out", `${box.root}/o`, ...flags],
     ],
     { BASETEN_API_KEY: "k" },
   );
   expect(ran.status, ran.stderr).toBe(0);
-  const state = server.received[0]?.body.state;
-  expect(state).toContain("<transcript>");
-  expect(state).toContain('Bash {"command":"echo hi"}');
+  return server.received.map(({ body }) => body.state);
+}
+
+const ASKED = { type: "decision", question: "Did it run?", expect: "yes" };
+const FINAL_ONLY_STATE =
+  "<task>\nsay it in plain words\n</task>\n\n<answer>\nIt is fixed now.\n</answer>";
+
+test("decision with sees transcript carries the rendering", async () => {
+  const states = await statesSent([{ ...ASKED, sees: ["final", TRANSCRIPT] }]);
+  expect(states).toHaveLength(1);
+  expect(states[0]).toContain(OPEN_TRANSCRIPT);
+  expect(states[0]).toContain('Bash {"command":"echo hi"}');
+});
+
+test("decision checks with sees absent or final only share one request, which is the 0.0.1 state", async () => {
+  const states = await statesSent([ASKED, { ...ASKED, sees: ["final"] }]);
+  expect(states).toEqual([FINAL_ONLY_STATE]);
+});
+
+test("decision checks that see different things send two requests, so none sees what it did not ask for", async () => {
+  const states = await statesSent([
+    ASKED,
+    { ...ASKED, sees: ["final", TRANSCRIPT] },
+  ]);
+  expect(states).toHaveLength(2);
+  expect(states[0]).toBe(FINAL_ONLY_STATE);
+  expect(states[1]).toContain(OPEN_TRANSCRIPT);
 });

@@ -21,7 +21,7 @@ test("three votes, two pass, scores 1 and records all three", async () => {
   );
   expect(prompts).toHaveLength(3);
   expect(check?.score).toBe(1);
-  expect(check?.votes).toEqual([
+  expect(check?.ballots).toEqual([
     { score: 1, reason: "ok" },
     { score: 0, reason: "no" },
     { score: 1, reason: "ok" },
@@ -29,10 +29,12 @@ test("three votes, two pass, scores 1 and records all three", async () => {
   expect(check?.reason).toBe("2 of 3 votes pass");
 });
 
-test("a single vote records no votes", async () => {
-  const { check } = await judgedWith({ rubric: "r", scale: BINARY }, [FAIL]);
-  expect(check).toMatchObject({ score: 0, reason: "no" });
-  expect(check).not.toHaveProperty("votes");
+test("a single vote records no ballots, and the configured votes count is kept", async () => {
+  const { check } = await judgedWith({ rubric: "r", scale: BINARY, votes: 1 }, [
+    FAIL,
+  ]);
+  expect(check).toMatchObject({ score: 0, reason: "no", votes: 1 });
+  expect(check).not.toHaveProperty("ballots");
 });
 
 test("0-1 votes score the median", async () => {
@@ -52,8 +54,8 @@ test("an unusable vote is recorded and left out; an even usable count that ties 
     "still no idea",
   ]);
   expect(check?.score).toBe(0);
-  expect(check?.votes?.[2]).toMatchObject({ score: null });
-  expect(check?.votes?.[2]?.reason).toMatch(/no usable score/);
+  expect(check?.ballots?.[2]).toMatchObject({ score: null });
+  expect(check?.ballots?.[2]?.reason).toMatch(/no usable score/);
   expect(check?.reason).toBe(
     "1 of 2 votes pass, a tie scores 0; 1 vote gave no usable answer",
   );
@@ -75,8 +77,10 @@ test("no usable vote leaves the check unscored", async () => {
     Array<string>(6).fill("nope"),
   );
   expect(check?.score).toBeNull();
-  expect(check?.votes).toHaveLength(3);
-  expect(check?.reason).toMatch(/^the judge gave no usable score/);
+  expect(check?.ballots).toHaveLength(3);
+  expect(check?.reason).toMatch(
+    /^none of 3 votes gave a usable answer; the last: the judge gave no usable score/,
+  );
 });
 
 test("structured rubric becomes pass/fail sections", async () => {

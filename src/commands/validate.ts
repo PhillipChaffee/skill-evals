@@ -141,6 +141,27 @@ function vacuousUnchanged(cases: Case[]): Lint[] {
   });
 }
 
+const OUTSIDE = /^(\/|\.\.([\\/]|$))/;
+
+/**
+ * Warns about `files` globs of a judge or decision check that start outside the workspace.
+ * @param cases - The loaded cases.
+ * @returns One warning for each such glob: it can never match, so the model is told that no file matches.
+ */
+function filesOutside(cases: Case[]): Lint[] {
+  return cases.flatMap((one) =>
+    one.checks.flatMap((check) =>
+      (check.files ?? [])
+        .filter((glob) => OUTSIDE.test(glob))
+        .map((glob): Lint => ({
+          level: "warning",
+          caseId: one.id,
+          text: `a ${check.type} check lists the file "${glob}", which starts outside the workspace and can never match`,
+        })),
+    ),
+  );
+}
+
 const DEFAULT_JUDGED_SHARE = 0.5;
 const PERCENT = 100;
 
@@ -180,6 +201,7 @@ export const LINTS: LintRule[] = [
   notApplicable,
   vacuousUnchanged,
   judgedShare,
+  filesOutside,
 ];
 
 const line = ({ level, caseId, text }: Lint): string =>

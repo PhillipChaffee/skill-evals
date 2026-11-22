@@ -1,5 +1,6 @@
 import type { Rubric, Scale } from "./checks/judge-fields.js";
 import type { Seen } from "./judge-render.js";
+import { tagged } from "./judge-render.js";
 import { isUnitScore } from "./score.js";
 import { messageOf } from "./scope.js";
 import type { Vote } from "./votes.js";
@@ -62,8 +63,9 @@ function judgePrompt(question: Question): string {
     scale = "0-1",
     seen = { final: true },
   } = question;
+  // A blank line follows each part, so that a prompt of the task, answer and rubric stays what 0.0.1 sent.
   const part = (tag: string, text: string | undefined): string[] =>
-    text === undefined ? [] : [`<${tag}>`, text, `</${tag}>`, ""];
+    text === undefined ? [] : [...tagged(tag, text), ""];
   const wider =
     !seen.final || seen.transcript !== undefined || seen.files !== undefined;
   return [
@@ -130,7 +132,7 @@ export interface Judged<Reply> {
   reason: string;
   replies: Reply[];
   /** Every vote, when there was more than one. */
-  votes?: Vote[];
+  ballots?: Vote[];
 }
 
 /**
@@ -188,6 +190,6 @@ export async function judge<
   return {
     ...tally(cast, scale),
     replies: cast.flatMap(({ replies }) => replies),
-    votes: cast.map(({ score, reason }) => ({ score, reason })),
+    ballots: cast.map(({ score, reason }) => ({ score, reason })),
   };
 }

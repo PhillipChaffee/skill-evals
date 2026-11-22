@@ -8,7 +8,6 @@ import { decide } from "./decision.js";
 import { judge } from "./judge.js";
 import { materialFor } from "./judge-render.js";
 import type { CheckResult, Usage } from "./run-plan.js";
-import { bare } from "./run-plan.js";
 
 /** What a model scores a run from. */
 interface Material {
@@ -36,7 +35,12 @@ export async function decideAll(
   const calls: DecisionCall[] = [];
   const groups = new Map<string, DecisionCheck[]>();
   for (const check of checks) {
-    const key = JSON.stringify([check.sees, check.files, check.maxChars]);
+    // No `sees` and `["final"]` see the same thing, so they share a request.
+    const key = JSON.stringify([
+      check.sees ?? ["final"],
+      check.files,
+      check.maxChars,
+    ]);
     groups.set(key, [...(groups.get(key) ?? []), check]);
   }
   for (const group of groups.values()) {
@@ -62,7 +66,7 @@ export async function decideAll(
  * @param ask - Sends a prompt to the judge.
  * @param run - The prompt the agent got, and what the run left behind.
  * @param check - The judge check.
- * @returns The check with its score, reason and, when it had several votes, each vote; and every reply it took.
+ * @returns The check with its score, reason and, when it had several votes, each ballot; and every reply it took.
  */
 export async function judgedResult<
   Reply extends Usage & { finalText: string; error: string | null },
@@ -84,10 +88,10 @@ export async function judgedResult<
   return {
     replies: verdict.replies,
     result: {
-      ...bare(check),
+      ...check,
       score: verdict.score,
       reason: verdict.reason,
-      ...(verdict.votes ? { votes: verdict.votes } : {}),
+      ...(verdict.ballots ? { ballots: verdict.ballots } : {}),
     },
   };
 }

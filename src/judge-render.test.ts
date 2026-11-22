@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { expect, onTestFinished, test } from "vitest";
+import { expect, onTestFinished, test, vi } from "vitest";
 import { materialFor, renderFiles, renderTranscript } from "./judge-render.js";
 import { call, result } from "./testing/transcript.js";
 import { numbered, textPart } from "./transcript.js";
@@ -158,4 +158,60 @@ test("the material follows sees: the final answer by default, and only what was 
   expect(materialFor({ sees: ["files"] }, outcome).files).toBe(
     "No file matches: ",
   );
+});
+
+test("the cut note counts only the outputs that were cut", () => {
+  const events = numbered([
+    { ...call("Bash", { command: "a" }, "a") },
+    result("a", "short"),
+    { ...call("Bash", { command: "b" }, "b") },
+    result("b", "y".repeat(2000)),
+  ]);
+  expect(renderTranscript(events, 1200).split("\n")[0]).toBe(
+    "[… 1 tool outputs cut to 400 characters …]",
+  );
+});
+
+test("a last event that alone is over the limit is cut, and the text says so", () => {
+  const events = numbered([textPart("z".repeat(500), { turn: 1 })]);
+  const text = renderTranscript(events, 100);
+  expect(text.length).toBeLessThanOrEqual(100);
+  expect(text).toMatch(/\[… last event cut …\]$/);
+});
+
+test("files: a glob over the cap and a directory that cannot be listed are stated", () => {
+  const dir = workspaceWith({ "keep/a.txt": "A", "locked/b.txt": "B" });
+  for (let at = 0; at < 5001; at += 1) {
+    fs.writeFileSync(path.join(dir, `keep/f${String(at)}.dat`), "");
+  }
+  const capped = renderFiles(["keep/*"], dir);
+  expect(capped).toContain(
+    '[… "keep/*" matches more than 5000 paths, so none of it is shown …]',
+  );
+  expect(capped).not.toContain("<file ");
+
+  const list = fs.readdirSync.bind(fs);
+  const spy = vi.spyOn(fs, "readdirSync").mockImplementation(((
+    target: string,
+    options: unknown,
+  ) => {
+    if (target.endsWith("/locked")) {
+      throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+    }
+    return (list as (...args: unknown[]) => unknown)(target, options);
+  }) as unknown as typeof fs.readdirSync);
+  try {
+    const text = renderFiles(["locked/*"], dir);
+    expect(text).toContain("No file matches: locked/*");
+    expect(text).toContain("[… locked cannot be listed …]");
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("files: only the start of a big file is read", () => {
+  const dir = workspaceWith({ "big.txt": "é".repeat(60_000) });
+  const text = renderFiles(["big.txt"], dir);
+  expect(text).toContain("[… cut at 20000 characters …]");
+  expect(text.length).toBeLessThan(20_200);
 });

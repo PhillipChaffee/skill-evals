@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { Sees } from "./checks/judge-fields.js";
 import { find } from "./checks/tree.js";
+import { GLOB_LIMIT } from "./glob.js";
 import type { TranscriptEvent } from "./harnesses/shared.js";
 import { forRecord } from "./transcript.js";
 
@@ -12,6 +13,7 @@ const OUTPUT_CHARS = 400;
 const FILE_CHARS = 20_000;
 /** How much of a file is looked at for a NUL byte. */
 const SNIFF_BYTES = 8192;
+const UTF8_MAX_BYTES = 4;
 const IMAGE = /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic)$/i;
 const NO_EVENTS = "(no events)";
 
@@ -22,6 +24,18 @@ export interface Seen {
   transcript?: string;
   files?: string;
 }
+
+/**
+ * Wraps text in a tag, the way every prompt to a model does.
+ * @param tag - The tag's name.
+ * @param text - What goes between the tags.
+ * @returns The opening tag, the text and the closing tag, as three lines.
+ */
+export const tagged = (tag: string, text: string): string[] => [
+  `<${tag}>`,
+  text,
+  `</${tag}>`,
+];
 
 /**
  * Keeps an event on one line.
@@ -79,12 +93,14 @@ export function renderTranscript(
     return text.length <= maxChars ? text : null;
   };
   const whole = recorded.map((event) => lineOf(event));
-  const outputs = recorded.filter(isOutput).length;
+  const cutOutputs = recorded.filter(
+    (event) => (event.output?.length ?? 0) > OUTPUT_CHARS,
+  ).length;
   const cutAll = recorded.map((event) => lineOf(event, OUTPUT_CHARS));
-  const cutNote = `[… ${String(outputs)} tool outputs cut to ${String(OUTPUT_CHARS)} characters …]`;
+  const cutNote = `[… ${String(cutOutputs)} tool outputs cut to ${String(OUTPUT_CHARS)} characters …]`;
   const rendered =
     fits(whole, "") ??
-    (outputs > 0 ? fits(cutAll, cutNote) : null) ??
+    (cutOutputs > 0 ? fits(cutAll, cutNote) : null) ??
     dropped(recorded, cutAll, maxChars);
   return rendered === "" ? NO_EVENTS : rendered;
 }
@@ -94,37 +110,64 @@ export function renderTranscript(
  * @param events - The events whose outputs may go.
  * @param lines - Their lines, each output cut.
  * @param maxChars - The most characters the rendering may have.
- * @returns The rendering, with a first line that counts what was left out; cut to the limit as a last resort.
+ * @returns The rendering, with first lines that count what was left out. When one event alone is over the limit it is
+ *   cut, and a last line says so.
  */
 function dropped(
   events: TranscriptEvent[],
   lines: string[],
   maxChars: number,
 ): string {
-  const kept = events.map((_, at) => at);
+  const alive = lines.map(() => true);
+  let left = {
+    chars: lines.reduce((sum, line) => sum + line.length, 0),
+    count: lines.length,
+  };
   let omitted = 0;
   let earlier = 0;
-  const text = (): string => {
-    const note = [
-      ...(omitted > 0 ? [`[… ${String(omitted)} tool outputs omitted …]`] : []),
-      ...(earlier > 0
-        ? [`[… ${String(earlier)} earlier events omitted …]`]
-        : []),
-    ];
-    return [...note, ...kept.map((at) => lines[at])].join("\n");
+  const notes = (): string[] => [
+    ...(omitted > 0 ? [`[… ${String(omitted)} tool outputs omitted …]`] : []),
+    ...(earlier > 0 ? [`[… ${String(earlier)} earlier events omitted …]`] : []),
+  ];
+  // The length of the joined text, kept as a running sum so that each step costs the notes only.
+  const length = (): number => {
+    const own = notes();
+    const lineCount = left.count + own.length;
+    return (
+      left.chars +
+      own.reduce((sum, note) => sum + note.length, 0) +
+      lineCount -
+      1
+    );
   };
-  for (const at of kept.filter((one) =>
-    isOutput(events[one] as TranscriptEvent),
-  )) {
-    if (text().length <= maxChars) break;
-    kept.splice(kept.indexOf(at), 1);
-    omitted += 1;
+  const drop = (at: number): void => {
+    alive[at] = false;
+    left = {
+      chars: left.chars - (lines[at] as string).length,
+      count: left.count - 1,
+    };
+  };
+  for (const [at, event] of events.entries()) {
+    if (length() <= maxChars) break;
+    if (isOutput(event)) {
+      drop(at);
+      omitted += 1;
+    }
   }
-  while (text().length > maxChars && kept.length > 1) {
-    kept.shift();
-    earlier += 1;
+  for (const at of alive.keys()) {
+    if (length() <= maxChars || left.count <= 1) break;
+    if (alive[at]) {
+      drop(at);
+      earlier += 1;
+    }
   }
-  return text().slice(0, maxChars);
+  const text = [...notes(), ...lines.filter((_, at) => alive[at])].join("\n");
+  if (text.length <= maxChars) return text;
+  const marker = "[… last event cut …]";
+  return `${text.slice(0, Math.max(0, maxChars - marker.length))}${marker}`.slice(
+    0,
+    maxChars,
+  );
 }
 
 /**
@@ -137,11 +180,19 @@ function fileBlock(relative: string, real: string): string {
   const named = (why: string): string =>
     `<file path="${relative}">not shown (${why})</file>`;
   if (IMAGE.test(relative)) return named("image");
-  const bytes = fs.readFileSync(real);
+  // A character is at most four bytes, so this much holds the first 20,000 characters.
+  const size = fs.statSync(real).size;
+  const bytes = Buffer.alloc(Math.min(size, FILE_CHARS * UTF8_MAX_BYTES));
+  const handle = fs.openSync(real, "r");
+  try {
+    fs.readSync(handle, bytes, 0, bytes.length, 0);
+  } finally {
+    fs.closeSync(handle);
+  }
   if (bytes.subarray(0, SNIFF_BYTES).includes(0)) return named("binary");
   const text = bytes.toString("utf8");
   const body =
-    text.length > FILE_CHARS
+    text.length > FILE_CHARS || size > bytes.length
       ? `${text.slice(0, FILE_CHARS)}\n[… cut at ${String(FILE_CHARS)} characters …]`
       : text;
   return `<file path="${relative}">\n${body}\n</file>`;
@@ -163,16 +214,28 @@ export function renderFiles(globs: string[], workspace: string): string {
     unlisted: [],
   };
   const files = new Map<string, string>();
+  const notes = new Set<string>();
   for (const glob of globs) {
-    for (const entry of find(tree, glob, true).entries) {
+    const found = find(tree, glob, true);
+    for (const entry of found.entries) {
       if (entry.kind === "file") files.set(entry.path, entry.real);
     }
+    if (found.capped !== null) {
+      notes.add(
+        `[… "${glob}" matches more than ${String(GLOB_LIMIT)} paths, so none of it is shown …]`,
+      );
+    }
+    for (const dir of found.unreadable) {
+      notes.add(`[… ${dir} cannot be listed …]`);
+    }
   }
-  if (files.size === 0) return `No file matches: ${globs.join(", ")}`;
-  return [...files]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([relative, real]) => fileBlock(relative, real))
-    .join("\n");
+  const shown =
+    files.size === 0
+      ? [`No file matches: ${globs.join(", ")}`]
+      : [...files]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([relative, real]) => fileBlock(relative, real));
+  return [...shown, ...notes].join("\n");
 }
 
 /**

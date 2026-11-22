@@ -58,3 +58,21 @@ test("a judged weight share outside 0 to 1 is a config error", async () => {
     /"maxJudgedWeightShare" must be a number from 0 to 1/,
   );
 });
+
+test("validate warns for a files glob that starts outside the workspace", async () => {
+  const out = await validated([
+    { ...FILE },
+    {
+      type: "judge",
+      rubric: "r",
+      sees: ["files"],
+      files: ["../x.md", "/etc/*", "ok/*.md", "..hidden"],
+    },
+  ]);
+  expect(out).toContain(
+    'a judge check lists the file "../x.md", which starts outside the workspace and can never match',
+  );
+  expect(out).toContain('"/etc/*"');
+  expect(out).not.toContain('"ok/*.md"');
+  expect(out).not.toContain('"..hidden"');
+});

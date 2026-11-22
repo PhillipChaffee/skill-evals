@@ -1,6 +1,7 @@
 import type { DecisionCheck } from "./checks/index.js";
 import type { Tokens } from "./harnesses/shared.js";
 import type { Seen } from "./judge-render.js";
+import { tagged } from "./judge-render.js";
 import { messageOf } from "./scope.js";
 
 const ATTEMPTS = 2;
@@ -91,12 +92,11 @@ const answerValues = (check: DecisionCheck): Record<string, number> =>
  * @returns The parts, delimited, and nothing that says where the answer came from.
  */
 function decisionState(task: string, answer: string, seen?: Seen): string {
+  // A blank line comes before each part after the task, which is the state 0.0.1 sent.
   const part = (tag: string, text: string | undefined): string[] =>
-    text === undefined ? [] : ["", `<${tag}>`, text, `</${tag}>`];
+    text === undefined ? [] : ["", ...tagged(tag, text)];
   return [
-    "<task>",
-    task,
-    "</task>",
+    ...tagged("task", task),
     ...part("answer", seen?.final === false ? undefined : answer),
     ...part("transcript", seen?.transcript),
     ...part("files", seen?.files),
