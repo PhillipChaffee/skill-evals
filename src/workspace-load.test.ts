@@ -188,3 +188,17 @@ test("an ordinary folder with a data file named case.json inside a case is not r
   box.write("cases/other/workspace/sub/case.json", "{}");
   expect(load(box, { fixtures: ["../other/workspace"] })()).toHaveLength(2);
 });
+
+test("a fixtures folder that holds a case-shaped folder under an underscore folder is data and loads", () => {
+  const box = sandbox();
+  box.write("cases/_shared/s/_x/case/case.json", "{}");
+  box.write("cases/_shared/s/_x/case/grader/check.sh", "x");
+  const cases = load(box, { fixtures: ["../_shared/s"] })();
+  expect(cases.map((one) => one.id)).toEqual(["c"]);
+});
+
+test("fixtures may not name the cases directory itself", () => {
+  expect(load(sandbox(), { fixtures: [".."] })).toThrow(
+    /fixtures: \.\. is outside the cases directory/,
+  );
+});

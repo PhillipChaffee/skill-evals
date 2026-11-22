@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isCaseDir, isSkippedName } from "./discover.js";
 import { HARNESSES } from "./harnesses/index.js";
 import { requireLinksInside } from "./isolate.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -73,11 +74,6 @@ export function fixtureOf(dir: string, file: string): string | null {
   return fixture;
 }
 
-const holdsCaseFile = (dir: string): boolean =>
-  ["case.json", "prompt.md"].some((name) =>
-    fs.existsSync(path.join(dir, name)),
-  );
-
 /**
  * Tells whether discovery would treat a directory as a case: it holds `case.json` or `prompt.md`, no directory from
  * the cases directory down to it starts with `_`, and none of those above it is a case, because nothing under a case
@@ -86,15 +82,15 @@ const holdsCaseFile = (dir: string): boolean =>
  * @param root - The real path of the cases directory.
  * @returns True when it is a case.
  */
-function isCaseDir(dir: string, root: string): boolean {
+function isRealCase(dir: string, root: string): boolean {
   const names = path.relative(root, dir).split(path.sep);
-  if (names[0] === "" || names.some((name) => name.startsWith("_"))) {
+  if (names[0] === "" || names.some(isSkippedName)) {
     return false;
   }
   const above = names
     .slice(0, -1)
     .map((_, index) => path.join(root, ...names.slice(0, index + 1)));
-  return holdsCaseFile(dir) && !above.some(holdsCaseFile);
+  return isCaseDir(dir) && !above.some(isCaseDir);
 }
 
 /**
@@ -113,12 +109,12 @@ function exposesCase(real: string, root: string): boolean {
   const inside = chain.some(
     (each) =>
       ["grader", "fixture"].includes(path.basename(each)) &&
-      isCaseDir(path.dirname(each), root),
+      isRealCase(path.dirname(each), root),
   );
-  let holds = isCaseDir(real, root);
+  let holds = isRealCase(real, root);
   walkTree(real, {
     visit: ({ file, dirent }) => {
-      holds ||= dirent.isDirectory() && isCaseDir(file, root);
+      holds ||= dirent.isDirectory() && isRealCase(file, root);
       return undefined;
     },
   });

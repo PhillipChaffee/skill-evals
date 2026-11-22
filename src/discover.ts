@@ -9,10 +9,22 @@ export interface Found {
   dir: string;
 }
 
-const isCaseDir = (dir: string): boolean =>
+/**
+ * Tells whether a directory holds the files of a case.
+ * @param dir - The directory.
+ * @returns True when it holds `prompt.md` or `case.json`.
+ */
+export const isCaseDir = (dir: string): boolean =>
   ["prompt.md", "case.json"].some((name) =>
     fs.existsSync(path.join(dir, name)),
   );
+
+/**
+ * Tells whether discovery skips a directory by its name, with all it holds.
+ * @param name - The directory's name.
+ * @returns True for a name that starts with `_`.
+ */
+export const isSkippedName = (name: string): boolean => name.startsWith("_");
 
 /**
  * Finds the case directories under a directory, at any depth. A directory is a case when it holds `prompt.md` or
@@ -44,7 +56,7 @@ export function discover(
     return [];
   }
   return entries.flatMap((entry) => {
-    if (!entry.isDirectory() || entry.name.startsWith("_")) return [];
+    if (!entry.isDirectory() || isSkippedName(entry.name)) return [];
     const where = path.join(dir, entry.name);
     const names = [...prefix, entry.name];
     if (!isCaseDir(where)) return discover(where, names, onError);
