@@ -1,4 +1,5 @@
-import type { CaseDiff, CheckChange, Diff, SideCase, Totals } from "./diff.js";
+import type { CheckChange } from "./diff-checks.js";
+import type { CaseDiff, Diff, Section, SideCase, Totals } from "./diff.js";
 import { formatScore } from "./score.js";
 
 const MS_PER_SECOND = 1000;
@@ -82,13 +83,60 @@ const totalCells = (
 });
 
 /**
+ * Renders the totals, cases and checks of one subject label.
+ * @param section - What changed for the label.
+ * @param many - True when the diff has more than one section, which then get a heading of their own.
+ * @returns The lines of the section.
+ */
+function renderSection(section: Section, many: boolean): string[] {
+  const { a, b } = section.totals;
+  const shownA = totalCells(a);
+  const shownB = totalCells(b);
+  const failing = section.cases.flatMap((one) =>
+    listOf("newly failing", one, one.newlyFailing),
+  );
+  const passing = section.cases.flatMap((one) =>
+    listOf("newly passing", one, one.newlyPassing),
+  );
+  return [
+    ...(many
+      ? [`## Subject ${section.labels.a} / ${section.labels.b}`, ""]
+      : []),
+    "## Totals",
+    "",
+    "| | A | B | Change |",
+    "| --- | --- | --- | --- |",
+    ...section.suites.map(
+      (suite) =>
+        `| Suite score, ${cell(suite.harness)} | ${formatScore(suite.a)} | ${formatScore(suite.b)} | ${change(suite.a, suite.b, score)} |`,
+    ),
+    `| Runs | ${shownA.runs} | ${shownB.runs} | ${String(b.runs - a.runs)} |`,
+    `| Cost | ${shownA.cost} | ${shownB.cost} | ${change(a.costUsd, b.costUsd, usd)} |`,
+    `| Duration | ${shownA.time} | ${shownB.time} | ${change(a.durationMs, b.durationMs, seconds)} |`,
+    "",
+    "## Cases",
+    "",
+    "| Case | A (valid/planned runs) | B (valid/planned runs) | Score change | Cost change | Duration change |",
+    "| --- | --- | --- | --- | --- | --- |",
+    ...section.cases.map(row),
+    "",
+    "## Checks",
+    "",
+    ...(failing.length + passing.length === 0
+      ? ["No check started or stopped passing."]
+      : [...failing, ...passing]),
+    "",
+  ];
+}
+
+/**
  * Renders a diff as markdown.
  * @param diff - What `diffResults` found.
  * @param names - What the two sides are called: the paths the user gave.
  * @param names.a - The earlier side.
  * @param names.b - The later side.
- * @returns The report: a warning block first when any, the totals, then each case's score change, with the checks
- *   that started or stopped passing.
+ * @returns The report: a warning block first when any, then for each subject label the totals, each case's score
+ *   change, and the checks that started or stopped passing.
  */
 export function renderDiff(
   diff: Diff,
@@ -105,45 +153,19 @@ export function renderDiff(
           ...diff.warnings.map((text) => `- ${text}`),
           "",
         ];
-  const { a, b } = diff.totals;
-  const shownA = totalCells(a);
-  const shownB = totalCells(b);
-  const failing = diff.cases.flatMap((one) =>
-    listOf("newly failing", one, one.newlyFailing),
-  );
-  const passing = diff.cases.flatMap((one) =>
-    listOf("newly passing", one, one.newlyPassing),
-  );
+  const subjects = diff.sections
+    .map((one) => `${one.labels.a}/${one.labels.b}`)
+    .join(", ");
   return [
     "# skill-evals diff",
     "",
-    `- A: ${names.a} (subject ${diff.labels.a})`,
-    `- B: ${names.b} (subject ${diff.labels.b})`,
+    `- A: ${names.a}`,
+    `- B: ${names.b}`,
+    `- Subjects: ${subjects}`,
     "",
     ...warnings,
-    "## Totals",
-    "",
-    "| | A | B | Change |",
-    "| --- | --- | --- | --- |",
-    ...diff.suites.map(
-      (suite) =>
-        `| Suite score, ${cell(suite.harness)} | ${formatScore(suite.a)} | ${formatScore(suite.b)} | ${change(suite.a, suite.b, score)} |`,
+    ...diff.sections.flatMap((one) =>
+      renderSection(one, diff.sections.length > 1),
     ),
-    `| Runs | ${shownA.runs} | ${shownB.runs} | ${String(b.runs - a.runs)} |`,
-    `| Cost | ${shownA.cost} | ${shownB.cost} | ${change(a.costUsd, b.costUsd, usd)} |`,
-    `| Duration | ${shownA.time} | ${shownB.time} | ${change(a.durationMs, b.durationMs, seconds)} |`,
-    "",
-    "## Cases",
-    "",
-    "| Case | A (valid/planned runs) | B (valid/planned runs) | Score change | Cost change | Duration change |",
-    "| --- | --- | --- | --- | --- | --- |",
-    ...diff.cases.map(row),
-    "",
-    "## Checks",
-    "",
-    ...(failing.length + passing.length === 0
-      ? ["No check started or stopped passing."]
-      : [...failing, ...passing]),
-    "",
   ].join("\n");
 }

@@ -80,13 +80,24 @@ ${CONFIG_FILE} in the project can set a default for these keys:
 ${Object.keys(CONFIG_KEYS).join(", ")}.`;
 
 /**
+ * Writes a command's name with what it takes.
+ * @param name - The word the user types.
+ * @param command - The entry of the command table, which lists its arguments.
+ * @returns The name and, for each argument it takes, `<argument>`.
+ */
+export const nameWith = (name: string, command: CommandDoc): string =>
+  [name, ...(command.positionals ?? []).map((one) => `<${one}>`)].join(" ");
+
+/**
  * Writes the help text from the command and flag tables.
  * @param commands - Every command.
  * @returns What a wrong command line prints: each command, each flag with its default and the commands that take
  *   it, and what a subject and the config file are.
  */
 export function usageText(commands: Record<string, CommandDoc>): string {
-  const names = pad(Object.keys(commands));
+  const names = pad(
+    Object.entries(commands).map(([name, command]) => nameWith(name, command)),
+  );
   const flags = Object.keys(FLAGS) as Flag[];
   const syntax = pad(flags.map(flagSyntax));
   return `Usage: skill-evals <command> [options]

@@ -34,6 +34,17 @@ export interface RunMeta {
   caseHashes: Record<string, Record<string, string>>;
   /** Whether the command ran with `--isolated`. */
   isolated: boolean;
+  /** Whether the command ran with `--lenient`. Absent from earlier results. */
+  lenient?: boolean;
+  /**
+   * How the judged checks were scored: through the API or a harness session, which harness (null: the harness under
+   * test), and which model. Absent from earlier results, which say it in `results.json`'s `judge` text.
+   */
+  judge?: {
+    via: "api" | "harness";
+    harness: string | null;
+    model: string | null;
+  };
 }
 
 /**
@@ -122,6 +133,10 @@ interface MetaInput {
   applied: Record<string, Case[]>;
   /** Whether the command ran with `--isolated`. */
   isolated: boolean;
+  /** Whether the command ran with `--lenient`. */
+  lenient: boolean;
+  /** How the judged checks are scored. */
+  judge: NonNullable<RunMeta["judge"]>;
 }
 
 /**
@@ -149,4 +164,6 @@ export const runMetaOf = (given: MetaInput): RunMeta => ({
     ]),
   ),
   isolated: given.isolated,
+  lenient: given.lenient,
+  judge: given.judge,
 });

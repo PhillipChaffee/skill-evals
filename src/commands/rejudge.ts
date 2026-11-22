@@ -5,17 +5,17 @@ import type { Evaluation, Results } from "../evaluate.js";
 import type { Case } from "../cases.js";
 import type { ExitCode } from "../exit-codes.js";
 import type { Format } from "../report/formats.js";
-import { lockDir, requireUnlocked } from "../lock.js";
+import { lockDir } from "../lock.js";
 import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
 import { planRejudge } from "../rejudge-plan.js";
 import { rejudged } from "../rejudge-results.js";
 import { harnessOf, rescoreAll } from "../rejudge-run.js";
-import { readSource } from "../rejudge-source.js";
+import { readSource, requireSource } from "../rejudge-source.js";
 import { emitReports } from "../report/emit.js";
 import { reportFormats } from "../report/formats.js";
 import { renderReport } from "../report/markdown.js";
-import { UsageError, outputDir } from "../scope.js";
+import { UsageError } from "../scope.js";
 import { loadSelection, selectionOf } from "../select.js";
 import { summaryOf } from "../summary.js";
 import { writeAtomic } from "../store.js";
@@ -117,12 +117,29 @@ async function rejudgeIn(
     live: plan.live,
     ran: plan.ran,
     judge: rescored.judge,
+    lenient: rescored.lenient,
     hashes: plan.hashes,
   });
   const exit = exitCodeOf(made.results, made.results.maxInvalid);
   write({ ...made, exit }, { dir, out, formats: given.formats });
   for (const note of rescored.notes) console.error(`skill-evals: ${note}`);
   return exit;
+}
+
+/**
+ * Refuses an `--out` that already holds results, which the new ones would overwrite, and creates it otherwise.
+ * @param out - The directory.
+ * @throws {UsageError} When it holds `results.json` or `results.jsonl`.
+ */
+function requireEmpty(out: string): void {
+  for (const name of ["results.json", "results.jsonl"]) {
+    if (fs.existsSync(path.join(out, name))) {
+      throw new UsageError(
+        `--out ${out} already holds ${name}; choose a directory without results, because rejudge never overwrites them`,
+      );
+    }
+  }
+  fs.mkdirSync(out, { recursive: true });
 }
 
 /**
@@ -148,16 +165,16 @@ export async function rejudge(
       `--out ${outDir} is the directory being re-judged; leave --out out to write ${REJUDGED_FILE} beside its results, or name another directory`,
     );
   }
+  requireSource(dir);
   const merged = withConfig(project, options);
   const formats = reportFormats(merged);
-  if (out !== null) {
-    requireUnlocked(out);
-    outputDir(out, project.cwd);
-  }
+  if (out !== null) requireEmpty(out);
   const release = lockDir(dir);
+  const releaseOut = out === null ? () => undefined : lockDir(out);
   try {
     return await rejudgeIn(dir, out, { options: merged, formats });
   } finally {
+    releaseOut();
     release();
   }
 }

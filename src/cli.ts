@@ -125,7 +125,7 @@ export const COMMANDS: Record<string, Command> = {
   },
   rejudge: {
     description:
-      "rejudge <out dir>: score the runs of an earlier command again, against the cases as they are now, without starting the agent. It reads the directory under its lock and never changes its results.json or results.jsonl: it writes results.rejudged.json beside them and prints the report, or the full set of files into --out. Judge answers come from the judge cache of the directory. A run whose prompt, files or setup changed is not re-scored; a run without a workspace archive (--keep-workspaces) keeps the old score of each check that needs files.",
+      "Score the runs of an earlier command again, against the cases as they are now, without starting the agent. It reads the directory under its lock and never changes its results.json or results.jsonl: it writes results.rejudged.json beside them and prints the report, or the full set of files into --out. Judge answers come from the judge cache of the directory. A run whose prompt, files or setup changed is not re-scored; a run without a workspace archive (--keep-workspaces) keeps the old score of each check that needs files.",
     handler: rejudge,
     positionals: ["out dir"],
     flags: [
@@ -134,12 +134,13 @@ export const COMMANDS: Record<string, Command> = {
       "judge-model",
       "judge-api",
       "judge-harness",
+      "lenient",
       "out",
     ],
   },
   diff: {
     description:
-      "diff <a> <b>: compare two sets of results, each an output directory or a results.json: the score change of each case with its run counts, the checks that started or stopped failing, and the change in cost and duration. A warning block comes first when the models, harnesses, tool version or any case differ. It informs and exits 0; --strict turns a warning into exit 2.",
+      "Compare two sets of results, each an output directory or a results.json: the score change of each case with its run counts, the checks that started or stopped failing, and the change in cost and duration. A warning block comes first when the models, harnesses, tool version or any case differ. It informs and exits 0; --strict turns a warning into exit 2.",
     handler: diff,
     positionals: ["a", "b"],
     flags: ["strict"],
@@ -250,7 +251,7 @@ function readOptions(
         ? "no arguments"
         : `exactly ${takes.map((one) => `<${one}>`).join(" ")}`;
     throw new UsageError(
-      `${name} takes ${wanted}, not ${String(positionals.length)} arguments`,
+      `${name} takes ${wanted}, not ${String(positionals.length)} ${positionals.length === 1 ? "argument" : "arguments"}`,
     );
   }
   return {

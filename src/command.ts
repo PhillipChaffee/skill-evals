@@ -231,16 +231,41 @@ export function copiesForCommands(
 }
 
 /**
- * Removes the harness's login files from the throwaway home, so that a command cannot read them through `$HOME`.
+ * Removes one login file without following a link: each part of the path is looked at with `lstat`, and a link on the
+ * way is removed as a link and not entered.
+ * @param home - The throwaway home.
+ * @param relative - A login file's path relative to the home.
+ */
+function removeUnlinked(home: string, relative: string): void {
+  const parts = relative.split("/").filter(Boolean);
+  let current = home;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    let info: fs.Stats;
+    try {
+      info = fs.lstatSync(current);
+    } catch {
+      return;
+    }
+    const last = index === parts.length - 1;
+    if (last || info.isSymbolicLink()) {
+      fs.rmSync(current, { recursive: true, force: true });
+      return;
+    }
+    if (!info.isDirectory()) return;
+  }
+}
+
+/**
+ * Removes the harness's login files from the throwaway home, so that a command cannot read them through `$HOME`. A
+ * link on the way to a file is removed as a link: nothing outside the home is touched.
  * @param authFiles - The adapter's login files, relative to a home directory.
  * @param home - The run's throwaway home.
  * @returns Why a file could not be removed, or null when none is left.
  */
 export function removeLogin(authFiles: string[], home: string): string | null {
   try {
-    for (const relative of authFiles) {
-      fs.rmSync(path.join(home, relative), { recursive: true, force: true });
-    }
+    for (const relative of authFiles) removeUnlinked(home, relative);
     return null;
   } catch (error) {
     return messageOf(error);

@@ -184,12 +184,14 @@ export const FLAGS = {
     value: "id",
     description: "The harness that scores judged checks.",
     default: "the harness under test",
+    defaultIn: { rejudge: "the judge harness of the earlier command" },
   },
   "judge-model": {
     as: "judgeModel",
     value: "id",
     description: "The model that scores judged checks.",
     default: "the value of --model",
+    defaultIn: { rejudge: "the judge model of the earlier command" },
   },
   "judge-api": {
     as: "judgeApi",
@@ -197,6 +199,7 @@ export const FLAGS = {
     description:
       "Ask the judge model over this API and start no harness process for it. Only anthropic. --judge-harness is then ignored.",
     default: "a harness session",
+    defaultIn: { rejudge: "the judge path of the earlier command" },
   },
   "judge-url": {
     as: "judgeUrl",
@@ -230,6 +233,7 @@ export const FLAGS = {
     description:
       "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",
     default: "off: an unknown key is an error",
+    defaultIn: { rejudge: "what the earlier command used" },
   },
   isolated: {
     kind: "switch",
@@ -252,6 +256,7 @@ export const FLAGS = {
     description:
       "Where results go. A fresh run starts an empty results.jsonl there.",
     default: "a new temp directory",
+    defaultIn: { rejudge: "results.rejudged.json beside the earlier results" },
   },
   resume: {
     value: "dir",

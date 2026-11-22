@@ -14,17 +14,26 @@ export interface Source {
 }
 
 /**
+ * Checks that a directory is the output directory of an earlier command.
+ * @param dir - The directory.
+ * @throws {UsageError} When it holds no `results.jsonl`.
+ */
+export function requireSource(dir: string): void {
+  if (!fs.existsSync(path.join(dir, RUNS_FILE))) {
+    throw new UsageError(
+      `${dir}: there is no ${RUNS_FILE} in it; rejudge reads the output directory of an earlier run or score`,
+    );
+  }
+}
+
+/**
  * Reads the output directory of an earlier command. It changes nothing.
  * @param dir - The directory.
  * @returns Its results, and the key of each run.
  * @throws {UsageError} When it is not an output directory of this tool, or its results are older than `meta`.
  */
 export function readSource(dir: string): Source {
-  if (!fs.existsSync(path.join(dir, RUNS_FILE))) {
-    throw new UsageError(
-      `${dir}: there is no ${RUNS_FILE} in it; rejudge reads the output directory of an earlier run or score`,
-    );
-  }
+  requireSource(dir);
   const { results } = readResultsFile(dir);
   if ((results.meta as unknown) === undefined) {
     throw new UsageError(

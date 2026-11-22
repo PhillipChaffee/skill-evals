@@ -5,7 +5,9 @@ import { EXIT } from "./exit-codes.js";
 import { PASS } from "./testing/judged.js";
 import {
   FIXED,
+  KEEP,
   NEVER,
+  NOTES,
   REJUDGED,
   RESULTS,
   judged,
@@ -18,6 +20,8 @@ import {
 import { startsOf } from "./testing/suite.js";
 
 const FIX = "It names the fix.";
+
+const JSONL = "results.jsonl";
 
 test("a rewritten pattern is re-scored without starting the harness", async () => {
   const scored = await scoredWith([FIXED]);
@@ -64,19 +68,33 @@ test("an unchanged rubric is served from the cache and starts nothing", async ()
   expect(record.judge).toMatchObject({ calls: 0, cacheHits: 1 });
 });
 
-test("rejudge starts no agent harness", async () => {
-  const scored = await scoredWith([FIXED]);
+test("rejudge starts no agent harness, for a pattern, a file check or a command check", async () => {
+  const scored = await scoredWith(
+    [
+      FIXED,
+      { type: "file_exists", path: NOTES },
+      { type: "command", run: "true" },
+    ],
+    { flags: [KEEP] },
+  );
   const before = startsOf(scored.box);
-  await scored.rejudge();
+  scored.rewrite([
+    NEVER,
+    { type: "file_exists", path: "notes.txt" },
+    { type: "command", run: "test -f notes.txt" },
+  ]);
+  const ran = await scored.rejudge();
   await scored.rejudge(["--case", "restate"]);
   expect(startsOf(scored.box)).toBe(before);
+  expect(
+    onlyRecord(scored.out, REJUDGED).checks.map((one) => one.score),
+  ).toEqual([0, 1, 1]);
+  expect(ran.status, ran.stderr).toBe(EXIT.ok);
 });
 
 test("rejudge leaves results.json untouched", async () => {
   const scored = await scoredWith([FIXED]);
-  const files = [RESULTS, "results.jsonl"].map((name) =>
-    path.join(scored.out, name),
-  );
+  const files = [RESULTS, JSONL].map((name) => path.join(scored.out, name));
   const before = files.map(read);
   scored.rewrite([NEVER]);
   const ran = await scored.rejudge();
@@ -114,13 +132,13 @@ test("rejudge needs one output directory", async () => {
   const scored = await scoredWith([FIXED]);
   const none = await scored.box.cli(["rejudge"]);
   expect(none.status).toBe(EXIT.usage);
-  expect(none.stderr).toContain("exactly <out dir>");
+  expect(none.stderr).toContain("exactly <out dir>, not 0 arguments");
   const empty = await scored.box.cli(["rejudge", scored.box.root]);
   expect(empty.status).toBe(EXIT.usage);
-  expect(empty.stderr).toContain("results.jsonl");
+  expect(empty.stderr).toContain(JSONL);
   const extra = await scored.box.cli(["score", "stray"]);
   expect(extra.status).toBe(EXIT.usage);
-  expect(extra.stderr).toContain("takes no arguments");
+  expect(extra.stderr).toContain("takes no arguments, not 1 argument");
 });
 
 test("a changed prompt is not re-scored", async () => {
@@ -216,4 +234,18 @@ test("the judge of the earlier command is the default, and a flag replaces it", 
     agent: "small",
     judge: "judge-two",
   });
+});
+
+test("a run with no key in results.jsonl warns once and caches apart", async () => {
+  const scored = await scoredWith([judged(FIX)], { replies: [PASS, PASS] });
+  fs.writeFileSync(path.join(scored.out, JSONL), "");
+  const ran = await scored.rejudge();
+  expect(ran.stderr.match(/has no key in results\.jsonl/g)).toHaveLength(1);
+});
+
+test("help names each command with what it takes", async () => {
+  const scored = await scoredWith([FIXED]);
+  const help = await scored.box.cli(["help"]);
+  expect(help.stdout).toContain("rejudge <out dir>");
+  expect(help.stdout).toContain("diff <a> <b>");
 });

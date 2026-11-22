@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import type { DecisionResult } from "./decision.js";
 import type { Scale } from "./checks/judge-fields.js";
 import type { Attachment } from "./judge-api.js";
 import type { Memo, Spot } from "./judge.js";
@@ -15,6 +16,8 @@ interface CacheValue {
   reason: string;
   /** What the call cost when it was made. A hit costs nothing. */
   usage: Usage;
+  /** For a decision request: the result of each of its checks. `score` is then 0 and means nothing. */
+  decision?: DecisionResult[];
 }
 
 /** Judge answers by key. */

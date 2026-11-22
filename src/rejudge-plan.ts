@@ -86,13 +86,19 @@ export function planRejudge(source: Results, given: Given): Plan {
     if (record.inputHash === undefined) unhashed += 1;
     return { kind: "rescore", caseDef };
   });
+  // A case with any run whose question changed keeps all its runs, so that no summary mixes two questions.
+  for (const [index, verdict] of verdicts.entries()) {
+    const id = source.records[index]?.caseId;
+    if (verdict.kind === "rescore" && id !== undefined && changed.has(id)) {
+      verdicts[index] = { kind: "keep", note: CHANGED_BEYOND_CHECKS };
+    }
+  }
   const live = new Map<string, Case>();
   const ran: Plan["ran"] = {};
   const hashes: Plan["hashes"] = {};
   for (const [index, verdict] of verdicts.entries()) {
     const record = source.records[index];
     if (verdict.kind !== "rescore" || record === undefined) continue;
-    if (changed.has(record.caseId)) continue;
     const { caseDef } = verdict;
     live.set(caseDef.id, byId.get(caseDef.id) ?? caseDef);
     (ran[record.harness] ??= new Map()).set(caseDef.id, caseDef);

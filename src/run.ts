@@ -28,7 +28,7 @@ import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
 import type { WorkspaceArchive } from "./run-archive.js";
-import { keptArchive } from "./run-archive.js";
+import { keptArchive, stageKept } from "./run-archive.js";
 import { inputHash } from "./input-hash.js";
 import { failedCalls, writeTranscript } from "./transcript.js";
 
@@ -335,6 +335,7 @@ async function record(
     agentTokens: parsed.agentTokens ?? null,
     costUsd: parsed.costUsd,
   };
+  const staged = stageKept(plan, ran);
   const scored = await scoreChecks(
     guardedBy(plan, parsed.costUsd),
     {
@@ -351,7 +352,7 @@ async function record(
     },
     invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
   );
-  const kept = keptArchive(plan, ran, transcript.stem);
+  const kept = keptArchive(plan, staged, transcript.stem);
   const archived = kept === null ? {} : { workspaceArchive: kept };
   return assemble({ ...base, ...archived }, scored, parsed.costUsd);
 }

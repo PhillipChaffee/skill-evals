@@ -5,7 +5,7 @@ import { expect, test, vi } from "vitest";
 import { archiveRun, unpackArchive } from "./archive.js";
 import { EXIT } from "./exit-codes.js";
 import { NO_ARCHIVE } from "./rescore.js";
-import { keptArchive } from "./run-archive.js";
+import { keptArchive, stageKept } from "./run-archive.js";
 import type { RunPlan } from "./run-plan.js";
 import type { SessionResult } from "./session.js";
 import {
@@ -178,13 +178,17 @@ test("an archive that cannot be made is a warning and a record without an archiv
     remoteDir: null,
     homeSeed: new Map(),
   } as unknown as SessionResult;
-  expect(keptArchive(plan, ran, "/nonexistent-out/stem")).toBeNull();
+  const staged = stageKept(plan, ran);
+  expect(staged).not.toBeNull();
+  expect(keptArchive(plan, staged, "/nonexistent-out/stem")).toBeNull();
+  const broken = { ...ran, homeSeed: null } as unknown as SessionResult;
+  expect(stageKept(plan, broken)).toBeNull();
+  expect(warn).toHaveBeenCalledTimes(2);
   expect(warn).toHaveBeenCalledWith(
     expect.stringContaining("could not be archived"),
   );
-  expect(
-    keptArchive({ ...plan, keepWorkspaces: false }, ran, "stem"),
-  ).toBeNull();
+  expect(stageKept({ ...plan, keepWorkspaces: false }, ran)).toBeNull();
+  expect(keptArchive(plan, null, "stem")).toBeNull();
   warn.mockRestore();
 });
 

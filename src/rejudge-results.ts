@@ -47,7 +47,14 @@ export interface Basis {
   /** For each harness id, the case as that harness runs it now, by id; only for the cases in `live`. */
   ran: Record<string, Map<string, Case>>;
   /** Who scored the judged checks now, in words, and its model. */
-  judge: { label: string; model: string | null };
+  judge: {
+    label: string;
+    model: string | null;
+    via: "api" | "harness";
+    harness: string | null;
+  };
+  /** Whether the skill checks were scored under `--lenient`. */
+  lenient: boolean;
   /** The hash of each case that was re-scored, by harness id and case id. */
   hashes: Record<string, Record<string, string>>;
 }
@@ -64,6 +71,10 @@ function stubCase(id: string, source: Results): Case {
   const scored = source.suites
     .flatMap((suite) => suite.cases)
     .find((one) => one.id === id) ?? { weight: 1, minScore: undefined };
+  // The case's own bar is kept in the comparison, which the stand-in must not lose.
+  const minDelta = source.comparison?.harnesses
+    .flatMap((one) => one.cases)
+    .find((one) => one.id === id)?.minDelta;
   const results = source.records.find((one) => one.caseId === id)?.checks ?? [];
   const checks = results.map((result) =>
     Object.fromEntries(
@@ -78,6 +89,7 @@ function stubCase(id: string, source: Results): Case {
     checks,
     weight: scored.weight,
     minScore: scored.minScore,
+    minDelta: minDelta ?? undefined,
     timeoutSeconds: 0,
     requires: [],
     description: meta.description ?? undefined,
@@ -127,6 +139,12 @@ function deltaOf(source: Results): DeltaSetup {
 const metaOf = (basis: Basis): Results["meta"] => ({
   ...basis.source.meta,
   models: { ...basis.source.meta.models, judge: basis.judge.model },
+  lenient: basis.lenient,
+  judge: {
+    via: basis.judge.via,
+    harness: basis.judge.harness,
+    model: basis.judge.model,
+  },
   caseHashes: Object.fromEntries(
     Object.entries(basis.source.meta.caseHashes).map(([harness, hashes]) => [
       harness,

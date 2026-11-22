@@ -6,7 +6,7 @@ import type {
 } from "./decision.js";
 import { decide } from "./decision.js";
 import type { Cache } from "./cache.js";
-import { memoOf } from "./cache.js";
+import { cacheKey, memoOf } from "./cache.js";
 import { judge } from "./judge.js";
 import type { Attachment } from "./judge-api.js";
 import { imagesOf } from "./judge-images.js";
@@ -33,6 +33,35 @@ export interface Via {
 }
 
 /**
+ * Names one request to the decision model in the cache.
+ * @param run - What the model scores a run from, and its id.
+ * @param run.task - The prompt the agent got.
+ * @param run.outcome - What the run left behind.
+ * @param run.modelId - The id of the model that is asked.
+ * @param group - The checks that the request carries.
+ * @returns The cache key.
+ */
+function decisionKey(
+  run: Material & { modelId?: string | undefined },
+  group: DecisionCheck[],
+): string {
+  const [first] = group;
+  return cacheKey({
+    prompt: JSON.stringify([
+      run.task,
+      run.outcome.finalText,
+      first?.sees === undefined ? null : materialFor(first, run.outcome),
+      group.map((one) => [one.question, one.expect, one.options]),
+    ]),
+    attachments: [],
+    model: run.modelId ?? "",
+    scale: "0-1",
+    vote: 0,
+    via: "decision",
+  });
+}
+
+/**
  * Sends the decision checks of a case to the decision model: one request for each distinct thing to see, so a check
  * that sees only the final answer never gets the transcript another check asked for.
  * @param run - The decision model and what to decide about.
@@ -41,7 +70,13 @@ export interface Via {
  * @returns Each check's result, and every request's cost.
  */
 export async function decideAll(
-  run: Material & { model: DecisionModel },
+  run: Material & {
+    model: DecisionModel;
+    /** What decision answers are kept in, by slot; none for no cache. */
+    cache?: Cache | null | undefined;
+    /** The decision model's id, for the cache key. */
+    modelId?: string | undefined;
+  },
   checks: DecisionCheck[],
 ): Promise<{
   results: Map<DecisionCheck, DecisionResult>;
@@ -61,6 +96,14 @@ export async function decideAll(
   }
   for (const group of groups.values()) {
     const [first] = group;
+    const key = decisionKey(run, group);
+    const hit = run.cache?.get(key)?.decision;
+    if (hit?.length === group.length) {
+      for (const [at, check] of group.entries()) {
+        results.set(check, hit[at] as DecisionResult);
+      }
+      continue;
+    }
     const decided = await decide(run.model, {
       task: run.task,
       answer: run.outcome.finalText,
@@ -70,6 +113,14 @@ export async function decideAll(
         : { seen: materialFor(first, run.outcome) }),
     });
     calls.push(...decided.calls);
+    if (decided.results.every((one) => one.score !== null)) {
+      run.cache?.set(key, {
+        score: 0,
+        reason: "",
+        usage: { durationMs: 0, tokens: null, costUsd: null },
+        decision: decided.results,
+      });
+    }
     for (const [at, check] of group.entries()) {
       results.set(check, decided.results[at] as DecisionResult);
     }

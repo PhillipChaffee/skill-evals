@@ -5,7 +5,7 @@ import { diffResults } from "./diff.js";
 import { renderDiff } from "./diff-render.js";
 import { EXIT } from "./exit-codes.js";
 import type { Results } from "./evaluate.js";
-import type { RunRecord } from "./run.js";
+import { record, results } from "./testing/diff.js";
 import { plugin } from "./testing/plant.js";
 import { onlyRecord, resultsIn, scoredWith } from "./testing/rejudge.js";
 
@@ -85,97 +85,11 @@ test("diff takes two results and refuses what is not one", async () => {
   expect(odd.stderr).toContain("not the results of skill-evals");
 });
 
-/**
- * Makes one check result of a synthetic record.
- * @param score - What the check scored; null for no score.
- * @returns A check result for the synthetic record.
- */
-const result = (score: number | null) => ({
-  type: "output_contains",
-  text: "x",
-  weight: 1,
-  score,
-});
-
-/**
- * Makes a synthetic record of the case `c` on the harness `h`.
- * @param checks - The score of each check.
- * @param more - Fields to set besides.
- * @returns A run record with those checks.
- */
-function record(
-  checks: (number | null)[],
-  more: Partial<RunRecord> = {},
-): RunRecord {
-  const scores = checks.filter((one) => one !== null);
-  return {
-    harness: "h",
-    subject: "subject",
-    caseId: "c",
-    rep: 1,
-    ok: true,
-    error: null,
-    finalText: "",
-    isolated: false,
-    unexpected: [],
-    reportMissing: false,
-    subjectLoaded: null,
-    judgeProblem: null,
-    checks: checks.map(result),
-    score: scores.length === checks.length ? 0.5 : null,
-    durationMs: 1000,
-    tokens: null,
-    costUsd: 0.5,
-    judge: null,
-    decision: null,
-    ...more,
-  } as unknown as RunRecord;
-}
-
-/**
- * Makes synthetic results of the harness `h`.
- * @param records - The runs; the cases are the ones they name.
- * @param more - Fields to set besides.
- * @returns Results with those runs.
- */
-function results(records: RunRecord[], more: Partial<Results> = {}): Results {
-  const ids = [...new Set(records.map((one) => one.caseId))];
-  return {
-    schemaVersion: 1,
-    subjects: [{ label: "subject" }],
-    harnesses: ["h"],
-    meta: {
-      toolVersion: "1",
-      harnessVersions: {},
-      models: { agent: "m", judge: null, decision: null },
-      subjects: [],
-      caseHashes: {
-        h: Object.fromEntries(ids.map((id) => [id, `hash-${id}`])),
-      },
-      isolated: false,
-    },
-    suites: [
-      {
-        harness: "h",
-        suite: { subject: 0.5 },
-        cases: ids.map((id) => ({
-          id,
-          weight: 1,
-          scores: { subject: 0.5 },
-          runs: { subject: { valid: 1, planned: 1 } },
-        })),
-      },
-    ],
-    records,
-    ...more,
-  } as unknown as Results;
-}
-
 test("diff matches duplicate descriptions by position", () => {
   // Two checks with one description: the first passed and still does, the second passed and now fails.
   const a = results([record([1, 1])]);
   const b = results([record([1, 0])]);
-  const [one] = diffResults(a, b).cases;
+  const [one] = diffResults(a, b).sections[0]?.cases ?? [];
   expect(one?.newlyFailing).toHaveLength(1);
   expect(one?.newlyFailing[0]).toMatchObject({ from: 1, to: 0 });
   expect(one?.newlyPassing).toEqual([]);
@@ -183,7 +97,7 @@ test("diff matches duplicate descriptions by position", () => {
   const swapped = diffResults(
     results([record([0, 1])]),
     results([record([1, 0])]),
-  ).cases[0];
+  ).sections[0]?.cases[0];
   expect(swapped?.newlyFailing).toHaveLength(1);
   expect(swapped?.newlyPassing).toHaveLength(1);
 });
@@ -195,7 +109,7 @@ test("a check passes at a mean of 0.5 over the valid runs, and invalid runs do n
     record([0], { rep: 2 }),
     record([1], { rep: 3, error: "boom" }),
   ]);
-  const [one] = diffResults(a, b).cases;
+  const [one] = diffResults(a, b).sections[0]?.cases ?? [];
   expect(one?.newlyFailing).toHaveLength(1);
   expect(one?.newlyFailing[0]).toMatchObject({ from: 0.5, to: 0 });
 });
@@ -216,7 +130,7 @@ test("diff warns about a missing meta, other harnesses, tool versions and case h
     },
   });
   const warnings = diffResults(base, other).warnings.join("\n");
-  expect(warnings).toContain("the harnesses differ: A h; B h, g");
+  expect(warnings).toContain("the harnesses differ: A h; B g, h");
   expect(warnings).toContain("the tool version differs: A 1; B 2");
   expect(warnings).toContain(
     "the case changed (its hash differs) in: h c, h d",
@@ -236,12 +150,14 @@ test("diff shows a case on one side only, no valid run, and the change in cost a
     record([1], { caseId: "new", costUsd: 1.5 }),
   ]);
   const found = diffResults(a, b);
-  const byId = Object.fromEntries(found.cases.map((one) => [one.caseId, one]));
+  const byId = Object.fromEntries(
+    (found.sections[0]?.cases ?? []).map((one) => [one.caseId, one]),
+  );
   expect(byId["gone"]?.b).toBeNull();
   expect(byId["new"]?.a).toBeNull();
   expect(byId["c"]?.newlyFailing).toEqual([]);
-  expect(found.totals.a.costUsd).toBe(1);
-  expect(found.totals.b).toMatchObject({
+  expect(found.sections[0]?.totals.a.costUsd).toBe(1);
+  expect(found.sections[0]?.totals.b).toMatchObject({
     runs: 2,
     costUsd: 1.5,
     durationMs: 5000,
@@ -276,7 +192,7 @@ test("a label that a suite does not score reads as no score, and a missing hash 
     },
   } as unknown as Partial<Results>);
   const found = diffResults(bare, base);
-  expect(found.cases[0]?.a).toMatchObject({
+  expect(found.sections[0]?.cases[0]?.a).toMatchObject({
     score: null,
     runs: { valid: 0, planned: 0 },
   });

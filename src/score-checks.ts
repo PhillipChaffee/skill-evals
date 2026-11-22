@@ -204,7 +204,13 @@ export async function scoreChecks(
   const decided =
     judgeable && plan.decision && decisions.length && early === null
       ? await decideAll(
-          { model: plan.decision.model, task, outcome },
+          {
+            model: plan.decision.model,
+            task,
+            outcome,
+            cache: plan.cache ?? null,
+            modelId: plan.decisionModel,
+          },
           decisions,
         )
       : null;

@@ -30,11 +30,21 @@ export interface Scored {
  * @param more.flags - More flags of `score`.
  * @param more.replies - What the fake judge answers, in order.
  * @param more.answer - What the agent says; null for the fake's report of what it saw. Default: "It is fixed now."
+ * @param more.plant - Plants more files, such as a script for the fake agent, before the run.
+ * @param more.extra - More keys of the case file.
  * @returns The sandbox, and what a test needs to re-judge it.
  */
 export async function scoredWith(
   checks: unknown[],
-  more: { flags?: string[]; replies?: string[]; answer?: string | null } = {},
+  more: {
+    flags?: string[];
+    replies?: string[];
+    answer?: string | null;
+    /** Plants more files, such as a script for the fake agent, before the run. */
+    plant?: (box: ReturnType<typeof sandbox>) => void;
+    /** More keys of the case file. */
+    extra?: Record<string, unknown>;
+  } = {},
 ): Promise<Scored> {
   const box = sandbox();
   const answer = more.answer === undefined ? "It is fixed now." : more.answer;
@@ -43,7 +53,8 @@ export async function scoredWith(
     "plugin-owned",
     answer === null ? {} : { answer },
   );
-  const cases = plantCase(box, checks);
+  const cases = plantCase(box, checks, more.extra);
+  more.plant?.(box);
   if (more.replies) box.write(REPLIES_FILE, more.replies);
   const out = path.join(box.root, "results");
   const ran = await box.cli([

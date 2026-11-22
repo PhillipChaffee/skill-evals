@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { findOnPath } from "./capabilities.js";
 import { setWritable } from "./command.js";
@@ -59,17 +61,84 @@ export function requireTar(
   }
 }
 
+/** What must not be copied into an archive: the login files by path, and any file with their content. */
+interface Banned {
+  /** The home directory that `paths` are relative to, when the directory being copied is the home. */
+  home?: string;
+  /** The login files' paths, relative to the home. */
+  paths: string[];
+  /** The sha256 of each login file's content, by its size in bytes. */
+  hashes: Map<number, Set<string>>;
+}
+
 /**
- * Copies a directory into the staging area under a fixed name; a directory that is gone becomes an empty one.
+ * Hashes the login files that exist, in the user's home and in the run's home.
+ * @param authFiles - The login files, relative to a home.
+ * @param homes - The directories that may hold them.
+ * @returns The content hashes of the regular files found, by size.
+ */
+function loginHashes(
+  authFiles: string[],
+  homes: string[],
+): Map<number, Set<string>> {
+  const found = new Map<number, Set<string>>();
+  for (const home of homes) {
+    for (const relative of authFiles) {
+      const file = path.join(home, relative);
+      try {
+        if (!fs.lstatSync(file).isFile()) continue;
+        const content = fs.readFileSync(file);
+        const sums = found.get(content.length) ?? new Set<string>();
+        sums.add(createHash("sha256").update(content).digest("hex"));
+        found.set(content.length, sums);
+      } catch {
+        // A login file that is not there has nothing to leave out.
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Tells whether a file has the content of a login file.
+ * @param file - A path.
+ * @param hashes - The content hashes of the login files, by size.
+ * @returns True for a regular file of the same size and hash.
+ */
+function holdsLogin(file: string, hashes: Map<number, Set<string>>): boolean {
+  try {
+    const info = fs.lstatSync(file);
+    const sums = info.isFile() ? hashes.get(info.size) : undefined;
+    return (
+      sums !== undefined &&
+      sums.has(createHash("sha256").update(fs.readFileSync(file)).digest("hex"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Copies a directory into the staging area under a fixed name, leaving out what is banned; a directory that is gone
+ * becomes an empty one. Nothing is deleted afterwards, so no link can lead a removal out of the copy.
  * @param from - The directory, or null.
  * @param to - The target.
+ * @param banned - What to leave out. Its paths apply when it names the `home` that `from` is.
  */
-function stage(from: string | null, to: string): void {
-  if (from !== null && fs.existsSync(from)) {
-    fs.cpSync(from, to, { recursive: true, verbatimSymlinks: true });
-  } else {
+function stage(from: string | null, to: string, banned: Banned): void {
+  if (from === null || !fs.existsSync(from)) {
     fs.mkdirSync(to);
+    return;
   }
+  fs.cpSync(from, to, {
+    recursive: true,
+    verbatimSymlinks: true,
+    filter: (source) =>
+      !(
+        banned.home !== undefined &&
+        isLogin(path.relative(banned.home, source), banned.paths)
+      ) && !holdsLogin(source, banned.hashes),
+  });
 }
 
 /**
@@ -83,54 +152,90 @@ const isLogin = (relative: string, authFiles: string[]): boolean =>
     (file) => relative === file || relative.startsWith(`${file}/`),
   );
 
+/** A run's files copied under their fixed names, ready for `tar`. */
+export interface Staged {
+  dir: string;
+  names: string[];
+  dispose: () => void;
+}
+
 /**
- * Archives a run's workspace, seed, remotes and home with the system `tar`, under fixed names, without the harness's
- * login files. The grader's copy is never given to this function, so it cannot be in the archive.
+ * Copies a run's workspace, seed, remotes and home under fixed names, and writes the home seed, leaving out the
+ * harness's login files and any file that has their content. Nothing is removed from a copy, so a link in the home cannot
+ * lead a removal anywhere. The grader's copy is never given to this function, so it cannot be staged.
  * @param source - What the run left, while it still exists.
- * @param target - The archive's path; its directory exists.
- * @returns The size of the archive in bytes.
- * @throws {Error} When a file cannot be copied or `tar` fails; nothing is left at `target`.
+ * @returns The staging directory, the names to archive, and a `dispose`.
+ * @throws {Error} When a file cannot be copied; nothing is left staged.
  */
-export function archiveRun(source: Archivable, target: string): number {
+export function stageRun(source: Archivable): Staged {
   const area = tempDir(STAGE_PREFIX, (dir) => {
     setWritable(dir, true);
   });
   try {
-    stage(source.workspace, path.join(area.dir, WORKSPACE));
-    stage(source.home, path.join(area.dir, HOME));
-    for (const file of source.authFiles) {
-      fs.rmSync(path.join(area.dir, HOME, file), {
-        recursive: true,
-        force: true,
-      });
-    }
+    const banned: Banned = {
+      paths: source.authFiles,
+      hashes: loginHashes(source.authFiles, [os.homedir(), source.home]),
+    };
+    stage(source.workspace, path.join(area.dir, WORKSPACE), banned);
+    stage(source.home, path.join(area.dir, HOME), {
+      ...banned,
+      home: source.home,
+    });
     const names = [WORKSPACE, HOME, HOME_SEED];
     if (source.seedDir !== null) {
-      stage(source.seedDir, path.join(area.dir, SEED));
+      stage(source.seedDir, path.join(area.dir, SEED), banned);
       names.push(SEED);
     }
     if (source.remoteDir !== null) {
-      stage(source.remoteDir, path.join(area.dir, REMOTES));
+      stage(source.remoteDir, path.join(area.dir, REMOTES), banned);
       names.push(REMOTES);
     }
     const kept = [...source.homeSeed].filter(
-      ([relative]) => !isLogin(relative, source.authFiles),
+      ([relative, hash]) =>
+        !isLogin(relative, source.authFiles) &&
+        ![...banned.hashes.values()].some((sums) => sums.has(hash)),
     );
     fs.writeFileSync(
       path.join(area.dir, HOME_SEED),
       JSON.stringify(Object.fromEntries(kept)),
     );
     setWritable(area.dir, true);
+    return { dir: area.dir, names, dispose: area.dispose };
+  } catch (error) {
+    area.dispose();
+    throw error;
+  }
+}
+
+/**
+ * Writes staged files to an archive with the system `tar`, and removes the staging area.
+ * @param staged - What `stageRun` made.
+ * @param target - The archive's path; its directory exists.
+ * @returns The size of the archive in bytes.
+ * @throws {Error} When `tar` fails; nothing is left at `target`.
+ */
+export function writeArchive(staged: Staged, target: string): number {
+  try {
     const partial = `${target}.partial`;
-    execFileSync("tar", ["-cf", partial, "-C", area.dir, ...names], {
+    execFileSync("tar", ["-cf", partial, "-C", staged.dir, ...staged.names], {
       stdio: "ignore",
     });
     fs.renameSync(partial, target);
     return fs.statSync(target).size;
   } finally {
-    area.dispose();
+    staged.dispose();
   }
 }
+
+/**
+ * Archives a run's files in one step: `stageRun`, then `writeArchive`.
+ * @param source - What the run left, while it still exists.
+ * @param target - The archive's path; its directory exists.
+ * @returns The size of the archive in bytes.
+ * @throws {Error} When a file cannot be copied or `tar` fails.
+ */
+export const archiveRun = (source: Archivable, target: string): number =>
+  writeArchive(stageRun(source), target);
 
 /**
  * Unpacks an archive of `archiveRun` into a temp directory, at the layout of the run.
@@ -143,7 +248,11 @@ export function unpackArchive(file: string): Unpacked {
     setWritable(dir, true);
   });
   try {
-    execFileSync("tar", ["-xf", file, "-C", area.dir], { stdio: "ignore" });
+    execFileSync(
+      "tar",
+      ["-xf", file, "-C", area.dir, "--no-same-owner", "--no-same-permissions"],
+      { stdio: "ignore" },
+    );
     const at = (name: string): string => path.join(area.dir, name);
     const seedDir = fs.existsSync(at(SEED)) ? at(SEED) : null;
     // The seed is read-only again, as a command check finds it in a run.

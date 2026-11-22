@@ -11,7 +11,7 @@ import { VARIANT_KEYS } from "../variants.js";
 import type { Flag, FlagSpec } from "../flags.js";
 import { EXAMPLE_CONFIG } from "./example-config.js";
 import { FLAGS } from "../flags.js";
-import { commandsTaking, defaultText, flagSyntax } from "../usage.js";
+import { commandsTaking, defaultText, flagSyntax, nameWith } from "../usage.js";
 import { apiReference } from "./api.js";
 import { capabilitiesPage } from "./capabilities-page.js";
 import { exitCodesPage } from "./exit-codes-page.js";
@@ -135,7 +135,7 @@ ${code("skill-evals --help")}, ${code("skill-evals help")}, ${code("skill-evals 
 ${table(
   ["Command", "What it does"],
   Object.entries(COMMANDS).map(([name, command]) => [
-    code(name),
+    code(nameWith(name, command)),
     command.description,
   ]),
 )}

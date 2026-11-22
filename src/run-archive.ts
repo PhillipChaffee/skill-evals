@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ARCHIVE_SUFFIX, archiveRun } from "./archive.js";
+import type { Staged } from "./archive.js";
+import { ARCHIVE_SUFFIX, stageRun, writeArchive } from "./archive.js";
 import { messageOf } from "./scope.js";
 import type { SessionResult } from "./session.js";
 import type { RunPlan } from "./run-plan.js";
@@ -12,28 +13,52 @@ export interface WorkspaceArchive {
   bytes: number;
 }
 
+// An archive this large is worth a word to the user: a workspace may hold a build.
+const KIB = 1024;
+const ARCHIVE_WARN_BYTES = KIB * KIB * KIB;
+
 /**
- * Archives the run's files when the command was started with `--keep-workspaces`. The checks have run, so the archive
- * holds what they left. A failure is a warning and a record without an archive, never a lost run.
- * @param plan - The run: its harness, which names the login files, and where its files go.
+ * Copies the run's files for an archive when the command was started with `--keep-workspaces`. It runs before the
+ * checks, so that nothing a `command` check writes, such as a copy of the grader's files, reaches the archive, and so
+ * that a rescore starts from the files the checks started from.
+ * @param plan - The run: its harness, which names the login files.
  * @param ran - What the session produced, while its directories still exist.
+ * @returns The staged files; null when the run is not kept or the copy failed, which is a warning and never a lost run.
+ */
+export function stageKept(plan: RunPlan, ran: SessionResult): Staged | null {
+  if (plan.keepWorkspaces !== true) return null;
+  try {
+    return stageRun({ ...ran, authFiles: plan.harness.authFiles });
+  } catch (error) {
+    console.error(
+      `skill-evals: warning: the workspace of ${plan.caseDef.id} could not be archived: ${messageOf(error)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Writes the staged files of a run to its archive.
+ * @param plan - The run: where its files go.
+ * @param staged - What `stageKept` made; null for no archive.
  * @param stem - The run's path without an extension, as its stream file's.
- * @returns The archive's relative path and size; null when the run is not kept or the archive could not be made.
+ * @returns The archive's relative path and size; null when there is none or `tar` failed.
  */
 export function keptArchive(
   plan: RunPlan,
-  ran: SessionResult,
+  staged: Staged | null,
   stem: string,
 ): WorkspaceArchive | null {
-  if (plan.keepWorkspaces !== true) return null;
+  if (staged === null) return null;
   const target = `${stem}${ARCHIVE_SUFFIX}`;
   try {
-    const bytes = archiveRun(
-      { ...ran, authFiles: plan.harness.authFiles },
-      target,
-    );
-    const relative = path.relative(path.resolve(plan.outDir), target);
-    return { path: relative, bytes };
+    const bytes = writeArchive(staged, target);
+    if (bytes > ARCHIVE_WARN_BYTES) {
+      console.error(
+        `skill-evals: warning: the archive ${target} is ${String(bytes)} bytes; delete it when you no longer need it`,
+      );
+    }
+    return { path: path.relative(path.resolve(plan.outDir), target), bytes };
   } catch (error) {
     fs.rmSync(`${target}.partial`, { force: true });
     console.error(

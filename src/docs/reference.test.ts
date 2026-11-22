@@ -1,3 +1,4 @@
+import { nameWith } from "../usage.js";
 import path from "node:path";
 import { format } from "prettier";
 import { expect, test } from "vitest";
@@ -62,7 +63,9 @@ test("the commands page and the help text have every command, flag, and default"
   const commands = page("reference/commands.md");
   const help = (await sandbox().cli(["help"])).stdout;
   for (const [name, command] of Object.entries(COMMANDS)) {
-    expect(commands).toContain(`| \`${name}\` | ${command.description} |`);
+    expect(commands).toContain(
+      `| \`${nameWith(name, command)}\` | ${command.description} |`,
+    );
     expect(help).toContain(command.description);
   }
   for (const [flag, spec] of Object.entries(FLAGS)) {

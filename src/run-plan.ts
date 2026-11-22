@@ -80,6 +80,7 @@ export type ScoringPlan = Pick<
   | "judge"
   | "judgeApi"
   | "decision"
+  | "decisionModel"
   | "isolated"
   | "pass"
   | "cache"

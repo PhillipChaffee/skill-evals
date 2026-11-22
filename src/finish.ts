@@ -240,6 +240,14 @@ export async function metaOfCommand(
     subjects,
     applied: context.parts.ran,
     isolated: modesOf(context.options).isolated,
+    lenient: modesOf(context.options).lenient,
+    judge: {
+      via: context.judgeApi ? "api" : "harness",
+      harness: context.judgeApi
+        ? null
+        : (context.judgeHarness?.harness.id ?? null),
+      model: context.judgeModel ?? null,
+    },
   });
 }
 

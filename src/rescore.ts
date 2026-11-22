@@ -30,6 +30,23 @@ export interface RescoreContext {
 const GRADER_PREFIX = "copy-";
 
 /**
+ * Resolves a path that a record names.
+ * @param outDir - The output directory the record was stored in.
+ * @param relative - The path as the record has it.
+ * @returns The absolute path.
+ * @throws {UsageError} When the path leads out of the output directory.
+ */
+function within(outDir: string, relative: string): string {
+  const root = path.resolve(outDir);
+  const found = path.resolve(root, relative);
+  const inside = path.relative(root, found);
+  if (inside.startsWith("..") || path.isAbsolute(inside)) {
+    throw new UsageError(`${relative} is not inside ${outDir}`);
+  }
+  return found;
+}
+
+/**
  * Reads the transcript file of a run.
  * @param record - The stored run.
  * @param outDir - The output directory it was stored in.
@@ -41,7 +58,7 @@ function transcriptOf(
   outDir: string,
 ): { events: TranscriptEvent[]; file: string } {
   const named = record.transcriptFile;
-  const file = named ? path.resolve(outDir, named) : null;
+  const file = named ? within(outDir, named) : null;
   if (file === null || !fs.existsSync(file)) {
     throw new UsageError(
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)} has no transcript file in ${outDir}`,
@@ -190,7 +207,7 @@ export async function rescore(
 ): Promise<RunRecord> {
   const transcript = transcriptOf(record, context.outDir);
   const archive = record.workspaceArchive?.path
-    ? path.resolve(context.outDir, record.workspaceArchive.path)
+    ? within(context.outDir, record.workspaceArchive.path)
     : null;
   const files =
     archive !== null && fs.existsSync(archive) ? unpacked(archive) : null;
