@@ -13,6 +13,24 @@ const orNull =
     value === null || inner(value);
 
 /**
+ * Checks the cost of a scoring model's calls in one run, which the totals line adds up.
+ * @param value - The `judge` or `decision` field of a line.
+ * @returns True for an object with the calls, the duration, the cost, the cache hits and the tokens that the report reads.
+ */
+const usage: Shape = (value) =>
+  isObject(value) &&
+  count(value["calls"]) &&
+  count(value["durationMs"]) &&
+  orNull(count)(value["costUsd"]) &&
+  (value["cacheHits"] === undefined || count(value["cacheHits"])) &&
+  orNull(
+    (tokens) =>
+      isObject(tokens) &&
+      (tokens["input"] === undefined || count(tokens["input"])) &&
+      (tokens["output"] === undefined || count(tokens["output"])),
+  )(value["tokens"]);
+
+/**
  * The fields that every line of `results.jsonl` must have. A line that lacks one, or has the wrong kind of value, is
  * not a run record: reading it would fail where the report, the progress line or a resume uses the field.
  */
@@ -42,8 +60,8 @@ export const LINE_FIELDS: Record<string, Shape> = {
   durationMs: count,
   tokens: orNull(isObject),
   costUsd: orNull(count),
-  judge: orNull(isObject),
-  decision: orNull(isObject),
+  judge: orNull(usage),
+  decision: orNull(usage),
 };
 
 /**

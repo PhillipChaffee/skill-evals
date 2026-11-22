@@ -9,7 +9,7 @@ import type { Located } from "./harnesses/index.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
-import { openStore } from "./store.js";
+import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
@@ -221,6 +221,8 @@ async function runSuite(
   }
   const release = lockDir(outDir);
   try {
+    // Another command may have filled the directory while the subjects were exported, and before it was locked.
+    if (resumed === undefined) requireFresh(outDir);
     const store = openStore(outDir, resumed !== undefined);
     const finished = { ...context, subjects };
     const records = await runAll({

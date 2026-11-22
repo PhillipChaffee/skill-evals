@@ -71,14 +71,16 @@ const self = (): Holder => ({
 function parse(text: string): Holder | null {
   try {
     const value = JSON.parse(text) as Partial<Holder> | null;
-    return typeof value?.pid === "number" && typeof value.hostname === "string"
-      ? {
-          pid: value.pid,
-          hostname: value.hostname,
-          bootId: value.bootId ?? null,
-          startTime: value.startTime ?? null,
-        }
-      : null;
+    const { pid, hostname } = value ?? {};
+    // A pid of 0 or below would signal a process group, so it is no lock.
+    if (!Number.isInteger(pid) || (pid as number) < 1) return null;
+    if (typeof hostname !== "string") return null;
+    return {
+      pid: pid as number,
+      hostname,
+      bootId: value?.bootId ?? null,
+      startTime: value?.startTime ?? null,
+    };
   } catch {
     return null;
   }

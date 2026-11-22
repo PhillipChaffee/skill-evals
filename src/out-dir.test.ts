@@ -127,3 +127,39 @@ test("a run that throws leaves results.json saying error, with the runs that fin
   // The lock went with the command.
   expect(fs.existsSync(path.join(out, ".lock"))).toBe(false);
 });
+
+test("a directory filled while the subject was exported is refused once the lock is held, and its runs are kept", async () => {
+  const box = sandbox();
+  const cases = plantSuite(box, ids);
+  box.write("kit/one/SKILL.md", "skill\n");
+  const out = path.join(box.root, "results");
+  fs.mkdirSync(out);
+  const real = fs.cpSync.bind(fs);
+  let filled = false;
+  const spy = vi.spyOn(fs, "cpSync").mockImplementation((...args) => {
+    // The subject is exported between the early check and the lock: another command finishes there.
+    if (!filled) {
+      filled = true;
+      fs.writeFileSync(path.join(out, "results.jsonl"), "kept\n");
+    }
+    real(...args);
+  });
+  try {
+    await expect(
+      asProcess({ env: box.env, cwd: box.root }, () =>
+        evaluate({
+          subjects: [path.join(box.root, "kit")],
+          cases,
+          reps: 1,
+          outDir: out,
+        }),
+      ),
+    ).rejects.toThrow(/holds 1 runs of an earlier command/);
+  } finally {
+    spy.mockRestore();
+  }
+  expect(fs.readFileSync(path.join(out, "results.jsonl"), "utf8")).toBe(
+    "kept\n",
+  );
+  expect(fs.existsSync(path.join(out, ".lock"))).toBe(false);
+});

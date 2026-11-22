@@ -136,11 +136,19 @@ test("a lock of a process that is gone is taken over, and so is text that is no 
   try {
     writeLock(file, { pid: 2_147_483_646 });
     lockDir(out)();
-    for (const text of ["garbage", "null", "5", '{"pid": 1}']) {
+    for (const text of [
+      "garbage",
+      "null",
+      "5",
+      '{"pid": 1}',
+      ...[0, -1, 1.5].map((pid) =>
+        JSON.stringify({ pid, hostname: os.hostname() }),
+      ),
+    ]) {
       fs.writeFileSync(file, text);
       lockDir(out)();
     }
-    expect(warn).toHaveBeenCalledTimes(5);
+    expect(warn).toHaveBeenCalledTimes(8);
     expect(String(warn.mock.calls.at(-1)?.[0])).toContain(
       "which was not a lock",
     );

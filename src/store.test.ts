@@ -205,3 +205,38 @@ test("a line that lacks any field that the report, the progress line or a resume
   ]);
   expect(() => readRuns(checks)).toThrow(/line 1/);
 });
+
+test("a line whose judge or decision totals have the wrong shape is refused", () => {
+  const usage = {
+    calls: 1,
+    durationMs: 5,
+    tokens: { input: 1, output: 2 },
+    costUsd: 0.1,
+    cacheHits: 1,
+  };
+  expect(() =>
+    readRuns(
+      holding([JSON.stringify({ ...run(), judge: usage, decision: usage })]),
+    ),
+  ).not.toThrow();
+  const bad: unknown[] = [
+    {},
+    { ...usage, calls: "1" },
+    { ...usage, durationMs: null },
+    { ...usage, costUsd: "x" },
+    { ...usage, cacheHits: "1" },
+    { ...usage, tokens: { input: "1" } },
+    { ...usage, tokens: 5 },
+  ];
+  for (const field of ["judge", "decision"]) {
+    for (const value of bad) {
+      const out = holding([
+        JSON.stringify({ ...run(), [field]: value }),
+        JSON.stringify(run()),
+      ]);
+      expect(() => readRuns(out), `${field} ${JSON.stringify(value)}`).toThrow(
+        /line 1 is not a valid run record/,
+      );
+    }
+  }
+});
