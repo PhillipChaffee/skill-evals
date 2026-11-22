@@ -22,7 +22,7 @@ export const NO_FILES = {
   command: {
     workspace: "",
     graderDir: null,
-    seedDir: "",
+    seedDir: null,
     home: "",
     transcriptFile: null,
     remoteDir: null,
@@ -85,6 +85,8 @@ export function dirsWith(seed: Record<string, string> = {}): Dirs {
     put,
     run: (agent = () => undefined) => {
       const before = snapshot(workspace);
+      const seedDir = path.join(base, "seed");
+      fs.cpSync(workspace, seedDir, { recursive: true });
       const homeBefore = snapshot(home);
       agent({ workspace, home });
       return bareOutcome({
@@ -92,7 +94,7 @@ export function dirsWith(seed: Record<string, string> = {}): Dirs {
         command: {
           ...NO_FILES.command,
           workspace,
-          seedDir: workspace,
+          seedDir,
           home,
         },
       });
@@ -109,8 +111,13 @@ export type Given = Omit<RuledCheck, "weight">;
  * @param outcome - What the run left behind.
  * @returns Its verdict.
  */
-export const scoredNow = (check: RuledCheck, outcome: Outcome): Verdict =>
-  checkScore(check, outcome) as Verdict;
+export const scoredNow = (check: RuledCheck, outcome: Outcome): Verdict => {
+  const verdict = checkScore(check, outcome);
+  if (verdict instanceof Promise) {
+    throw new Error(`${check.type} waits for a process; use scoredAsync`);
+  }
+  return verdict;
+};
 
 /**
  * Scores one check against an outcome.

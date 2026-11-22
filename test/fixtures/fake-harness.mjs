@@ -16,6 +16,7 @@
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -160,16 +161,24 @@ const perform = ({ input, output = "", exec, write }) => {
     fs.writeFileSync(target, write.content);
   }
   if (!exec) return { content: output, isError: false };
-  // The sandbox's PATH holds node and git only, so a command also gets the system's.
-  const ran = spawnSync("sh", ["-c", `(${input.command}\n) 2>&1`], {
-    encoding: "utf8",
+  // The sandbox's PATH holds node and git only, so a command also gets the system's. Its output goes to a file, and the
+  // run's own standard output is handed to it as descriptor 3, so a process it leaves in the background holds the
+  // harness's pipe open as a real agent's would.
+  const file = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "fake-out-")),
+    "output",
+  );
+  const ran = spawnSync("sh", ["-c", `(${input.command}\n) >"$0" 2>&1`, file], {
+    stdio: ["ignore", "ignore", "ignore", 1],
     env: {
       ...process.env,
       PLUGIN_DIR: pluginDir ?? "",
       PATH: `${process.env.PATH}:/usr/local/bin:/usr/bin:/bin`,
     },
   });
-  return { content: ran.stdout, isError: ran.status !== 0 };
+  const content = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
+  return { content, isError: ran.status !== 0 };
 };
 
 /**

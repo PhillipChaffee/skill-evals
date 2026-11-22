@@ -1,11 +1,14 @@
+import fs from "node:fs";
 import type { CommandResult } from "../command.js";
 import { runCommand } from "../command.js";
-import type { Rule, Spec, Verdict, With } from "./index.js";
+import { allChanged, diffSnapshots, snapshot } from "../snapshot.js";
+import type { Outcome, Rule, Spec, Verdict, With } from "./index.js";
 import { regex } from "./rules.js";
 
 const KEPT_BYTES = 2000;
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const SHOWN_LINE_LENGTH = 80;
+const SHOWN_PATHS = 10;
 const UTF8_CONTINUATION = 0b1000_0000;
 const UTF8_CONTINUATION_MASK = 0b1100_0000;
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -31,7 +34,7 @@ function lastBytes(text: string, limit = KEPT_BYTES): string {
 
 /**
  * Reads the score a command printed.
- * @param stdout - Everything the command wrote to standard output.
+ * @param stdout - What the command wrote to standard output.
  * @returns The number on its last non-empty line, from 0 to 1, or why there is none.
  */
 function ratioOf(
@@ -67,9 +70,7 @@ function ratioOf(
  */
 function shortfall(check: With<"run">, result: CommandResult): string | null {
   const expected = check.expectExit ?? 0;
-  if (result.exit !== expected) {
-    return `expected exit ${String(expected)}`;
-  }
+  if (result.exit !== expected) return `expected exit ${String(expected)}`;
   const { stdoutMatches, stdoutLacks, flags } = check;
   if (stdoutMatches && !regex(stdoutMatches, flags).test(result.stdout)) {
     return `stdout does not match /${stdoutMatches}/`;
@@ -84,9 +85,14 @@ function shortfall(check: With<"run">, result: CommandResult): string | null {
  * Scores a command check from what its command did.
  * @param check - The check, with its `run` and the fields that say what passes.
  * @param result - What the command did.
+ * @param timeoutSeconds - The time the command was given.
  * @returns A score from 0 to 1 and why, with the record of what the command did.
  */
-function verdictOf(check: With<"run">, result: CommandResult): Verdict {
+function verdictOf(
+  check: With<"run">,
+  result: CommandResult,
+  timeoutSeconds: number,
+): Verdict {
   const stderr = lastBytes(result.stderr);
   const command = {
     run: check.run,
@@ -94,38 +100,68 @@ function verdictOf(check: With<"run">, result: CommandResult): Verdict {
     durationMs: result.durationMs,
     stdout: lastBytes(result.stdout),
     stderr,
+    truncated: result.truncated,
   };
-  const timeout = check.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+  const tail = stderr.trim() === "" ? "" : `: ${stderr.trim()}`;
   if (result.failure === "timeout") {
     return {
       score: 0,
-      reason: `timed out after ${String(timeout)} s`,
+      reason: `timed out after ${String(timeoutSeconds)} s${tail}`,
       command,
     };
   }
   if (result.failure === "spawn") {
     return { score: 0, reason: `could not start: ${stderr}`, command };
   }
-  const took = `exit ${String(result.exit)} in ${String(result.durationMs)} ms`;
+  const took =
+    result.exit === null
+      ? `killed by ${String(result.signal)}`
+      : `exit ${String(result.exit)}`;
+  const timed = `${took} in ${String(result.durationMs)} ms`;
+  const cut = result.truncated
+    ? " (output cut at 5 MB; patterns saw the kept start)"
+    : "";
   const problem = shortfall(check, result);
   const ratio =
-    check.score === "stdout"
+    check.scoreFrom === "stdout"
       ? ratioOf(result.stdout)
       : { score: 1, problem: null };
   const failed = problem ?? ratio.problem;
-  if (failed === null) return { score: ratio.score, reason: took, command };
-  const tail = stderr.trim() === "" ? "" : `: ${stderr.trim()}`;
-  return { score: 0, reason: `${took}, ${failed}${tail}`, command };
+  if (failed === null) {
+    return { score: ratio.score, reason: `${timed}${cut}`, command };
+  }
+  return { score: 0, reason: `${timed}, ${failed}${cut}${tail}`, command };
+}
+
+/**
+ * Finds what changed in the seed copy since it was taken, which a check must not trust a command to leave alone.
+ * @param outcome - What the run left behind.
+ * @returns The changed paths; none when there is no seed copy.
+ */
+function seedChanges(outcome: Outcome): string[] {
+  const { seedDir } = outcome.command;
+  if (seedDir === null) return [];
+  return allChanged(diffSnapshots(outcome.seed, snapshot(seedDir)));
 }
 
 const commandRule: Rule = async (check, outcome) => {
   const given = check as With<"run">;
-  const result = await runCommand(
-    given.run,
-    outcome.command,
-    given.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
-  );
-  return verdictOf(given, result);
+  if (!fs.existsSync(outcome.command.workspace)) {
+    return { score: 0, reason: "the workspace no longer exists" };
+  }
+  const changed = seedChanges(outcome);
+  if (changed.length > 0) {
+    const more = changed.length - SHOWN_PATHS;
+    const shown = changed.slice(0, SHOWN_PATHS).join(", ");
+    const rest = more > 0 ? ` and ${String(more)} more` : "";
+    return {
+      score: 0,
+      reason: `the seed copy was changed: ${shown}${rest}`,
+    };
+  }
+  const timeout = given.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+  const result = await runCommand(given.run, outcome.command, timeout);
+  return verdictOf(given, result, timeout);
 };
 
 // The check that runs a command after the agent exits.
@@ -134,11 +170,11 @@ export const COMMAND_CHECKS = {
     fields: ["run"],
     optional: [
       ...["expectExit", "stdoutMatches", "stdoutLacks", "flags"],
-      ...["timeoutSeconds", "score"],
+      ...["timeoutSeconds", "scoreFrom"],
     ],
     scores:
-      "The command exits with the expected code and its standard output passes. With `score: stdout`, the score is the number on the last line of standard output.",
-    note: "It runs after the agent exits, in the workspace, as you, without a sandbox. See the safety page.",
+      "The command exits with the expected code and its standard output passes. With `scoreFrom: stdout`, the score is the number on the last line of standard output.",
+    note: "It runs after the agent exits, in the workspace, as you, without a sandbox, and after every other check is scored. See the safety page.",
     rule: commandRule,
   } satisfies Spec,
 };

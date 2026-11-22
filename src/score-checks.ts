@@ -1,8 +1,11 @@
-import type { Outcome } from "./checks/index.js";
+import type { Outcome, RuledCheck, Verdict } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
+import { removeLogin } from "./command.js";
 import { decide } from "./decision.js";
 import { judge } from "./judge.js";
-import type { CheckResult, RunPlan, Usage } from "./run.js";
+import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
+import { withheld } from "./run-plan.js";
+import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
@@ -18,12 +21,46 @@ const NOT_RUN = {
   reason: "not run, because the run is invalid",
 };
 /**
- * Names what no harness process of a run may get.
- * @param plan - The run.
- * @returns The decision model's key, when there is a decision model.
+ * Scores a check by its rule. A rule that throws, such as a user's regular expression that overflows the stack, scores
+ * its check 0 and leaves the run valid.
+ * @param check - A check that a rule scores.
+ * @param outcome - What the run left behind.
+ * @returns The rule's verdict, or 0 with the message that the rule threw.
  */
-export const withheld = (plan: RunPlan): string[] =>
-  plan.decision ? [plan.decision.secret] : [];
+async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
+  try {
+    return await checkScore(check, outcome);
+  } catch (error) {
+    return {
+      score: 0,
+      reason: `the check could not be scored: ${messageOf(error)}`,
+    };
+  }
+}
+
+/**
+ * Runs the command checks of a case, in case order, once everything else is scored.
+ * @param plan - The run, whose case holds the checks and whose harness names the login files.
+ * @param run - What the commands look at, and whether the run is still valid.
+ * @param run.outcome - What the run left behind.
+ * @param run.judgeable - False when the run is already invalid: the commands are not run.
+ * @param slots - The results by place in the case; each command's place is filled in.
+ */
+async function runCommands(
+  plan: RunPlan,
+  run: { outcome: Outcome; judgeable: boolean },
+  slots: (CheckResult | undefined)[],
+): Promise<void> {
+  const { checks } = plan.caseDef;
+  if (run.judgeable && checks.some((check) => check.type === "command")) {
+    removeLogin(plan.harness.authFiles, run.outcome.home);
+  }
+  for (const [index, check] of checks.entries()) {
+    if (check.type !== "command") continue;
+    const verdict = run.judgeable ? await ruled(check, run.outcome) : NOT_RUN;
+    slots[index] = { ...check, ...verdict };
+  }
+}
 
 /**
  * Scores every check of a case for one run.
@@ -61,21 +98,20 @@ export async function scoreChecks(
           checks: decisions,
         })
       : null;
-  const checks: CheckResult[] = [];
+  const slots: (CheckResult | undefined)[] = asked.map(() => undefined);
   const replies: Usage[] = [];
-  for (const check of asked) {
+  // Commands run last: they may change the files that the other checks read, and a login must not be readable by
+  // them. The record keeps the case's order.
+  for (const [index, check] of asked.entries()) {
+    if (check.type === "command") continue;
     if (isDecision(check)) {
       const result = decided?.results[decisions.indexOf(check)];
-      checks.push({ ...check, ...(result ?? NOT_DECIDED) });
+      slots[index] = { ...check, ...(result ?? NOT_DECIDED) };
     } else if (!isJudged(check)) {
-      const verdict =
-        check.type === "command" && !judgeable
-          ? NOT_RUN
-          : await checkScore(check, outcome);
-      checks.push({ ...check, ...verdict });
+      slots[index] = { ...check, ...(await ruled(check, outcome)) };
     } else if (!judgeable) {
       const reason = "not judged, because the run is invalid";
-      checks.push({ ...check, score: null, reason });
+      slots[index] = { ...check, score: null, reason };
     } else {
       const verdict = await judge(ask, {
         task,
@@ -83,9 +119,11 @@ export async function scoreChecks(
         rubric: check.rubric,
       });
       replies.push(...verdict.replies);
-      checks.push({ ...check, score: verdict.score, reason: verdict.reason });
+      slots[index] = { ...check, score: verdict.score, reason: verdict.reason };
     }
   }
+  await runCommands(plan, { outcome, judgeable }, slots);
+  const checks = slots.filter((slot) => slot !== undefined);
   return {
     checks,
     replies,

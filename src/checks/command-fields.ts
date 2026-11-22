@@ -24,9 +24,9 @@ export const COMMAND_FIELDS: Record<string, FieldDef> = {
   timeoutSeconds: {
     type: "int",
     meaning:
-      "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120 for a `command` check, 600 for a case.",
+      "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120.",
   },
-  score: {
+  scoreFrom: {
     type: "enum",
     values: ["exit", "stdout"],
     meaning:

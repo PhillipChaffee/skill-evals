@@ -29,7 +29,8 @@ export function workspaceOf(dir: string, file: string): string | null {
  * @param dir - The case's directory.
  * @param file - The case file, for an error message.
  * @returns The folder, or null when there is none.
- * @throws {UsageError} When `workspace/` holds a `grader/` folder: the agent would start with the held-out files.
+ * @throws {UsageError} When `workspace/` holds a `grader/` folder (the agent would start with the held-out files), or
+ *   `grader` is not a directory.
  */
 export function graderOf(dir: string, file: string): string | null {
   if (fs.existsSync(path.join(dir, "workspace", "grader"))) {
@@ -38,5 +39,9 @@ export function graderOf(dir: string, file: string): string | null {
     );
   }
   const grader = path.join(dir, "grader");
-  return fs.existsSync(grader) ? grader : null;
+  if (!fs.existsSync(grader)) return null;
+  if (!fs.statSync(grader).isDirectory()) {
+    throw new UsageError(`${file}: grader must be a directory`);
+  }
+  return grader;
 }

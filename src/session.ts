@@ -201,13 +201,12 @@ async function attempt(
     invocation = harness.invocation(input);
   } catch (error) {
     const failure = `could not prepare the run: ${messageOf(error)}`;
-    const homeSeed = snapshot(input.home);
     return {
       stdout: "",
       failure,
       durationMs: 0,
       placedChanges: null,
-      homeSeed,
+      homeSeed: snapshot(input.home),
     };
   }
   const placedChanges = watchPlaced(input.subject, invocation.placed);
@@ -235,6 +234,8 @@ async function attempt(
     ...options,
     env: environment(session.env ?? {}),
     stdin: invocation.stdin,
+    // Whatever the agent left running goes with it, so a background process cannot hold the run until its time limit.
+    reapOnExit: true,
   });
   return {
     ...result,

@@ -337,7 +337,7 @@ One tool call of the agent.
 A check with what it gave one run.
 
 ```ts
-type CheckResult = WithoutScore<Check> & {
+type CheckResult = Check & {
   /** Null when a judged check, a decision check or a command check got no usable answer. */
   score: number | null;
   /** The judge's reason, or why there is no score. */

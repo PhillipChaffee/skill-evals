@@ -53,7 +53,7 @@ interface CheckFields {
   stdoutMatches?: string;
   stdoutLacks?: string;
   timeoutSeconds?: number;
-  score?: "exit" | "stdout";
+  scoreFrom?: "exit" | "stdout";
   rubric?: string;
   question?: string;
   expect?: "yes" | "no";
@@ -135,6 +135,8 @@ export interface Verdict {
     durationMs: number;
     stdout: string;
     stderr: string;
+    /** True when the command wrote more than 5 MB to a stream and the rest was dropped. */
+    truncated: boolean;
   };
 }
 /** Scores one check from what the run left behind. A rule that waits for a process returns a promise. */

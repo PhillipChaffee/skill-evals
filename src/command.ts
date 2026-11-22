@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { exec } from "./exec.js";
 import { tempDir } from "./scope.js";
 
@@ -9,8 +10,8 @@ export interface CommandContext {
   workspace: string;
   /** A copy of the case's `grader/` directory made after the agent exited; null when the case has none. */
   graderDir: string | null;
-  /** The workspace as it was before the agent ran. */
-  seedDir: string;
+  /** A read-only copy of the workspace as it was before the agent ran; null when none was taken. */
+  seedDir: string | null;
   /** The run's throwaway home. */
   home: string;
   /** The run's transcript file. Null until the transcript is written (Task 14). */
@@ -26,21 +27,19 @@ export interface CommandContext {
  * @param ran - What the session left, while its directories still exist.
  * @param ran.workspace - The agent's workspace.
  * @param ran.home - The run's throwaway home.
- * @param ran.seedDir - The copy of the workspace taken before the agent ran; null when the case has no command check.
+ * @param ran.seedDir - The copy of the workspace taken before the agent ran; null when none was taken.
  * @param ran.graderDir - The copy of the case's `grader/` directory; null when the case has none.
  * @param env - The case's `env`.
  * @returns The context. The transcript and the remote directory are null until later tasks make them.
  */
 export function commandContext(
-  ran: Pick<CommandContext, "workspace" | "home" | "graderDir"> & {
-    seedDir: string | null;
-  },
+  ran: Pick<CommandContext, "workspace" | "home" | "graderDir" | "seedDir">,
   env: Record<string, string>,
 ): CommandContext {
   return {
     workspace: ran.workspace,
     graderDir: ran.graderDir,
-    seedDir: ran.seedDir ?? "",
+    seedDir: ran.seedDir,
     home: ran.home,
     transcriptFile: null,
     remoteDir: null,
@@ -53,13 +52,21 @@ export interface CommandResult {
   /** The exit code; null when a signal ended the command, or when it never started. */
   exit: number | null;
   stdout: string;
-  /** For a command that never started, the reason. */
+  /** For a command that never started, the reason. At most 5 MB is kept. */
   stderr: string;
+  /** The signal that ended the command, when one did. */
+  signal: string | null;
+  /** True when a stream came out longer than 5 MB and the end was dropped. */
+  truncated: boolean;
   durationMs: number;
   /** "timeout": the time ran out and the process group was killed. "spawn": the shell could not be started. */
   failure: "timeout" | "spawn" | null;
 }
 
+// The most of each stream that is kept: a command that prints more is cut, and the check says so.
+const BYTES_PER_MEGABYTE = 1_048_576;
+const KEPT_MEGABYTES = 5;
+const KEPT_BYTES = KEPT_MEGABYTES * BYTES_PER_MEGABYTE;
 const DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin";
 const FIXTURE = "fixture";
 const FIXTURE_EMAIL = "fixture@example.invalid";
@@ -73,6 +80,7 @@ const FIXTURE_EMAIL = "fixture@example.invalid";
 function commandEnv(context: CommandContext): Record<string, string> {
   const optional = {
     SKILL_EVALS_GRADER_DIR: context.graderDir,
+    SKILL_EVALS_SEED_DIR: context.seedDir,
     SKILL_EVALS_TRANSCRIPT: context.transcriptFile,
     SKILL_EVALS_REMOTE_DIR: context.remoteDir,
   };
@@ -82,7 +90,6 @@ function commandEnv(context: CommandContext): Record<string, string> {
     TMPDIR: process.env["TMPDIR"] ?? os.tmpdir(),
     LANG: process.env["LANG"] ?? "C.UTF-8",
     SKILL_EVALS_WORKSPACE: context.workspace,
-    SKILL_EVALS_SEED_DIR: context.seedDir,
     SKILL_EVALS_HOME: context.home,
     ...Object.fromEntries(
       Object.entries(optional).filter(
@@ -117,11 +124,14 @@ export async function runCommand(
     env: commandEnv(context),
     timeoutSeconds,
     reapOnExit: true,
+    maxBytes: KEPT_BYTES,
   });
   return {
     exit: result.exit,
     stdout: result.stdout,
     stderr: result.kind === "spawn" ? (result.failure ?? "") : result.stderr,
+    signal: result.signal,
+    truncated: result.truncated,
     durationMs: Date.now() - started,
     failure: result.kind,
   };
@@ -129,7 +139,7 @@ export async function runCommand(
 
 /** The directories a session makes for command checks. */
 export interface CommandCopies {
-  /** A copy of the workspace as the copy of the case left it. */
+  /** A read-only copy of the workspace as the copy of the case left it. */
   seedDir: string;
   /** Copies the held-out directory into a temp directory; null when the case has none. Call it after the agent exits. */
   copyGrader: () => string | null;
@@ -140,6 +150,32 @@ export interface CommandCopies {
 // A neutral name: the agent may list the temp directory while it runs, and a name like "grader" would tell it what
 // the directory is for.
 const COPY_PREFIX = "copy-";
+const READ_ONLY_FILE = 0o444;
+const READ_ONLY_DIR = 0o555;
+const WRITABLE_DIR = 0o755;
+const WRITABLE_FILE = 0o644;
+
+/**
+ * Switches the write permission of every file and directory of a tree, best effort: a link is left alone, and a user
+ * who may write anyway (root) is not stopped. The seed snapshot is what catches a change.
+ * @param dir - The tree.
+ * @param writable - True to allow writing again, so that the tree can be removed.
+ */
+function setWritable(dir: string, writable: boolean): void {
+  try {
+    if (writable) fs.chmodSync(dir, WRITABLE_DIR);
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) setWritable(full, writable);
+      else if (entry.isFile()) {
+        fs.chmodSync(full, writable ? WRITABLE_FILE : READ_ONLY_FILE);
+      }
+    }
+    if (!writable) fs.chmodSync(dir, READ_ONLY_DIR);
+  } catch {
+    // Best effort.
+  }
+}
 
 /**
  * Takes the copies that command checks read.
@@ -152,7 +188,13 @@ export function copiesForCommands(
   graderDir: string | null,
 ): CommandCopies {
   const seed = tempDir(COPY_PREFIX);
-  fs.cpSync(workspace, seed.dir, { recursive: true, verbatimSymlinks: true });
+  try {
+    fs.cpSync(workspace, seed.dir, { recursive: true, verbatimSymlinks: true });
+  } catch (error) {
+    seed.dispose();
+    throw error;
+  }
+  setWritable(seed.dir, false);
   let grader: ReturnType<typeof tempDir> | null = null;
   return {
     seedDir: seed.dir,
@@ -166,8 +208,20 @@ export function copiesForCommands(
       return grader.dir;
     },
     dispose: () => {
+      setWritable(seed.dir, true);
       seed.dispose();
       grader?.dispose();
     },
   };
+}
+
+/**
+ * Removes the harness's login files from the throwaway home, so that a command cannot read them through `$HOME`.
+ * @param authFiles - The adapter's login files, relative to a home directory.
+ * @param home - The run's throwaway home.
+ */
+export function removeLogin(authFiles: string[], home: string): void {
+  for (const relative of authFiles) {
+    fs.rmSync(path.join(home, relative), { force: true });
+  }
 }

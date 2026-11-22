@@ -1894,7 +1894,7 @@
     },
     "check-command": {
       "title": "command",
-      "description": "The command exits with the expected code and its standard output passes. With `score: stdout`, the score is the number on the last line of standard output. It runs after the agent exits, in the workspace, as you, without a sandbox. See the safety page.",
+      "description": "The command exits with the expected code and its standard output passes. With `scoreFrom: stdout`, the score is the number on the last line of standard output. It runs after the agent exits, in the workspace, as you, without a sandbox, and after every other check is scored. See the safety page.",
       "type": "object",
       "required": ["type", "run"],
       "properties": {
@@ -1939,12 +1939,12 @@
         },
         "timeoutSeconds": {
           "title": "timeoutSeconds",
-          "description": "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120 for a `command` check, 600 for a case.",
+          "description": "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120.",
           "type": "integer",
           "minimum": 1
         },
-        "score": {
-          "title": "score",
+        "scoreFrom": {
+          "title": "scoreFrom",
           "description": "How the check scores: \"exit\" gives 1 or 0, \"stdout\" reads a number from 0 to 1 on the last non-empty line of standard output, and anything else scores 0. The exit code and the patterns must hold either way. Default: \"exit\".",
           "type": "string",
           "enum": ["exit", "stdout"]

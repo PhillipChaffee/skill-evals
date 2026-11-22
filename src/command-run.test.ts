@@ -38,7 +38,7 @@ test("a held-out grader that the workspace never held passes after the agent's f
   const fixed = await ran(sandbox(), {
     checks: [check],
     grader: { "held-out.mjs": HELD_OUT },
-    workspace: { "src/parse.mjs": PARSE_BUGGY },
+    workspace: { "src/parse.mjs": PARSE_BUGGY, "decoy/held-out.mjs": "x" },
     agent: [agentRuns(FIND_THE_GRADER), fix],
   });
   expect(fixed.results?.records[0]?.checks[0]?.score).toBe(1);
@@ -52,7 +52,13 @@ test("a held-out grader that the workspace never held passes after the agent's f
     .filter((line) => line.includes("tool_result"))
     .map((line) => line);
   expect(found).toHaveLength(2);
-  expect(found[0]).not.toContain("held-out");
+  // The positive control: the same search does find a file of that name where the agent can see it, and finds nothing
+  // else, so the held-out copy was nowhere it looked.
+  expect(found[0]).toContain("./decoy/held-out.mjs\\n");
+  // The decoy is in the workspace, so its copies (the workspace itself and the seed copy) are found too; nothing else is.
+  const paths = found[0]?.match(/[^"\\]*held-out\.mjs/g) ?? [];
+  expect(paths.length).toBeGreaterThan(0);
+  expect(paths.every((one) => one.endsWith("decoy/held-out.mjs"))).toBe(true);
   const unfixed = await ran(sandbox(), {
     checks: [check],
     grader: { "held-out.mjs": HELD_OUT },
@@ -119,43 +125,48 @@ test(
   async () => {
     const got = await ran(sandbox(), {
       checks: [{ type: "command", run: "true" }],
-      agent: [agentRuns("/bin/sleep 300 >/dev/null 2>&1 &")],
+      agent: [agentRuns("/bin/sleep 300 &")],
     });
     expect(got.results?.records[0]?.checks[0]?.score).toBe(1);
   },
   SHORT_MS,
 );
 
-test("a mutation grader", async () => {
-  const lint =
-    'import fs from "node:fs";\nprocess.exit(fs.readFileSync("src/a.mjs", "utf8").includes("var ") ? 1 : 0);\n';
-  const patch = [
-    "--- a/src/a.mjs",
-    "+++ b/src/a.mjs",
-    "@@ -1 +1 @@",
-    "-const a = 1;",
-    "+var a = 1;",
-    "",
-  ].join("\n");
-  const check = {
-    type: "command",
-    run: 'git apply "$SKILL_EVALS_GRADER_DIR/bad.patch" && ! node lint.mjs',
-  };
-  const got = await ran(sandbox(), {
-    checks: [check],
-    grader: { "bad.patch": patch },
-    workspace: { "lint.mjs": lint, "src/a.mjs": "const a = 1;\n" },
-  });
-  expect(got.results?.records[0]?.checks[0]?.score).toBe(1);
-  const lax = await ran(sandbox(), {
-    checks: [check],
-    grader: { "bad.patch": patch },
-    workspace: {
-      "lint.mjs": "process.exit(0);\n",
-      "src/a.mjs": "const a = 1;\n",
-    },
-  });
+const LINT_MESSAGE = "no-var: src/a.mjs";
+const MUTATION = {
+  type: "command",
+  run: 'git apply "$SKILL_EVALS_GRADER_DIR/bad.patch" && node lint.mjs',
+  expectExit: 1,
+  stdoutMatches: LINT_MESSAGE,
+};
+const BAD_PATCH = [
+  "--- a/src/a.mjs",
+  "+++ b/src/a.mjs",
+  "@@ -1 +1 @@",
+  "-const a = 1;",
+  "+var a = 1;",
+  "",
+].join("\n");
+const LINT = `import fs from "node:fs";
+if (fs.readFileSync("src/a.mjs", "utf8").includes("var ")) {
+  console.log("${LINT_MESSAGE}");
+  process.exit(1);
+}
+`;
+
+test("a mutation grader needs the lint rule's own message, so a missing or lax lint scores 0", async () => {
+  const mutated = (workspace: Record<string, string>) =>
+    ran(sandbox(), {
+      checks: [MUTATION],
+      grader: { "bad.patch": BAD_PATCH },
+      workspace: { "src/a.mjs": "const a = 1;\n", ...workspace },
+    });
+  const caught = await mutated({ "lint.mjs": LINT });
+  expect(caught.results?.records[0]?.checks[0]?.score).toBe(1);
+  const lax = await mutated({ "lint.mjs": "process.exit(0);\n" });
   expect(lax.results?.records[0]?.checks[0]?.score).toBe(0);
+  const missing = await mutated({});
+  expect(missing.results?.records[0]?.checks[0]?.score).toBe(0);
 });
 
 test("commands run in case order and see each other's effects", async () => {

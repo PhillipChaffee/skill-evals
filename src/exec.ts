@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import { onDispose } from "./scope.js";
 
 const MS_PER_SECOND = 1000;
@@ -17,6 +18,8 @@ export interface ExecOptions {
    * background process that keeps a pipe open holds the result back until the timeout. Default: false.
    */
   reapOnExit?: boolean | undefined;
+  /** The most bytes kept of each of standard output and standard error; the rest is read and dropped. Default: all. */
+  maxBytes?: number | undefined;
 }
 
 /** What a finished command left behind. */
@@ -29,6 +32,39 @@ export interface ExecResult {
   exit: number | null;
   /** Which way it failed when it did not exit by itself; null for an exit, whatever its code. */
   kind: "timeout" | "spawn" | null;
+  /** The signal that ended the command, when one did. */
+  signal: string | null;
+  /** True when more than `maxBytes` came out of either stream and the end was dropped. */
+  truncated: boolean;
+}
+
+// After the process group is killed, a process outside it may still hold the pipes open. The output that is already
+// buffered gets this long to arrive, then the pipes are let go.
+const DRAIN_MS = 250;
+
+/**
+ * Keeps the start of a stream, up to a limit of bytes, and reads and drops the rest.
+ * @param stream - A readable stream of the child process.
+ * @param limit - The most bytes to keep.
+ * @returns What is kept so far: its `text`, its size in `bytes`, and whether anything was dropped (`cut`).
+ */
+function keeper(stream: Readable, limit: number) {
+  const kept = { text: "", bytes: 0, cut: false };
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk: string) => {
+    const size = Buffer.byteLength(chunk);
+    if (kept.bytes + size <= limit) {
+      kept.text += chunk;
+      kept.bytes += size;
+      return;
+    }
+    kept.cut = true;
+    const room = limit - kept.bytes;
+    if (room <= 0) return;
+    kept.text += Buffer.from(chunk).subarray(0, room).toString("utf8");
+    kept.bytes = limit;
+  });
+  return kept;
 }
 
 /**
@@ -54,6 +90,77 @@ function start(bin: string, args: string[], run: ExecOptions) {
   return child;
 }
 
+/** How a command ended. */
+interface Ending {
+  code: number | null;
+  signal: string | null;
+  /** The message of an error that stopped it from starting. */
+  spawnError: string | undefined;
+  timedOut: boolean;
+  timeoutSeconds: number;
+}
+
+/**
+ * Turns what a command left and how it ended into its result.
+ * @param kept - What was read from its streams.
+ * @param kept.stdout - The kept start of standard output.
+ * @param kept.stderr - The kept start of standard error.
+ * @param kept.truncated - Whether either stream was cut.
+ * @param how - How it ended.
+ * @returns The result, with the failure text that matches the ending.
+ */
+function concluded(
+  kept: { stdout: string; stderr: string; truncated: boolean },
+  how: Ending,
+): ExecResult {
+  const { code, signal } = how;
+  const base = { ...kept, exit: code, signal };
+  if (how.spawnError !== undefined) {
+    const failure = how.spawnError;
+    return { ...base, exit: null, signal: null, failure, kind: "spawn" };
+  }
+  if (how.timedOut) {
+    const failure = `timed out after ${String(how.timeoutSeconds)} s`;
+    return { ...base, failure, kind: "timeout" };
+  }
+  if (code === 0) return { ...base, failure: null, kind: null };
+  const tail = kept.stderr.trim().slice(-SHOWN_STDERR_LENGTH);
+  return {
+    ...base,
+    failure: `exit ${String(code ?? signal)}: ${tail}`,
+    kind: null,
+  };
+}
+
+/**
+ * Stops every process of a group.
+ * @param pid - The group leader's process id; none when the command never started.
+ */
+function killGroup(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // The group already exited.
+  }
+}
+
+/**
+ * Starts the command, catching the faults that `spawn` throws instead of emitting, such as a working directory that
+ * is a file.
+ * @param bin - The executable.
+ * @param args - Its arguments.
+ * @param options - Where and with what to run it.
+ * @returns The child process, or the message of the fault.
+ */
+function tryStart(bin: string, args: string[], options: ExecOptions) {
+  try {
+    return start(bin, args, options);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 /**
  * Runs a command to its end and never rejects.
  * @param bin - The executable.
@@ -67,54 +174,79 @@ export function exec(
   args: string[],
   options: ExecOptions,
 ): Promise<ExecResult> {
+  const started = tryStart(bin, args, options);
+  if (typeof started !== "string") return watch(started, options);
+  const none = { stdout: "", stderr: "", truncated: false };
   const { timeoutSeconds } = options;
+  const how = { code: null, signal: null, timedOut: false, timeoutSeconds };
+  return Promise.resolve(concluded(none, { ...how, spawnError: started }));
+}
+
+/**
+ * Waits for a started command to end, kills its process group on a timeout, and lets go of pipes that a process outside
+ * the group holds open.
+ * @param child - The started process.
+ * @param options - How long it may run, how much of its output to keep, and whether to reap it on exit.
+ * @returns How it ended.
+ */
+function watch(
+  child: ReturnType<typeof start>,
+  options: ExecOptions,
+): Promise<ExecResult> {
+  const { timeoutSeconds, maxBytes = Infinity } = options;
   return new Promise((resolve) => {
-    const child = start(bin, args, options);
     const kill = (): void => {
-      if (child.pid === undefined) return;
-      try {
-        process.kill(-child.pid, "SIGKILL");
-      } catch {
-        // The group already exited.
-      }
+      killGroup(child.pid);
     };
     // Runs when the child closes too, so nothing the command left in the background outlives the run.
     const reap = onDispose(kill);
-    let stdout = "";
-    let stderr = "";
+    const out = keeper(child.stdout, maxBytes);
+    const err = keeper(child.stderr, maxBytes);
     let timedOut = false;
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    const timer = setTimeout(() => {
-      timedOut = true;
-      kill();
-    }, timeoutSeconds * MS_PER_SECOND);
-    child.stdout.on("data", (chunk: string) => (stdout += chunk));
-    child.stderr.on("data", (chunk: string) => (stderr += chunk));
+    let ended: { code: number | null; signal: string | null } | null = null;
+    const timers: NodeJS.Timeout[] = [];
     let finished = false;
     const finish = (
-      failure: string | null,
-      exit: number | null,
-      kind: ExecResult["kind"],
+      code: number | null,
+      signal: string | null,
+      spawnError?: string,
     ): void => {
       if (finished) return;
       finished = true;
-      clearTimeout(timer);
+      for (const timer of timers) clearTimeout(timer);
       reap();
-      resolve({ stdout, stderr, failure, exit, kind });
+      const kept = {
+        ...{ stdout: out.text, stderr: err.text },
+        truncated: out.cut || err.cut,
+      };
+      const how = { code, signal, spawnError, timedOut, timeoutSeconds };
+      resolve(concluded(kept, how));
     };
+    const drain = (): void => {
+      timers.push(
+        setTimeout(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(ended?.code ?? null, ended?.signal ?? null);
+        }, DRAIN_MS),
+      );
+    };
+    timers.push(
+      setTimeout(() => {
+        timedOut = true;
+        kill();
+        drain();
+      }, timeoutSeconds * MS_PER_SECOND),
+    );
     child.on("error", (error) => {
-      finish(error.message, null, "spawn");
+      finish(null, null, error.message);
     });
-    if (options.reapOnExit) child.on("exit", kill);
-    child.on("close", (code, signal) => {
-      if (timedOut) {
-        finish(`timed out after ${String(timeoutSeconds)} s`, code, "timeout");
-      } else if (code === 0) finish(null, code, null);
-      else {
-        const tail = stderr.trim().slice(-SHOWN_STDERR_LENGTH);
-        finish(`exit ${String(code ?? signal)}: ${tail}`, code, null);
-      }
+    child.on("exit", (code, signal) => {
+      ended = { code, signal };
+      if (!options.reapOnExit) return;
+      kill();
+      drain();
     });
+    child.on("close", finish);
   });
 }

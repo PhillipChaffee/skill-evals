@@ -1,47 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Case } from "./cases.js";
 import { commandContext } from "./command.js";
-import type { Check, Verdict } from "./checks/index.js";
 import { isDecision, isJudged } from "./checks/index.js";
-import type { DecisionService } from "./decision.js";
-import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
+import type { Harness, Loaded, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
+import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
+import { withheld } from "./run-plan.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
-import { scoreChecks, withheld } from "./score-checks.js";
+import { scoreChecks } from "./score-checks.js";
 import { startupRecord } from "./startup.js";
 import type { ChangedFiles } from "./snapshot.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
-import type { Subject } from "./subject.js";
 
-/** What a session cost. A number the harness does not report is null. */
-export interface Usage {
-  durationMs: number;
-  tokens: Tokens | null;
-  costUsd: number | null;
-}
-
-// Omit that keeps each member of the union apart. A `command` check's own `score` setting gives way to its result.
-type WithoutScore<T> = T extends unknown ? Omit<T, "score"> : never;
-
-/** A check with what it gave one run. */
-export type CheckResult = WithoutScore<Check> & {
-  /** Null when a judged check, a decision check or a command check got no usable answer. */
-  score: number | null;
-  /** The judge's reason, or why there is no score. */
-  reason?: string;
-  /** For a decision check, the probability the model gave each allowed answer. */
-  probabilities?: Record<string, number>;
-  /** For a command check: what the command did, each stream cut to its last 2,000 bytes. */
-  command?: Verdict["command"];
-};
+export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
 
 /** Everything kept about one run. */
 export interface RunRecord extends Usage {
@@ -84,13 +62,6 @@ export interface RunRecord extends Usage {
   decision: (Usage & { calls: number }) | null;
 }
 
-/** The harness and model that score judged checks. */
-export interface Judge {
-  harness: Harness;
-  bin: string;
-  model?: string | undefined;
-}
-
 /**
  * Reads the two switches that change how a run is made and scored.
  * @param options - Options that may set either.
@@ -105,27 +76,6 @@ export const modesOf = (options: {
   isolated: options.isolated ?? false,
   lenient: options.lenient ?? false,
 });
-
-/** One run to make: one case, one harness, one subject. */
-export interface RunPlan {
-  harness: Harness;
-  bin: string;
-  subject: Subject;
-  caseDef: Case;
-  rep: number;
-  model?: string | undefined;
-  judge: Judge;
-  /** Start the harness with nothing loaded but the subject, and invalidate a run that reports anything else. */
-  isolated?: boolean | undefined;
-  /** Keep the 0.0.1 rule for `skill_loaded` and `skill_not_loaded` (`--lenient`). */
-  lenient?: boolean | undefined;
-  /** Names of variables the harness gets besides the allowlist: the config's `env`. */
-  pass?: string[] | undefined;
-  /** The model that scores decision checks; null when no case has one. */
-  decision: DecisionService | null;
-  /** Where the run's stream and final text are written. */
-  outDir: string;
-}
 
 /**
  * Decides whether a run counts.

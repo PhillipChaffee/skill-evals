@@ -1,9 +1,10 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { expect, test } from "vitest";
-import { runCommand } from "./command.js";
+import { expect, onTestFinished, test } from "vitest";
+import { copiesForCommands, runCommand } from "./command.js";
 import type { Given } from "./testing/outcome.js";
-import { dirsWith, scoredAsync } from "./testing/outcome.js";
+import { dirsWith, scoredAsync, scoredNow } from "./testing/outcome.js";
 
 const SECOND_MS = 1000;
 const SHORT_MS = 10 * SECOND_MS;
@@ -28,7 +29,10 @@ test("stdoutMatches and expectExit", async () => {
 test("score stdout reads a ratio", async () => {
   const dirs = dirsWith();
   const ratio = (run: string, more: Partial<Given> = {}) =>
-    scoredAsync({ type: "command", run, score: "stdout", ...more }, dirs.run());
+    scoredAsync(
+      { type: "command", run, scoreFrom: "stdout", ...more },
+      dirs.run(),
+    );
   expect((await ratio("echo 0.75")).score).toBe(0.75);
   expect((await ratio("printf '1\\n0.5\\n\\n\\n'")).score).toBe(0.5);
   const words = await ratio("echo mutants killed");
@@ -47,7 +51,9 @@ test("score stdout reads a ratio", async () => {
 test("a command that cannot start scores 0 with the reason", async () => {
   const dirs = dirsWith();
   const out = dirs.run();
+  // A file where the workspace was: the directory exists no more, and the shell cannot start in it.
   fs.rmSync(dirs.workspace, { recursive: true });
+  fs.writeFileSync(dirs.workspace, "");
   const gone = await scoredAsync({ type: "command", run: "true" }, out);
   expect(gone.score).toBe(0);
   expect(gone.reason).toMatch(/^could not start: /);
@@ -56,8 +62,7 @@ test("a command that cannot start scores 0 with the reason", async () => {
 test("the command environment is the listed names and the case's own", async () => {
   const dirs = dirsWith({ "a.txt": "a" });
   const out = dirs.run();
-  const seedDir = path.join(path.dirname(dirs.workspace), "seed");
-  fs.mkdirSync(seedDir);
+  const { seedDir } = out.command;
   const context = {
     workspace: dirs.workspace,
     graderDir: "/g",
@@ -94,6 +99,8 @@ test("the command environment is the listed names and the case's own", async () 
     5,
   );
   expect(withBoth.stdout).not.toContain("SKILL_EVALS_GRADER_DIR");
+  const noSeed = await runCommand(ENV, { ...context, seedDir: null }, 5);
+  expect(noSeed.stdout).not.toContain("SKILL_EVALS_SEED_DIR");
   expect(withBoth.stdout).toContain("SKILL_EVALS_TRANSCRIPT=/t.json");
   expect(withBoth.stdout).toContain("SKILL_EVALS_REMOTE_DIR=/r");
 });
@@ -131,4 +138,119 @@ test("a command cut to its last 2,000 bytes keeps whole characters", async () =>
   expect(command?.stderr.endsWith("END")).toBe(true);
   expect(verdict.reason).toMatch(/^exit 0 in \d+ ms/);
   expect(verdict.reason?.endsWith("END")).toBe(true);
+});
+
+/**
+ * Makes shell text that starts a session leader holding the command's pipes open, and kills it when the test ends.
+ * @returns A shell command to put in the background.
+ */
+function daemonThatOutlivesTheTest(): string {
+  const pidFile = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "daemon-")),
+    "pid",
+  );
+  onTestFinished(() => {
+    try {
+      process.kill(Number(fs.readFileSync(pidFile, "utf8")), "SIGKILL");
+    } catch {
+      // It was never started, or it is gone.
+    }
+    fs.rmSync(path.dirname(pidFile), { recursive: true, force: true });
+  });
+  return `setsid sh -c 'echo $$ > ${pidFile}; exec /bin/sleep 317'`;
+}
+
+test(
+  "a daemon that left the process group and holds the pipes does not hold the check",
+  async () => {
+    const daemon = daemonThatOutlivesTheTest();
+    const started = Date.now();
+    const out = dirsWith().run();
+    const verdict = await scoredAsync(
+      {
+        type: "command",
+        run: `${daemon} & /bin/sleep 1000`,
+        timeoutSeconds: 1,
+      },
+      out,
+    );
+    expect(verdict.score).toBe(0);
+    expect(verdict.reason).toMatch(/^timed out after 1 s/);
+    expect(Date.now() - started).toBeLessThan(5 * SECOND_MS);
+  },
+  SHORT_MS,
+);
+
+test(
+  "a daemon that outlives a command that exited does not hold the check either",
+  async () => {
+    const daemon = daemonThatOutlivesTheTest();
+    const out = dirsWith().run();
+    const verdict = await scoredAsync(
+      { type: "command", run: `${daemon} & echo hi` },
+      out,
+    );
+    expect(verdict.score).toBe(1);
+    expect(verdict.command?.stdout).toBe("hi\n");
+  },
+  SHORT_MS,
+);
+
+test("a command that a signal ended, and one that timed out, say so with the end of stderr", async () => {
+  const out = dirsWith().run();
+  const killed = await scoredAsync({ type: "command", run: "kill -9 $$" }, out);
+  expect(killed.score).toBe(0);
+  expect(killed.reason).toMatch(
+    /^killed by SIGKILL in \d+ ms, expected exit 0/,
+  );
+  const slow = await scoredAsync(
+    {
+      type: "command",
+      run: "echo oops >&2; /bin/sleep 5",
+      timeoutSeconds: 1,
+    },
+    out,
+  );
+  expect(slow.reason).toBe("timed out after 1 s: oops");
+});
+
+test("a workspace the agent deleted says so", async () => {
+  const dirs = dirsWith();
+  const out = dirs.run();
+  fs.rmSync(dirs.workspace, { recursive: true });
+  const gone = await scoredAsync({ type: "command", run: "true" }, out);
+  expect(gone).toEqual({ score: 0, reason: "the workspace no longer exists" });
+});
+
+test("without a seed copy there is no seed variable, and a seed copy that cannot be made leaves nothing behind", () => {
+  const before = fs
+    .readdirSync(os.tmpdir())
+    .filter((n) => n.startsWith("copy-"));
+  expect(() => copiesForCommands("/nonexistent/workspace", null)).toThrow();
+  const after = fs
+    .readdirSync(os.tmpdir())
+    .filter((n) => n.startsWith("copy-"));
+  expect(after).toEqual(before);
+});
+
+test("scoredNow refuses a check that waits for a process", () => {
+  const out = dirsWith().run();
+  expect(() =>
+    scoredNow({ type: "command", run: "true", weight: 1 }, out),
+  ).toThrow(/scoredAsync/);
+});
+
+test("a seed copy that is missing, or changed in many files, is named", async () => {
+  const many = Object.fromEntries(
+    Array.from({ length: 12 }, (_, index) => [`f${String(index)}.txt`, "x"]),
+  );
+  const out = dirsWith(many).run();
+  const none = await scoredAsync(
+    { type: "command", run: "true" },
+    { ...out, command: { ...out.command, seedDir: null } },
+  );
+  expect(none.score).toBe(1);
+  fs.rmSync(out.command.seedDir ?? "", { recursive: true });
+  const gone = await scoredAsync({ type: "command", run: "true" }, out);
+  expect(gone.reason).toMatch(/^the seed copy was changed: .*and 2 more$/);
 });

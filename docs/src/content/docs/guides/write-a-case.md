@@ -258,33 +258,35 @@ A `command` check runs a shell command in the workspace after the agent exits, a
 }
 ```
 
-The command runs with `/bin/sh -c`, in the workspace, in its own process group. The check scores 1 when the exit code is `expectExit` (default 0) and standard output matches `stdoutMatches` and does not match `stdoutLacks`, and 0 when it does not. With `"score": "stdout"` the check scores the number on the last non-empty line of standard output, which must be from 0 to 1; any other last line scores 0 and the reason quotes it. The exit code and the patterns must hold either way. A mutation ratio is a good use: the grader prints `0.75` when it caught three of four bad changes.
+The command runs with `/bin/sh -c`, in the workspace, in its own process group. The check scores 1 when the exit code is `expectExit` (default 0) and standard output matches `stdoutMatches` and does not match `stdoutLacks`, and 0 when it does not. With `"scoreFrom": "stdout"` the check scores the number on the last non-empty line of standard output, which must be from 0 to 1; any other last line scores 0 and the reason quotes it. The exit code and the patterns must hold either way. A mutation ratio is a good use: the grader prints `0.75` when it caught three of four bad changes.
 
-Checks run one after the other in case order, so a later command sees what an earlier one did. A command that times out, or cannot be started, scores 0 with the reason (`timed out after 1 s`, `could not start: ...`), and the run stays valid. Whatever the command left running in the background is killed with it. A command check runs only when the run is valid so far: after a harness error or a time limit, it is not run, scores nothing, and the run is invalid for its first reason.
+Every check that is not a command (file checks, tool checks, judged and decision checks) is scored first, from what the agent left, and then the command checks run one after the other in case order, so a later command sees what an earlier one did and no command can change what another kind of check reads. The record keeps the checks in the case's order. Before the first command runs, the harness's login files are removed from the throwaway home, so `$HOME` holds no credentials. A command that times out, or cannot be started, scores 0 with the reason (`timed out after 1 s` and the end of its standard error, `could not start: ...`), and the run stays valid. Whatever the command left running in the background is killed with its process group; a process that left the group (`setsid`, a detached spawn) can outlive the run, but it cannot hold the check: a short time after the command exits or times out, its pipes are let go. At most 5 MB of each of standard output and standard error is kept. A command that prints more is cut, the patterns see the kept start, and the reason says so. A pattern that throws (a regular expression that overflows the stack, for example) scores its check 0 with `the check could not be scored: <message>`, and the run stays valid. A command check runs only when the run is valid so far: after a harness error or a time limit, it is not run, scores nothing, and the run is invalid for its first reason.
 
-The run record keeps the command, its exit code, its duration, and the last 2,000 bytes of each stream as `command` on the check. The reason is `exit <n> in <ms> ms`, and on a failure it ends with the end of standard error.
+The run record keeps the command, its exit code, its duration, and the last 2,000 bytes of each stream, and whether the output was cut, as `command` on the check. The reason is `exit <n> in <ms> ms`, and on a failure it ends with the end of standard error.
 
 A `grader/` folder beside `prompt.md` holds files that only the command may read. It is not copied into the workspace before the agent runs. After the agent exits it is copied into a new temp directory with a plain name, and `SKILL_EVALS_GRADER_DIR` names it. The copy is removed with the run's other temp directories. A `grader/` folder inside `workspace/` is a load error, because the agent would start with the held-out files.
 
 The command gets exactly these variables, and the ones in the case's `env`, and nothing else from your shell. It never gets a provider key.
 
-| Variable                                                      | Value                                                                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `PATH`, `TMPDIR`, `LANG`                                      | Taken from the environment of the command that runs `skill-evals`.                                      |
-| `HOME`, `SKILL_EVALS_HOME`                                    | The run's throwaway home.                                                                               |
-| `SKILL_EVALS_WORKSPACE`                                       | The workspace, as the agent left it.                                                                    |
-| `SKILL_EVALS_GRADER_DIR`                                      | The copy of `grader/`. Not set when the case has none.                                                  |
-| `SKILL_EVALS_SEED_DIR`                                        | A copy of the workspace as it was before the agent ran. Taken only when the case has a `command` check. |
-| `SKILL_EVALS_TRANSCRIPT`, `SKILL_EVALS_REMOTE_DIR`            | Not set yet.                                                                                            |
-| `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`                    | `/dev/null` and `1`, so no git setting of yours applies.                                                |
-| `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and the two `_EMAIL`s | `fixture`, and `fixture@example.invalid`.                                                               |
+| Variable                                                      | Value                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATH`, `TMPDIR`, `LANG`                                      | Taken from the environment of the command that runs `skill-evals`.                                                                                                                                                                                |
+| `HOME`, `SKILL_EVALS_HOME`                                    | The run's throwaway home.                                                                                                                                                                                                                         |
+| `SKILL_EVALS_WORKSPACE`                                       | The workspace, as the agent left it.                                                                                                                                                                                                              |
+| `SKILL_EVALS_GRADER_DIR`                                      | The copy of `grader/`. Not set when the case has none.                                                                                                                                                                                            |
+| `SKILL_EVALS_SEED_DIR`                                        | A read-only copy of the workspace as it was before the agent ran. Taken only when the case has a `command` check, and checked against the seed before each command: a change to it scores that check 0 with `the seed copy was changed: <paths>`. |
+| `SKILL_EVALS_TRANSCRIPT`, `SKILL_EVALS_REMOTE_DIR`            | Not set yet.                                                                                                                                                                                                                                      |
+| `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`                    | `/dev/null` and `1`, so no git setting of yours applies.                                                                                                                                                                                          |
+| `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and the two `_EMAIL`s | `fixture`, and `fixture@example.invalid`.                                                                                                                                                                                                         |
 
-A mutation check applies a known-bad change and expects the agent's own check to catch it:
+A mutation check applies a known-bad change and expects the agent's own check to catch it. Do not write `! npm run lint`: it also passes when there is no lint script at all. Expect the failing exit code and the rule's own message instead, so that only a lint that sees the bad change passes:
 
 ```json
 {
   "type": "command",
-  "run": "git apply \"$SKILL_EVALS_GRADER_DIR/bad.patch\" && ! npm run lint --silent"
+  "run": "git apply \"$SKILL_EVALS_GRADER_DIR/bad.patch\" && npm run lint --silent",
+  "expectExit": 1,
+  "stdoutMatches": "no-var"
 }
 ```
 
