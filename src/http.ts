@@ -45,28 +45,29 @@ interface Post {
  * @param endpoint - The URL.
  * @param request - Headers, body, limit and the secret to hide.
  * @returns Whether the status is 2xx, the status, and the body text.
- * @throws {Error} When the request fails or times out; the message names the endpoint and hides the secret.
+ * @throws {Error} When the request fails or times out; the message names the endpoint and hides the secret. The error
+ *   has no cause: the original would hold the text that echoed the secret.
  */
 export async function post(
   endpoint: string,
   request: Post,
 ): Promise<{ ok: boolean; status: number; text: string }> {
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: request.headers,
-      body: request.body,
-      signal: AbortSignal.timeout(request.timeoutMs),
-    });
-    return {
+  const sent = await fetch(endpoint, {
+    method: "POST",
+    headers: request.headers,
+    body: request.body,
+    signal: AbortSignal.timeout(request.timeoutMs),
+  })
+    .then(async (response) => ({
       ok: response.ok,
       status: response.status,
       text: await response.text(),
-    };
-  } catch (error) {
+    }))
+    .catch((error: unknown) => messageOf(error));
+  if (typeof sent === "string") {
     throw new Error(
-      `the request to ${endpoint} failed: ${redact(messageOf(error), request.secret)}`,
-      { cause: error },
+      redact(`the request to ${endpoint} failed: ${sent}`, request.secret),
     );
   }
+  return sent;
 }

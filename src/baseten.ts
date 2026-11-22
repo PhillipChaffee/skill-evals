@@ -138,13 +138,10 @@ export function connect(connection: Connection): DecisionService {
     }
     try {
       return readResponse(text, request.questions);
-    } catch (error) {
-      // A parse error quotes the start of the body, which may hold the key, so its text is not repeated.
+    } catch {
+      // The parse error quotes the start of the body, with the key if it was echoed; the body is shown redacted.
       throw new Error(
-        `${endpoint} answered with a body that is not valid JSON`,
-        {
-          cause: error,
-        },
+        `${endpoint} answered with a body that is not valid JSON: ${shown(text, key)}`,
       );
     }
   };

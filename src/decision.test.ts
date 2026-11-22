@@ -210,6 +210,19 @@ test("an error body that echoes the key never reaches the reason or the results"
   }
 });
 
+test("a non-JSON 200 body shows its start and never the key", async () => {
+  const ran = await decided(
+    [{ body: `<html>bad gateway ${KEY}</html>` }],
+    [PLAIN],
+    () => ["score", "--subject", "none"],
+  );
+  const [record] = readResults(ran.outDir).records;
+  expect(record?.checks[0]?.reason).toMatch(
+    /not valid JSON: <html>bad gateway \[redacted\]<\/html>/,
+  );
+  expect(everythingIn(ran.outDir)).not.toContain(KEY);
+});
+
 test("a failed request is sent once more, and its second answer counts", async () => {
   const { result, outDir, received } = await decided(
     [{ status: 500, body: '{"error": "overloaded"}' }, { answers: ANSWERS }],
