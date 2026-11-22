@@ -1,10 +1,10 @@
 import type { Usage } from "./run-plan.js";
+import { joinUrl, post, shown } from "./http.js";
 import { messageOf } from "./scope.js";
 
 /** The judge's model on the API path when no `judgeModel` is set. */
 export const DEFAULT_API_MODEL = "claude-opus-5-5";
 
-const SHOWN_MESSAGE_LENGTH = 200;
 const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
 const FORBIDDEN = 403;
@@ -73,17 +73,18 @@ const count = (value: unknown): number =>
 /**
  * Finds the message of an error response.
  * @param raw - The body.
- * @returns The API's own message when the body has one, else the body, cut to 200 characters.
+ * @param key - The API key, which the text never carries.
+ * @returns The API's own message when the body has one, else the body, redacted and cut to 200 characters.
  */
-function apiMessage(raw: string): string {
-  let said = raw.trim();
+function apiMessage(raw: string, key: string): string {
+  let said = raw;
   try {
     const message = (Object(JSON.parse(raw)) as WireReply).error?.message;
     if (typeof message === "string") said = message;
   } catch {
     // The body is not JSON: it is shown as it is.
   }
-  return said.slice(0, SHOWN_MESSAGE_LENGTH);
+  return shown(said, key);
 }
 
 /**
@@ -140,10 +141,6 @@ function readReply(
     output: count(usage.output_tokens),
   };
   const category = reply.stop_details?.category;
-  const error =
-    reply.stop_reason === "refusal"
-      ? `the model refused to answer${typeof category === "string" ? ` (${category})` : ""}`
-      : null;
   const text = (Array.isArray(reply.content) ? reply.content : [])
     .flatMap((block) =>
       block.type === "text" && typeof block.text === "string"
@@ -151,6 +148,14 @@ function readReply(
         : [],
     )
     .join("");
+  let error: string | null = null;
+  if (reply.stop_reason === "refusal") {
+    error = `the model refused to answer${typeof category === "string" ? ` (${category})` : ""}`;
+  } else if (reply.stop_reason === "max_tokens") {
+    error = "the judge reply was cut at max_tokens";
+  } else if (text === "") {
+    error = "the judge reply has no text";
+  }
   return { text: error ? "" : text, error, tokens };
 }
 
@@ -182,12 +187,10 @@ export async function askApi(
   if (!key) {
     return done("", `the judge API key is not set: set ${config.keyVar}`);
   }
-  const endpoint = `${config.url.replace(/\/+$/, "")}/v1/messages`;
-  let response: Response;
-  let raw: string;
+  const endpoint = joinUrl(config.url, "/v1/messages");
+  let sent;
   try {
-    response = await fetch(endpoint, {
-      method: "POST",
+    sent = await post(endpoint, {
       headers: {
         "x-api-key": key,
         "anthropic-version": ANTHROPIC_VERSION,
@@ -195,20 +198,20 @@ export async function askApi(
         ...(config.fallbacks ? { "anthropic-beta": FALLBACK_BETA } : {}),
       },
       body: bodyOf(config, prompt, attachments),
-      signal: AbortSignal.timeout(config.timeoutMs),
+      timeoutMs: config.timeoutMs,
+      secret: key,
     });
-    raw = await response.text();
   } catch (error) {
-    return done("", `the request to ${endpoint} failed: ${messageOf(error)}`);
+    return done("", messageOf(error));
   }
-  if (!response.ok) {
+  if (!sent.ok) {
     const answer = done(
       "",
-      `HTTP ${String(response.status)}: ${apiMessage(raw)}`,
+      `HTTP ${String(sent.status)}: ${apiMessage(sent.text, key)}`,
     );
-    return REJECTED.has(response.status) ? { ...answer, final: true } : answer;
+    return REJECTED.has(sent.status) ? { ...answer, final: true } : answer;
   }
-  const { text, error, tokens } = readReply(raw);
+  const { text, error, tokens } = readReply(sent.text);
   return done(text, error, tokens);
 }
 

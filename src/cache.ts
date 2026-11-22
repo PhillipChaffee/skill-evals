@@ -5,6 +5,7 @@ import type { Scale } from "./checks/judge-fields.js";
 import type { Attachment } from "./judge-api.js";
 import type { Memo, Spot } from "./judge.js";
 import type { Usage } from "./run-plan.js";
+import { messageOf } from "./scope.js";
 
 const CACHE_FILE = "judge-cache.jsonl";
 
@@ -64,7 +65,7 @@ export const cacheKey = (question: Question): string =>
  * @param read - Whether answers are served from the cache. Default: false, so a fresh run asks every question and
  *   only writes; `--resume` and `rejudge` turn it on.
  * @returns A cache that, when it reads, holds what `judge-cache.jsonl` there holds now, and every answer added since;
- *   a line that is damaged or has no score is left out. `set` always adds a line to the file.
+ *   a line that is damaged or has no score is left out. `set` adds a line to the file; when that fails it keeps the answer, and warns once.
  */
 export function openCache(outDir: string, read = false): Cache {
   const file = path.join(outDir, CACHE_FILE);
@@ -81,11 +82,22 @@ export function openCache(outDir: string, read = false): Cache {
       }
     }
   }
+  let warned = false;
   return {
     get: (key) => kept.get(key),
     set(key, value) {
       if (read) kept.set(key, value);
-      fs.appendFileSync(file, `${JSON.stringify({ key, ...value })}\n`);
+      try {
+        fs.appendFileSync(file, `${JSON.stringify({ key, ...value })}\n`);
+      } catch (error) {
+        // The cache is a saving, never a reason to lose a verdict. One warning for the command.
+        if (!warned) {
+          console.error(
+            `skill-evals: warning: the judge cache could not be written: ${messageOf(error)}`,
+          );
+        }
+        warned = true;
+      }
     },
   };
 }

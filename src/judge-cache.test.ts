@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { cacheKey, openCache } from "./cache.js";
-import { apiCase, judgedWith, PASS } from "./testing/judged.js";
+import { apiCase, evaluateCase, judgedWith, PASS } from "./testing/judged.js";
+import { plantCase, plugin } from "./testing/plant.js";
 import { reply } from "./testing/judge-server.js";
 import { sandbox } from "./testing/sandbox.js";
 
@@ -110,7 +111,7 @@ test("a cached entry with no score is ignored, and so is a damaged line", () => 
   expect(cache.get("b")).toMatchObject({ score: 1, reason: "y" });
 });
 
-test("the harness path uses the cache too, when it is on", async () => {
+test("the harness path writes the cache when it is off", async () => {
   const { prompts, ran, out } = await judgedWith(
     { rubric: RUBRIC, scale: "binary" },
     [PASS],
@@ -120,6 +121,39 @@ test("the harness path uses the cache too, when it is on", async () => {
   // Off: both reps asked (the fake had one reply, so the second was unusable) and the one usable answer was written.
   expect(prompts).toHaveLength(3);
   expect(linesOf(out)).toHaveLength(1);
+});
+
+test("the harness path reads the cache when it is on", async () => {
+  const box = sandbox();
+  const owned = plugin(box, "plugin-owned", { answer: "It is fixed now." });
+  const cases = plantCase(box, [
+    { type: "judge", rubric: RUBRIC, scale: "binary" },
+  ]);
+  box.write("fake/judge/replies.json", [PASS]);
+  const out = path.join(box.root, "results");
+  const options = { subjects: [owned], cases, reps: 1, outDir: out };
+  await evaluateCase(box, options);
+  const again = await evaluateCase(box, { ...options, useCache: true });
+  const prompts = fs
+    .readFileSync(path.join(box.root, "fake/judge/prompts.jsonl"), "utf8")
+    .trim()
+    .split("\n");
+  expect(prompts).toHaveLength(1);
+  expect(again.check?.score).toBe(1);
+  expect(again.record?.judge).toMatchObject({ calls: 0, cacheHits: 1 });
+});
+
+test("a cache that cannot be written keeps the verdict and warns once", async () => {
+  const { run, out } = await apiCase({ rubric: RUBRIC, votes: 3 }, [
+    reply(SCORE_HALF),
+  ]);
+  // A directory where the file belongs makes every append fail.
+  fs.mkdirSync(path.join(out, CACHE_FILE), { recursive: true });
+  const { ran, check } = await run();
+  expect(ran.status, ran.stderr).toBe(0);
+  expect(check?.score).toBe(0.5);
+  const warnings = ran.stderr.match(/the judge cache could not be written: /g);
+  expect(warnings).toHaveLength(1);
 });
 
 test("the key changes with the prompt, an attachment, the model, the scale and the vote", () => {

@@ -58,6 +58,10 @@ export async function judgedWith(
   return { ran, prompts, check: record?.checks[0], record, out, box };
 }
 
+// What the agent says: a fixed sentence by default, or the fake's report of what it saw for null.
+const said = (answer: string | null | undefined) =>
+  answer === null ? {} : { answer: answer ?? "It is fixed now." };
+
 export const API_KEY = "skill-evals-judge-key";
 
 /**
@@ -83,8 +87,7 @@ export async function apiCase(
 ) {
   const box = sandbox();
   const server = await judgeServer(script);
-  const { answer = "It is fixed now." } = more;
-  const owned = plugin(box, "plugin-owned", answer === null ? {} : { answer });
+  const owned = plugin(box, "plugin-owned", said(more.answer));
   const cases = plantCase(box, [{ type: "judge", ...judged }]);
   more.plant?.(box);
   if (more.config) box.write("skill-evals.config.json", more.config);
@@ -124,7 +127,14 @@ export async function apiCase(
       judgeUrl: server.url,
       ...more,
     });
-  return { box, out, received: server.received, run, evaluated };
+  return {
+    box,
+    out,
+    url: server.url,
+    received: server.received,
+    run,
+    evaluated,
+  };
 }
 
 /**
@@ -133,7 +143,7 @@ export async function apiCase(
  * @param options - What to evaluate.
  * @returns The first run's record and its first check.
  */
-async function evaluateCase(
+export async function evaluateCase(
   box: ReturnType<typeof sandbox>,
   options: EvaluateOptions,
 ) {

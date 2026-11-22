@@ -193,6 +193,23 @@ test("the API key reaches neither the harness nor anything the command writes", 
   expect(seenBy(String(plain?.finalText)).leaks).toBe(1);
 });
 
+test("an error body that echoes the key never reaches the reason or the results", async () => {
+  for (const reply of [
+    { status: 401, body: `bad key ${KEY}` },
+    { body: `not json ${KEY}` },
+  ]) {
+    const ran = await decided([reply], [PLAIN], () => [
+      "score",
+      "--subject",
+      "none",
+    ]);
+    const [record] = readResults(ran.outDir).records;
+    expect(record?.checks[0]?.score).toBeNull();
+    expect(everythingIn(ran.outDir)).not.toContain(KEY);
+    expect(ran.result.stdout + ran.result.stderr).not.toContain(KEY);
+  }
+});
+
 test("a failed request is sent once more, and its second answer counts", async () => {
   const { result, outDir, received } = await decided(
     [{ status: 500, body: '{"error": "overloaded"}' }, { answers: ANSWERS }],

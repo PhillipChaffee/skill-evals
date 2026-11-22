@@ -7,13 +7,13 @@ import type {
   DecisionRequest,
   DecisionService,
 } from "./decision.js";
-import { UsageError, messageOf } from "./scope.js";
+import { joinUrl, post, shown } from "./http.js";
+import { UsageError } from "./scope.js";
 
 const DEFAULT_URL = "https://inference.baseten.co";
 const ENDPOINT = "/v1/systemone";
 const KEY_VARIABLE = "BASETEN_API_KEY";
 const DEFAULT_TIMEOUT_MS = 60_000;
-const SHOWN_BODY_LENGTH = 200;
 
 /** How to reach the decision model. */
 interface Connection {
@@ -114,7 +114,7 @@ export function connect(connection: Connection): DecisionService {
   if (!URL.canParse(url)) {
     throw new UsageError(`the decision URL is not a URL: ${url}`);
   }
-  const endpoint = `${url.endsWith("/") ? url.slice(0, -1) : url}${ENDPOINT}`;
+  const endpoint = joinUrl(url, ENDPOINT);
   const decide = async (request: DecisionRequest): Promise<DecisionReply> => {
     const questions = Object.fromEntries(
       Object.entries(request.questions).map(([name, asked]) => [
@@ -122,31 +122,31 @@ export function connect(connection: Connection): DecisionService {
         toWire(asked),
       ]),
     );
-    let response;
-    let text;
+    const { ok, status, text } = await post(endpoint, {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model, state: request.state, questions }),
+      timeoutMs,
+      secret: key,
+    });
+    if (!ok) {
+      throw new Error(
+        `${endpoint} answered HTTP ${String(status)}: ${shown(text, key)}`,
+      );
+    }
     try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ model, state: request.state, questions }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      text = await response.text();
+      return readResponse(text, request.questions);
     } catch (error) {
+      // A parse error quotes the start of the body, which may hold the key, so its text is not repeated.
       throw new Error(
-        `the request to ${endpoint} failed: ${messageOf(error)}`,
-        { cause: error },
+        `${endpoint} answered with a body that is not valid JSON`,
+        {
+          cause: error,
+        },
       );
     }
-    if (!response.ok) {
-      throw new Error(
-        `${endpoint} answered HTTP ${String(response.status)}: ${text.trim().slice(0, SHOWN_BODY_LENGTH)}`,
-      );
-    }
-    return readResponse(text, request.questions);
   };
   return { model: { decide }, secret: KEY_VARIABLE };
 }

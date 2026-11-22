@@ -42,7 +42,7 @@ test("askApi says so when the key is not set, the reply is no JSON, or the body 
   const empty = await judgeServer([{ body: "{}" }]);
   expect(await askApi(config(empty.url), "p", [])).toMatchObject({
     text: "",
-    error: null,
+    error: "the judge reply has no text",
   });
   const odd = await judgeServer([{ status: 500, body: "<html>" }]);
   expect((await askApi(config(odd.url), "p", [])).error).toMatch(

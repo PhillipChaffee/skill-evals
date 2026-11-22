@@ -5,31 +5,10 @@ import type { DecisionService } from "./decision.js";
 import { requireEnvNames } from "./env.js";
 import type { Config } from "./project.js";
 import { isUnitScore } from "./score.js";
+import { MS_PER_SECOND, requireSeconds } from "./seconds.js";
 import { UsageError } from "./scope.js";
 
 const DEFAULT_REPS = 3;
-export const MS_PER_SECOND = 1000;
-// The longest time limit a timer takes is 2^32 - 1 milliseconds.
-const MAX_TIMEOUT_SECONDS = 4_294_967;
-
-/**
- * Rejects a time limit that no timer takes.
- * @param name - The option's name, for the message.
- * @param seconds - The value.
- * @throws {UsageError} When it is not a positive integer of seconds that a timer takes.
- */
-export function requireSeconds(name: string, seconds: number): void {
-  if (!(
-    Number.isInteger(seconds) &&
-    seconds >= 1 &&
-    seconds <= MAX_TIMEOUT_SECONDS
-  )) {
-    throw new UsageError(
-      `${name} must be a positive integer of seconds, at most ${String(MAX_TIMEOUT_SECONDS)}`,
-    );
-  }
-}
-
 /**
  * Rejects option values that no run could use, before any harness starts.
  * @param options - The options after the config file was applied.

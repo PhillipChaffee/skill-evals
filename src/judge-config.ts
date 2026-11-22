@@ -1,11 +1,11 @@
 import type { Case } from "./cases.js";
-import { MS_PER_SECOND, requireSeconds } from "./evaluate-setup.js";
 import type { Located } from "./harnesses/index.js";
 import { selectHarnesses } from "./harnesses/index.js";
 import { judgeModelOf } from "./judge-warning.js";
 import { isJudged } from "./checks/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { Config } from "./project.js";
+import { MS_PER_SECOND, requireSeconds } from "./seconds.js";
 import { UsageError } from "./scope.js";
 
 const DEFAULT_URL = "https://api.anthropic.com";
@@ -47,9 +47,13 @@ function judgeApiFor(
       `a case has a judge check, but the judge API key is not set: set ${keyVar}`,
     );
   }
+  const url = options.judgeUrl ?? DEFAULT_URL;
+  if (!URL.canParse(url)) {
+    throw new UsageError(`the judge URL is not a URL: ${url}`);
+  }
   return {
     kind,
-    url: options.judgeUrl ?? DEFAULT_URL,
+    url,
     model,
     keyVar,
     timeoutMs: seconds * MS_PER_SECOND,
