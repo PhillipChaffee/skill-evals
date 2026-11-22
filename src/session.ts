@@ -11,6 +11,8 @@ import {
   parseStream,
 } from "./session-attempt.js";
 import type { Dirs, SessionInput, SessionResult } from "./session-attempt.js";
+import type { Seeded } from "./history-plant.js";
+import { UNSEEDED, plantHistory } from "./history-plant.js";
 import { snapshot } from "./snapshot.js";
 import { runTurns } from "./turns.js";
 import type { PreparedRun } from "./workspace.js";
@@ -71,19 +73,20 @@ type Done = Pick<
 /**
  * Runs the harness once for the case's single prompt.
  * @param run - The harness, the prompt, and what to load.
- * @param where - The run's directories, and a failed setup step if one stopped the case.
+ * @param where - The run's directories, a failed setup step if one stopped the case, and what was planted.
  * @param where.dirs - Where the run is.
  * @param where.failure - Why the harness never starts; null when it does.
+ * @param where.seeded - What planting the case's history left.
  * @returns What the process left, and how it ended.
  */
 async function single(
   run: SessionInput,
-  where: { dirs: Dirs; failure: string | null },
+  where: { dirs: Dirs; failure: string | null; seeded: Seeded },
 ): Promise<Done> {
-  const { home, workspace } = where.dirs;
+  const { home } = where.dirs;
   const ran =
     where.failure === null
-      ? await attempt(run, inputOf(run, home, workspace))
+      ? await attempt(run, inputOf(run, where))
       : notStarted(where.failure, home);
   const end = endOf({
     ...ran,
@@ -129,15 +132,18 @@ export async function session<T>(
     const seed = prepared?.seed ?? snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
     const dirs = { home: home.dir, workspace: workspace.dir };
-    // A failed setup step means the harness never starts.
-    const failure = prepared?.failure ?? null;
+    // The order is: setup steps, login files, history and sessions, then the harness. A failed step means it never starts.
+    const setupFailure = prepared?.failure ?? null;
+    const seeded = setupFailure === null ? plantHistory(run, dirs) : UNSEEDED;
+    const failure = setupFailure ?? seeded.failure;
     const done = run.turns
-      ? await runTurns(run, { dirs, seed, failure })
-      : await single(run, { dirs, failure });
+      ? await runTurns(run, { dirs, seed, failure, seeded })
+      : await single(run, { dirs, failure, seeded });
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
     const graderDir = prepared?.copies?.copyGrader() ?? null;
     const { stoppedBy, error, parsed } = done.end;
     return await use({
+      seeded: seeded.events,
       stdout: done.stdout,
       parsed,
       error,

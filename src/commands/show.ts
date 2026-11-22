@@ -5,6 +5,7 @@ import { EXIT } from "../exit-codes.js";
 import type { AgentRef, TranscriptEvent } from "../harnesses/shared.js";
 import type { Project } from "../project.js";
 import { readResultsFile } from "../results-file.js";
+import { HISTORY_TURN } from "../history.js";
 import { within } from "../rescore.js";
 import type { RunRecord } from "../run.js";
 import { resultsByCall } from "../transcript.js";
@@ -36,13 +37,16 @@ function payload(event: TranscriptEvent): string {
  * @param event - The transcript event to write.
  * @param call - The number that the checks give the call, as in `#0`: the call's own for a call, the call it answers
  *   for a result, and absent for any other event.
- * @returns `<index>: <agent> <kind or type> <name> [call #<n>] <payload>`, with the agent, kind and name quoted. The
+ * @returns `<index>: [history] <agent> <kind or type> <name> [call #<n>] <payload>`, with the agent, kind and name quoted;
+ *   `[history]` only for an event of the seeded history. The
  *   first number is the event's place in the transcript; `call #<n>` is the number that a check's reason quotes. An
  *   event with no agent prints `?`, so that one malformed event does not hide the rest.
  */
 const eventLine = (event: TranscriptEvent, call?: number): string =>
   [
     `${String(event.index)}:`,
+    // A seeded history is in the file, and no check reads it.
+    ...(event.userTurn === HISTORY_TURN ? ["[history]"] : []),
     quoted((event.agent as Partial<AgentRef> | undefined)?.id, "?"),
     quoted(event.kind ?? event.type, "?"),
     quoted(event.name, "-"),
@@ -86,7 +90,10 @@ function transcriptLines(record: RunRecord, dir: string): string[] {
     const events = JSON.parse(
       fs.readFileSync(file, "utf8"),
     ) as TranscriptEvent[];
-    const numbers = callNumbers(events);
+    // The checks number the agent's calls only, so the seeded history's calls get no number.
+    const numbers = callNumbers(
+      events.filter((one) => one.userTurn !== HISTORY_TURN),
+    );
     return [
       `transcript: ${clean(named)}, ${String(events.length)} events; each input, output, text and line of a reason is cut at ${String(SHOW_CUT)} characters`,
       ...events.map((one) => eventLine(one, numbers.get(one.index))),

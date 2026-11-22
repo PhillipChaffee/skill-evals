@@ -1,0 +1,4 @@
+schedule: "02:00"
+format: csv
+timeout: 300
+replica: none

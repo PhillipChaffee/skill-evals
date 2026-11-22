@@ -6,6 +6,8 @@ import { attempt, notStarted, parseStream } from "./session-attempt.js";
 import type { Dirs, SessionInput } from "./session-attempt.js";
 import type { Snapshot } from "./snapshot.js";
 import { diffSnapshots, snapshot } from "./snapshot.js";
+import { withPreamble } from "./history.js";
+import type { Seeded } from "./history-plant.js";
 import { lifecyclePart, numbered } from "./transcript.js";
 import { emptyParse } from "./turn-merge.js";
 import { unasked } from "./turn-reply.js";
@@ -24,6 +26,8 @@ interface Place {
   /** The turn's place in the case's list, from 0. */
   index: number;
   state: State;
+  /** The block that goes in front of the first message when the case's history is in `preamble` mode; null otherwise. */
+  preamble: string | null;
 }
 
 /**
@@ -72,7 +76,12 @@ function sentText(turn: Turn, run: SessionInput): string | null {
  */
 function inputFor(run: SessionInput, place: Place): RunInput {
   const { turn, index, state } = place;
-  const message = sentText(turn, run);
+  const sent = sentText(turn, run);
+  // The block goes in front of a first message that is the user's own text, never in front of a slash command.
+  const message =
+    index === 0 && "prompt" in turn && sent !== null
+      ? withPreamble(place.preamble, sent)
+      : sent;
   return {
     subject: run.subject,
     home: place.dirs.home,
@@ -371,16 +380,23 @@ function withChanges(step: Step, state: State, workspace: string): Step {
  * @param start.dirs - Where the run is.
  * @param start.seed - The workspace before the first turn.
  * @param start.failure - Why the harness cannot start, such as a failed setup step; null when it can.
+ * @param start.seeded - What planting the case's history left: the session to resume, or the block for the first message.
  * @returns The merged result, and each turn's record and workspace changes.
  * @throws {Error} For an exception while a turn was run, naming the turn.
  */
 export async function runTurns(
   run: SessionInput,
-  start: { dirs: Dirs; seed: Snapshot; failure: string | null },
+  start: {
+    dirs: Dirs;
+    seed: Snapshot;
+    failure: string | null;
+    seeded: Seeded;
+  },
 ): Promise<TurnsRun> {
   const turns = run.turns ?? [];
   const state: State = {
-    session: null,
+    // A history written natively is the session that the first turn resumes.
+    session: start.seeded.session,
     continuing: false,
     last: 0,
     stop: null,
@@ -394,7 +410,13 @@ export async function runTurns(
   const steps: Step[] = [];
   for (const [index, turn] of turns.entries()) {
     try {
-      const step = await runTurn(run, { dirs: start.dirs, turn, index, state });
+      const step = await runTurn(run, {
+        dirs: start.dirs,
+        turn,
+        index,
+        state,
+        preamble: start.seeded.preamble,
+      });
       steps.push(withChanges(step, state, start.dirs.workspace));
     } catch (error) {
       throw new Error(

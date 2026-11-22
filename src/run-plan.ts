@@ -4,6 +4,7 @@ import type { Cache } from "./cache.js";
 import type { DecisionService } from "./decision.js";
 import type { StopReason } from "./gate.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
+import type { HistoryMode } from "./history-types.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { ToolCall, Loaded } from "./harnesses/shared.js";
 import type { SkillEvent } from "./skill-events.js";
@@ -57,6 +58,8 @@ export interface RunPlan {
   judge: Judge;
   /** Start the harness with nothing loaded but the subject, and invalidate a run that reports anything else. */
   isolated?: boolean | undefined;
+  /** `--history-mode`: how a case's history reaches the agent. Absent: the harness's own mode. */
+  historyMode?: HistoryMode | undefined;
   /** Keep the 0.0.1 rule for `skill_loaded` and `skill_not_loaded` (`--lenient`). */
   lenient?: boolean | undefined;
   /** Names of variables the harness gets besides the allowlist: the config's `env`. */
@@ -147,6 +150,11 @@ export interface RunRecord extends Usage, LimitFields {
   loaded: Loaded;
   /** Whether the run was started with `--isolated`. */
   isolated: boolean;
+  /**
+   * How the case's `history.json` reached the agent: "native" or "preamble"; null for a case with no history. Absent from
+   * earlier records.
+   */
+  historyMode?: HistoryMode | null;
   /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
   unexpected: string[];
   /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */

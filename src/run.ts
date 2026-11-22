@@ -27,7 +27,8 @@ import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
 import { keptArchive, stageKept } from "./run-archive.js";
-import { inputHash } from "./input-hash.js";
+import { withHistory } from "./history.js";
+import { seenFields } from "./run-seen.js";
 import { flattened } from "./case-checks.js";
 import { slicesOf } from "./turn-outcome.js";
 import { failedCalls, writeTranscript } from "./transcript.js";
@@ -175,7 +176,9 @@ function writeStreams(
   fs.mkdirSync(path.dirname(stem), { recursive: true });
   fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
   fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
-  const absolute = path.resolve(writeTranscript(stem, ran.parsed.transcript));
+  // The seeded history is in the file, with `userTurn` -1; no check reads it.
+  const events = withHistory(ran.seeded, ran.parsed.transcript);
+  const absolute = path.resolve(writeTranscript(stem, events));
   return {
     absolute,
     relative: path.relative(path.resolve(plan.outDir), absolute),
@@ -301,7 +304,7 @@ async function record(
     skillsLoaded: loaded,
     skillEvents: events,
     transcriptFile: transcript.relative,
-    inputHash: inputHash(caseDef, { harness: harness.id, model: plan.model }),
+    ...seenFields(plan),
     ...turned,
     askedUser: parsed.askedUser ?? null,
     ...startupRecord(plan, ran, copy),
@@ -372,6 +375,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         maxTurns,
         onTimeout: caseDef.onTimeout,
         isolated: plan.isolated,
+        historyMode: plan.historyMode,
         timeoutSeconds,
         layers: caseDef,
         withhold: withheld(plan),

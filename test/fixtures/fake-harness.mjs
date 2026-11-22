@@ -29,6 +29,11 @@
 //   turn states in place of that one, and its `inits` lists fields of each turn's init event to replace.
 // - A prompt of `/compact` is a compaction: it writes a `compact_boundary` system event and no assistant turn, and it does
 //   not use up a script turn.
+// - It reports the history it found (`foundHistory`): the count in the "Earlier in this conversation (N messages):" block of the
+//   prompt (`preamble`), or the conversational lines of the session file that `--resume <id>` names, under
+//   `projects/<cwd with every character but letters and digits as "-">/<id>.jsonl` of its config directory (`native`);
+//   and the other session files it found there. In a script's text, `$HISTORY` is the message count and `$HISTORY_MODE`
+//   the mode ("none" when it found none). Without a script the final text is JSON that has `history` and `sessions`.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -230,6 +235,62 @@ function turnIndex(file) {
 }
 
 /**
+ * Finds the history that this run was given, in either mode, and the other sessions in the store.
+ * @returns `{ mode, messages, lines, found }` for the history (`found` is whether a native session file is where Claude Code
+ *   looks for the working directory's sessions) and `others`, the ids of the session files that are not the resumed one.
+ */
+function foundHistory() {
+  const header = /^Earlier in this conversation \((\d+) messages\):/m.exec(
+    prompt ?? "",
+  );
+  const config = process.env.CLAUDE_CONFIG_DIR ?? "";
+  const root = path.join(config, "projects");
+  const files = fs.existsSync(root)
+    ? fs.readdirSync(root).flatMap((dir) =>
+        fs
+          .readdirSync(path.join(root, dir))
+          .filter((name) => name.endsWith(".jsonl"))
+          .map((name) => ({ dir, id: name.slice(0, -".jsonl".length) })),
+      )
+    : [];
+  const others = files
+    .filter(({ id }) => id !== resumed)
+    .map(({ id }) => id)
+    .sort();
+  if (header) {
+    return {
+      mode: "preamble",
+      messages: Number(header[1]),
+      lines: 0,
+      found: false,
+      others,
+    };
+  }
+  const own = files.find(({ id }) => id === resumed);
+  if (!own)
+    return { mode: "none", messages: 0, lines: 0, found: false, others };
+  const lines = fs
+    .readFileSync(path.join(root, own.dir, `${resumed}.jsonl`), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const spoken = lines.filter(
+    ({ message }) =>
+      message.role === "assistant" || typeof message.content === "string",
+  );
+  const here = path
+    .join(root, fs.realpathSync(process.cwd()).replace(/[^a-zA-Z0-9]/g, "-"))
+    .concat(path.sep);
+  return {
+    mode: "native",
+    messages: spoken.length,
+    lines: lines.length,
+    found: path.join(root, own.dir).concat(path.sep) === here,
+    others,
+  };
+}
+
+/**
  * Replaces the placeholders of a script's call input, at any depth.
  * @param value - The input, or a part of it.
  * @returns The same shape with `$PLUGIN_DIR` and `$CONFIG_DIR` filled in.
@@ -241,7 +302,9 @@ function expand(value) {
     return value
       .replaceAll("$PLUGIN_DIR", pluginDir ?? "")
       .replaceAll("$CONFIG_DIR", config)
-      .replaceAll("$RESUMED", resumed ?? "");
+      .replaceAll("$RESUMED", resumed ?? "")
+      .replaceAll("$HISTORY_MODE", history.mode)
+      .replaceAll("$HISTORY", String(history.messages));
   }
   if (Array.isArray(value)) return value.map(expand);
   if (value && typeof value === "object") {
@@ -491,6 +554,9 @@ function playPi(steps) {
   });
 }
 
+const history = piMode
+  ? { mode: "none", messages: 0, lines: 0, found: false, others: [] }
+  : foundHistory();
 const played = matchingScript();
 if (played?.found.noSessionId) sessionId = null;
 let startNo = null;
@@ -582,6 +648,13 @@ const seen = {
   home: process.env.HOME,
   cwd: process.cwd(),
   prompt,
+  history: {
+    mode: history.mode,
+    messages: history.messages,
+    lines: history.lines,
+    found: history.found,
+  },
+  sessions: history.others,
   model: flag("--model"),
   credentials: fs.existsSync(credentialsFile)
     ? fs.readFileSync(credentialsFile, "utf8")

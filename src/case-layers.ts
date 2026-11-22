@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fixtureOf, fixturesOf, homeOf } from "./case-dirs.js";
 import type { FieldDef } from "./checks/fields.js";
+import { seedsOf } from "./history-files.js";
 import type { Found } from "./discover.js";
 import type { SetupStep } from "./setup-steps.js";
 
@@ -28,7 +29,8 @@ export const LAYER_KEYS: Record<string, FieldDef> = {
  * @param found - The case's id and its directory.
  * @param read - Reads a key of the case file; undefined for a key the file leaves out.
  * @param root - The cases directory.
- * @returns The setup steps, the shared fixture directories, the case's `fixture/` and its home directory.
+ * @returns The setup steps, the shared fixture directories, the case's `fixture/` and its home directory, and its history
+ *   and prior sessions when it has them.
  */
 export function layersOf(
   found: Found,
@@ -45,5 +47,6 @@ export function layersOf(
     ),
     fixtureDir: fixtureOf(dir, file),
     homeDir: homeOf({ dir, file, root }, read("home") as string | undefined),
+    ...seedsOf(dir),
   };
 }

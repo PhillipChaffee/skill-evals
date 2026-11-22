@@ -118,7 +118,11 @@ const cursor: Harness = {
   pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".cursor/auth.json", ".config/cursor/auth.json"],
   authEnv: ["CURSOR_API_KEY"],
-  capabilities: new Set(["subagents"]),
+  capabilities: new Set([
+    "subagents",
+    // The runner writes the history as a block in front of the first prompt, so every adapter has it.
+    "history",
+  ]),
   status: "unverified",
   reportsCost: false,
   isRateLimit: looksRateLimited,

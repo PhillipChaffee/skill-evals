@@ -154,6 +154,11 @@
       "description": "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
       "type": "boolean"
     },
+    "historyMode": {
+      "title": "historyMode",
+      "description": "How a case's history.json reaches the agent. preamble renders it as a block in front of the first message, which every harness can do. native writes it as the harness's own session and resumes it, and only a harness that declares historyNative can: where it is forced on one that cannot, a case with a history is not applicable. Each run record keeps the mode. Results of the two modes are not comparable.",
+      "type": "string"
+    },
     "keepWorkspaces": {
       "title": "keepWorkspaces",
       "description": "After a run's checks, archive its workspace, the seed it started from, its remote directory and its throwaway home as <run>.workspace.tar in the output directory, with the system tar. The harness's login files are left out of the home, and the grader's copy is never in it. results.json records each archive as workspaceArchive. rejudge reads the archive to score the checks that need files again. Needs tar on PATH.",

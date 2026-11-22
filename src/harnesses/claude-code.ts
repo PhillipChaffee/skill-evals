@@ -140,6 +140,8 @@ const claudeCode: Harness = {
     "isolated",
     "toolOutputs",
     "assistantText",
+    // The runner writes the history as a block in front of the first prompt, so every adapter has it.
+    "history",
     // Confirmed from the CLI binary's strings, not from a stream: `AskUserQuestion` is the question tool.
     "askUser",
     // Confirmed from `claude --help` (2.1.330): `-r, --resume [value]` "Resume a conversation by session ID or name"
@@ -149,6 +151,9 @@ const claudeCode: Harness = {
     "clear",
     // Not declared: `userInvoke`. `claude --help` says "Skills still resolve via /skill-name" (`--bare`), but whether a
     // `/skill args` prompt in a `-p` process loads the skill is unconfirmed without a real model; Task 29 confirms it.
+    // Not declared: `historyNative` and `sessionStore`. `claude-code-history.ts` writes a session as the binary's strings
+    // show it, and `--resume` would continue it, but whether Claude Code accepts a planted session needs a real model;
+    // Task 29 confirms it. Tests use a test-only harness that declares both (`docs/design/multi-turn-and-history.md`).
     // Not declared: `compact`. `claude --help` shows only `--autocompact` (the automatic window), no way to ask for a
     // compaction in a `-p` process. The stream's `compact_boundary` event is parsed, so a harness that reports one shows it.
   ]),

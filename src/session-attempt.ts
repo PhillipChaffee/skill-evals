@@ -7,8 +7,12 @@ import type {
   Invocation,
   Parsed,
   RunInput,
+  TranscriptEvent,
 } from "./harnesses/shared.js";
-import { NOT_REPORTED, firstTurn, withIndexes } from "./harnesses/shared.js";
+import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
+import type { Seeded } from "./history-plant.js";
+import { withPreamble } from "./history.js";
+import type { HistoryMode } from "./history-types.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
@@ -52,6 +56,8 @@ export interface SessionInput {
   timeoutSeconds: number;
   /** The seconds all turns together may take. Absent: `timeoutSeconds` times the number of turns. */
   totalTimeoutSeconds?: number | undefined;
+  /** `--history-mode`: how the case's history reaches the agent. Absent: the harness's own mode. */
+  historyMode?: HistoryMode | undefined;
   /** What the case puts in the workspace and the home, and the steps that set it up; absent for an empty workspace. */
   layers?: Layers | undefined;
   /** Environment variables the harness must not get, such as the key of the model that scores its answer. */
@@ -66,6 +72,8 @@ export interface SessionInput {
 
 /** What a session produced, seen while its workspace still exists. */
 export interface SessionResult {
+  /** The seeded history as transcript events, with `userTurn` -1; empty for a run with no history. */
+  seeded: TranscriptEvent[];
   stdout: string;
   parsed: Parsed;
   /** The harness's own message when it produced a stream, else why the process failed. For turns, the first failure, with its turn. */
@@ -372,21 +380,25 @@ export function parseStream(harness: Harness, stdout: string): Parsed {
 /**
  * Gathers what the adapter builds the command line from, for a run with one prompt.
  * @param run - The harness, the prompt, and what to load.
- * @param home - The run's throwaway home.
- * @param workspace - The run's workspace.
+ * @param where - The run's directories, and what was planted in them.
+ * @param where.dirs - The run's throwaway home and workspace.
+ * @param where.seeded - What planting the case's history left: the block in front of the prompt, or the session to resume.
  * @returns The input of `invocation`.
  */
 export const inputOf = (
   run: SessionInput,
-  home: string,
-  workspace: string,
-): RunInput => ({
-  subject: run.subject,
-  home,
-  workspace,
-  prompt: run.prompt,
-  ...firstTurn(run.prompt),
-  model: run.model,
-  maxTurns: run.maxTurns,
-  isolated: run.isolated,
-});
+  where: { dirs: Dirs; seeded: Seeded },
+): RunInput => {
+  const message = withPreamble(where.seeded.preamble, run.prompt);
+  return {
+    subject: run.subject,
+    home: where.dirs.home,
+    workspace: where.dirs.workspace,
+    prompt: message,
+    turn: { index: 0, message, invoke: null, event: null },
+    session: where.seeded.session,
+    model: run.model,
+    maxTurns: run.maxTurns,
+    isolated: run.isolated,
+  };
+};

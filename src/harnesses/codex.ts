@@ -198,7 +198,13 @@ const codex: Harness = {
   placedAfterSetup: installedSkills,
   authFiles: [".codex/auth.json"],
   authEnv: OPENAI_ENV,
-  capabilities: new Set(["subagents", "toolOutputs", "assistantText"]),
+  capabilities: new Set([
+    "subagents",
+    "toolOutputs",
+    "assistantText",
+    // The runner writes the history as a block in front of the first prompt, so every adapter has it.
+    "history",
+  ]),
   status: "scripted",
   reportsCost: false,
   isRateLimit: looksRateLimited,

@@ -1,0 +1,25 @@
+[
+  {
+    "role": "user",
+    "text": "The nightly export job is timing out. Can you look at it?"
+  },
+  {
+    "role": "assistant",
+    "text": "I'll start by reading the job config.",
+    "toolCalls": [
+      {
+        "name": "Read",
+        "input": { "file_path": "export/job.yaml" },
+        "output": "format: csv\ntimeout: 300\n"
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "text": "It is about 4 GB a night now. Should we move to Parquet?"
+  },
+  {
+    "role": "assistant",
+    "text": "That is your decision: Parquet is smaller, but finance reads CSV only. I have changed nothing."
+  }
+]

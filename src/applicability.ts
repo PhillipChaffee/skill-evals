@@ -5,6 +5,8 @@ import { allChecks, dropChecks, turnNeeds } from "./case-checks.js";
 import type { Check } from "./checks/index.js";
 import { CHECKS, describeCheck } from "./checks/index.js";
 import type { Harness } from "./harnesses/shared.js";
+import { historyNeeds } from "./history-needs.js";
+import type { HistoryMode } from "./history-types.js";
 import { UsageError } from "./scope.js";
 
 /** Whether a harness can run a case. Decided before any run, from the adapter's declared capabilities. */
@@ -92,19 +94,36 @@ const lacking = (harness: Harness, host: Host, needs: Need[]): Need[] =>
   );
 
 /**
- * Decides whether a harness can run a case.
+ * Decides whether a harness can run a case, in the default history mode of the adapter.
  * @param harness - The adapter, which declares what it can observe or do.
  * @param caseDef - The case, with what it requires and what its checks imply.
  * @param host - The host capabilities that are present, from `hostCapabilities`. Default: none.
- * @returns Applicable, with the checks to drop on this harness; or not applicable, with what is missing and why.
- *   The case is not applicable when it lists other harnesses, when the case or a check that does not say
- *   `ifUnsupported: "skip"` needs something missing, or when every check would be skipped.
+ * @returns What `applicabilityUnder` returns.
  */
-export function applicability(
+export const applicability = (
   harness: Harness,
   caseDef: Case,
   host: Host = new Set(),
+): Applicability => applicabilityUnder(harness, caseDef, { host });
+
+/**
+ * Decides whether a harness can run a case.
+ * @param harness - The adapter, which declares what it can observe or do.
+ * @param caseDef - The case, with what it requires and what its checks imply.
+ * @param where - What else decides it.
+ * @param where.host - The host capabilities that are present, from `hostCapabilities`.
+ * @param where.forced - `--history-mode`; undefined to take the adapter's own mode, which is `preamble` unless it says so.
+ * @returns Applicable, with the checks to drop on this harness; or not applicable, with what is missing and why.
+ *   The case is not applicable when it lists other harnesses, when the case or a check that does not say
+ *   `ifUnsupported: "skip"` needs something missing, when its history or sessions need what the harness or the mode
+ *   lacks (`history`, `historyNative`, `sessionStore`), or when every check would be skipped.
+ */
+export function applicabilityUnder(
+  harness: Harness,
+  caseDef: Case,
+  where: { host: Host; forced?: HistoryMode | undefined },
 ): Applicability {
+  const { host, forced } = where;
   if (caseDef.harnesses && !caseDef.harnesses.includes(harness.id)) {
     return {
       applicable: false,
@@ -112,9 +131,15 @@ export function applicability(
       reason: caseDef.note ?? "the case names other harnesses",
     };
   }
+  const seeded = historyNeeds(caseDef, { harness, forced });
   const missing = new Set<Need>(
-    lacking(harness, host, [...caseDef.requires, ...turnNeeds(caseDef)]),
+    lacking(harness, host, [
+      ...caseDef.requires,
+      ...turnNeeds(caseDef),
+      ...seeded.needs,
+    ]),
   );
+  for (const need of seeded.blocked) missing.add(need);
   const skipped: number[] = [];
   const skippedMissing = new Set<Need>();
   const checks = allChecks(caseDef);
@@ -164,15 +189,22 @@ export interface Partition {
  * Applies `applicability` to every pair of harness and case.
  * @param harnesses - The harnesses that will run.
  * @param cases - Every loaded case.
- * @param host - The host capabilities that are present.
+ * @param where - The host capabilities that are present, and `--history-mode` when it is set.
+ * @param where.host - The host capabilities that are present.
+ * @param where.forced - The forced history mode; undefined for each adapter's own.
  * @returns What each harness runs, the pairs that are not applicable, and the checks that are skipped.
  */
-function partition(harnesses: Harness[], cases: Case[], host: Host): Partition {
+function partition(
+  harnesses: Harness[],
+  cases: Case[],
+  where: { host: Host; forced?: HistoryMode | undefined },
+): Partition {
   const result: Partition = { ran: {}, notApplicable: [], skippedChecks: [] };
   for (const harness of harnesses) {
     const ran: Case[] = [];
     for (const caseDef of cases) {
-      const verdict = applicability(harness, caseDef, host);
+      const { host } = where;
+      const verdict = applicabilityUnder(harness, caseDef, where);
       if (!verdict.applicable) {
         const { missing, reason } = verdict;
         result.notApplicable.push({
@@ -211,17 +243,19 @@ function partition(harnesses: Harness[], cases: Case[], host: Host): Partition {
  * Decides, once for the command, which cases each harness runs.
  * @param harnesses - The harnesses that will run, each with the executable to spawn.
  * @param cases - Every loaded case.
+ * @param forced - `--history-mode` or the config's `historyMode`; undefined for each adapter's own mode.
  * @returns What each harness runs and what it does not.
  * @throws {UsageError} When no case applies to any of the harnesses.
  */
 export function partitionApplicable(
   harnesses: { harness: Harness }[],
   cases: Case[],
+  forced?: HistoryMode,
 ): Partition {
   const parts = partition(
     harnesses.map((located) => located.harness),
     cases,
-    hostCapabilities(cases),
+    { host: hostCapabilities(cases), forced },
   );
   if (Object.values(parts.ran).every((ran) => ran.length === 0)) {
     throw new UsageError(

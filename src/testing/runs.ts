@@ -41,6 +41,8 @@ interface Scoring {
   only?: string;
   /** Extra environment variables of the command line. */
   env?: Record<string, string>;
+  /** More flags of `score`, such as `--history-mode native`. */
+  flags?: string[];
 }
 
 /**
@@ -56,6 +58,7 @@ export async function scoreSubject(box: Sandbox, scoring: Scoring) {
       ...["score", "--subject", scoring.subject, "--cases", scoring.cases],
       ...["--reps", String(scoring.reps ?? 1), "--out", out],
       ...(scoring.only ? ["--case", scoring.only] : []),
+      ...(scoring.flags ?? []),
     ],
     scoring.env ?? {},
     scoring.cwd,

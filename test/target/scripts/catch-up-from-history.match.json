@@ -1,0 +1,10 @@
+{
+  "match": { "prompt": "Where did we leave off" },
+  "turns": [
+    [
+      {
+        "text": "Two decisions are still waiting on you. First, whether the export stays CSV or moves to Parquet, which depends on what finance can accept. Second, which region the failover replica goes in, eu-west or us-east. Nothing has been changed, and the timeout is still 300."
+      }
+    ]
+  ]
+}

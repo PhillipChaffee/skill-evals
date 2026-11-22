@@ -10,6 +10,7 @@ import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
+import type { History, PriorSession } from "./history-types.js";
 import { allChecks } from "./case-checks.js";
 import { CASE_KEYS } from "./case-keys.js";
 import { layersOf } from "./case-layers.js";
@@ -90,6 +91,13 @@ export interface Case {
   fixtureDir: string | null;
   /** The directory that `home` names, copied into the run's throwaway home, or null. */
   homeDir: string | null;
+  /**
+   * The conversation that already happened, from the case's `history.json`; absent when the case has none. It reaches the
+   * agent in front of turn 1 (`preamble`) or as the harness's own session (`native`), and no check reads it.
+   */
+  history?: History | undefined;
+  /** Earlier sessions for the harness's prior-session store, from `sessions/sessions.json`; absent when the case has none. */
+  sessions?: PriorSession[] | undefined;
   /** The keys of the case file that start with `x-`, which belong to the case's author. */
   extensions: Record<string, unknown>;
   /** The case's directory; set by the loader. A reused result is tied to its content (`runKey`). */

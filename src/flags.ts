@@ -243,6 +243,13 @@ export const FLAGS = {
       "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
     default: "off: the harness loads what its settings say",
   },
+  "history-mode": {
+    as: "historyMode",
+    value: "native|preamble",
+    description:
+      "How a case's history.json reaches the agent. preamble renders it as a block in front of the first message, which every harness can do. native writes it as the harness's own session and resumes it, and only a harness that declares historyNative can: where it is forced on one that cannot, a case with a history is not applicable. Each run record keeps the mode. Results of the two modes are not comparable.",
+    default: "each harness's own, which is preamble for every harness today",
+  },
   "keep-workspaces": {
     as: "keepWorkspaces",
     kind: "switch",

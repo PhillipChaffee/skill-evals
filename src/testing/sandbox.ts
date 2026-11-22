@@ -41,6 +41,10 @@ export interface Seen {
   home: string;
   cwd: string;
   prompt: string;
+  /** The history the run was given: its mode, the messages and session-file lines counted, and whether a native file is where Claude Code looks. */
+  history: { mode: string; messages: number; lines: number; found: boolean };
+  /** The ids of the other session files in the store. */
+  sessions: string[];
   model: string | null;
   skills: Record<string, string>;
   credentials: string | null;

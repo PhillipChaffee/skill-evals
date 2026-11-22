@@ -16,9 +16,14 @@ export const BLINDING =
  *   first dot.
  * @param subject - The subject directory. `$SOURCE_SUBJECT` in the script stands for it, so a script can reach the
  *   source directory by its absolute path. Default: the target subject.
+ * @param flags - More flags of `score`, such as `--history-mode native`. Default: none.
  * @returns The exit status, standard error and records of the command.
  */
-export function run(name: string, subject = path.join(TARGET, "subject")) {
+export function run(
+  name: string,
+  subject = path.join(TARGET, "subject"),
+  flags: string[] = [],
+) {
   const box = sandbox();
   box.write(
     `fake/scripts/${name}.json`,
@@ -30,6 +35,7 @@ export function run(name: string, subject = path.join(TARGET, "subject")) {
     subject,
     cases: CASES,
     only: name.split(".")[0] ?? "",
+    flags,
     // The setup steps run bash and git, which the sandbox's own PATH leaves out.
     env: { PATH: `${String(box.env["PATH"])}:/usr/local/bin:/usr/bin:/bin` },
   });
@@ -38,10 +44,11 @@ export function run(name: string, subject = path.join(TARGET, "subject")) {
 /**
  * Plays one script of a target case against its subject.
  * @param name - The script's file name, as for `run`.
+ * @param flags - More flags of `score`, as for `run`. Default: none.
  * @returns The run record.
  */
-export async function play(name: string) {
-  const ran = await run(name);
+export async function play(name: string, flags: string[] = []) {
+  const ran = await run(name, undefined, flags);
   expect(ran.status, ran.stderr).toBe(0);
   const [record] = ran.records;
   if (!record) throw new Error("no record");

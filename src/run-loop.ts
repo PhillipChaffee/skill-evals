@@ -5,6 +5,7 @@ import { killRunning } from "./exec.js";
 import type { Gate, Limits, StopReason } from "./gate.js";
 import { createGate } from "./gate.js";
 import type { Located } from "./harnesses/index.js";
+import type { HistoryMode } from "./history-types.js";
 import type { JudgeApi } from "./judge-api.js";
 import { runKey } from "./run-key.js";
 import type { Progress } from "./progress.js";
@@ -33,6 +34,8 @@ export interface PlanBase {
   subjects: Subject[];
   model: string | undefined;
   isolated: boolean;
+  /** `--history-mode`; undefined leaves each harness its own mode. */
+  historyMode: HistoryMode | undefined;
   lenient: boolean;
   /** Archive each run's files, less the login files. */
   keepWorkspaces: boolean;
@@ -109,6 +112,7 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       decisionUrl: plan.decisionUrl,
       pass: plan.pass,
       isolated: plan.isolated,
+      historyMode: plan.historyMode,
       lenient: plan.lenient,
       keepWorkspaces: plan.keepWorkspaces,
       outDir: plan.outDir,

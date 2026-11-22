@@ -1,0 +1,13 @@
+[
+  {
+    "id": "migration-start",
+    "startedAt": "2026-01-05T09:00:00Z",
+    "messages": [
+      { "role": "user", "text": "Start the schema migration for orders." },
+      {
+        "role": "assistant",
+        "text": "Started. The orders table now has a nullable region column."
+      }
+    ]
+  }
+]

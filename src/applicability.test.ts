@@ -130,7 +130,10 @@ test("the adapters declare what their parsers and fixtures show today", () => {
     HARNESSES.map((h) => [h.id, [h.status, [...h.capabilities]]]),
   );
   expect(declared).toEqual({
-    pi: ["scripted", ["toolOutputs", "assistantText", "turnGrouping"]],
+    pi: [
+      "scripted",
+      ["toolOutputs", "assistantText", "turnGrouping", "history"],
+    ],
     "claude-code": [
       "real-model",
       [
@@ -143,13 +146,14 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "isolated",
         "toolOutputs",
         "assistantText",
+        "history",
         "askUser",
         "multiTurn",
         "resume",
         "clear",
       ],
     ],
-    cursor: ["unverified", ["subagents"]],
+    cursor: ["unverified", ["subagents", "history"]],
     opencode: [
       "scripted",
       [
@@ -158,9 +162,13 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "assistantText",
         "toolDurations",
         "turnGrouping",
+        "history",
       ],
     ],
-    codex: ["scripted", ["subagents", "toolOutputs", "assistantText"]],
+    codex: [
+      "scripted",
+      ["subagents", "toolOutputs", "assistantText", "history"],
+    ],
   });
 });
 

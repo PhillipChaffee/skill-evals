@@ -1,0 +1,24 @@
+{
+  "match": { "prompt": "Where did we leave off" },
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Edit",
+          "input": {
+            "file_path": "export/job.yaml",
+            "old_string": "timeout: 300",
+            "new_string": "timeout: 1800"
+          },
+          "write": {
+            "path": "export/job.yaml",
+            "content": "schedule: \"02:00\"\nformat: csv\ntimeout: 1800\nreplica: none\n"
+          }
+        }
+      },
+      {
+        "text": "Two decisions are still waiting on you: CSV or Parquet, and eu-west or us-east. I raised the timeout to 1800 meanwhile."
+      }
+    ]
+  ]
+}

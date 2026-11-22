@@ -12,6 +12,7 @@ import {
   labelled,
   requireJobs,
   requireDeltaSetup,
+  requireHistoryMode,
   requireMaxInvalid,
   requireUsable,
 } from "./evaluate-setup.js";
@@ -20,6 +21,7 @@ import { exclusionsOf } from "./exclusions.js";
 import { requireLimits } from "./evaluate-limits.js";
 import type { Limits } from "./gate.js";
 import type { Located } from "./harnesses/index.js";
+import type { HistoryMode } from "./history-types.js";
 import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
@@ -55,6 +57,8 @@ export interface Context {
   shared: boolean;
   /** The share of the planned runs that may be invalid before the command exits 3. */
   maxInvalid: number;
+  /** `--history-mode`; undefined leaves each harness its own mode. */
+  historyMode: HistoryMode | undefined;
   reps: number;
   cases: Case[];
   parts: Partition;
@@ -95,6 +99,7 @@ export function prepare(
   const reps = requireUsable(options);
   const jobs = requireJobs(options);
   const maxInvalid = requireMaxInvalid(options);
+  const historyMode = requireHistoryMode(options);
   reportFormats(options);
   if (options.keepWorkspaces) requireTar();
   const resumed = resumeDir(options, cwd);
@@ -130,13 +135,14 @@ export function prepare(
     }),
     shared: same,
     maxInvalid,
+    historyMode,
     reps,
     jobs,
     limits,
     resumed,
     cwd,
     cases,
-    parts: partitionApplicable(selection.chosen, cases),
+    parts: partitionApplicable(selection.chosen, cases, historyMode),
   };
   return { context, project, pairs };
 }
@@ -213,6 +219,7 @@ export const basePlan = (
   subjects,
   model: context.model,
   isolated: modesOf(context.options).isolated,
+  historyMode: context.historyMode,
   lenient: modesOf(context.options).lenient,
   keepWorkspaces: context.options.keepWorkspaces ?? false,
   outDir,

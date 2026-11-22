@@ -1,0 +1,23 @@
+{
+  "match": { "prompt": "Where did we leave off" },
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Write",
+          "input": {
+            "file_path": "notes.md",
+            "content": "open: CSV or Parquet; eu-west or us-east"
+          },
+          "write": {
+            "path": "notes.md",
+            "content": "open: CSV or Parquet; eu-west or us-east"
+          }
+        }
+      },
+      {
+        "text": "Two decisions are still waiting on you: CSV or Parquet, and eu-west or us-east. I wrote them down in notes.md."
+      }
+    ]
+  ]
+}

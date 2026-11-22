@@ -49,6 +49,7 @@ const SUITE_FLAGS: Flag[] = [
   "decision-timeout",
   "lenient",
   "isolated",
+  "history-mode",
   "keep-workspaces",
   "out",
   "resume",

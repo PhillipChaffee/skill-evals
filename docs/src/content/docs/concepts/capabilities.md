@@ -95,7 +95,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `childText`     | no   | yes           | no       | no         | no      |
 | `rules`         | no   | no            | no       | no         | no      |
 | `hooks`         | no   | no            | no       | no         | no      |
-| `history`       | no   | no            | no       | no         | no      |
+| `history`       | yes  | yes           | yes      | yes        | yes     |
 | `historyNative` | no   | no            | no       | no         | no      |
 | `askUser`       | no   | yes           | no       | no         | no      |
 | `toolDurations` | no   | no            | no       | yes        | no      |

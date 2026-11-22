@@ -1,0 +1,6 @@
+{
+  "description": "An earlier session is in the harness's prior-session store. The agent does not write anything while it answers.",
+  "tags": ["history"],
+  "checks": [{ "type": "tool_not_called", "kind": "write" }],
+  "timeoutSeconds": 300
+}

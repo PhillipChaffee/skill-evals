@@ -1,0 +1,9 @@
+{
+  "description": "The conversation so far is in history.json. The agent changes nothing and names the decision that is waiting.",
+  "tags": ["history"],
+  "checks": [
+    { "type": "tool_not_called", "kind": "write" },
+    { "type": "output_matches", "pattern": "Parquet", "flags": "i" }
+  ],
+  "timeoutSeconds": 300
+}

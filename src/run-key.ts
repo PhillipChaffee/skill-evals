@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Case } from "./cases.js";
+import { recordedMode } from "./history.js";
 import type { RunPlan } from "./run-plan.js";
 import { canonical, hashTree, sha256 } from "./tree-hash.js";
 
@@ -95,7 +96,7 @@ const passedEnv = (
  * answer to the same question.
  * @param plan - The run: its case, subject, harness, model, rep and scoring settings.
  * @returns The sha256 of the canonical JSON of the case hash, the subject's revision, the harness and its executable
- *   (real path, size, modification time), the model, the rep, the tool's version (the package version, so a rebuilt
+ *   (real path, size, modification time), the model, for a case with a history the mode it reaches the agent in, the rep, the tool's version (the package version, so a rebuilt
  *   tool with the same version shares keys), the names and value hashes of the passed variables, and the scoring: the
  *   judge's harness, its executable when it is not the harness under test, API, URL, fallbacks and model, the decision model and URL, `isolated` and `lenient`. Each of these changes what a run is or how it is scored.
  */
@@ -107,6 +108,10 @@ export function runKey(plan: RunPlan): string {
       subjectRevision: plan.subject.revision,
       harness: plan.harness.id,
       model: plan.model ?? null,
+      // Only a case with a history has the key, so that the key of any other run stays what it was.
+      ...(plan.caseDef.history && {
+        historyMode: recordedMode({ ...plan, forced: plan.historyMode }),
+      }),
       rep: plan.rep,
       toolVersion: toolVersion(),
       harnessBin: binOf(plan.bin),

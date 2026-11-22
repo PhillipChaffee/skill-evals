@@ -7,6 +7,8 @@ import type { Label } from "./subject.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { requireEnvNames } from "./env.js";
+import type { HistoryMode } from "./history-types.js";
+import { HISTORY_MODES } from "./history-types.js";
 import type { NoiseFile } from "./noise.js";
 import { readNoise } from "./noise.js";
 import type { Config } from "./project.js";
@@ -133,6 +135,24 @@ export function requireJobs(options: Config): number {
     throw new UsageError("jobs must be a positive integer");
   }
   return jobs;
+}
+
+/**
+ * Reads how a case's history reaches the agent.
+ * @param options - The options after the config file was applied.
+ * @returns `historyMode`; undefined when it is not set, which leaves each harness its own mode.
+ * @throws {UsageError} When it is neither "native" nor "preamble".
+ */
+export function requireHistoryMode(options: Config): HistoryMode | undefined {
+  const { historyMode } = options;
+  if (historyMode === undefined) return undefined;
+  const known = HISTORY_MODES.find((mode) => mode === historyMode);
+  if (known === undefined) {
+    throw new UsageError(
+      `historyMode must be one of ${HISTORY_MODES.join(", ")}, not "${historyMode}"`,
+    );
+  }
+  return known;
 }
 
 /**

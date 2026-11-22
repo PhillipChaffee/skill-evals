@@ -71,6 +71,8 @@ export interface EvaluateOptions extends SelectionOptions {
   lenient?: boolean | undefined;
   /** Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false. */
   isolated?: boolean | undefined;
+  /** How a case's `history.json` reaches the agent: "native" or "preamble". A usage error for any other word. Default: each harness's own, which is "preamble". */
+  historyMode?: string | undefined;
   /** Archive each run's workspace, seed, remotes and home, less the harness's login files, as `<run>.workspace.tar` in the output directory. A usage error without `tar` on `PATH`. Default: false. */
   keepWorkspaces?: boolean | undefined;
   /** Called with a line of text for each key that `lenient` drops. */

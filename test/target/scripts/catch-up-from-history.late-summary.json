@@ -1,0 +1,10 @@
+{
+  "match": { "prompt": "Where did we leave off" },
+  "turns": [
+    [
+      {
+        "text": "We looked at the nightly export job, which was timing out because it now writes about 4 GB. We read its config and talked about the timeout. Two decisions are still waiting on you: CSV or Parquet, and eu-west or us-east."
+      }
+    ]
+  ]
+}

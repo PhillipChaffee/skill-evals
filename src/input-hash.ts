@@ -1,4 +1,5 @@
 import type { Case } from "./cases.js";
+import type { HistoryMode } from "./history-types.js";
 import { canonical, hashTree, sha256 } from "./tree-hash.js";
 import { stepOf } from "./turn-spec.js";
 
@@ -33,14 +34,20 @@ function seenFiles(caseDef: Case): string {
  * @param run - Who answers the case.
  * @param run.harness - The id of the harness under test.
  * @param run.model - The model of the run: the case's own `model`, else the command's.
+ * @param run.historyMode - How the case's history reached the agent (`recordedMode`); only a case with a history uses it.
  * @returns The sha256 over the prompt, the content of `workspace/`, the shared fixtures, the case's `fixture/` and
  *   `home/`, the setup steps, the harness, the model, `maxTurns` and the names of the case's `env`; for a case with
- *   `turns`, also each turn's text, invocation or event, so that a changed turn prompt file changes it. The checks,
+ *   `turns`, also each turn's text, invocation or event, so that a changed turn prompt file changes it; for a case with
+ *   a `history.json` its messages and the mode, and for one with `sessions/` its sessions. The checks,
  *   the rubrics and `grader/` are not in it.
  */
 export function inputHash(
   caseDef: Case,
-  run: { harness: string; model: string | undefined },
+  run: {
+    harness: string;
+    model: string | undefined;
+    historyMode?: HistoryMode | null | undefined;
+  },
 ): string {
   return sha256(
     canonical({
@@ -49,6 +56,12 @@ export function inputHash(
       ...(caseDef.turns && {
         turns: caseDef.turns.map(stepOf),
       }),
+      // Only a case with a history or sessions has these keys, so that the hash of any other case stays what it was.
+      ...(caseDef.history && {
+        history: caseDef.history,
+        historyMode: run.historyMode ?? null,
+      }),
+      ...(caseDef.sessions && { sessions: caseDef.sessions }),
       files: seenFiles(caseDef),
       setup: caseDef.setup,
       harness: run.harness,

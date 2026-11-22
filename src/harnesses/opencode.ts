@@ -137,6 +137,8 @@ const opencode: Harness = {
     "assistantText",
     "toolDurations",
     "turnGrouping",
+    // The runner writes the history as a block in front of the first prompt, so every adapter has it.
+    "history",
   ]),
   status: "scripted",
   reportsCost: true,

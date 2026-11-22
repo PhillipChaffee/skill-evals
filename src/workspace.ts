@@ -23,6 +23,8 @@ export type Layers = Pick<
   | "env"
   | "checks"
   | "turns"
+  | "history"
+  | "sessions"
 >;
 
 /** A workspace that is ready for the agent, or the reason it is not. */

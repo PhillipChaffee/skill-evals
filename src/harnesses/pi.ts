@@ -120,7 +120,13 @@ const pi: Harness = {
   pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
-  capabilities: new Set(["toolOutputs", "assistantText", "turnGrouping"]),
+  capabilities: new Set([
+    "toolOutputs",
+    "assistantText",
+    "turnGrouping",
+    // The runner writes the history as a block in front of the first prompt, so every adapter has it.
+    "history",
+  ]),
   status: "scripted",
   reportsCost: true,
   isRateLimit: looksRateLimited,

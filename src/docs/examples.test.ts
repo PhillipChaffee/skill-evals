@@ -88,11 +88,13 @@ test("an example the tool would reject fails the same validation", () => {
 // A case that shows a feature and not one check type: it may have any name. A new one is added here on purpose.
 const FEATURE_EXAMPLES = [
   "by-agent",
+  "history",
   "judge-transcript",
   "requires",
   "routing",
   "setup-git",
   "setup-home",
+  "sessions",
   "shared-fixture",
   "turns",
   "variants",

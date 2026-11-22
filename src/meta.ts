@@ -3,6 +3,7 @@ import { exec } from "./exec.js";
 import fs from "node:fs";
 import type { Case } from "./cases.js";
 import type { Located } from "./harnesses/index.js";
+import type { HistoryMode } from "./history-types.js";
 import { caseHash, toolVersion } from "./run-key.js";
 import type { Subject } from "./subject.js";
 
@@ -36,6 +37,8 @@ export interface RunMeta {
   isolated: boolean;
   /** Whether the command ran with `--lenient`. Absent from earlier results. */
   lenient?: boolean;
+  /** The `--history-mode` of the command. Absent when it was not set, and from earlier results. */
+  historyMode?: HistoryMode;
   /**
    * How the judged checks were scored: through the API or a harness session, which harness (null: the harness under
    * test), and which model. Absent from earlier results, which say it in `results.json`'s `judge` text.
@@ -135,6 +138,8 @@ interface MetaInput {
   isolated: boolean;
   /** Whether the command ran with `--lenient`. */
   lenient: boolean;
+  /** `--history-mode`; undefined when it was not set. */
+  historyMode: HistoryMode | undefined;
   /** How the judged checks are scored. */
   judge: NonNullable<RunMeta["judge"]>;
 }
@@ -165,5 +170,8 @@ export const runMetaOf = (given: MetaInput): RunMeta => ({
   ),
   isolated: given.isolated,
   lenient: given.lenient,
+  ...(given.historyMode === undefined
+    ? {}
+    : { historyMode: given.historyMode }),
   judge: given.judge,
 });

@@ -112,6 +112,96 @@ Some harnesses have a tool that asks the user a question and waits (Claude Code'
 
 `examples/cases/asked_user` and `examples/cases/ended_awaiting_user` show the two checks on one prompt. Only Claude Code declares `askUser`, from the tool's name in the CLI binary. The signal that the process stopped for input is read from the result's `permission_denials`, and is unconfirmed against a real run until Task 29, which will also decide `askUser` for Pi, OpenCode, Codex and Cursor. A harness without it makes `asked_user`, `ended_awaiting_user` and a `reply` turn not applicable.
 
+## Start from a conversation that already happened
+
+A skill that catches the user up, restates its own last message or finds an earlier decision cannot be tested from an empty session. Put a `history.json` beside `prompt.md`: the messages that were said before the first prompt of the run.
+
+```jsonc
+[
+  {
+    "role": "user",
+    "text": "The nightly export job is timing out. Can you look at it?",
+  },
+  {
+    "role": "assistant",
+    "text": "I'll start by reading the job config.",
+    "toolCalls": [
+      {
+        "name": "Read",
+        "input": { "file_path": "export/job.yaml" },
+        "output": "timeout: 300\n",
+      },
+    ],
+  },
+  {
+    "role": "user",
+    "text": "I need to think about both. Let's stop here for today.",
+  },
+]
+```
+
+Each message has `role` (`user` or `assistant`) and `text`; an assistant message may have `toolCalls`, each with `name`, `input` and, if you want it in the history, `output`. The file is a non-empty list, and an unknown key is an error, even under `--lenient`. `history.json` and `sessions/` follow the rules of the case's other files: a link must lead to a file inside the case, and nothing in `grader/` may be used. Both count in the hash that tells a later run whether the agent's input changed, so editing `history.json` makes `--resume` run the case again.
+
+The case then asks what the history leads up to:
+
+```json
+{
+  "description": "Twelve messages stopped with two decisions open: the agent writes nothing, says first that something is waiting, and names both decisions.",
+  "checks": [
+    { "type": "tool_not_called", "kind": "write" },
+    {
+      "type": "transcript_matches",
+      "pattern": "^[^.!?]*(waiting|pending|open)",
+      "flags": "i",
+      "scope": "first_message"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "CSV.*Parquet|Parquet.*CSV",
+      "flags": "is"
+    }
+  ]
+}
+```
+
+`test/target/cases/catch-up-from-history` is the whole case, and [`examples/cases/history`](https://github.com/PhillipChaffee/skill-evals/tree/main/examples/cases/history) is a small one.
+
+### How the history reaches the agent
+
+There are two modes, and the run record's `historyMode` says which one a run used (`null` for a case with no history).
+
+| Mode       | What happens                                                                                                                                                                                                                                                                          | Needs           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `preamble` | The runner puts a block in front of the first message: `Earlier in this conversation (12 messages):`, the messages in a fence that has more backticks than any run of backticks in them, and `Latest message:`. The words name no eval, no case and no tool. Every harness can do it. | `history`       |
+| `native`   | The adapter writes the history as a session in the harness's own store and resumes it, so the assistant turns and tool results are real events of the session, and a skill that reads its own transcript on disk finds them there.                                                    | `historyNative` |
+
+The default is `preamble` for every harness. `--history-mode native|preamble` (config key `historyMode`) forces a mode. Forcing `native` on a harness that does not declare `historyNative` is not a usage error: a case with a history is not applicable there, with the reason `needs historyNative`. A case that says `"requires": ["historyNative"]` is not applicable under `preamble`, whether `preamble` is the default or was forced, and so is a case whose first turn is an `invoke`, because a block in front of a slash command would stop it being one. Results of the two modes are not comparable, and the report keeps the mode of each run.
+
+In a case with `turns` the block goes in front of the first turn only, and a native history is the session that the first turn resumes.
+
+No harness declares `historyNative` or `sessionStore` yet. The Claude Code adapter has the code that writes a session file (`~/.claude/projects/<working directory, every character but a letter or a digit as "-">/<session id>.jsonl`, one JSON object per line), read from the strings of the installed `claude` binary, but whether Claude Code accepts a session planted this way needs a real model to confirm, and Task 29 does that. Until then the tests use a test-only harness that declares both. [The design note](https://github.com/PhillipChaffee/skill-evals/blob/main/docs/design/multi-turn-and-history.md#native-history-and-session-stores-task-25-unconfirmed) lists the evidence.
+
+### What the checks see
+
+The seeded messages are in the transcript file, with `userTurn` -1, and no check reads them: a `tool_called` for `Bash` is not satisfied by a `Bash` call of the history, `transcript_matches` and the skill checks never match its text or its skill loads, and a file check does not count the files that the run planted as the agent's changes. The record's `toolCalls` and `skillsLoaded` are the agent's own. There is no way to include the history in a check in this release.
+
+### Earlier sessions
+
+`sessions/sessions.json` plants other past sessions in the harness's prior-session store, for a skill that looks at what the user did before. It is separate from the history.
+
+```jsonc
+[
+  {
+    "id": "older-one",
+    "startedAt": "2026-01-05T09:00:00Z",
+    "cwd": "/srv/app",
+    "messages": [{ "role": "user", "text": "start the migration" }],
+  },
+]
+```
+
+`id` is letters, digits, `.`, `_` and `-`, and may not start with `.` (an adapter may use it as a file name). `startedAt` is a date, `cwd` is optional (the default is the run's workspace), and `messages` is a history. A case with `sessions/` needs `sessionStore`, so it is not applicable on a harness that declares none. The files are written after the setup steps and the login files and before the harness starts, and they are in the home as the harness's prompt finds it: a check on the home does not report them as the agent's changes, and `--keep-workspaces` archives them with the rest of the home (the login files are still left out). [`examples/cases/sessions`](https://github.com/PhillipChaffee/skill-evals/tree/main/examples/cases/sessions) shows one.
+
 ## Lifecycle events
 
 | Event     | What the run does                                                                                                              |
@@ -126,11 +216,13 @@ Each event is an event of kind `lifecycle` in the transcript, with the event's n
 
 A case that needs more than a harness declares is not applicable there, and never a pass. The case's needs come from its turns:
 
-| The case has                           | It needs                       |
-| -------------------------------------- | ------------------------------ |
-| More than one turn                     | `multiTurn`                    |
-| An `invoke` turn                       | `userInvoke`                   |
-| A `reply` turn                         | `askUser`                      |
-| A `compact`, `clear` or `resume` event | `compact`, `clear` or `resume` |
+| The case has                           | It needs                                                 |
+| -------------------------------------- | -------------------------------------------------------- |
+| More than one turn                     | `multiTurn`                                              |
+| An `invoke` turn                       | `userInvoke`                                             |
+| A `reply` turn                         | `askUser`                                                |
+| A `compact`, `clear` or `resume` event | `compact`, `clear` or `resume`                           |
+| A `history.json`                       | `history`; `historyNative` under `--history-mode native` |
+| A `sessions/` directory                | `sessionStore`                                           |
 
 Only Claude Code declares `multiTurn`, `clear` and `resume`, because its `--help` confirms the continuation flag (`-r, --resume`). No harness declares `userInvoke` yet: the `/skill` syntax is in the help text, but whether a `/skill` prompt in a print-mode process loads the skill needs a real model to confirm. No harness declares `compact`: `claude --help` has no way to ask for a compaction in a print-mode process, and no other CLI was installed to read. [Harnesses](../agents/harnesses.md) lists what each adapter declares and [Capabilities](../concepts/capabilities.md) says what each means.

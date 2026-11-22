@@ -41,6 +41,33 @@ interface Given {
 }
 
 /**
+ * Finds the cases that apply to each harness, in the history mode of the earlier command.
+ * @param source - The earlier results.
+ * @param given - The cases now and the harnesses.
+ * @returns For each harness id, the cases it runs.
+ */
+const appliedTo = (source: Results, given: Given): Record<string, Case[]> =>
+  partitionApplicable(given.harnesses, given.all, source.meta.historyMode).ran;
+
+/**
+ * Hashes what the agent would see of a case now, as the record's run did.
+ * @param record - The stored run, which names the harness and the mode of its history.
+ * @param caseDef - The case as it is now.
+ * @param model - The model of the earlier command.
+ * @returns The `inputHash` of the case now.
+ */
+const hashNow = (
+  record: RunRecord,
+  caseDef: Case,
+  model: string | null,
+): string =>
+  inputHash(caseDef, {
+    harness: record.harness,
+    model: model ?? undefined,
+    historyMode: record.historyMode ?? null,
+  });
+
+/**
  * Decides what to do with each run of an earlier command.
  * @param source - The earlier results.
  * @param given - The cases now, which of them the user selected, and the harnesses.
@@ -55,7 +82,7 @@ export function planRejudge(source: Results, given: Given): Plan {
       (one) => one.id,
     ),
   );
-  const applied = partitionApplicable(given.harnesses, given.all).ran;
+  const applied = appliedTo(source, given);
   const current = (record: RunRecord): Case | undefined =>
     applied[record.harness]?.find((one) => one.id === record.caseId);
   const changed = new Set<string>();
@@ -75,10 +102,7 @@ export function planRejudge(source: Results, given: Given): Plan {
         note: `kept unchanged: the case does not apply to ${record.harness} now`,
       };
     }
-    const now = inputHash(caseDef, {
-      harness: record.harness,
-      model: source.model ?? undefined,
-    });
+    const now = hashNow(record, caseDef, source.model);
     if (record.inputHash !== undefined && record.inputHash !== now) {
       changed.add(record.caseId);
       return { kind: "keep", note: CHANGED_BEYOND_CHECKS };

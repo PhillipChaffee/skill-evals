@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Capability } from "../capabilities.js";
+import type { HistoryAdapter } from "../history-types.js";
 import type { Subject } from "../subject.js";
 import type { Invoke, TurnInput, TurnState } from "./turn-input.js";
 
@@ -226,7 +227,7 @@ export const ANTHROPIC_ENV = [
 export const OPENAI_ENV = ["OPENAI_API_KEY", "OPENAI_BASE_URL"];
 
 /** The adapter of one coding-agent CLI. */
-export interface Harness {
+export interface Harness extends HistoryAdapter {
   id: string;
   /** The name of the executable on PATH. */
   bin: string;
