@@ -6,7 +6,10 @@ import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
+import type { Spend } from "./gate.js";
+import { spendOf } from "./gate.js";
 import type { RetryKind } from "./retry.js";
+import { retryKind } from "./retry.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { failedRecord } from "./run-failed.js";
@@ -71,11 +74,11 @@ export interface RunRecord extends Usage, LimitFields {
   /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
   decision: (Usage & { calls: number }) | null;
   /**
-   * The error of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
+   * The error, the cost (null when none was reported) and the duration of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
    * before the harness wrote anything. This record is the last attempt; its `attempt` in `results.jsonl` is the number
    * of the attempt. Absent when the run was made once.
    */
-  attempts?: { error: string }[];
+  attempts?: { error: string; costUsd: number | null; durationMs: number }[];
   /**
    * True when the command reached its `--max-cost` or `--max-duration` while this run was in flight, so its judged and
    * decision checks were not asked. Such a run is invalid, and `--resume` makes it again in full. Absent otherwise.
@@ -226,6 +229,49 @@ const skillEventsOf = (
   );
 
 /**
+ * Makes the plan that this run's own judges see: the gate does not have the run's agent cost yet, but the judges must
+ * not push the budget over it.
+ * @param plan - The run.
+ * @param agentCost - What the agent cost; null when the harness stated none.
+ * @returns The plan, with `breached` counting the agent's cost as spent.
+ */
+function guardedBy(plan: RunPlan, agentCost: number | null): RunPlan {
+  const { breached } = plan;
+  return breached
+    ? { ...plan, breached: () => breached(agentCost ?? 0) }
+    : plan;
+}
+
+/**
+ * Puts the scored checks into the run's record, and adds up what the attempt cost.
+ * @param base - What the record says before its checks.
+ * @param scored - What `scoreChecks` returned.
+ * @param agentCost - What the agent cost; null when the harness stated none.
+ * @returns The record, with a score unless the run is invalid, and the spend.
+ */
+function assemble(
+  base: Omit<
+    RunRecord,
+    "judgeProblem" | "checks" | "score" | "judge" | "decision"
+  >,
+  scored: Awaited<ReturnType<typeof scoreChecks>>,
+  agentCost: number | null,
+): { record: RunRecord; spend: Spend } {
+  const { checks, replies, requests, hits, skippedGraders } = scored;
+  const judged = { ...base, judgeProblem: scored.judgeProblem, checks };
+  return {
+    record: {
+      ...judged,
+      score: invalidReason(judged) ? null : weightedMean(checks),
+      judge: judgeUsage(replies, hits),
+      decision: requests.length ? totalUsage(requests) : null,
+      ...(skippedGraders ? { skippedGraders } : {}),
+    },
+    spend: spendOf(agentCost, [...replies, ...requests]),
+  };
+}
+
+/**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
  * @param ran - What the session produced; its workspace still exists.
@@ -236,13 +282,12 @@ async function record(
   plan: RunPlan,
   ran: SessionResult,
   copy: Copy | null,
-): Promise<RunRecord> {
+): Promise<{ record: RunRecord; spend: Spend }> {
   const { harness, subject, caseDef, rep } = plan;
   const { parsed, error, durationMs } = ran;
   const { changes, observed } = observe(copy, ran);
   const events = skillEventsOf(harness, ran, copy);
   const loaded = skillsLoaded(events);
-
   const transcript = writeStreams(plan, ran);
   const files = fileState(ran);
   const base = {
@@ -267,31 +312,23 @@ async function record(
     agentTokens: parsed.agentTokens ?? null,
     costUsd: parsed.costUsd,
   };
-  const { checks, replies, requests, judgeProblem, hits, skippedGraders } =
-    await scoreChecks(
-      plan,
-      {
-        ...parsed,
-        skillEvents: events,
-        legacySkillLoads: plan.lenient ?? false,
-        ...files,
-        command: commandContext(ran, caseDef.env, transcript.absolute),
-        subject: {
-          dir: copy?.loaded.dir ?? null,
-          mutated: changes ? allChanged(changes) : [],
-          observed,
-        },
+  const scored = await scoreChecks(
+    guardedBy(plan, parsed.costUsd),
+    {
+      ...parsed,
+      skillEvents: events,
+      legacySkillLoads: plan.lenient ?? false,
+      ...files,
+      command: commandContext(ran, caseDef.env, transcript.absolute),
+      subject: {
+        dir: copy?.loaded.dir ?? null,
+        mutated: changes ? allChanged(changes) : [],
+        observed,
       },
-      invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
-    );
-  const judged = { ...base, judgeProblem, checks };
-  return {
-    ...judged,
-    score: invalidReason(judged) ? null : weightedMean(checks),
-    judge: judgeUsage(replies, hits),
-    decision: requests.length ? totalUsage(requests) : null,
-    ...(skippedGraders ? { skippedGraders } : {}),
-  };
+    },
+    invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
+  );
+  return assemble(base, scored, parsed.costUsd);
 }
 
 /** One attempt at a run: its record, and whether the failure that it shows is worth another attempt. */
@@ -299,6 +336,8 @@ export interface Attempted {
   record: RunRecord;
   /** Why the run may be tried again; null for a run that passed, failed for the agent's reasons, or never got going. */
   retry: RetryKind | null;
+  /** What the attempt cost, reply by reply. */
+  spend: Spend;
 }
 
 /**
@@ -330,14 +369,19 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         withhold: withheld(plan),
         pass: plan.pass,
       },
-      async (ran) => ({
-        record: await record(plan, ran, copy),
-        retry: ran.retry,
-      }),
+      async (ran) => {
+        const made = await record(plan, ran, copy);
+        return {
+          ...made,
+          retry: retryKind(harness, ran.ending, made.record),
+        };
+      },
     );
   } catch (error) {
     // Anything unexpected while the run was made or scored is this run's problem, never the suite's.
-    return { record: failedRecord(plan, messageOf(error)), retry: null };
+    // A run that broke while it was scored may have been paid for; nothing says how much.
+    const spend = { costUsd: 0, reported: false, unreported: 1 };
+    return { record: failedRecord(plan, messageOf(error)), retry: null, spend };
   } finally {
     copy?.dispose();
   }

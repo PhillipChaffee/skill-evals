@@ -10,8 +10,7 @@ import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { OnTimeout, StoppedBy } from "./session-end.js";
 import { endOf } from "./session-end.js";
-import type { RetryKind } from "./retry.js";
-import { retryKind } from "./retry.js";
+import type { Ending } from "./retry.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
 import { turnWatch } from "./turn-watch.js";
@@ -56,8 +55,8 @@ export interface SessionResult {
   turns: number | null;
   /** Milliseconds from the start of the prompt to the first byte of output; null when none came. */
   firstOutputMs: number | null;
-  /** Why the run may be tried again, when it failed for a reason that is not the agent's; null when it must not be. */
-  retry: RetryKind | null;
+  /** What decides whether a failed run may be tried again; `retryKind` reads it with the record. */
+  ending: Ending;
   workspace: string;
   /**
    * What the run changed in the copies of the skills that the adapter placed in the home, as paths inside the
@@ -377,13 +376,14 @@ export async function session<T>(
       stoppedBy,
       turns: ran.turns,
       firstOutputMs: ran.firstOutputMs,
-      retry: retryKind(harness, {
+      ending: {
         error,
         stoppedBy,
-        firstOutputMs: ran.firstOutputMs,
+        agentEvents: parsed.transcript.length,
         unfinished: parsed.unfinished === true,
+        fault: ran.fault,
         exec: ran.exec,
-      }),
+      },
       workspace: workspace.dir,
       seed,
       placedChanges,

@@ -14,6 +14,8 @@ export interface Progress {
   total: number;
   /** What this command has spent, reused runs excluded; null while no run has reported a cost. */
   spentUsd: number | null;
+  /** How many costs of this command were not reported; the spend is then a lower bound. */
+  unreported: number;
   /** The time left in milliseconds; null until a run of this command has finished. */
   etaMs: number | null;
 }
@@ -63,15 +65,15 @@ export function clockText(ms: number): string {
 /**
  * Writes the progress of a command as the progress line ends.
  * @param progress - How far the command has got.
- * @returns `[n/N] $<spent> ETA <mm:ss>`. The spend has four decimals under one dollar and two from there on, and is `$?`
- *   while no run has reported a cost. The time is `--:--` until a run of this command has finished.
+ * @returns `[n/N] $<spent> ETA <mm:ss>`. The spend has four decimals under one dollar and two from there on, is `≥$x`
+ *   when some cost was not reported, and is `$?` while none has been. The time is `--:--` until a run of this command has finished.
  */
 export function progressText(progress: Progress): string {
-  const { done, total, spentUsd, etaMs } = progress;
+  const { done, total, spentUsd, etaMs, unreported } = progress;
   const spent =
     spentUsd === null
-      ? "?"
-      : spentUsd.toFixed(spentUsd < 1 ? SHORT_DECIMALS : LONG_DECIMALS);
+      ? "$?"
+      : `${unreported > 0 ? "\u2265$" : "$"}${spentUsd.toFixed(spentUsd < 1 ? SHORT_DECIMALS : LONG_DECIMALS)}`;
   const eta = etaMs === null ? "--:--" : clockText(etaMs);
-  return `[${String(done)}/${String(total)}] $${spent} ETA ${eta}`;
+  return `[${String(done)}/${String(total)}] ${spent} ETA ${eta}`;
 }

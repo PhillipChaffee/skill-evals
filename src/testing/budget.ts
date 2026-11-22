@@ -26,6 +26,8 @@ interface Scripted {
   checks?: unknown[];
   /** Replaces the script's `noInit`. */
   noInit?: boolean;
+  /** Fields of the script's init event to replace. */
+  init?: FakeScript["init"];
 }
 
 /**
@@ -40,7 +42,14 @@ export function scriptedCase(
   id: string,
   scripted: Scripted = {},
 ): string {
-  const { costUsd, before = [], more = {}, checks = [], noInit } = scripted;
+  const {
+    costUsd,
+    before = [],
+    more = {},
+    checks = [],
+    noInit,
+    init,
+  } = scripted;
   writeCase(box, "suite", { id, checks: [SUMMARY, ...checks] });
   if (Object.keys(more).length > 0) {
     box.write(`suite/${id}/case.json`, {
@@ -52,6 +61,7 @@ export function scriptedCase(
     match: { prompt: `do ${id}` },
     ...(costUsd === undefined ? {} : { costUsd }),
     ...(noInit === undefined ? {} : { noInit }),
+    ...(init === undefined ? {} : { init }),
     turns: [[...before, WRITE_SUMMARY, { final: "done" }]],
   });
   return path.join(box.root, "suite");

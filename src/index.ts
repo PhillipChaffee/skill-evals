@@ -17,6 +17,8 @@ export type {
   ToolCall,
   TranscriptEvent,
 } from "./harnesses/shared.js";
+export type { Progress } from "./progress.js";
+export type { NotRun } from "./not-run.js";
 export type { CheckResult, RunRecord } from "./run.js";
 export type { CaseScore, CommonSet, SuiteScore } from "./score.js";
 export type { SubjectSummary } from "./subject.js";

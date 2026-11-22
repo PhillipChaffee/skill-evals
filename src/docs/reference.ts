@@ -245,7 +245,7 @@ ${table(
 
 Every key is optional. ${code("cases")} resolves against the project root. ${code("harness")} narrows ${code("check")} too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
 
-A file that sets every key:
+A file that sets every key. It shows each key's type, and is not a file to run with: ${code("maxCost")} is a usage error together with ${code("judgeApi")} or ${code("decisionModel")}, because those report no cost. Use one or the other.
 
 ${FENCE}json
 ${JSON.stringify(EXAMPLE_CONFIG, null, JSON_INDENT)}

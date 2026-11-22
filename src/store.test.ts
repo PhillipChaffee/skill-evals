@@ -240,3 +240,33 @@ test("a line whose judge or decision totals have the wrong shape is refused", ()
     }
   }
 });
+
+test("attempt must be a positive integer, and attempts and skippedGraders are checked when present", () => {
+  const bad = [
+    { attempt: 0 },
+    { attempt: 1.5 },
+    { attempt: "1" },
+    { attempts: "x" },
+    { attempts: [{ error: 1, costUsd: null, durationMs: 1 }] },
+    { attempts: [{ error: "e", costUsd: "1", durationMs: 1 }] },
+    { attempts: [{ error: "e", costUsd: null }] },
+    { skippedGraders: false },
+    { skippedGraders: "yes" },
+  ];
+  for (const more of bad) {
+    const out = holding([
+      JSON.stringify({ ...run(), ...more }),
+      JSON.stringify(run()),
+    ]);
+    expect(() => readRuns(out), JSON.stringify(more)).toThrow(/line 1/);
+  }
+  const good = holding([
+    JSON.stringify({
+      ...run(),
+      attempt: 2,
+      skippedGraders: true,
+      attempts: [{ error: "e", costUsd: null, durationMs: 1 }],
+    }),
+  ]);
+  expect(readRuns(good).lines).toHaveLength(1);
+});

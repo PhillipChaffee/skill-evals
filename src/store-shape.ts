@@ -31,12 +31,41 @@ const usage: Shape = (value) =>
   )(value["tokens"]);
 
 /**
+ * Lets a field be absent.
+ * @param inner - What the field must be when it is there.
+ * @returns A shape that also accepts undefined, for a field that older lines do not have.
+ */
+const optional =
+  (inner: Shape): Shape =>
+  (value) =>
+    value === undefined || inner(value);
+
+/**
+ * The fields that a line may have: when present, each must be of its kind. `attempts` lists the earlier attempts, and
+ * `skippedGraders` marks a run whose judged and decision checks were skipped.
+ */
+const OPTIONAL_FIELDS: Record<string, Shape> = {
+  attempts: optional(
+    (value) =>
+      Array.isArray(value) &&
+      value.every(
+        (each) =>
+          isObject(each) &&
+          text(each["error"]) &&
+          orNull(count)(each["costUsd"]) &&
+          count(each["durationMs"]),
+      ),
+  ),
+  skippedGraders: optional((value) => value === true),
+};
+
+/**
  * The fields that every line of `results.jsonl` must have. A line that lacks one, or has the wrong kind of value, is
  * not a run record: reading it would fail where the report, the progress line or a resume uses the field.
  */
 export const LINE_FIELDS: Record<string, Shape> = {
   key: text,
-  attempt: count,
+  attempt: (value) => Number.isInteger(value) && (value as number) >= 1,
   harness: text,
   caseId: text,
   subject: text,
@@ -71,4 +100,6 @@ export const LINE_FIELDS: Record<string, Shape> = {
  */
 export const isStoredRun = (value: unknown): boolean =>
   isObject(value) &&
-  Object.entries(LINE_FIELDS).every(([name, shape]) => shape(value[name]));
+  [...Object.entries(LINE_FIELDS), ...Object.entries(OPTIONAL_FIELDS)].every(
+    ([name, shape]) => shape(value[name]),
+  );

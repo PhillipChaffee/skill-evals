@@ -39,7 +39,7 @@ An optional `skill-evals.config.json` in the project root sets defaults. A flag 
 
 Every key is optional. `cases` resolves against the project root. `harness` narrows `check` too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
 
-A file that sets every key:
+A file that sets every key. It shows each key's type, and is not a file to run with: `maxCost` is a usage error together with `judgeApi` or `decisionModel`, because those report no cost. Use one or the other.
 
 ```json
 {

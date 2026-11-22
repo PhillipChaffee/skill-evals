@@ -18,7 +18,13 @@ const BACKOFF_MS = 100;
  * @returns The record, with only the fields the retry loop reads.
  */
 const attempted = (error: string | null, costUsd: number | null = null) =>
-  ({ error, costUsd, judge: null, decision: null }) as unknown as RunRecord;
+  ({
+    error,
+    costUsd,
+    durationMs: 7,
+    judge: null,
+    decision: null,
+  }) as unknown as RunRecord;
 
 /**
  * Plays attempts one after another.
@@ -26,7 +32,11 @@ const attempted = (error: string | null, costUsd: number | null = null) =>
  */
 function attempts(...list: [RunRecord, RetryKind | null][]): void {
   for (const [record, retry] of list) {
-    vi.mocked(runAttempt).mockResolvedValueOnce({ record, retry });
+    const spend =
+      record.costUsd === null
+        ? { costUsd: 0, reported: false, unreported: 1 }
+        : { costUsd: record.costUsd, reported: true, unreported: 0 };
+    vi.mocked(runAttempt).mockResolvedValueOnce({ record, retry, spend });
   }
 }
 
@@ -61,8 +71,8 @@ test("a crash is retried at once, up to the number of retries, and the last atte
   expect(done.attempt).toBe(3);
   expect(done.record.error).toBe("third");
   expect(done.record.attempts).toEqual([
-    { error: "first" },
-    { error: "second" },
+    { error: "first", costUsd: null, durationMs: 7 },
+    { error: "second", costUsd: null, durationMs: 7 },
   ]);
 });
 
@@ -104,7 +114,9 @@ test("a limit that is reached stops the retries, and every attempt is paid for",
   expect(done.attempt).toBe(2);
   expect(gate.spent()).toBe(1.25);
   expect(gate.stopped()).toBe("budget");
-  expect(done.record.attempts).toEqual([{ error: "boom" }]);
+  expect(done.record.attempts).toEqual([
+    { error: "boom", costUsd: 0.75, durationMs: 7 },
+  ]);
 });
 
 test("a limit reached before the first retry leaves the failed attempt as the record", async () => {

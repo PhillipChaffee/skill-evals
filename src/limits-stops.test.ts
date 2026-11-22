@@ -191,6 +191,7 @@ test("the report counts a timed-out run as scored only when it has no invalid re
     cases: [],
     skippedChecks: [],
     notApplicable: [],
+    partial: null,
   } as never;
 
   expect(noteSections(evaluation).join("\n")).toContain(

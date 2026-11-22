@@ -158,7 +158,7 @@ async function judgedSlot(
  * @returns The reason to put on the checks; null when they may be asked.
  */
 function skippedFor(plan: RunPlan): string | null {
-  const reached = plan.breached?.() ?? null;
+  const reached = plan.breached?.(0) ?? null;
   return reached === null ? null : `skipped: ${reached} reached`;
 }
 

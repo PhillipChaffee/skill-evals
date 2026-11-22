@@ -2,6 +2,8 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { evaluate } from "./evaluate.js";
 import { scoreArgs, scriptedCase } from "./testing/budget.js";
+
+const RESULTS = "results";
 import { asProcess, readResults, sandbox } from "./testing/sandbox.js";
 import { linesIn, startsOf } from "./testing/suite.js";
 import fs from "node:fs";
@@ -11,7 +13,7 @@ import fs from "node:fs";
  * @param out - The output directory.
  * @returns The parsed lines.
  */
-const CRASHED = { error: "no result event" };
+const CRASHED: unknown = expect.objectContaining({ error: "no result event" });
 const stored = (out: string) =>
   linesIn(out).map(
     (line) => JSON.parse(line) as { attempt: number; attempts?: unknown },
@@ -95,16 +97,28 @@ test("a timeout before the harness wrote anything is retried", async () => {
   expect(ran.status, ran.stderr).toBe(0);
   expect(startsOf(box)).toBe(2);
   const [record] = readResults(out).records;
-  expect(record?.attempts).toEqual([{ error: "timed out after 1 s" }]);
+  expect(record?.attempts).toEqual([
+    expect.objectContaining({ error: "timed out after 1 s" }),
+  ]);
   expect(record?.score).toBe(1);
 });
 
-test("a timeout after the harness wrote something is not retried", async () => {
+test("a hang after the init event, before the agent did anything, is retried", async () => {
   const box = sandbox();
-  // The init event is output, so `firstOutputMs` is set.
-  scriptedCase(box, "late", {
+  scriptedCase(box, "init-only", {
     more: { timeoutSeconds: 1 },
     before: [{ onStart: [1], step: { hang: true } }],
+  });
+  const ran = await box.cli(scoreArgs(box, RESULTS, "--retries", "1"));
+  expect(ran.status, ran.stderr).toBe(0);
+  expect(startsOf(box)).toBe(2);
+});
+
+test("a timeout after the agent did something is not retried", async () => {
+  const box = sandbox();
+  scriptedCase(box, "late", {
+    more: { timeoutSeconds: 1 },
+    before: [{ text: "working" }, { onStart: [1], step: { hang: true } }],
   });
   const out = path.join(box.root, "results");
   const ran = await box.cli(scoreArgs(box, "results", "--retries", "2"));
@@ -152,6 +166,47 @@ test("a rate limit is retried, with the wait overridden to nothing", async () =>
   expect(record?.attempts).toHaveLength(2);
   expect(record?.attempts?.[0]?.error).toMatch(/rate limit/);
   expect(fs.existsSync(path.join(out, "results.json"))).toBe(true);
+});
+
+test("an error with a stack trace that has 429 and a rate-limit path in it is not a rate limit", async () => {
+  const box = sandbox();
+  const trace =
+    "Error: boom at run (/app/node_modules/rate-limit/cli.js:429:17)";
+  scriptedCase(box, "traced", {
+    before: [{ onStart: [1, 2, 3], step: { fail: trace } }],
+  });
+  const ran = await box.cli(scoreArgs(box, RESULTS, "--retries", "2"));
+  expect(ran.status).toBe(1);
+  expect(startsOf(box)).toBe(1);
+});
+
+test("a crash in a run that loaded outside the subject is not retried", async () => {
+  const box = sandbox();
+  scriptedCase(box, "breach", {
+    init: { plugins: [{ name: "org", path: "/opt/org/plugin" }] },
+    before: [{ onStart: [1, 2, 3], step: { crash: "segfault" } }],
+  });
+  const ran = await box.cli(
+    scoreArgs(box, RESULTS, "--isolated", "--retries", "2"),
+  );
+  expect(ran.status).toBe(1);
+  expect(startsOf(box)).toBe(1);
+  const [record] = readResults(path.join(box.root, RESULTS)).records;
+  expect(record?.unexpected).toEqual(["/opt/org/plugin"]);
+  expect(record).not.toHaveProperty("attempts");
+});
+
+test("retries in the config file apply, and the flag wins", async () => {
+  const box = sandbox();
+  scriptedCase(box, "solo", {
+    before: [{ onStart: [1, 3], step: { crash: "segfault" } }],
+  });
+  box.write("skill-evals.config.json", { retries: 1 });
+  const ran = await box.cli(scoreArgs(box, RESULTS));
+  expect(ran.status, ran.stderr).toBe(0);
+  expect(startsOf(box)).toBe(2);
+  const off = await box.cli(scoreArgs(box, "second", "--retries", "0"));
+  expect(off.status, off.stderr).toBe(1);
 });
 
 test("a run that reports a rate limit is not retried without retries", async () => {

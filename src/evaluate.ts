@@ -18,6 +18,8 @@ import { outputDir } from "./scope.js";
 import type { Subject, SubjectSummary } from "./subject.js";
 import { changedAtSource } from "./subject.js";
 import type { Partition } from "./applicability.js";
+import type { NotRun } from "./not-run.js";
+import { notRunOf, plannedRuns } from "./not-run.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions extends SelectionOptions {
@@ -77,7 +79,7 @@ export interface EvaluateOptions extends SelectionOptions {
   maxCost?: number | undefined;
   /** Stop starting runs after this many minutes, a positive number; fractions are allowed. Default: no limit. */
   maxDuration?: number | undefined;
-  /** The seconds a rate-limited run waits before its next attempt, per attempt; for tests. Default: 30 s times the attempt number, in milliseconds. */
+  /** The milliseconds a rate-limited run waits before its next attempt, times the number of the attempt that failed; for tests. Default: 30,000. */
   rateLimitBackoffMs?: number | undefined;
   /**
    * The output directory of an earlier command, which holds `results.jsonl`. It implies `outDir`. A run whose key matches
@@ -134,10 +136,16 @@ export interface Results {
   partial: {
     reason: "running" | "error" | "budget" | "duration" | "interrupted";
   } | null;
+  /**
+   * The runs of the plan that did not run, in plan order: those that were never started because the command stopped,
+   * and those that were started but had their judged and decision checks skipped (they are in `records`, invalid, with
+   * `skippedGraders`). Empty for a command that ran to the end. While the command runs, the runs not finished yet.
+   */
+  notRun: NotRun[];
   records: RunRecord[];
 }
 
-/** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty. */
+/** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished. */
 export interface Evaluation extends Results {
   /** Every loaded case, applicable or not. */
   cases: Case[];
@@ -216,6 +224,15 @@ function summarize(finished: Finished): Results {
     }),
     sourceChanged: finished.sourceChanged,
     partial: finished.partial,
+    notRun: notRunOf(
+      plannedRuns({
+        harnesses,
+        applied: parts.ran,
+        reps: finished.reps,
+        labels,
+      }),
+      records,
+    ),
     records,
   };
 }
@@ -224,13 +241,15 @@ function summarize(finished: Finished): Results {
  * Makes the runs, writing each record as its run ends, and sums them up.
  * @param prepared - What `prepare` returned.
  * @param subjects - The subjects, resolved.
- * @param onRun - The hook of the caller.
+ * @param hooks - The hook of the caller, and when the command started.
+ * @param hooks.onRun - Called with each run's record as it ends.
+ * @param hooks.began - When the command started, which `maxDuration` counts from.
  * @returns The results and the output directory.
  */
 async function runSuite(
   prepared: Prepared,
   subjects: Subject[],
-  onRun: EvaluateOptions["onRun"],
+  hooks: { onRun: EvaluateOptions["onRun"]; began: number },
 ): Promise<{ results: Results; outDir: string }> {
   const { context } = prepared;
   const { options, resumed } = context;
@@ -265,7 +284,8 @@ async function runSuite(
           }),
         );
       },
-      onRun,
+      onRun: hooks.onRun,
+      began: hooks.began,
       rateLimitBackoffMs: options.rateLimitBackoffMs,
     });
     const results = summarize({
@@ -291,12 +311,16 @@ async function runSuite(
  * @throws {UsageError} For a wrong option, case file, or config file, before any harness starts.
  */
 export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
+  const began = Date.now();
   const { onRun, ...rest } = given;
   const prepared = prepare(rest);
   const subjects: Subject[] = [];
   try {
     resolveAll(prepared, subjects);
-    const { results, outDir } = await runSuite(prepared, subjects, onRun);
+    const { results, outDir } = await runSuite(prepared, subjects, {
+      onRun,
+      began,
+    });
     const { cases, parts } = prepared.context;
     return { ...results, cases, applied: parts.ran, outDir };
   } finally {

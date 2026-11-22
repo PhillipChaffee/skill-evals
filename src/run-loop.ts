@@ -94,6 +94,8 @@ export interface Plan extends PlanBase {
         info: { reused: boolean; progress: Progress },
       ) => void)
     | undefined;
+  /** When the command started, on the clock `runAll` gets; `--max-duration` counts from here. Default: when `runAll` starts. */
+  began?: number | undefined;
   /** The wait after a rate limit, per attempt, in milliseconds. Default: `RATE_LIMIT_BACKOFF_MS`. For tests. */
   rateLimitBackoffMs?: number | undefined;
 }
@@ -150,8 +152,6 @@ interface Tally {
   gate: Gate;
   /** The wall time of each run that this command finished, retries included. */
   durations: number[];
-  /** How many of those runs reported no cost. */
-  unreported: number;
 }
 
 /**
@@ -177,6 +177,7 @@ const progressOf = (
   done,
   total: tally.planned.length,
   spentUsd: tally.gate.spent(),
+  unreported: tally.gate.unreported(),
   etaMs: etaOf(tally.planned.length - done, tally.durations, jobs),
 });
 
@@ -219,7 +220,6 @@ const jobsOf = (
               },
             );
             tally.durations.push(shared.clock() - began);
-            if (record.costUsd === null) tally.unreported += 1;
             plan.store.append({ ...record, key, attempt });
             tally.finished[index] = record;
             shared.flushSoon(sofar(tally));
@@ -239,9 +239,10 @@ const jobsOf = (
  *   reached limit when a run in flight had its graders skipped. Warns once when a budget counted runs with no cost.
  */
 function ended(plan: Plan, tally: Tally): Ran {
-  if (plan.limits.maxCost !== undefined && tally.unreported > 0) {
+  const missing = tally.gate.unreported();
+  if (plan.limits.maxCost !== undefined && missing > 0) {
     console.error(
-      `skill-evals: warning: ${String(tally.unreported)} runs reported no cost; the budget counts only reported costs`,
+      `skill-evals: warning: ${String(missing)} costs were not reported (agent attempts and judge replies); the budget counts only reported costs`,
     );
   }
   const records = sofar(tally);
@@ -274,9 +275,8 @@ export async function runAll(
     finished: planned.map(({ key, subject }) =>
       plan.reused.get(slotName(key, subject.label)),
     ),
-    gate: createGate(plan.limits, clock),
+    gate: createGate(plan.limits, clock, plan.began),
     durations: [],
-    unreported: 0,
   };
   plan.flush(sofar(tally));
   for (const [index, record] of sofar(tally).entries()) {

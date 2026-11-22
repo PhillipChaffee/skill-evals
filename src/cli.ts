@@ -70,16 +70,16 @@ async function suite(
   };
   const evaluation = await evaluate({ ...given, onRun });
   console.log(renderReport(evaluation));
-  if (evaluation.partial !== null) {
-    console.error(stoppedMessage(evaluation));
-    return PARTIAL_EXIT_CODE;
-  }
   if (evaluation.sourceChanged.length > 0) {
     console.error(
       `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
     );
-    return SUBJECT_CHANGED_EXIT_CODE;
   }
+  if (evaluation.partial !== null) {
+    console.error(stoppedMessage(evaluation));
+    return PARTIAL_EXIT_CODE;
+  }
+  if (evaluation.sourceChanged.length > 0) return SUBJECT_CHANGED_EXIT_CODE;
   return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
 }
 

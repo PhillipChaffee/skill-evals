@@ -26,10 +26,19 @@ test.each([
 });
 
 test("the progress text has n of N, the spend and the time left", () => {
-  const base = { done: 3, total: 12, spentUsd: 0.042, etaMs: 72_000 };
+  const base = {
+    done: 3,
+    total: 12,
+    spentUsd: 0.042,
+    etaMs: 72_000,
+    unreported: 0,
+  };
   expect(progressText(base)).toBe("[3/12] $0.0420 ETA 01:12");
   expect(progressText({ ...base, spentUsd: 12.5 })).toBe(
     "[3/12] $12.50 ETA 01:12",
+  );
+  expect(progressText({ ...base, unreported: 2 })).toBe(
+    "[3/12] \u2265$0.0420 ETA 01:12",
   );
   expect(progressText({ ...base, spentUsd: null, etaMs: null })).toBe(
     "[3/12] $? ETA --:--",

@@ -41,18 +41,26 @@ export async function runWithRetries(
   options: RetryOptions,
 ): Promise<{ record: RunRecord; attempt: number }> {
   const { retries, gate, backoffMs = RATE_LIMIT_BACKOFF_MS } = options;
-  const earlier: { error: string }[] = [];
+  const earlier: NonNullable<RunRecord["attempts"]> = [];
   for (let attempt = 1; ; attempt += 1) {
-    const { record, retry } = await runAttempt(plan);
-    gate.add(record);
-    const again = retry !== null && attempt <= retries;
-    if (again && retry === "rate limit") await pause(backoffMs * attempt);
-    if (!again || gate.check() === "stop") {
+    const { record, retry, spend } = await runAttempt(plan);
+    gate.add(spend);
+    let again = retry !== null && attempt <= retries && gate.check() === "go";
+    if (again && retry === "rate limit") {
+      await pause(backoffMs * attempt);
+      // Time passed while it waited, and other runs may have spent the rest.
+      again = gate.check() === "go";
+    }
+    if (!again) {
       return {
         record: earlier.length > 0 ? { ...record, attempts: earlier } : record,
         attempt,
       };
     }
-    earlier.push({ error: record.error as string });
+    earlier.push({
+      error: record.error as string,
+      costUsd: spend.reported ? spend.costUsd : null,
+      durationMs: record.durationMs,
+    });
   }
 }

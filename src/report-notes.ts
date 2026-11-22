@@ -1,6 +1,88 @@
+const MS_PER_SECOND = 1000;
+const COST_DECIMALS = 4;
 import type { Evaluation } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
+import { plannedRuns } from "./not-run.js";
+
+/**
+ * Says that the command stopped before the end, and how many runs did not run.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing for a command that ran to the end. It names the limit, says for each harness and
+ *   subject how many runs did not run, and says when the two subjects of a comparison finished different numbers of
+ *   runs, so that their scores are not over the same sample.
+ */
+function partialSection(evaluation: Evaluation): string[] {
+  const { partial, notRun } = evaluation;
+  if (partial === null) return [];
+  const limit = partial.reason === "budget" ? "--max-cost" : "--max-duration";
+  const labels = evaluation.subjects.map((subject) => subject.label);
+  const planned = plannedRuns({
+    harnesses: evaluation.harnesses,
+    applied: evaluation.applied,
+    reps: evaluation.reps,
+    labels,
+  });
+  const count = (runs: { harness: string; subject: string }[], key: string) =>
+    runs.filter((run) => `${run.harness} ${run.subject}` === key).length;
+  const rows = evaluation.harnesses.flatMap((harness) =>
+    labels.map((label) => {
+      const key = `${harness} ${label}`;
+      const total = count(planned, key);
+      const missing = count(notRun, key);
+      return { harness, label, total, missing, done: total - missing };
+    }),
+  );
+  const uneven = evaluation.harnesses.filter((harness) => {
+    const done = rows.filter((row) => row.harness === harness);
+    return done.some((row) => row.done !== done[0]?.done);
+  });
+  return [
+    "",
+    "## Stopped early",
+    "",
+    `The command stopped at ${limit} (${partial.reason}). Scores cover finished runs only; \`results.json\` lists the runs that did not run under \`notRun\`. Continue with \`--resume\`.`,
+    "",
+    ...rows
+      .filter((row) => row.missing > 0)
+      .map(
+        (row) =>
+          `- ${row.harness} ${row.label.toUpperCase()}: ${String(row.missing)} of ${String(row.total)} runs did not run; scores cover finished runs only`,
+      ),
+    ...uneven.map(
+      (harness) =>
+        `- ${harness}: the subjects finished different numbers of runs (${rows
+          .filter((row) => row.harness === harness)
+          .map((row) => `${row.label.toUpperCase()} ${String(row.done)}`)
+          .join(", ")}), so the comparison is not over the same reps`,
+    ),
+  ];
+}
+
+/**
+ * Says how many runs were retried, and what the failed attempts cost, which the table leaves out.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when no run was retried.
+ */
+function retriedSection(evaluation: Evaluation): string[] {
+  const retried = evaluation.records.filter((record) => record.attempts);
+  if (retried.length === 0) return [];
+  const attempts = retried.flatMap((record) => record.attempts ?? []);
+  const costs = attempts.flatMap((attempt) => attempt.costUsd ?? []);
+  const seconds =
+    attempts.reduce((sum, attempt) => sum + attempt.durationMs, 0) /
+    MS_PER_SECOND;
+  const cost =
+    costs.length === 0
+      ? ""
+      : `, $${costs.reduce((sum, value) => sum + value, 0).toFixed(COST_DECIMALS)}`;
+  return [
+    "",
+    "## Retried runs",
+    "",
+    `${String(retried.length)} of ${String(evaluation.records.length)} runs were retried. The ${String(attempts.length)} failed attempts took ${seconds.toFixed(1)} s${cost} in total, not counted in the table.`,
+  ];
+}
 
 /**
  * Lists the pairs of harness and case that were not run.
@@ -113,6 +195,8 @@ function stoppedSection(evaluation: Evaluation): string[] {
  * @returns The sections that apply, in that order; nothing when none does.
  */
 export const noteSections = (evaluation: Evaluation): string[] => [
+  ...partialSection(evaluation),
+  ...retriedSection(evaluation),
   ...skippedSection(evaluation),
   ...limitsSection(evaluation),
   ...stoppedSection(evaluation),

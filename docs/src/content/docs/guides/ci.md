@@ -33,9 +33,9 @@ skill-evals run --a main --b . --reps 5 --jobs 4 --max-cost 20 --max-duration 90
 ```
 
 - `--max-cost <usd>` (config key `maxCost`) takes a positive number. The command sums what its own attempts cost: the agent, the judge and the decision model. Runs that an earlier command made and `--resume` reused are not counted.
-- `--max-duration <min>` (config key `maxDuration`) takes a positive number of minutes. Fractions are allowed: `--max-duration 0.5` is 30 seconds.
+- `--max-duration <min>` (config key `maxDuration`) takes a positive number of minutes, counted from the start of the command, before the subjects are exported. Fractions are allowed: `--max-duration 0.5` is 30 seconds.
 
-Both are checked before each run starts and before each retry. When the summed cost is at or above the limit, or the elapsed time is, no new run starts. The runs already in flight finish, but their judged checks and decision checks are not asked: those checks get no score with the reason `skipped: budget reached` (or `skipped: duration reached`). Command checks and the other checks of such a run still run. A run with a skipped check is invalid and its record has `skippedGraders: true`:
+Both are checked before each run starts and before each retry. When the summed cost is at or above the limit, or the elapsed time is, no new run starts. The runs already in flight finish, but their judged checks and decision checks are not asked: those checks get no score with the reason `skipped: budget reached` (or `skipped: duration reached`). Command checks and the other checks of such a run still run. A run is also treated as in flight at the breach when its own agent cost, added to what the command has spent, reaches the limit before its judge starts. A run with a skipped check is invalid and its record has `skippedGraders: true`:
 
 ```text
 {
@@ -48,7 +48,7 @@ Both are checked before each run starts and before each retry. When the summed c
 }
 ```
 
-The command then writes `results.json` with `"partial": { "reason": "budget" }` (or `"duration"`), prints the report, and exits 4. Continue it with `--resume <dir>`; a run with `skippedGraders` is repeated in full, because only a valid record is reused. A later command, `rejudge`, will score such a run without repeating the agent, and will be the cheap way to finish it.
+The command then writes `results.json` with `"partial": { "reason": "budget" }` (or `"duration"`) and `notRun`, the list of the runs that were never started or had their graders skipped (`{ "harness", "caseId", "subject", "rep" }` each). It prints the report, which has a "Stopped early" section: the limit, "K of N runs did not run; scores cover finished runs only" for each harness and subject, and a note when the two subjects of a comparison finished different numbers of runs. It exits 4. A stopped command did not succeed, whatever its scores say. Continue it with `--resume <dir>`; a run with `skippedGraders` is repeated in full, because only a valid record is reused. A later command, `rejudge`, will score such a run without repeating the agent, and will be the cheap way to finish it.
 
 `--max-cost` is a usage error (exit 2, before any run) when it cannot count the whole command:
 
@@ -56,7 +56,7 @@ The command then writes `results.json` with `"partial": { "reason": "budget" }` 
 - the judge cannot report one: the judge API (`--judge-api`) reports no cost, and neither does a judge harness that reports none;
 - a case has a decision check, which reports no cost.
 
-`--max-duration` has no such condition. A harness that reports a cost can still return none for a run, for example a run that was stopped at its time limit. The command warns once, `3 runs reported no cost; the budget counts only reported costs`, and counts only what was reported.
+`--max-duration` has no such condition. A harness that reports a cost can still return none for a run, for example a run that was stopped at its time limit. The same goes for a judge reply that states no cost: the budget sums replies one by one, so the others still count. The command warns once, `3 costs were not reported (agent attempts and judge replies); the budget counts only reported costs`, and counts only what was reported.
 
 While a command runs, each line on standard error ends with its progress, `[n/N] $<spent> ETA <time>`:
 
@@ -64,21 +64,21 @@ While a command runs, each line on standard error ends with its progress, `[n/N]
 claude-code plain-words b1: score 0.86 [7/60] $1.2400 ETA 18:30
 ```
 
-`n` counts finished runs, reused ones included, and `N` is the whole plan. `$<spent>` is what this command has spent, or `$?` until a run has reported a cost. `ETA` is the runs left times the median wall time of the runs this command has finished, divided by `--jobs`, as `mm:ss` (`h:mm:ss` from one hour on). It reads `--:--` until a run has finished.
+`n` counts finished runs, reused ones included, and `N` is the whole plan. `$<spent>` is what this command has spent, `≥$<spent>` when some cost was not reported, or `$?` until a cost has been reported. `ETA` is the runs left times the median wall time of the runs this command has finished, divided by `--jobs`, as `mm:ss` (`h:mm:ss` from one hour on). It reads `--:--` until a run has finished.
 
 ## Retry what the infrastructure broke
 
 `--retries <n>` (config key `retries`, a non-negative integer, default 0) makes a run again, at most `n` more times, when it failed for a reason that is not the agent's:
 
-| Reason                      | What it is                                                                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| harness crash               | The harness exited non-zero, or died of a signal, and its stream has no final event.                                         |
-| rate limit                  | The adapter's `isRateLimit` says the run's error is one. A rate-limited run waits 30 seconds times the attempt number first. |
-| timeout before first output | The time limit stopped a harness that had written nothing.                                                                   |
+| Reason                      | What it is                                                                                                                                               |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| harness crash               | The harness exited non-zero, or died of a signal, and its stream has no final event. A start that failed with `EAGAIN`, `EMFILE` or `ENFILE` counts too. |
+| rate limit                  | The adapter's `isRateLimit` says the run's error is one. A rate-limited run waits 30 seconds times the attempt number first.                             |
+| timeout before first output | The time limit stopped a harness that had written nothing.                                                                                               |
 
-A crash and a timeout are tried again at once. A setup failure, a precondition, an isolation breach, any other invalid run, and a low score are never retried: they are about the case or the agent, and a second try would hide them.
+A crash and a timeout are tried again at once. A setup failure, a precondition, a fault of the runner's own turn counter, a run that loaded outside the subject or did not load it (an isolation breach), any other invalid run, and a low score are never retried: they are about the case or the agent, and a second try would hide them.
 
-The record of the last attempt is the run's record. Its `attempts` lists the error of each earlier attempt, and in `results.jsonl` its `attempt` is its own number. The file has the last attempt's line only:
+The record of the last attempt is the run's record. Its `attempts` lists the error, the cost (`null` when none was reported) and the duration of each earlier attempt, and in `results.jsonl` its `attempt` is its own number. The file has the last attempt's line only:
 
 ```text
 {
@@ -89,15 +89,15 @@ The record of the last attempt is the run's record. Its `attempts` lists the err
 }
 ```
 
-Every attempt is paid for: its cost counts against `--max-cost`, and a retry is not started once a limit is reached.
+Every attempt is paid for: its cost counts against `--max-cost`, and a retry is not started once a limit is reached, before or after a rate-limit wait. The report has a "Retried runs" section with how many runs were retried and what the failed attempts took; their cost is not in the table.
 
-The patterns that `isRateLimit` uses are in `src/harnesses/rate-limit.ts` (a rate limit, `429`, `529`, "too many requests", "overloaded"), and every adapter uses the same ones. They come from the providers' documented errors and are not verified against real runs of any harness, so check the first rate-limited run of yours: if its error is not retried, the pattern does not match its wording.
+The patterns that `isRateLimit` uses are in `src/harnesses/rate-limit.ts` and match provider-shaped text only: `429 Too Many Requests`, `status: 429`, `HTTP 429`, `rate_limit_error`, `overloaded_error`, `rate limit reached` or `exceeded`. A bare `429` does not match, because a stack position such as `cli.js:429:17` has one. Every adapter uses the same ones. They come from the providers' documented errors and are not verified against real runs of any harness, so check the first rate-limited run of yours: if its error is not retried, the pattern does not match its wording.
 
 ## Interrupts
 
 SIGINT (Ctrl-C) and SIGTERM, which most CI systems send to cancel a job, end the command cleanly:
 
-1. The harness processes that are running are killed. Nothing is recorded for them.
+1. The process group of each harness that is running is killed. Nothing is recorded for them. A process that left the group with `setsid` can survive; the tool does not chase it.
 2. `results.json` is written with the finished runs and `"partial": { "reason": "interrupted" }`.
 3. The lock on the output directory is released.
 4. The command exits 130.

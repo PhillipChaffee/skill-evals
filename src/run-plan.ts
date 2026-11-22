@@ -63,10 +63,11 @@ export interface RunPlan {
   /** What the judge answered before, in this output directory; none for no cache. */
   cache?: Cache | undefined;
   /**
-   * Tells whether a cost or time limit of the command is reached now. When it is, the run's judged and decision checks
-   * are not asked: they get no score, the run is invalid and carries `skippedGraders`. Absent: never.
+   * Tells whether a cost or time limit of the command is reached now, counting the agent's cost of this run, which the
+   * gate does not have yet, as `pendingUsd`. When it is, the run's judged and decision checks are not asked: they get no
+   * score, the run is invalid and carries `skippedGraders`. Absent: never.
    */
-  breached?: (() => StopReason | null) | undefined;
+  breached?: ((pendingUsd: number) => StopReason | null) | undefined;
 }
 
 /**

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
-import { expect, test, vi } from "vitest";
+import { expect, onTestFinished, test, vi } from "vitest";
 import { exec, killRunning } from "./exec.js";
 import { onDispose, onInterrupt } from "./scope.js";
 import { resumeArgs, scoreArgs, scriptedCase } from "./testing/budget.js";
@@ -47,7 +47,8 @@ function plant(box: ReturnType<typeof sandbox>): void {
   scriptedCase(box, "charlie");
 }
 
-test(
+// Type stripping, which the child needs to run the sources, is on by default from Node 22.18.
+test.skipIf(!process.features.typescript)(
   "SIGINT writes the partial results, releases the lock, exits 130, and a resume completes the suite",
   async () => {
     const box = sandbox();
@@ -62,6 +63,10 @@ test(
       ],
       { cwd: box.root, env: box.env, stdio: ["ignore", "pipe", "pipe"] },
     );
+    // A child must not outlive a failed test.
+    onTestFinished(() => {
+      child.kill("SIGKILL");
+    });
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
@@ -119,7 +124,10 @@ test(
     try {
       const running = box.cli(scoreArgs(box, "results", "--jobs", "1"));
       await until(
-        () => linesIn(out).length === 1 && hanging(box),
+        () =>
+          fs.existsSync(path.join(out, "results.jsonl")) &&
+          linesIn(out).length === 1 &&
+          hanging(box),
         "bravo to hang",
       );
       process.emit("SIGINT");

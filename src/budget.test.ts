@@ -135,10 +135,14 @@ test("a run in flight at the breach skips its judged checks and is invalid, with
 test("a time limit skips the graders of a run in flight too", async () => {
   const box = sandbox();
   box.write("fake/judge/replies.json", ['{"score": 1, "reason": "yes"}']);
+  // The limit, 0.6 s, falls inside the run's one second of work, with a margin on both sides.
   scriptedCase(box, "slow", {
+    before: [
+      { call: { name: "Bash", input: { command: "sleep 1" }, exec: true } },
+    ],
     checks: [{ type: "judge", rubric: "Says done." }],
   });
-  const ran = await box.cli(scoreArgs(box, RESULTS, MAX_DURATION, "0.0002"));
+  const ran = await box.cli(scoreArgs(box, RESULTS, MAX_DURATION, "0.01"));
   expect(ran.status, ran.stderr).toBe(PARTIAL);
   const [record] = readResults(path.join(box.root, RESULTS)).records;
   expect(record?.checks[1]?.reason).toBe("skipped: duration reached");
@@ -183,12 +187,12 @@ test("a budget on a harness that sometimes reports no cost warns once", async ()
   expect(ran.status, ran.stderr).toBe(0);
   const warnings = ran.stderr
     .split("\n")
-    .filter((line) => line.includes("reported no cost"));
+    .filter((line) => line.includes("not reported"));
   expect(warnings).toEqual([
-    "skill-evals: warning: 2 runs reported no cost; the budget counts only reported costs",
+    "skill-evals: warning: 2 costs were not reported (agent attempts and judge replies); the budget counts only reported costs",
   ]);
   const none = await box.cli(scoreArgs(box, "second"));
-  expect(none.stderr).not.toContain("reported no cost");
+  expect(none.stderr).not.toContain("not reported");
 });
 
 test("the progress line ends with [n/N], the spend and the time left", async () => {
