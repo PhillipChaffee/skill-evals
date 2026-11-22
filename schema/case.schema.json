@@ -394,7 +394,7 @@
               },
               "dispatches": {
                 "title": "dispatches",
-                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                 "type": "string",
                 "minLength": 1
               }
@@ -1490,7 +1490,7 @@
         },
         "dispatches": {
           "title": "dispatches",
-          "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+          "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
           "type": "string",
           "minLength": 1
         },
@@ -1629,7 +1629,7 @@
         },
         "dispatches": {
           "title": "dispatches",
-          "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+          "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
           "type": "string",
           "minLength": 1
         },
@@ -1753,7 +1753,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             }
@@ -1850,7 +1850,7 @@
               },
               "dispatches": {
                 "title": "dispatches",
-                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                 "type": "string",
                 "minLength": 1
               }
@@ -1886,7 +1886,7 @@
     },
     "check-agent_dispatched": {
       "title": "agent_dispatched",
-      "description": "The number of dispatches that start the agent is from `min` to `max`, and each one's brief fits `briefMatches` and its model fits `modelMatches`, where given. A dispatch starts the agent when its type, normalized, is the `agent` (`matched by type`). A dispatch of no type, or of `general-purpose`, starts it when its brief holds a line `name: <agent>` anywhere, or the agent name as a whole word in the first `briefWindow` (default 400) characters (`matched by inlined definition`); the bare-name rule does not read meaning, so a negated mention such as `do not act like the research-synthesizer` also counts; a dispatch with a type of its own is judged by the type alone. The brief is the dispatch's `prompt` text, then its `description`. A dispatch that carries no model does not match `modelMatches`, and the reason says so. `min` defaults to 1, and to 0 when `max` is 0. Needs a harness with `subagents`.",
+      "description": "The number of dispatches that start the agent is from `min` to `max`, and each one's brief fits `briefMatches` and its model fits `modelMatches`, where given. A dispatch starts the agent when its type, normalized, is the `agent` (`matched by type`). A dispatch of no type, or of `general-purpose`, starts it when the first line `name: <x>` anywhere in its brief names the agent (that line alone decides: the dispatch is then only <x>), or, when the brief has no `name:` line, when the agent name is a whole word in the first `briefWindow` (default 400) characters (`matched by inlined definition`); the bare-name rule does not read meaning, so a negated mention such as `do not act like the research-synthesizer` also counts; a dispatch with a type of its own is judged by the type alone. The brief is the dispatch's `prompt` text, then its `description`. A dispatch that carries no model does not match `modelMatches`, and the reason says so. `min` defaults to 1, and to 0 when `max` is 0. Needs a harness with `subagents`.",
       "type": "object",
       "required": ["type", "agent"],
       "properties": {
@@ -1931,7 +1931,7 @@
         },
         "briefWindow": {
           "title": "briefWindow",
-          "description": "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. A `name: <agent>` line counts anywhere in the brief. Default: 400.",
+          "description": "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one. Default: 400.",
           "type": "integer",
           "minimum": 1
         },
@@ -2055,7 +2055,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             },
@@ -2155,7 +2155,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             },
@@ -2258,7 +2258,7 @@
               },
               "dispatches": {
                 "title": "dispatches",
-                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                 "type": "string",
                 "minLength": 1
               }
@@ -2424,7 +2424,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -2523,7 +2523,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -2623,7 +2623,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -2797,7 +2797,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -2896,7 +2896,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -2996,7 +2996,7 @@
                     },
                     "dispatches": {
                       "title": "dispatches",
-                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+                      "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
                       "type": "string",
                       "minLength": 1
                     }
@@ -3143,7 +3143,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             }
@@ -3289,7 +3289,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             }
@@ -3441,7 +3441,7 @@
             },
             "dispatches": {
               "title": "dispatches",
-              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+              "description": "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
               "type": "string",
               "minLength": 1
             }

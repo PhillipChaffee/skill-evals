@@ -49,7 +49,7 @@
       {
         "agent": {
           "type": "general-purpose",
-          "prompt": "---\nname: research-synthesizer\n---\nCombine the two reports into one recommendation.",
+          "prompt": "Merge the researcher outputs into one recommendation.\n\n---\nname: research-synthesizer\n---\nYou combine reports.",
           "steps": [
             {
               "text": "Combined."

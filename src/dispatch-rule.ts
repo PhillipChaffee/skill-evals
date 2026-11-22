@@ -2,6 +2,7 @@ import { GENERIC_AGENT, normalizeAgent } from "./agents.js";
 import type { ToolCall } from "./harnesses/shared.js";
 
 export const DEFAULT_WINDOW = 400;
+const NAME_LINE = /^\s*name:\s*["']?([^\s"']+)["']?\s*$/m;
 const SPECIAL = /[.*+?^${}()|[\]\\]/g;
 
 /** How a dispatch was found to start the agent. */
@@ -33,8 +34,8 @@ export const typeOf = (call: ToolCall): string =>
  * @param agent - The agent's normalized name.
  * @param window - How far into the brief the bare name counts.
  * @returns `type` when the dispatch's type is the agent. Only for a dispatch of no type or the generic one:
- *   `inlined definition` when a line `name: <agent>` is anywhere in the brief, or the name is a whole word in the first
- *   `window` characters of it; otherwise null.
+ *   `inlined definition` when the first line `name: <x>` anywhere in the brief names the agent; with no such line, when
+ *   the name is a whole word in the first `window` characters of it; otherwise null.
  */
 export function ruleOf(
   call: ToolCall,
@@ -45,10 +46,12 @@ export function ruleOf(
   if (type === agent) return "type";
   if (type !== "" && type !== GENERIC_AGENT) return null;
   const brief = briefOf(call);
+  const named = NAME_LINE.exec(brief)?.[1];
+  // A `name:` line settles it: the first one decides, and the bare name is not looked for.
+  if (named !== undefined) {
+    return normalizeAgent(named) === agent ? "inlined definition" : null;
+  }
   const name = agent.replace(SPECIAL, "\\$&");
-  const alone = `(?<![\\w-])${name}(?![\\w-])`;
-  const line = new RegExp(`^\\s*name:\\s*["']?${name}["']?\\s*$`, "m");
-  return line.test(brief) || new RegExp(alone).test(brief.slice(0, window))
-    ? "inlined definition"
-    : null;
+  const alone = new RegExp(`(?<![\\w-])${name}(?![\\w-])`);
+  return alone.test(brief.slice(0, window)) ? "inlined definition" : null;
 }

@@ -33,7 +33,7 @@ export interface ToolMatcher {
   /**
    * An agent name: the call must be a `subagent` call that starts that agent, by the rule of `agent_dispatched`: its
    * type, with any plugin prefix dropped, is the name, or, for a dispatch of no type or `general-purpose`, its brief
-   * has a line `name: <agent>` or holds the name as a whole word in its first 400 characters. Needs `subagents`.
+   * has a first line `name: <agent>`, or, with no `name:` line, holds the name as a whole word in its first 400 characters. Needs `subagents`.
    */
   dispatches?: string;
 }

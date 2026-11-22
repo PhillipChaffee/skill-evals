@@ -49,7 +49,7 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   dispatches: {
     type: "text",
     meaning:
-      "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+      "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch the first `name: <agent>` line in its brief, or with no such line the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
   },
   briefMatches: {
     type: "regex",
@@ -59,7 +59,7 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   briefWindow: {
     type: "int",
     meaning:
-      "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. A `name: <agent>` line counts anywhere in the brief. Default: 400.",
+      "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one. Default: 400.",
   },
   modelMatches: {
     type: "regex",

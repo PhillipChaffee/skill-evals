@@ -10,6 +10,7 @@ import { plantCase } from "./testing/plant.js";
 import { sandbox } from "./testing/sandbox.js";
 import { CLAUDE_CODE, check, harnessOf } from "./testing/attribution.js";
 
+const SYNTHESIZER = "research-synthesizer";
 const GENERIC = "general-purpose";
 const INLINED = "matched by inlined definition";
 const NO_DISPATCH: Dispatch = { type: null, model: null, effort: null };
@@ -234,7 +235,7 @@ test("agent_dispatched rejects a window that is no positive whole number, and sh
 test("the bare-name rule does not read meaning: a negated mention counts", () => {
   const given = {
     type: "agent_dispatched",
-    agent: "research-synthesizer",
+    agent: SYNTHESIZER,
   } as const;
   const negated = dispatched({
     subagent_type: GENERIC,
@@ -305,4 +306,20 @@ test("dispatches needs subagents, in a check and in a matcher, and shows in desc
   expect(describeCheck({ ...loaded.checks[0], weight: 1 } as never)).toContain(
     "dispatches planner",
   );
+});
+
+test("a name line settles which agent an inlined dispatch is", () => {
+  const brief = dispatched({
+    subagent_type: GENERIC,
+    prompt:
+      "Merge the researcher outputs.\nname: research-synthesizer\nname: researcher\n",
+  });
+  const asked = (agent: string) =>
+    run({ type: "agent_dispatched", agent }, brief).score;
+  expect(asked(SYNTHESIZER)).toBe(1);
+  expect(asked("researcher")).toBe(0);
+  const matcher = (dispatches: string) =>
+    run({ type: "tool_called", dispatches }, brief).score;
+  expect(matcher(SYNTHESIZER)).toBe(1);
+  expect(matcher("researcher")).toBe(0);
 });
