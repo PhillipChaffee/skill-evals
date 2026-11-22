@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { median } from "./commands/plan-estimate.js";
 import { plugin } from "./testing/plant.js";
-import { sandbox } from "./testing/sandbox.js";
+import { gitRepo, sandbox } from "./testing/sandbox.js";
 import { SUMMARY, plantSuite, startsOf } from "./testing/suite.js";
 
 const ids = ["alpha", "bravo", "charlie"];
@@ -19,7 +19,9 @@ test("plan prints the run count and spends nothing", async () => {
   ]);
   expect(ran.status, ran.stderr).toBe(0);
   expect(ran.stdout).toContain("Runs: 6");
-  expect(ran.stdout).toContain("- claude-code: 3 cases x 1 subjects = 6 runs");
+  expect(ran.stdout).toContain(
+    "- claude-code: 3 cases x 1 subjects x 2 reps = 6 runs",
+  );
   expect(ran.stdout).toContain("Subjects (1): subject = none");
   expect(ran.stdout).not.toContain("Estimate");
   expect(startsOf(box)).toBe(0);
@@ -186,9 +188,12 @@ test("plan estimates cost and duration from the medians of an earlier command", 
   ]);
   expect(ran.status, ran.stderr).toBe(0);
   expect(ran.stdout).toContain("Runs: 12");
-  // Three of the four cases ran before: 9 of the 12 planned runs are covered, each at its median of $0.50.
-  expect(ran.stdout).toContain("estimate covers 9 of 12 runs");
-  expect(ran.stdout).toContain("- cost: $4.50");
+  // Reps 1 and 2 of the three old cases are reused: 6 of 12. Of the 6 that are left, the third rep of each old case is
+  // covered by its median of $0.50, and the new case is not.
+  expect(ran.stdout).toContain("6 of 12 runs would be reused");
+  expect(ran.stdout).toContain("for the remaining 6");
+  expect(ran.stdout).toContain("estimate covers 3 of 6 runs");
+  expect(ran.stdout).toContain("- cost: $1.50 (from 3 of 6 runs)");
   expect(ran.stdout).toMatch(/- duration: \d+:\d\d \(mm:ss\) at --jobs 2/);
   expect(startsOf(box)).toBe(started);
 });
@@ -203,18 +208,21 @@ test("plan reads --out too, and falls back on results.json", async () => {
     "--cases",
     cases,
     "--reps",
-    "1",
+    "3",
     "--out",
     out,
   ];
   const first = await box.cli(args);
+  expect(first.stdout).toContain("6 of 9 runs would be reused");
   expect(first.stdout).toContain("estimate covers 3 of 3 runs");
   expect(first.stdout).toContain(
     "- cost: unknown, no earlier run reported a cost",
   );
   fs.rmSync(path.join(out, "results.jsonl"));
   const second = await box.cli(args);
-  expect(second.stdout).toContain("estimate covers 3 of 3 runs");
+  // Without results.jsonl no key can be compared, so nothing counts as reused.
+  expect(second.stdout).not.toContain("would be reused");
+  expect(second.stdout).toContain("estimate covers 9 of 9 runs");
   fs.writeFileSync(path.join(out, RESULTS), "{not json");
   const broken = await box.cli(args);
   expect(broken.status).toBe(2);
@@ -250,6 +258,11 @@ test("the median of an even count is the mean of the two middle values", () => {
 test("plan names the project as the default subject, and main as the baseline of a comparison", async () => {
   const box = sandbox();
   const cases = plantSuite(box, ["alpha"]);
+  box.write("one/SKILL.md", "a skill\n");
+  const git = gitRepo(box.root);
+  git("add", "one");
+  git("commit", "-q", "-m", "skill");
+  git("branch", "main");
   const alone = await box.cli(["plan", "--cases", cases, "--reps", "1"]);
   expect(alone.stdout).toContain(`Subjects (1): subject = ${box.root}`);
   const pair = await box.cli([

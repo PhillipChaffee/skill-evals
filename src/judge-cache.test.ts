@@ -55,12 +55,13 @@ test("a normal run writes the cache and never reads it", async () => {
   expect(linesOf(out)).toHaveLength(3);
 });
 
-test("with the cache on, two reps with the same answer ask once", async () => {
+test("with the cache on, two reps are two slots and each asks", async () => {
   const { evaluated, received } = await apiCase({ rubric: RUBRIC }, [
+    reply(SCORE_HALF),
     reply(SCORE_HALF),
   ]);
   await evaluated({ reps: 2, useCache: true });
-  expect(received).toHaveLength(1);
+  expect(received).toHaveLength(2);
 });
 
 test("votes are independent: each vote is cached on its own", async () => {

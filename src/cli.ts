@@ -39,7 +39,7 @@ async function suite(
   project: Project,
 ): Promise<number> {
   const { dryRun, ...given } = options;
-  if (dryRun) return printPlan(given, project);
+  if (dryRun) return printPlan({ ...given, cwd: project.cwd });
   const onRun = (record: RunRecord, info: { reused: boolean }): void => {
     const outcome =
       invalidReason(record) ??
@@ -159,19 +159,7 @@ export const COMMANDS: Record<string, Command> = {
       "a",
       "b",
       "subject",
-      "harness",
-      "case",
-      "not-case",
-      "tag",
-      "tag-all",
-      "not-tag",
-      "heldout",
-      "cases",
-      "reps",
-      "jobs",
-      "lenient",
-      "out",
-      "resume",
+      ...SUITE_FLAGS.filter((flag) => flag !== "dry-run"),
     ],
   },
   check: {

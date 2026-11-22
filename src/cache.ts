@@ -103,6 +103,20 @@ export function openCache(outDir: string, read = false): Cache {
 }
 
 /**
+ * Limits a cache to one slot of a plan, so that an answer is served only to the run that earned it. Two reps of one
+ * case are two slots, and their judge noise stays independent.
+ * @param cache - The cache of the output directory.
+ * @param slot - What names the run: its key and its subject's label.
+ * @returns A cache whose keys are the slot and the question.
+ */
+export const scopedCache = (cache: Cache, slot: string): Cache => ({
+  get: (key) => cache.get(`${slot}|${key}`),
+  set: (key, value) => {
+    cache.set(`${slot}|${key}`, value);
+  },
+});
+
+/**
  * Lets the judge use the cache.
  * @param cache - Where the answers are kept.
  * @param fixed - What the key holds besides the prompt and the vote.

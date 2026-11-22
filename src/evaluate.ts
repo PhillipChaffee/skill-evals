@@ -1,34 +1,22 @@
 import type { CaseMeta } from "./case-meta.js";
 import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
-import type { DecisionService } from "./decision.js";
-import {
-  casesOf,
-  decisionFor,
-  labelled,
-  requireJobs,
-  requireUsable,
-} from "./evaluate-setup.js";
-import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
+import { basePlan, prepare, resolveAll } from "./prepare.js";
+import type { Prepared } from "./prepare.js";
+import { lockDir } from "./lock.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { Located } from "./harnesses/index.js";
-import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
-import type { Config } from "./project.js";
-import { findProject, withConfig } from "./project.js";
 import type { RunRecord } from "./run.js";
-import { invalidReason, modesOf } from "./run.js";
-import { resumeDir } from "./resume.js";
+import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
-import { openStore } from "./store.js";
+import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
-import { outputDir, requireSupportedPlatform } from "./scope.js";
+import { outputDir } from "./scope.js";
 import type { Subject, SubjectSummary } from "./subject.js";
-import { changedAtSource, resolveSubject } from "./subject.js";
-import { exclusionsOf } from "./exclusions.js";
+import { changedAtSource } from "./subject.js";
 import type { Partition } from "./applicability.js";
-import { partitionApplicable } from "./applicability.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions extends SelectionOptions {
@@ -120,6 +108,11 @@ export interface Results {
   invalid: string[];
   /** The paths of a subject directory that changed while the command ran, each as the user would type it. */
   sourceChanged: string[];
+  /**
+   * Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is
+   * "running". The last write has null.
+   */
+  partial: { reason: "running" } | null;
   records: RunRecord[];
 }
 
@@ -147,6 +140,7 @@ interface Finished {
   parts: Partition;
   records: RunRecord[];
   sourceChanged: string[];
+  partial: Results["partial"];
 }
 
 /**
@@ -200,70 +194,65 @@ function summarize(finished: Finished): Results {
       return reason === null ? [] : [`${run}: ${reason}`];
     }),
     sourceChanged: finished.sourceChanged,
+    partial: finished.partial,
     records,
   };
 }
 
-/** What `evaluate` settles before it resolves any subject. */
-interface Context extends Omit<
-  Finished,
-  "subjects" | "records" | "sourceChanged"
-> {
-  options: Config & Pick<EvaluateOptions, "outDir" | "useCache">;
-  decision: DecisionService | null;
-  jobs: number;
-  /** The directory of the earlier command to continue; undefined for a fresh run. */
-  resumed: string | undefined;
-  cwd: string;
-  onRun: EvaluateOptions["onRun"];
-}
-
 /**
  * Makes the runs, writing each record as its run ends, and sums them up.
- * @param context - What was settled before the subjects were resolved.
+ * @param prepared - What `prepare` returned.
  * @param subjects - The subjects, resolved.
+ * @param onRun - The hook of the caller.
  * @returns The results and the output directory.
  */
 async function runSuite(
-  context: Context,
+  prepared: Prepared,
   subjects: Subject[],
+  onRun: EvaluateOptions["onRun"],
 ): Promise<{ results: Results; outDir: string }> {
-  const { options, resumed, selection, parts, judgeHarness } = context;
+  const { context } = prepared;
+  const { options, resumed } = context;
   const outDir = resumed ?? outputDir(options.outDir, context.cwd);
-  const store = openStore(outDir, resumed !== undefined);
-  const finished = { ...context, subjects };
-  const records = await runAll({
-    chosen: selection.chosen,
-    judgeOf: (located) => ({
-      ...(judgeHarness ?? located),
-      model: context.judgeModel,
-    }),
-    decision: context.decision,
-    decisionModel: options.decisionModel,
-    judgeApi: context.judgeApi,
-    pass: options.env,
-    applied: parts.ran,
-    reps: context.reps,
-    subjects,
-    model: context.model,
-    ...modesOf(options),
-    useCache: resumed !== undefined || (options.useCache ?? false),
-    outDir,
-    jobs: context.jobs,
-    store,
-    reused: resumed === undefined ? new Map<string, RunRecord>() : store.load(),
-    flush: (records) => {
-      store.flush(summarize({ ...finished, records, sourceChanged: [] }));
-    },
-    onRun: context.onRun,
-  });
-  const results = summarize({
-    ...finished,
-    records,
-    sourceChanged: changedAtSource(subjects),
-  });
-  store.flush(results);
-  return { results, outDir };
+  if (resumed === undefined) requireFresh(outDir);
+  else if (context.model === undefined) {
+    console.error(
+      "skill-evals: warning: --resume without --model: reused runs may come from a different default model",
+    );
+  }
+  const release = lockDir(outDir);
+  try {
+    const store = openStore(outDir, resumed !== undefined);
+    const finished = { ...context, subjects };
+    const records = await runAll({
+      ...basePlan(context, subjects, outDir),
+      useCache: resumed !== undefined || (options.useCache ?? false),
+      store,
+      reused:
+        resumed === undefined ? new Map<string, RunRecord>() : store.load(),
+      flush: (records) => {
+        store.flush(
+          summarize({
+            ...finished,
+            records,
+            sourceChanged: [],
+            partial: { reason: "running" },
+          }),
+        );
+      },
+      onRun,
+    });
+    const results = summarize({
+      ...finished,
+      records,
+      sourceChanged: changedAtSource(subjects),
+      partial: null,
+    });
+    store.flush(results);
+    return { results, outDir };
+  } finally {
+    release();
+  }
 }
 
 /**
@@ -276,45 +265,14 @@ async function runSuite(
  * @throws {UsageError} For a wrong option, case file, or config file, before any harness starts.
  */
 export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
-  const { cwd = process.cwd(), subjects: specs, onRun, ...rest } = given;
-  requireSupportedPlatform();
-  const pairs = labelled(specs);
-  const project = findProject(cwd);
-  const options = withConfig(project, rest);
-  const reps = requireUsable(options);
-  const jobs = requireJobs(options);
-  const resumed = resumeDir(options, cwd);
-  const selection = selectHarnesses(options.harness);
-  const judgeHarness = judgeHarnessOf(options);
-  if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
-  const cases = casesOf(options);
-  const { judgeApi, judgeModel } = judgeSetup(cases, options);
-  const context: Context = {
-    options,
-    decision: decisionFor(cases, options),
-    decisionModel: options.decisionModel,
-    selection,
-    judgeHarness,
-    judgeModel,
-    judgeApi,
-    model: options.model,
-    minScore: options.minScore,
-    reps,
-    jobs,
-    resumed,
-    cwd,
-    onRun,
-    cases,
-    parts: partitionApplicable(selection.chosen, cases),
-  };
+  const { onRun, ...rest } = given;
+  const prepared = prepare(rest);
   const subjects: Subject[] = [];
   try {
-    const scope = { ...project, left: exclusionsOf(options, cwd) };
-    for (const { label, spec } of pairs) {
-      subjects.push(resolveSubject(label, spec, scope));
-    }
-    const { results, outDir } = await runSuite(context, subjects);
-    return { ...results, cases, applied: context.parts.ran, outDir };
+    resolveAll(prepared, subjects);
+    const { results, outDir } = await runSuite(prepared, subjects, onRun);
+    const { cases, parts } = prepared.context;
+    return { ...results, cases, applied: parts.ran, outDir };
   } finally {
     for (const subject of subjects) subject.dispose();
   }

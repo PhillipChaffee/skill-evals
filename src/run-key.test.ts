@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, onTestFinished, test } from "vitest";
+import { expect, onTestFinished, test, vi } from "vitest";
 import { loadCases } from "./cases.js";
 import type { Case } from "./cases.js";
 import { caseHash, runKey, toolVersion } from "./run-key.js";
@@ -104,7 +104,7 @@ test("a run key changes with every part that decides the result, and with nothin
     runKey({ ...PLAN, caseDef, ...change });
   const base = keyOf();
   expect(keyOf()).toBe(base);
-  expect(keyOf({ pass: ["X"], outDir: "elsewhere" })).toBe(base);
+  expect(keyOf({ outDir: "elsewhere" })).toBe(base);
   const changed: Partial<RunPlan>[] = [
     { harness: harness("other") },
     { subject: { revision: "r2" } as RunPlan["subject"] },
@@ -118,6 +118,30 @@ test("a run key changes with every part that decides the result, and with nothin
     { decisionModel: "d" },
     { isolated: true },
     { lenient: true },
+    { pass: ["X"] },
+    { decisionUrl: "https://decide.example" },
+    {
+      judgeApi: {
+        kind: "anthropic",
+        model: "a",
+        url: "u1",
+      } as RunPlan["judgeApi"],
+    },
+    {
+      judgeApi: {
+        kind: "anthropic",
+        model: "a",
+        url: "u2",
+      } as RunPlan["judgeApi"],
+    },
+    {
+      judgeApi: {
+        kind: "anthropic",
+        model: "a",
+        url: "u1",
+        fallbacks: false,
+      } as RunPlan["judgeApi"],
+    },
   ];
   const keys = changed.map((change) => keyOf(change));
   expect(new Set([base, ...keys]).size).toBe(changed.length + 1);
@@ -131,6 +155,36 @@ test("a run key changes with every part that decides the result, and with nothin
   );
 });
 
+test("the passed variables count by name and by the hash of their value", () => {
+  const { load } = planted();
+  const caseDef = load();
+  const keyOf = (): string => runKey({ ...PLAN, caseDef, pass: ["KEY_VAR"] });
+  const unset = keyOf();
+  vi.stubEnv("KEY_VAR", "one");
+  const one = keyOf();
+  expect(keyOf()).toBe(one);
+  vi.stubEnv("KEY_VAR", "two");
+  expect(new Set([unset, one, keyOf()]).size).toBe(3);
+  vi.unstubAllEnvs();
+});
+
+test("a harness executable that changes in size or time or path changes the key", () => {
+  const { box, load } = planted();
+  const caseDef = load();
+  const bin = box.write("bin/harness", "one\n");
+  const keyOf = (path: string): string =>
+    runKey({ ...PLAN, caseDef, bin: path });
+  const first = keyOf(bin);
+  expect(keyOf(bin)).toBe(first);
+  box.write("bin/harness", "longer text\n");
+  const grown = keyOf(bin);
+  fs.utimesSync(bin, 1, 1);
+  const touched = keyOf(bin);
+  const moved = keyOf(box.write("bin/other", "longer text\n"));
+  expect(new Set([first, grown, touched, moved]).size).toBe(4);
+  expect(keyOf(path.join(box.root, "bin/missing"))).toMatch(/^[0-9a-f]{64}$/);
+});
+
 test("the tool version is the package version", () => {
   const { version } = JSON.parse(
     fs.readFileSync(path.join(import.meta.dirname, "../package.json"), "utf8"),
@@ -138,13 +192,17 @@ test("the tool version is the package version", () => {
   expect(toolVersion()).toBe(version);
 });
 
-test("the revision of a directory is the content hash of its export, of a ref the git tree, of none none", () => {
+test("the revision is the content hash of the export for a directory and a ref alike, and none for none", () => {
   const box = sandbox();
   box.write("one/SKILL.md", "first\n");
+  box.write("notes/extra.txt", "extra\n");
   const git = gitRepo(box.root);
   const project = { root: box.root, isGitRepo: true, cwd: box.root };
-  const revisionOf = (spec: string): string => {
-    const subject = resolveSubject("subject", spec, project);
+  const revisionOf = (spec: string, globs: string[] = []): string => {
+    const subject = resolveSubject("subject", spec, {
+      ...project,
+      left: { globs, cases: null, out: null },
+    });
     onTestFinished(subject.dispose);
     return subject.revision;
   };
@@ -153,7 +211,10 @@ test("the revision of a directory is the content hash of its export, of a ref th
   expect(revisionOf("none")).toBe("none");
   git("add", "-A");
   git("commit", "-q", "-m", "kit");
-  expect(revisionOf("HEAD")).toBe(git("rev-parse", "HEAD^{tree}"));
+  expect(revisionOf("HEAD")).toBe(dir);
+  // What the subject excludes is not part of what the agent gets, so it is not part of the revision.
+  expect(revisionOf("HEAD", ["notes/**"])).not.toBe(dir);
+  expect(revisionOf("HEAD", ["notes/**"])).toBe(revisionOf(".", ["notes/**"]));
   box.write("one/SKILL.md", "second\n");
   expect(revisionOf(".")).not.toBe(dir);
 });

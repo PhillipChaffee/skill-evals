@@ -57,12 +57,45 @@ export function toolVersion(): string {
 }
 
 /**
+ * Describes the executable of a harness, so that a self-update of the harness changes the key.
+ * @param bin - The path of the executable.
+ * @returns Its real path, size and modification time; null when it cannot be read.
+ */
+function binOf(
+  bin: string,
+): { realpath: string; size: number; mtimeMs: number } | null {
+  try {
+    const realpath = fs.realpathSync(bin);
+    const { size, mtimeMs } = fs.statSync(realpath);
+    return { realpath, size, mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Describes the variables that the config passes to the harness.
+ * @param names - The names in the config's `env`.
+ * @returns Each name, in order, with the sha256 of its value in this process; a variable that is not set hashes as unset.
+ */
+const passedEnv = (
+  names: string[] | undefined,
+): Record<string, string | null> =>
+  Object.fromEntries(
+    [...(names ?? [])].sort().map((name) => {
+      const value = process.env[name];
+      return [name, value === undefined ? null : sha256(value)];
+    }),
+  );
+
+/**
  * Names a run by everything that decides its result, so that a later command can tell whether a stored record is the
  * answer to the same question.
  * @param plan - The run: its case, subject, harness, model, rep and scoring settings.
- * @returns The sha256 of the canonical JSON of the case hash, the subject's revision, the harness, the model, the rep,
- *   the tool's version, and the scoring: the judge's harness, API and model, the decision model, `isolated` and
- *   `lenient`. Each of these changes what a run is or how it is scored.
+ * @returns The sha256 of the canonical JSON of the case hash, the subject's revision, the harness and its executable
+ *   (real path, size, modification time), the model, the rep, the tool's version (the package version, so a rebuilt
+ *   tool with the same version shares keys), the names and value hashes of the passed variables, and the scoring: the
+ *   judge's harness, API, URL, fallbacks and model, the decision model and URL, `isolated` and `lenient`. Each of these changes what a run is or how it is scored.
  */
 export function runKey(plan: RunPlan): string {
   const { judgeApi, judge } = plan;
@@ -74,9 +107,14 @@ export function runKey(plan: RunPlan): string {
       model: plan.model ?? null,
       rep: plan.rep,
       toolVersion: toolVersion(),
+      harnessBin: binOf(plan.bin),
+      env: passedEnv(plan.pass),
       scoring: {
         judgeHarness: judgeApi ? null : judge.harness.id,
         judgeApi: judgeApi?.kind ?? null,
+        judgeUrl: judgeApi?.url ?? null,
+        judgeFallbacks: judgeApi?.fallbacks ?? null,
+        decisionUrl: plan.decisionUrl ?? null,
         judgeModel: (judgeApi ?? judge).model ?? null,
         decisionModel: plan.decisionModel ?? null,
         isolated: plan.isolated ?? false,

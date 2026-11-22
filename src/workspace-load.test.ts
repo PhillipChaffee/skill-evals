@@ -60,6 +60,10 @@ test("a link in a fixture, the fixture directory or home that leaves its tree is
   const home = load(withHome, { home: "home" }, { "home/a": "x" });
   fs.symlinkSync("/etc", path.join(withHome.root, "cases/c/home/abs"));
   expect(home).toThrow(/home\/abs is a link to \/etc/);
+  const withGrader = sandbox();
+  const grader = load(withGrader, {}, { "grader/check.sh": "x" });
+  fs.symlinkSync("/etc", path.join(withGrader.root, "cases/c/grader/abs"));
+  expect(grader).toThrow(/grader\/abs is a link to \/etc/);
 });
 
 test("a home file at a login file path is a load error", () => {

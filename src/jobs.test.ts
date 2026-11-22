@@ -14,44 +14,56 @@ const ids = (count: number): string[] =>
     (_, index) => `c${String(index).padStart(2, "0")}`,
   );
 
-test("eight jobs finish a 20-case suite with records in plan order", async () => {
-  const box = sandbox();
-  const names = ids(20);
-  for (const [index, id] of names.entries()) {
-    writeCase(box, "suite", { id, checks: [SUMMARY] });
-    // Every run says how many runs were live when it ended, and the early cases take longest, so they end last.
-    play(box, {
-      name: id,
-      id,
-      steps: [
-        exec(
-          `mkdir -p out; echo summary > out/summary.txt; echo x >> ${box.root}/live; sleep 0.${String(9 - (index % 9))}; wc -l < ${box.root}/live >> ${box.root}/seen; echo y >> ${box.root}/done`,
-        ),
+test(
+  "eight jobs finish a 20-case suite with records in plan order",
+  { timeout: 60_000 },
+  async () => {
+    const box = sandbox();
+    const names = ids(20);
+    const [started, done, seen] = ["started", "done", "seen"].map((name) =>
+      path.join(box.root, name),
+    ) as [string, string, string];
+    fs.writeFileSync(done, "");
+    for (const [index, id] of names.entries()) {
+      writeCase(box, "suite", { id, checks: [SUMMARY] });
+      // Each run notes how many runs are in flight when it starts: those started and not yet done. The early cases
+      // take longest, so they end last.
+      play(box, {
+        name: id,
+        id,
+        steps: [
+          exec(
+            `mkdir -p out; echo summary > out/summary.txt; echo s >> ${started}; echo $(( $(wc -l < ${started}) - $(wc -l < ${done}) )) >> ${seen}; sleep 0.${String(9 - (index % 9))}; echo d >> ${done}`,
+          ),
+        ],
+      });
+    }
+    const out = path.join(box.root, "results");
+    const ran = await box.cli([
+      ...[
+        "score",
+        "--subject",
+        "none",
+        "--cases",
+        path.join(box.root, "suite"),
       ],
-    });
-  }
-  const out = path.join(box.root, "results");
-  const ran = await box.cli([
-    ...["score", "--subject", "none", "--cases", path.join(box.root, "suite")],
-    ...["--reps", "1", "--jobs", "8", "--out", out],
-  ]);
-  expect(ran.status, ran.stderr).toBe(0);
-  const { records } = readResults(out);
-  expect(records.map((record) => record.caseId)).toEqual(names);
-  expect(records.every((record) => record.score === 1)).toBe(true);
-  const live = fs
-    .readFileSync(path.join(box.root, "seen"), "utf8")
-    .trim()
-    .split("\n")
-    .map(Number);
-  // Runs overlapped, and no more than eight were in flight.
-  expect(Math.max(...live)).toBeGreaterThan(1);
-  expect(Math.max(...live)).toBeLessThanOrEqual(20);
-  const lines = ran.stderr.trim().split("\n");
-  expect(lines).toHaveLength(20);
-  expect(lines).not.toEqual([...lines].sort());
-  expect(linesIn(out)).toHaveLength(20);
-});
+      ...["--reps", "1", "--jobs", "8", "--out", out],
+    ]);
+    expect(ran.status, ran.stderr).toBe(0);
+    const { records } = readResults(out);
+    expect(records.map((record) => record.caseId)).toEqual(names);
+    expect(records.every((record) => record.score === 1)).toBe(true);
+    const flying = fs.readFileSync(seen, "utf8").trim().split("\n").map(Number);
+    expect(flying).toHaveLength(20);
+    // Runs overlapped, and never more than eight were in flight.
+    expect(Math.max(...flying)).toBeGreaterThan(1);
+    expect(Math.max(...flying)).toBeLessThanOrEqual(8);
+    const lines = ran.stderr.trim().split("\n");
+    expect(lines).toHaveLength(20);
+    expect(lines).not.toEqual([...lines].sort());
+    expect(linesIn(out)).toHaveLength(20);
+  },
+);
 
 test("each job has its own home and workspace", async () => {
   const box = sandbox();
@@ -104,11 +116,11 @@ test("jobs must be a positive integer, in the flag and in the config file", asyn
   expect(bad.status).toBe(2);
 });
 
-test("results.jsonl grows by one line per run and results.json is valid after each", async () => {
+test("results.jsonl grows by one line per run and results.json is valid whenever it exists", async () => {
   const box = sandbox();
   const cases = plantSuite(box, ids(4));
   const out = path.join(box.root, "results");
-  const seen: { lines: number; recorded: number; tmp: boolean }[] = [];
+  const seen: { lines: number; partial: unknown; tmp: boolean }[] = [];
   await asProcess({ env: box.env, cwd: box.root }, () =>
     evaluate({
       subjects: ["none"],
@@ -117,21 +129,26 @@ test("results.jsonl grows by one line per run and results.json is valid after ea
       jobs: 2,
       outDir: out,
       onRun: () => {
-        // `results.json` is parsed here: a half-written file would throw.
+        // `results.json` is parsed here: a half-written file would throw. It is written once at the start and then at
+        // most every ten seconds, so it need not hold this run yet.
         const results = JSON.parse(
           fs.readFileSync(path.join(out, "results.json"), "utf8"),
-        ) as { records: unknown[] };
+        ) as { partial: unknown };
         seen.push({
           lines: linesIn(out).length,
-          recorded: results.records.length,
+          partial: results.partial,
           tmp: fs.existsSync(path.join(out, "results.json.tmp")),
         });
       },
     }),
   );
-  expect(seen).toEqual(
-    [1, 2, 3, 4].map((n) => ({ lines: n, recorded: n, tmp: false })),
-  );
+  expect(seen.map(({ lines }) => lines)).toEqual([1, 2, 3, 4]);
+  expect(seen.every(({ tmp }) => !tmp)).toBe(true);
+  // Every snapshot taken while the command ran says so.
+  expect(seen.every(({ partial }) => partial !== undefined)).toBe(true);
+  const last = readResults(out);
+  expect(last.partial).toBeNull();
+  expect(last.records.map((record) => record.caseId)).toEqual(ids(4));
   for (const line of linesIn(out)) {
     expect(JSON.parse(line)).toMatchObject({
       attempt: 1,
@@ -140,10 +157,30 @@ test("results.jsonl grows by one line per run and results.json is valid after ea
   }
 });
 
-test("a fresh run starts an empty results.jsonl in a used directory", async () => {
+test("a fresh run into a directory that holds runs is a usage error, and removing results.jsonl allows it", async () => {
   const box = sandbox();
   const cases = plantSuite(box, ids(2));
   const out = path.join(box.root, "results");
+  const args = ["score", "--subject", "none", "--cases", cases, "--reps", "1"];
+  expect((await box.cli([...args, "--out", out])).status).toBe(0);
+  const again = await box.cli([...args, "--out", out], { KEEP_RUNS: "1" });
+  expect(again.status).toBe(2);
+  expect(again.stderr).toContain(
+    `${out} holds 2 runs of an earlier command; pass --resume ${out}, remove results.jsonl, or choose another --out`,
+  );
+  expect(linesIn(out)).toHaveLength(2);
+  // A directory with results.json from before and no results.jsonl is overwritten as it always was.
+  fs.rmSync(path.join(out, "results.jsonl"));
+  expect(
+    (await box.cli([...args, "--out", out], { KEEP_RUNS: "1" })).status,
+  ).toBe(0);
+});
+
+test("a second command on a directory in use is a usage error, and a dead holder's lock is taken over", async () => {
+  const box = sandbox();
+  const cases = plantSuite(box, ids(1));
+  const out = path.join(box.root, "results");
+  fs.mkdirSync(out);
   const args = [
     "score",
     "--subject",
@@ -155,9 +192,19 @@ test("a fresh run starts an empty results.jsonl in a used directory", async () =
     "--out",
     out,
   ];
-  await box.cli(args);
-  await box.cli(args);
-  expect(linesIn(out)).toHaveLength(2);
+  fs.writeFileSync(path.join(out, ".lock"), String(process.pid));
+  const busy = await box.cli(args);
+  expect(busy.status).toBe(2);
+  expect(busy.stderr).toContain(`is in use by process ${String(process.pid)}`);
+  // Process ids this large do not exist, and neither does text that is no id.
+  for (const stale of ["2147483646", "garbage"]) {
+    fs.writeFileSync(path.join(out, ".lock"), stale);
+    const taken = await box.cli(args);
+    expect(taken.status, taken.stderr).toBe(0);
+    expect(taken.stderr).toContain("took over the lock");
+    expect(fs.existsSync(path.join(out, ".lock"))).toBe(false);
+    fs.rmSync(path.join(out, "results.jsonl"));
+  }
 });
 
 test("a warning fires once for the command under --jobs", async () => {

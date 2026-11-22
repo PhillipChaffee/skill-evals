@@ -53,6 +53,8 @@ export interface RunPlan {
   decision: DecisionService | null;
   /** The id of the decision model, which a reused result must share; absent when none is set. */
   decisionModel?: string | undefined;
+  /** The base URL of the decision model's API, which a reused result must share; absent when none is set. */
+  decisionUrl?: string | undefined;
   /** Where the run's stream and final text are written. */
   outDir: string;
   /** Set, the judge asks the API and starts no harness process; `judge` is then not used. */

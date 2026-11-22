@@ -147,6 +147,10 @@ export async function evaluateCase(
   box: ReturnType<typeof sandbox>,
   options: EvaluateOptions,
 ) {
+  // A second evaluation into the same directory starts over, as a user who removed results.jsonl would.
+  if (options.outDir && !options.resume) {
+    fs.rmSync(path.join(options.outDir, "results.jsonl"), { force: true });
+  }
   const { value } = await asProcess(
     { env: { ...box.env, ANTHROPIC_API_KEY: API_KEY }, cwd: box.root },
     () => evaluate(options),

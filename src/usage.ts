@@ -117,7 +117,7 @@ export const FLAGS = {
     read: Number,
     value: "n",
     description:
-      "How many runs may be in flight at once. A positive integer. Each run has its own home, workspace and copy of the subject; the records are written in plan order whatever order the runs end in.",
+      "How many runs may be in flight at once. A positive integer. Each run has its own home, workspace and copy of the subject. results.json lists the records in plan order whatever order the runs end in; results.jsonl and the progress lines follow the order they end in.",
     default: "1",
   },
   model: {

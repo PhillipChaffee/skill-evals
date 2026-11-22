@@ -99,7 +99,7 @@ test("a truncated last line is dropped and its run repeats", async () => {
   fs.writeFileSync(file, text.slice(0, text.length - 40));
   const again = await resume();
   expect(again.status, again.stderr).toBe(0);
-  expect(again.stderr.match(/is not valid JSON/g)).toHaveLength(1);
+  expect(again.stderr.match(/is not a valid run record/g)).toHaveLength(1);
   expect(startsOf(box)).toBe(ids.length + 1);
   // The broken text is gone, so the new line starts on a line of its own.
   const lines = linesIn(out);
@@ -120,7 +120,7 @@ test("a last line that lacks only its newline is kept and the next line starts a
   fs.writeFileSync(file, fs.readFileSync(file, "utf8").trimEnd());
   const again = await resume();
   expect(again.status, again.stderr).toBe(0);
-  expect(again.stderr).not.toContain("not valid JSON");
+  expect(again.stderr).not.toContain("not a valid run record");
   expect(startsOf(box)).toBe(2);
   expect(fs.readFileSync(file, "utf8").endsWith("\n")).toBe(true);
 });

@@ -4,7 +4,13 @@ import { expect, test, vi } from "vitest";
 import type { Results } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
 import { UsageError } from "./scope.js";
-import { openStore, readRuns, recordOf, slotName } from "./store.js";
+import {
+  openStore,
+  readRuns,
+  recordOf,
+  requireFresh,
+  slotName,
+} from "./store.js";
 import type { StoredRun } from "./store.js";
 import { sandbox } from "./testing/sandbox.js";
 
@@ -69,13 +75,14 @@ test("flush replaces results.json whole and leaves no temporary file", () => {
   expect(fs.readdirSync(out).sort()).toEqual(["results.json", "results.jsonl"]);
 });
 
-test("load takes the last valid record of each key and subject, and skips invalid ones", () => {
+test("load reuses a record only when it is valid and the last line of its stem", () => {
   const out = holding([
     JSON.stringify(run({ score: 0.2 })),
     JSON.stringify(run({ score: 0.9 })),
-    JSON.stringify(run({ error: "crashed", score: null })),
-    JSON.stringify(run({ key: "k2", error: "crashed", score: null })),
-    JSON.stringify(run({ key: "k1", subject: "b", score: 0.4 })),
+    JSON.stringify(run({ rep: 2, score: 0.5 })),
+    JSON.stringify(run({ rep: 2, error: "crashed", score: null })),
+    JSON.stringify(run({ rep: 3, key: "k2", error: "crashed", score: null })),
+    JSON.stringify(run({ subject: "b", score: 0.4 })),
   ]);
   const kept = openStore(out, true).load();
   expect([...kept.keys()].sort()).toEqual(
@@ -87,6 +94,15 @@ test("load takes the last valid record of each key and subject, and skips invali
   expect(record).not.toHaveProperty("attempt");
 });
 
+test("a stem whose last line has another key is not reused under the older key", () => {
+  const out = holding([
+    JSON.stringify(run({ key: "old" })),
+    JSON.stringify(run({ key: "new" })),
+  ]);
+  const kept = openStore(out, true).load();
+  expect([...kept.keys()]).toEqual([slotName("new", "subject")]);
+});
+
 test("a last line that is not valid JSON is dropped once and removed from the file", () => {
   const good = JSON.stringify(run());
   const out = holding([good, '{"key": "k2", "attempt": 1, "chec'], "");
@@ -95,7 +111,9 @@ test("a last line that is not valid JSON is dropped once and removed from the fi
     const kept = openStore(out, true).load();
     expect(kept.size).toBe(1);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("is not valid JSON");
+    expect(String(warn.mock.calls[0]?.[0])).toContain(
+      "is not a valid run record",
+    );
   } finally {
     warn.mockRestore();
   }
@@ -109,6 +127,10 @@ test("a line that is JSON but no run is as damaged as one that is not JSON", () 
     '{"key": 1}',
     '{"key": "k", "attempt": 1}',
     "7",
+    JSON.stringify({ ...run(), checks: [null] }),
+    JSON.stringify({ ...run(), harness: undefined }),
+    JSON.stringify({ ...run(), unexpected: undefined }),
+    JSON.stringify({ ...run(), rep: "1" }),
   ]) {
     const out = holding([bad, JSON.stringify(run())]);
     expect(() => readRuns(out), bad).toThrow(UsageError);
@@ -127,4 +149,26 @@ test("recordOf takes off the key and the attempt only", () => {
   const record = recordOf(run());
   expect(Object.keys(record)).not.toContain("key");
   expect(record).toMatchObject({ harness: "h", score: 1 });
+});
+
+test("load rewrites the file through a temporary file that does not stay", () => {
+  const out = holding([JSON.stringify(run()), "{cut"], "");
+  const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    openStore(out, true).load();
+  } finally {
+    warn.mockRestore();
+  }
+  expect(fs.readdirSync(out)).toEqual([RUNS]);
+});
+
+test("a directory that holds runs is refused for a fresh command, and one that holds none is not", () => {
+  const out = holding([JSON.stringify(run()), JSON.stringify(run({ rep: 2 }))]);
+  expect(() => {
+    requireFresh(out);
+  }).toThrow(/holds 2 runs of an earlier command; pass --resume/);
+  fs.writeFileSync(path.join(out, RUNS), "");
+  requireFresh(out);
+  fs.rmSync(path.join(out, RUNS));
+  requireFresh(out);
 });

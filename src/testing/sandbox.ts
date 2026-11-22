@@ -109,6 +109,33 @@ export interface Sandbox {
 }
 
 /**
+ * Lets a test score again into the same `--out`: it removes `results.jsonl` first, as a user who removed it would. Set
+ * `KEEP_RUNS` in the environment of the call to see the command refuse instead.
+ * @param args - The command line.
+ * @param cwd - What a relative `--out` resolves against.
+ * @param extra - The extra environment of the call.
+ */
+function startOver(
+  args: string[],
+  cwd: string,
+  extra: Record<string, string>,
+): void {
+  const at = args.indexOf("--out");
+  const scoring = args[0] === "score" || args[0] === "run";
+  if (
+    at >= 0 &&
+    scoring &&
+    !args.includes("--dry-run") &&
+    !args.includes("--resume") &&
+    extra["KEEP_RUNS"] === undefined
+  ) {
+    fs.rmSync(path.resolve(cwd, args[at + 1] ?? "", "results.jsonl"), {
+      force: true,
+    });
+  }
+}
+
+/**
  * Makes a temp directory, removed when the test ends, with a `cli` that sees no installed harness but the fake one,
  * behind the Claude Code adapter.
  * @returns The sandbox. Its root is also the home directory of the command line.
@@ -160,6 +187,7 @@ export function sandbox(): Sandbox {
     ...LAUNCHED_BY_NPX,
   };
   const cli: Sandbox["cli"] = async (args, extra = {}, cwd = root) => {
+    startOver(args, cwd, extra);
     const setting = { env: { ...env, ...extra }, cwd };
     const ran = await asProcess(setting, () => main(args));
     return { status: ran.value, stdout: ran.stdout, stderr: ran.stderr };

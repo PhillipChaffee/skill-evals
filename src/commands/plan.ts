@@ -1,36 +1,62 @@
 import fs from "node:fs";
 import path from "node:path";
-import { partitionApplicable } from "../applicability.js";
 import type { EvaluateOptions } from "../evaluate.js";
-import {
-  casesOf,
-  labelled,
-  requireJobs,
-  requireUsable,
-} from "../evaluate-setup.js";
-import { selectHarnesses } from "../harnesses/index.js";
+import type { Context, Prepared } from "../prepare.js";
+import { basePlan, prepare, resolveAll } from "../prepare.js";
 import type { Project } from "../project.js";
-import { withConfig } from "../project.js";
-import { resumeDir } from "../resume.js";
 import type { RunRecord } from "../run.js";
-import { slotsOf } from "../run-loop.js";
+import { invalidReason } from "../run.js";
+import type { Planned } from "../run-loop.js";
+import { runsOf } from "../run-loop.js";
 import { UsageError, messageOf } from "../scope.js";
-import { RUNS_FILE, readRuns, recordOf } from "../store.js";
+import type { StoredRun } from "../store.js";
+import { RUNS_FILE, readRuns, recordOf, reusable, slotName } from "../store.js";
+import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
 import { estimateOf, renderEstimate } from "./plan-estimate.js";
 
 /** What `planText` takes: the options of a run or score command line. */
 type PlanOptions = Omit<EvaluateOptions, "onRun" | "onWarning">;
 
+/** What an earlier command left in an output directory. */
+interface Prior {
+  /** The valid records, the last of each run; invalid and superseded lines are left out. */
+  records: RunRecord[];
+  /** What a resume would reuse; null when there is no `results.jsonl`, so no key can be compared. */
+  reusable: Map<string, RunRecord> | null;
+}
+
 /**
- * Reads the records of an earlier command in an output directory.
+ * Keeps the valid records of a list, the last of each run.
+ * @param all - Records in the order they were made.
+ * @returns The records that count as valid runs, without one that a later record of the same run replaced.
+ */
+function validOnes(all: RunRecord[]): RunRecord[] {
+  const last = new Map<string, RunRecord>();
+  for (const record of all) {
+    if (Array.isArray(record.checks) && invalidReason(record) === null) {
+      last.set(
+        `${record.harness}\n${record.caseId}\n${record.subject}\n${String(record.rep)}`,
+        record,
+      );
+    }
+  }
+  return [...last.values()];
+}
+
+/**
+ * Reads what an earlier command left in an output directory.
  * @param dir - The directory.
  * @returns The records of `results.jsonl`, else those of `results.json`; null when the directory holds neither.
  * @throws {UsageError} When `results.jsonl` or `results.json` cannot be read as results.
  */
-function priorRecords(dir: string): RunRecord[] | null {
+function priorOf(dir: string): Prior | null {
   if (fs.existsSync(path.join(dir, RUNS_FILE))) {
-    return readRuns(dir).lines.map(recordOf);
+    const { lines }: { lines: StoredRun[] } = readRuns(dir);
+    return {
+      records: validOnes(lines.map(recordOf)),
+      reusable: reusable(lines),
+    };
   }
   const file = path.join(dir, "results.json");
   if (!fs.existsSync(file)) return null;
@@ -38,7 +64,7 @@ function priorRecords(dir: string): RunRecord[] | null {
     const { records } = JSON.parse(fs.readFileSync(file, "utf8")) as {
       records: RunRecord[];
     };
-    return Array.from(records);
+    return { records: validOnes(Array.from(records)), reusable: null };
   } catch (error) {
     throw new UsageError(
       `${file}: cannot be read as results: ${messageOf(error)}`,
@@ -47,83 +73,121 @@ function priorRecords(dir: string): RunRecord[] | null {
 }
 
 /**
- * Describes what a run or score command would do. It starts no harness process and writes nothing; it looks harnesses
- * up on `PATH` only.
- * @param given - The options of the command, with its subjects.
- * @param project - Where the config file and the default cases directory are.
- * @returns The matrix of harnesses, cases, subjects and reps, the number of runs, the pairs that are not applicable,
- *   and, when `resume` or `outDir` names a directory with an earlier command's results, an estimate of cost and duration.
- * @throws {UsageError} For a wrong option or case file, as the command itself would.
+ * Words how many runs a harness has.
+ * @param prepared - What `prepare` returned.
+ * @param id - The harness id.
+ * @param subjects - The number of subjects.
+ * @returns The line of the matrix: cases, subjects, reps, runs. Reps is a range when cases set their own.
  */
-function planText(given: PlanOptions, project: Project): string {
-  const { cwd = project.cwd, subjects: specs, ...rest } = given;
-  const options = withConfig(project, rest);
-  const reps = requireUsable(options);
-  const jobs = requireJobs(options);
-  const prior = resumeDir(options, cwd) ?? options.outDir;
-  const selection = selectHarnesses(options.harness);
-  const cases = casesOf(options);
-  const parts = partitionApplicable(selection.chosen, cases);
-  const pairs = labelled(specs);
-  const slots = slotsOf({
-    chosen: selection.chosen,
-    applied: parts.ran,
-    reps,
-    subjects: pairs,
-  });
-  const harnesses = selection.chosen.map(({ harness }) => harness.id);
-  const priorDir = prior === undefined ? null : path.resolve(cwd, prior);
-  const earlier = priorDir === null ? null : priorRecords(priorDir);
-  return [
-    `Harnesses (${String(harnesses.length)}): ${harnesses.join(", ")} (${selection.reason})`,
-    `Subjects (${String(pairs.length)}): ${pairs.map(({ label, spec }) => `${label} = ${spec}`).join(", ")}`,
-    `Cases: ${String(cases.length)} loaded, ${String(reps)} reps each unless a case says its own`,
-    "",
-    "Matrix (harness x case x subject x reps):",
-    ...harnesses.map((id) => {
-      const mine = slots.filter(({ located }) => located.harness.id === id);
-      const own = parts.ran[id] ?? [];
-      return `- ${id}: ${String(own.length)} cases x ${String(pairs.length)} subjects = ${String(mine.length)} runs`;
-    }),
-    "",
-    `Runs: ${String(slots.length)}`,
-    ...(parts.notApplicable.length === 0
-      ? []
-      : [
-          "",
-          "Not applicable (no runs, no score):",
-          ...parts.notApplicable.map(
-            ({ harness, caseId, reason }) =>
-              `- ${harness} ${caseId}: ${reason}`,
-          ),
-        ]),
-    ...(earlier === null
-      ? []
-      : [
-          "",
-          ...renderEstimate(
-            estimateOf(
-              earlier,
-              slots.map(({ located, caseDef }) => ({
-                harness: located.harness.id,
-                caseId: caseDef.id,
-              })),
-              jobs,
+function matrixLine(prepared: Prepared, id: string, subjects: number): string {
+  const { context } = prepared;
+  const own = context.parts.ran[id] ?? [];
+  const reps = own.map((one) => one.reps ?? context.reps);
+  const low = Math.min(...reps);
+  const high = Math.max(...reps);
+  const shown = low === high ? String(low) : `${String(low)}-${String(high)}`;
+  const runs = reps.reduce((sum, each) => sum + each, 0) * subjects;
+  return `- ${id}: ${String(own.length)} cases x ${String(subjects)} subjects x ${shown} reps = ${String(runs)} runs`;
+}
+
+/**
+ * Words the estimate for the runs that a resume would make.
+ * @param what - What was planned and what an earlier command left.
+ * @param what.prior - The earlier command's records and directory; null when there are none.
+ * @param what.planned - Every run of the plan.
+ * @param what.left - The runs that a resume would not reuse.
+ * @param what.context - What `prepare` settled; the jobs divide the duration.
+ * @returns The lines, after a blank line; none without a prior directory.
+ */
+function estimateLines(what: {
+  prior: { earlier: Prior; dir: string } | null;
+  planned: Planned[];
+  left: Planned[];
+  context: Context;
+}): string[] {
+  const { prior, planned, left, context } = what;
+  if (prior === null) return [];
+  const { earlier, dir } = prior;
+  const reuse = earlier.reusable;
+  const estimate = estimateOf(
+    earlier.records,
+    left.map(({ run }) => ({
+      harness: run.harness.id,
+      caseId: run.caseDef.id,
+    })),
+    context.jobs,
+  );
+  const reused =
+    reuse === null
+      ? null
+      : { count: planned.length - left.length, of: planned.length };
+  return ["", ...renderEstimate(estimate, { dir, jobs: context.jobs, reused })];
+}
+
+/**
+ * Describes what a run or score command would do. It starts no harness process and writes nothing to the output
+ * directory; it looks harnesses up on `PATH`, and exports each subject to a temp directory to key the runs. It raises
+ * every usage error that the command would.
+ * @param given - The options of the command, with its subjects.
+ * @returns The matrix of harnesses, cases, subjects and reps, the number of runs, the pairs that are not applicable,
+ *   and, when `resume` or `outDir` names a directory with an earlier command's results, how many runs a resume would
+ *   reuse and an estimate of cost and duration for the rest.
+ * @throws {UsageError} For a wrong option, subject or case file, as the command itself would.
+ */
+function planText(given: PlanOptions): string {
+  const prepared = prepare(given);
+  const { context, pairs } = prepared;
+  const subjects: Subject[] = [];
+  try {
+    resolveAll(prepared, subjects);
+    const prior = context.resumed ?? context.options.outDir;
+    const dir = prior === undefined ? null : path.resolve(context.cwd, prior);
+    const earlier = dir === null ? null : priorOf(dir);
+    const planned = runsOf(basePlan(context, subjects, dir ?? ""));
+    const reuse = earlier?.reusable ?? null;
+    const left = planned.filter(
+      ({ key, subject }) => reuse?.has(slotName(key, subject.label)) !== true,
+    );
+    const harnesses = context.selection.chosen.map(({ harness }) => harness.id);
+    const { notApplicable } = context.parts;
+    return [
+      `Harnesses (${String(harnesses.length)}): ${harnesses.join(", ")} (${context.selection.reason})`,
+      `Subjects (${String(pairs.length)}): ${pairs.map(({ label, spec }) => `${label} = ${spec}`).join(", ")}`,
+      `Cases: ${String(context.cases.length)} loaded, ${String(context.reps)} reps each unless a case says its own`,
+      "",
+      "Matrix (harness x case x subject x reps):",
+      ...harnesses.map((id) => matrixLine(prepared, id, pairs.length)),
+      "",
+      `Runs: ${String(planned.length)}`,
+      ...(notApplicable.length === 0
+        ? []
+        : [
+            "",
+            "Not applicable (no runs, no score):",
+            ...notApplicable.map(
+              ({ harness, caseId, reason }) =>
+                `- ${harness} ${caseId}: ${reason}`,
             ),
-            { dir: priorDir ?? "", jobs },
-          ),
-        ]),
-  ].join("\n");
+          ]),
+      ...estimateLines({
+        prior: earlier === null || dir === null ? null : { earlier, dir },
+        planned,
+        left,
+        context,
+      }),
+    ].join("\n");
+  } finally {
+    for (const subject of subjects) subject.dispose();
+  }
 }
 
 /**
  * Prints the plan of a command line.
  * @param given - The options and subjects of the command.
- * @param project - Where the config file and the default cases directory are.
  * @returns 0.
  */
-export function printPlan(given: PlanOptions, project: Project): number {
-  console.log(planText(given, project));
+export function printPlan(given: PlanOptions): number {
+  console.log(planText(given));
   return 0;
 }
 
@@ -139,5 +203,5 @@ export function plan(options: Options, project: Project): number {
     a === undefined && b === undefined
       ? [subject ?? project.root]
       : [a ?? "main", b ?? project.root];
-  return printPlan({ ...rest, subjects }, project);
+  return printPlan({ ...rest, subjects, cwd: project.cwd });
 }

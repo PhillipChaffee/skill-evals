@@ -43,8 +43,8 @@ export interface Subject extends SubjectSummary {
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
   sourceChanges: () => string[];
   /**
-   * What a reused result must share: the git tree hash of a ref; for a directory, the content hash of the export; for
-   * "none", "none".
+   * What a reused result must share: the content hash of the export, which has left out what the subject excludes, for
+   * a directory and for a git ref alike; "none" for "none".
    */
   revision: string;
   /** Removes the export. */
@@ -301,9 +301,7 @@ export function resolveSubject(
       exported: exported.dir,
       exportChanged: exported.changed,
       sourceChanges: watchSource(source, left),
-      revision: source.commit
-        ? git(scope.root, "rev-parse", `${source.commit}^{tree}`)
-        : hashTree(exported.dir),
+      revision: hashTree(exported.dir),
       dispose: exported.dispose,
     };
   } catch (error) {
