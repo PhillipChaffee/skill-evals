@@ -70,6 +70,44 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
   tags: { type: "array", items: { type: "string", pattern: SLUG_PATTERN } },
   texts: { type: "array", minItems: 1, items: PLAIN_TEXT },
   needs: { type: "array", items: { type: "string", pattern: NEED_PATTERN } },
+  steps: {
+    type: "array",
+    minItems: 1,
+    items: {
+      oneOf: [
+        {
+          type: "object",
+          required: ["run"],
+          properties: {
+            run: PLAIN_TEXT,
+            timeoutSeconds: { type: "integer", minimum: 1 },
+          },
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          required: ["git"],
+          properties: {
+            git: {
+              type: "object",
+              minProperties: 1,
+              properties: {
+                init: { type: "boolean" },
+                branch: {
+                  type: "string",
+                  pattern: "^[A-Za-z0-9_][A-Za-z0-9._/-]*$",
+                },
+                commitAll: PLAIN_TEXT,
+                remote: { type: "string", pattern: "^[A-Za-z0-9_-]+$" },
+              },
+              additionalProperties: false,
+            },
+          },
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
   envvars: {
     type: "object",
     patternProperties: {

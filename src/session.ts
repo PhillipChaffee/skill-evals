@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CommandCopies } from "./command.js";
-import { copiesForCommands } from "./command.js";
 import { childEnv } from "./env.js";
 import { exec } from "./exec.js";
 import type { Harness, Parsed, RunInput } from "./harnesses/shared.js";
@@ -11,6 +9,8 @@ import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
+import type { Layers, PreparedRun } from "./workspace.js";
+import { copyHome, prepareRun } from "./workspace.js";
 
 /** One prompt for one harness. */
 export interface SessionInput {
@@ -25,19 +25,14 @@ export interface SessionInput {
   /** Start the harness with nothing loaded but the subject. */
   isolated?: boolean | undefined;
   timeoutSeconds: number;
-  /** Copied into the workspace before the harness starts. */
-  workspaceDir?: string | null;
+  /** What the case puts in the workspace and the home, and the steps that set it up; absent for an empty workspace. */
+  layers?: Layers | undefined;
   /** Environment variables the harness must not get, such as the key of the model that scores its answer. */
   withhold?: string[] | undefined;
   /** Names of this process's variables the project's config passes to the harness. */
   pass?: string[] | undefined;
   /** Variables a case sets for the agent, with their values. They reach the agent's process only. */
   env?: Record<string, string> | undefined;
-  /**
-   * Present when the case has a command check: the session keeps a copy of the workspace before the agent runs, and
-   * copies `graderDir` (the case's held-out directory, or null) after the agent exits.
-   */
-  commands?: { graderDir: string | null } | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -53,7 +48,7 @@ export interface SessionResult {
    * subject; null when the adapter placed none.
    */
   placedChanges: ChangedFiles | null;
-  /** The workspace as the copy left it, before the harness started. */
+  /** The workspace as the agent starts from it: the copies and the setup steps done. */
   seed: Snapshot;
   /** The run's throwaway home, which exists until the callback returns. */
   home: string;
@@ -63,6 +58,8 @@ export interface SessionResult {
   placed: Record<string, string> | undefined;
   /** The workspace as the copy left it, kept as a directory; null unless the case has a command check. */
   seedDir: string | null;
+  /** The run's directory for bare remotes and linked worktrees, which exists until the callback returns; null without a case. */
+  remoteDir: string | null;
   /** The held-out directory, copied after the agent exited; null when the case has none or has no command check. */
   graderDir: string | null;
 }
@@ -179,6 +176,21 @@ const joined = (
   first && second ? mergeChanges(first, second) : (first ?? second);
 
 /**
+ * Makes the result of a run whose harness never started.
+ * @param failure - Why: the setup step that failed.
+ * @param home - The run's throwaway home.
+ * @returns What `attempt` returns, with no output and no time.
+ */
+const notStarted = (failure: string, home: string) => ({
+  stdout: "",
+  failure,
+  durationMs: 0,
+  placedChanges: null,
+  placed: undefined,
+  homeSeed: snapshot(home),
+});
+
+/**
  * Prepares the harness and runs the prompt.
  * @param session - Which harness, and how long it may take.
  * @param input - What the adapter builds the command line from.
@@ -200,14 +212,10 @@ async function attempt(
   try {
     invocation = harness.invocation(input);
   } catch (error) {
-    const failure = `could not prepare the run: ${messageOf(error)}`;
-    return {
-      stdout: "",
-      failure,
-      durationMs: 0,
-      placedChanges: null,
-      homeSeed: snapshot(input.home),
-    };
+    return notStarted(
+      `could not prepare the run: ${messageOf(error)}`,
+      input.home,
+    );
   }
   const placedChanges = watchPlaced(input.subject, invocation.placed);
   const environment = environmentOf(session, input.home, invocation.env);
@@ -228,6 +236,7 @@ async function attempt(
     };
   }
   const late = afterSetup(harness, input);
+  copyHome(session.layers?.homeDir ?? null, input.home);
   const homeSeed = snapshot(input.home);
   const started = Date.now();
   const result = await exec(bin, invocation.args, {
@@ -278,22 +287,20 @@ export async function session<T>(
   run: SessionInput,
   use: (result: SessionResult) => T | Promise<T>,
 ): Promise<T> {
-  const { harness, subject, prompt, model, maxTurns, workspaceDir } = run;
+  const { harness, subject, prompt, model, maxTurns } = run;
   const { isolated } = run;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
-  let copies: CommandCopies | null = null;
+  let prepared: PreparedRun | null = null;
   try {
-    if (workspaceDir) {
-      fs.cpSync(workspaceDir, workspace.dir, {
-        recursive: true,
-        verbatimSymlinks: true,
-      });
-    }
-    const seed = snapshot(workspace.dir);
-    copies = run.commands
-      ? copiesForCommands(workspace.dir, run.commands.graderDir)
+    // Setup runs before the login files are in the home, so no step can read them.
+    prepared = run.layers
+      ? await prepareRun(run.layers, {
+          workspace: workspace.dir,
+          home: home.dir,
+        })
       : null;
+    const seed = prepared?.seed ?? snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
     const input = {
       subject,
@@ -304,10 +311,13 @@ export async function session<T>(
       maxTurns,
       isolated,
     };
+    // A failed setup step means the harness never starts.
     const { stdout, failure, durationMs, placedChanges, placed, homeSeed } =
-      await attempt(run, input);
+      prepared?.failure
+        ? notStarted(prepared.failure, home.dir)
+        : await attempt(run, input);
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
-    const graderDir = copies?.copyGrader() ?? null;
+    const graderDir = prepared?.copies?.copyGrader() ?? null;
     const parsed = parseStream(harness, stdout);
     // The harness's own message is the most specific one, but only when it produced a stream at all.
     const error =
@@ -323,11 +333,12 @@ export async function session<T>(
       home: home.dir,
       homeSeed,
       placed,
-      seedDir: copies?.seedDir ?? null,
+      seedDir: prepared?.seedDir ?? null,
+      remoteDir: prepared?.remoteDir ?? null,
       graderDir,
     });
   } finally {
-    copies?.dispose();
+    prepared?.dispose();
     home.dispose();
     workspace.dispose();
   }

@@ -13,7 +13,8 @@ const BLINDING =
 
 /**
  * Plays one script of a target case against its subject.
- * @param name - The script's file name below `test/target/scripts`, without `.json`.
+ * @param name - The script's file name below `test/target/scripts`, without `.json`; the case is the part before the
+ *   first dot.
  * @returns The run record.
  */
 async function play(name: string) {
@@ -25,6 +26,9 @@ async function play(name: string) {
   const ran = await scoreSubject(box, {
     subject: path.join(TARGET, "subject"),
     cases: CASES,
+    only: name.split(".")[0] ?? "",
+    // The setup steps run bash and git, which the sandbox's own PATH leaves out.
+    env: { PATH: `${String(box.env["PATH"])}:/usr/local/bin:/usr/bin:/bin` },
   });
   expect(ran.status, ran.stderr).toBe(0);
   const [record] = ran.records;
@@ -35,7 +39,7 @@ const scores = (record: { checks: { score: number | null }[] }) =>
   record.checks.map(({ score }) => score);
 
 test("routing first-action: the prompt tells the agent nothing about being graded", () => {
-  const [found] = loadCases(CASES);
+  const [found] = loadCases(CASES, "routing-first-action");
   expect(found?.id).toBe("routing-first-action");
   expect(found?.prompt).not.toMatch(BLINDING);
 });
@@ -78,4 +82,47 @@ test("routing first-action: an edit before the skill fails the first-skill check
 test("routing first-action: loading the nearby skill after the entry skill fails only the check that keeps it out", async () => {
   const record = await play("routing-first-action.wrong-skill-after");
   expect(scores(record)).toEqual([1, 0, 1]);
+});
+
+test("history clean-up: the prompt tells the agent nothing about being graded", () => {
+  const [found] = loadCases(CASES, "history-clean-up");
+  expect(found?.prompt).not.toMatch(BLINDING);
+  expect(found?.setup).toHaveLength(2);
+  expect(found?.fixtureDir).toMatch(/history-clean-up\/fixture$/);
+});
+
+test("history clean-up: a squash with the same tree and a lease push scores 1", async () => {
+  const record = await play("history-clean-up.match");
+  expect(scores(record)).toEqual([1, 1, 1, 1]);
+  expect(record.score).toBe(1);
+  const touched = [
+    ...record.changedFiles.created,
+    ...record.changedFiles.modified,
+    ...record.changedFiles.deleted,
+  ].filter((file) => !file.startsWith(".git/"));
+  expect(touched).toEqual([]);
+  expect(record.checks[0]?.command?.stdout).toContain("ok same tree");
+  expect(record.checks[1]?.command?.stdout).toContain("ok 1 commits");
+});
+
+test("history clean-up: a force push without the lease fails only that check", async () => {
+  const record = await play("history-clean-up.force-push");
+  expect(scores(record)).toEqual([1, 1, 1, 0]);
+});
+
+test("history clean-up: a squash that changes a file fails the tree check", async () => {
+  const record = await play("history-clean-up.changed-tree");
+  expect(scores(record)).toEqual([0, 1, 1, 1]);
+  expect(record.checks[0]?.command?.stdout).toContain("tree changed");
+});
+
+test("history clean-up: leaving the seven commits fails the count and the subjects", async () => {
+  const record = await play("history-clean-up.untouched");
+  expect(scores(record)).toEqual([1, 0, 0, 1]);
+  expect(record.checks[1]?.command?.stdout).toContain("7 commits");
+});
+
+test("history clean-up: a noisy subject on the squash fails the subject check", async () => {
+  const record = await play("history-clean-up.noisy-subject");
+  expect(scores(record)).toEqual([1, 1, 0, 1]);
 });

@@ -1,0 +1,27 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "git reset --soft main && git -c user.name=a -c user.email=a@example.invalid commit -q -m \"wip: cart stuff\""
+          },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "git push --force-with-lease -u origin feature/checkout"
+          },
+          "exec": true
+        }
+      },
+      {
+        "final": "Squashed the branch."
+      }
+    ]
+  ]
+}

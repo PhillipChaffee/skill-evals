@@ -114,6 +114,10 @@ One prompt and what a good run of it does.
 | `minDelta?`      | `number \| undefined`     | The least score difference between the subjects that the case must show.                                                                                                          |
 | `workspaceDir`   | `string \| null`          | A directory whose content the agent starts with, or null for an empty workspace.                                                                                                  |
 | `graderDir`      | `string \| null`          | The case's `grader/` directory, or null. It is never copied before the agent runs. After the agent exits a `command` check reaches a copy of it through `SKILL_EVALS_GRADER_DIR`. |
+| `setup`          | `SetupStep[]`             | Steps that run in the workspace after the files are copied and before the agent starts.                                                                                           |
+| `fixtureDirs`    | `string[]`                | The shared fixture directories that `fixtures` names, absolute, in the order they are layered.                                                                                    |
+| `fixtureDir`     | `string \| null`          | The case's `fixture/` directory, which only setup steps see, or null.                                                                                                             |
+| `homeDir`        | `string \| null`          | The directory that `home` names, copied into the run's throwaway home, or null.                                                                                                   |
 | `extensions`     | `Record<string, unknown>` | The keys of the case file that start with `x-`, which belong to the case's author.                                                                                                |
 
 ### LoadOptions

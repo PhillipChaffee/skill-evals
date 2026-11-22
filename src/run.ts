@@ -254,7 +254,7 @@ async function record(
  */
 export async function runOnce(plan: RunPlan): Promise<RunRecord> {
   const { harness, bin, subject, caseDef } = plan;
-  const { prompt, maxTurns, timeoutSeconds, workspaceDir } = caseDef;
+  const { prompt, maxTurns, timeoutSeconds } = caseDef;
   const copy = copyOf(subject);
   try {
     return await session(
@@ -269,12 +269,9 @@ export async function runOnce(plan: RunPlan): Promise<RunRecord> {
         maxTurns,
         isolated: plan.isolated,
         timeoutSeconds,
-        workspaceDir,
+        layers: caseDef,
         withhold: withheld(plan),
         pass: plan.pass,
-        commands: caseDef.checks.some((check) => check.type === "command")
-          ? { graderDir: caseDef.graderDir }
-          : undefined,
       },
       (ran) => record(plan, ran, copy),
     );

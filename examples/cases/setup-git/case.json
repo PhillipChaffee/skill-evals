@@ -1,0 +1,27 @@
+{
+  "description": "Start in a git repository on a feature branch with six commits, built by a script the agent never sees.",
+  "tags": ["setup", "git"],
+  "setup": [
+    {
+      "git": { "init": true, "branch": "main", "commitAll": "initial import" }
+    },
+    {
+      "run": "bash \"$SKILL_EVALS_FIXTURE_DIR/build-history.sh\"",
+      "timeoutSeconds": 60
+    }
+  ],
+  "checks": [
+    {
+      "type": "command",
+      "run": "git rev-list --count main..HEAD",
+      "stdoutMatches": "^1$"
+    },
+    {
+      "type": "command",
+      "run": "test \"$(git rev-parse 'HEAD^{tree}')\" = \"$(git -C \"$SKILL_EVALS_SEED_DIR\" rev-parse 'HEAD^{tree}')\"",
+      "weight": 2
+    },
+    { "type": "output_contains", "text": "done" }
+  ],
+  "timeoutSeconds": 300
+}

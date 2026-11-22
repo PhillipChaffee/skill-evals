@@ -6,6 +6,7 @@ import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
+import { readSteps } from "../setup-steps.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { UsageError, messageOf } from "../scope.js";
 
@@ -32,6 +33,7 @@ export type FieldType =
   | "harnesses"
   | "envvars"
   | "needs"
+  | "steps"
   | "matcher"
   | "matchers"
   | "vias"
@@ -309,6 +311,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     return value;
   },
   needs: (value, at) => readNeeds(value, at.where),
+  steps: (value, at) => readSteps(value, at.where),
   vias: parseVias,
   matcher: (value, at) => PARSERS.object(value, at),
   matchers: (value, at) => objects(value, at),

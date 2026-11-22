@@ -10,9 +10,11 @@ import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
+import { LAYER_KEYS, layersOf } from "./case-layers.js";
 import { limitsOf } from "./case-limits.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
+import type { SetupStep } from "./setup-steps.js";
 import { readVariants } from "./variants.js";
 import type { Resolved } from "./variants.js";
 
@@ -67,6 +69,14 @@ export interface Case {
    * `command` check reaches a copy of it through `SKILL_EVALS_GRADER_DIR`.
    */
   graderDir: string | null;
+  /** Steps that run in the workspace after the files are copied and before the agent starts. */
+  setup: SetupStep[];
+  /** The shared fixture directories that `fixtures` names, absolute, in the order they are layered. */
+  fixtureDirs: string[];
+  /** The case's `fixture/` directory, which only setup steps see, or null. */
+  fixtureDir: string | null;
+  /** The directory that `home` names, copied into the run's throwaway home, or null. */
+  homeDir: string | null;
   /** The keys of the case file that start with `x-`, which belong to the case's author. */
   extensions: Record<string, unknown>;
 }
@@ -152,6 +162,7 @@ export const CASE_KEYS: Record<string, FieldDef> = {
     meaning:
       "The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.",
   },
+  ...LAYER_KEYS,
   variants: {
     type: "variants",
     meaning:
@@ -292,6 +303,7 @@ function loadCase(found: Found, mode: Mode): Case[] {
     ...settingsOf(read),
     workspaceDir: workspaceOf(workspaceDir, file),
     graderDir: graderOf(dir, file),
+    ...layersOf(found, read),
   };
   const variants = read("variants") as Record<string, unknown>[] | undefined;
   return expand(

@@ -16,7 +16,7 @@ export interface CommandContext {
   home: string;
   /** The run's transcript file. Null until the transcript is written (Task 14). */
   transcriptFile: string | null;
-  /** The directory of the run's local remote. Null until fixtures exist (Task 13). */
+  /** The run's per-run directory outside the workspace, for bare remotes and linked worktrees; null when none was made. */
   remoteDir: string | null;
   /** What the case sets in its `env`, which the command gets too. */
   env: Record<string, string>;
@@ -29,11 +29,15 @@ export interface CommandContext {
  * @param ran.home - The run's throwaway home.
  * @param ran.seedDir - The copy of the workspace taken before the agent ran; null when none was taken.
  * @param ran.graderDir - The copy of the case's `grader/` directory; null when the case has none.
+ * @param ran.remoteDir - The run's remote directory; null when none was made.
  * @param env - The case's `env`.
- * @returns The context. The transcript and the remote directory are null until later tasks make them.
+ * @returns The context. The transcript is null until a later task writes it.
  */
 export function commandContext(
-  ran: Pick<CommandContext, "workspace" | "home" | "graderDir" | "seedDir">,
+  ran: Pick<
+    CommandContext,
+    "workspace" | "home" | "graderDir" | "seedDir" | "remoteDir"
+  >,
   env: Record<string, string>,
 ): CommandContext {
   return {
@@ -42,7 +46,7 @@ export function commandContext(
     seedDir: ran.seedDir,
     home: ran.home,
     transcriptFile: null,
-    remoteDir: null,
+    remoteDir: ran.remoteDir,
     env,
   };
 }
@@ -72,12 +76,13 @@ const FIXTURE = "fixture";
 const FIXTURE_EMAIL = "fixture@example.invalid";
 
 /**
- * Builds the environment of a command: the listed names, the case's own `env`, and nothing of this process's
- * environment besides `PATH`, `TMPDIR` and `LANG`. No provider key is among them.
+ * Builds the environment of a command, and of a setup step: the listed names, the case's own `env`, and nothing of this
+ * process's environment besides `PATH`, `TMPDIR` and `LANG`. No provider key is among them, and git reads no
+ * configuration of the user's.
  * @param context - Where the command runs.
  * @returns The whole environment.
  */
-function commandEnv(context: CommandContext): Record<string, string> {
+export function commandEnv(context: CommandContext): Record<string, string> {
   const optional = {
     SKILL_EVALS_GRADER_DIR: context.graderDir,
     SKILL_EVALS_SEED_DIR: context.seedDir,

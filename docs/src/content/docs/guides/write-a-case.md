@@ -25,6 +25,8 @@ A case is a directory under `evals/cases/`, at any depth. Its path below that di
 | `prompt.md`  | The prompt, exactly as a user would type it. Nothing else.                                                                                             |
 | `case.json`  | `{ "checks": [...], "weight": 1, "minScore": 0.5, "maxTurns": 6, "timeoutSeconds": 600 }`. Only `checks` is required, and it needs at least one check. |
 | `workspace/` | Optional. Files the agent finds in its working directory.                                                                                              |
+| `fixture/`   | Optional. Files that only setup steps see, such as a script that builds a git history. [Setup, fixtures and home](#setup-fixtures-and-home).           |
+| `home/`      | Optional, and named by the `home` key. Files copied into the agent's throwaway home.                                                                   |
 
 Every check takes an optional `weight`, a positive number that defaults to 1.
 
@@ -243,6 +245,61 @@ A link in a case's `workspace/` folder whose target is absolute, or leads outsid
 
 The full cases are in `examples/cases/file-state`.
 
+## Setup, fixtures and home
+
+A case that needs a git repository, a branch, a commit history, a linked worktree, a local remote or a user-level file cannot be a plain copy of files: a nested `.git` cannot be committed in your repository. Three keys build the start of a run.
+
+```json
+{
+  "setup": [
+    {
+      "git": { "init": true, "branch": "main", "commitAll": "initial import" }
+    },
+    {
+      "run": "bash \"$SKILL_EVALS_FIXTURE_DIR/build-history.sh\"",
+      "timeoutSeconds": 60
+    }
+  ],
+  "checks": [
+    {
+      "type": "command",
+      "run": "git rev-list --count main..HEAD",
+      "stdoutMatches": "^[1-4]$"
+    }
+  ]
+}
+```
+
+`setup` is a non-empty list of steps. They run in order, each one finished before the next starts, in the workspace, after its files are copied and before the harness starts. A step is one of:
+
+- `{ "run": "<shell text>", "timeoutSeconds": 60 }`: run with `/bin/sh -c`. The time limit defaults to 60 seconds.
+- `{ "git": { ... } }`: a shortcut that expands, in this order, to `git init -q -b <branch>` (when `init` is true; `branch` defaults to `main` and needs `init`), `git add -A && git commit -q -m <commitAll>` (when `commitAll` is set), and for `remote` a bare repository in the remote directory, added as that remote and pushed to: `git init -q --bare "$SKILL_EVALS_REMOTE_DIR/<remote>.git" && git remote add <remote> ... && git push -q -u <remote> HEAD`. A `commitAll` needs at least one file in the workspace, as `git commit` does.
+
+Steps get the environment of a `command` check, plus `SKILL_EVALS_REMOTE_DIR`, `SKILL_EVALS_FIXTURE_DIR` and the case's `env`. They never get `SKILL_EVALS_GRADER_DIR` or `SKILL_EVALS_SEED_DIR`, a provider key or the harness's login files. Git reads none of your configuration (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`) and the author and committer are `fixture <fixture@example.invalid>`, so a setup commit never depends on your `~/.gitconfig` and is never signed. A step that fails (a non-zero exit, a time limit, a start that did not work) stops setup, the harness never starts, and the run is invalid with `setup failed: step <n> (<first 40 characters of the command>): <why>`. A failed setup is never a score of 0.
+
+The seed that file checks and `$SKILL_EVALS_SEED_DIR` compare against is taken after the steps, so it describes the workspace the agent starts from, `.git` included.
+
+**`fixture/`.** A `fixture/` folder beside `prompt.md` holds what setup needs and the agent must not see, such as the script that builds a history. It is not copied into the workspace. It is copied to a temp directory outside the workspace, `SKILL_EVALS_FIXTURE_DIR` names it for the steps only, and it is removed when setup is done. A `git` step therefore cannot record it, and the agent cannot find how the repository was built. Use `bash "$SKILL_EVALS_FIXTURE_DIR/build-history.sh"`, not `bash fixture/build-history.sh`.
+
+**Remote and worktrees.** `SKILL_EVALS_REMOTE_DIR` is a new temp directory for this run, outside the workspace, made before setup and kept until the run's checks have finished. A bare remote goes there (the `remote` key does it), and so does every linked worktree: `git worktree add "$SKILL_EVALS_REMOTE_DIR/wt-1" -b wt-1`. A `command` check gets the same variable. A step that writes somewhere else is not stopped: setup runs as you, and [Safety](../safety.md) says what that means.
+
+**`home`.** The name of a folder of the case, such as `"home"`. Its files are copied into the run's throwaway home after the login files and the skill copies the harness places, and before the home seed is taken, so they count as the starting state and `root: "home"` checks see them. Use it for a user-level role file, a user-level skill or a seeded configuration file. A file in it at the path of any harness's login file (`.claude/.credentials.json`, `.codex/auth.json`, and so on) is a load error.
+
+**`fixtures`.** A list of folders, relative to the case's folder and inside the cases folder, copied into the workspace in order, before the case's own `workspace/`. A file in a later layer replaces the same path in an earlier one. Many cases can share one fixture repository with a different prompt each:
+
+```jsonc
+{
+  "fixtures": ["../_shared/shop-core"],
+  "checks": [{ "type": "file_exists", "path": "package.json" }],
+}
+```
+
+A folder whose name starts with `_` is never a case, so keep shared fixtures under `_shared/`. A path that leaves the cases folder, or does not exist, is a load error.
+
+**Links.** `workspace/`, each shared fixture folder, `fixture/` and `home/` are copied with their links unchanged. A link whose target is absolute, or leaves its own folder, is a load error that names it.
+
+The full case is in `examples/cases/setup-git`.
+
 ## Commands after the run
 
 A `command` check runs a shell command in the workspace after the agent exits, and scores it. Use it for what a pattern cannot say: the project's own tests, a check the agent never saw, a `git` query, or a mutation check.
@@ -268,16 +325,17 @@ A `grader/` folder beside `prompt.md` holds files that only the command may read
 
 The command gets exactly these variables, and the ones in the case's `env`, and nothing else from your shell. It never gets a provider key.
 
-| Variable                                                      | Value                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PATH`, `TMPDIR`, `LANG`                                      | Taken from the environment of the command that runs `skill-evals`.                                                                                                                                                                                |
-| `HOME`, `SKILL_EVALS_HOME`                                    | The run's throwaway home.                                                                                                                                                                                                                         |
-| `SKILL_EVALS_WORKSPACE`                                       | The workspace, as the agent left it.                                                                                                                                                                                                              |
-| `SKILL_EVALS_GRADER_DIR`                                      | The copy of `grader/`. Not set when the case has none.                                                                                                                                                                                            |
-| `SKILL_EVALS_SEED_DIR`                                        | A read-only copy of the workspace as it was before the agent ran. Taken only when the case has a `command` check, and checked against the seed before each command: a change to it scores that check 0 with `the seed copy was changed: <paths>`. |
-| `SKILL_EVALS_TRANSCRIPT`, `SKILL_EVALS_REMOTE_DIR`            | Not set yet.                                                                                                                                                                                                                                      |
-| `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`                    | `/dev/null` and `1`, so no git setting of yours applies.                                                                                                                                                                                          |
-| `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and the two `_EMAIL`s | `fixture`, and `fixture@example.invalid`.                                                                                                                                                                                                         |
+| Variable                                                      | Value                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATH`, `TMPDIR`, `LANG`                                      | Taken from the environment of the command that runs `skill-evals`.                                                                                                                                                                                                                                  |
+| `HOME`, `SKILL_EVALS_HOME`                                    | The run's throwaway home.                                                                                                                                                                                                                                                                           |
+| `SKILL_EVALS_WORKSPACE`                                       | The workspace, as the agent left it.                                                                                                                                                                                                                                                                |
+| `SKILL_EVALS_GRADER_DIR`                                      | The copy of `grader/`. Not set when the case has none.                                                                                                                                                                                                                                              |
+| `SKILL_EVALS_SEED_DIR`                                        | A read-only copy of the workspace as the agent started from it, setup included (a `.git` that setup made is in it). Taken only when the case has a `command` check, and checked against the seed before each command: a change to it scores that check 0 with `the seed copy was changed: <paths>`. |
+| `SKILL_EVALS_REMOTE_DIR`                                      | The run's directory outside the workspace, the one setup used for bare remotes and linked worktrees. It exists until the run's checks finish.                                                                                                                                                       |
+| `SKILL_EVALS_TRANSCRIPT`                                      | Not set yet.                                                                                                                                                                                                                                                                                        |
+| `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`                    | `/dev/null` and `1`, so no git setting of yours applies.                                                                                                                                                                                                                                            |
+| `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME` and the two `_EMAIL`s | `fixture`, and `fixture@example.invalid`.                                                                                                                                                                                                                                                           |
 
 A mutation check applies a known-bad change and expects the agent's own check to catch it. Do not write `! npm run lint`: it also passes when there is no lint script at all. Expect the failing exit code and the rule's own message instead, so that only a lint that sees the bad change passes:
 

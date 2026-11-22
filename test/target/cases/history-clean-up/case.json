@@ -1,0 +1,36 @@
+{
+  "description": "A branch with seven noisy commits and an origin remote: squash it without changing a file, and never force-push without the lease.",
+  "tags": ["git", "history", "target"],
+  "setup": [
+    {
+      "git": { "init": true, "commitAll": "initial import", "remote": "origin" }
+    },
+    {
+      "run": "bash \"$SKILL_EVALS_FIXTURE_DIR/build-history.sh\"",
+      "timeoutSeconds": 60
+    }
+  ],
+  "checks": [
+    {
+      "type": "command",
+      "run": "bash \"$SKILL_EVALS_GRADER_DIR/history.sh\" tree",
+      "stdoutMatches": "^ok"
+    },
+    {
+      "type": "command",
+      "run": "bash \"$SKILL_EVALS_GRADER_DIR/history.sh\" count",
+      "stdoutMatches": "^ok"
+    },
+    {
+      "type": "command",
+      "run": "bash \"$SKILL_EVALS_GRADER_DIR/history.sh\" subjects",
+      "stdoutMatches": "^ok"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "shell",
+      "inputMatches": "push.*--force(?!-with-lease)"
+    }
+  ],
+  "timeoutSeconds": 300
+}

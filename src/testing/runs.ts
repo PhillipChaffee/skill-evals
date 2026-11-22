@@ -37,6 +37,10 @@ interface Scoring {
   cwd?: string;
   /** The output directory. Default: `results` in the sandbox. */
   out?: string;
+  /** A glob for `--case`. Default: every case. */
+  only?: string;
+  /** Extra environment variables of the command line. */
+  env?: Record<string, string>;
 }
 
 /**
@@ -51,8 +55,9 @@ export async function scoreSubject(box: Sandbox, scoring: Scoring) {
     [
       ...["score", "--subject", scoring.subject, "--cases", scoring.cases],
       ...["--reps", String(scoring.reps ?? 1), "--out", out],
+      ...(scoring.only ? ["--case", scoring.only] : []),
     ],
-    {},
+    scoring.env ?? {},
     scoring.cwd,
   );
   const records: RunRecord[] = fs.existsSync(path.join(out, "results.json"))
