@@ -38,6 +38,10 @@ export const BLINDING_ENDINGS: readonly string[] = [
   "s",
   "ation",
   "ations",
+  "ement",
+  "ements",
+  "ison",
+  "isons",
 ];
 
 // A word is a run of letters, so "_", "-", "." and digits end it, and "contest" does not hold "test".
