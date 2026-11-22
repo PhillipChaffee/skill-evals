@@ -38,38 +38,44 @@ async function scored(
 const HEARTBEAT_WAIT_MS = 300;
 // Long enough for the background process to start and beat on a loaded machine; the full suite runs files in parallel.
 const TIMEOUT_SECONDS = 3;
+// The run takes the case timeout plus start, drain and the heartbeat wait; vitest's 5 s default is too tight under load.
+const TEST_TIMEOUT_MS = 30_000;
 
-test("a harness that outlasts the case's timeout is stopped with everything it started, and the run is invalid", async () => {
-  const box = sandbox();
-  const heartbeat = path.join(box.root, "heartbeat");
-  const env = {
-    SKILL_EVALS_BIN_CLAUDE_CODE: fixture("slow-harness.mjs"),
-  };
-  box.write(CONFIG_FILE, { env: ["SLOW_HEARTBEAT_FILE"] });
-  const { result, record } = await scored(
-    box,
-    { ...env, SLOW_HEARTBEAT_FILE: heartbeat },
-    { timeoutSeconds: TIMEOUT_SECONDS },
-  );
+test(
+  "a harness that outlasts the case's timeout is stopped with everything it started, and the run is invalid",
+  async () => {
+    const box = sandbox();
+    const heartbeat = path.join(box.root, "heartbeat");
+    const env = {
+      SKILL_EVALS_BIN_CLAUDE_CODE: fixture("slow-harness.mjs"),
+    };
+    box.write(CONFIG_FILE, { env: ["SLOW_HEARTBEAT_FILE"] });
+    const { result, record } = await scored(
+      box,
+      { ...env, SLOW_HEARTBEAT_FILE: heartbeat },
+      { timeoutSeconds: TIMEOUT_SECONDS },
+    );
 
-  expect(result.status).toBe(1);
-  expect(record).toMatchObject({
-    ok: false,
-    error: `timed out after ${String(TIMEOUT_SECONDS)} s`,
-    score: null,
-  });
-  expect(result.stdout).toMatch(
-    new RegExp(
-      `^- SUBJECT \`hello\` rep 1: run failed: timed out after ${String(TIMEOUT_SECONDS)} s$`,
-      "m",
-    ),
-  );
-  // The process that the harness left in the background beat while it lived.
-  const beats = fs.readFileSync(heartbeat, "utf8");
-  expect(Number(beats)).toBeGreaterThan(0);
-  await new Promise((resolve) => setTimeout(resolve, HEARTBEAT_WAIT_MS));
-  expect(fs.readFileSync(heartbeat, "utf8")).toBe(beats);
-});
+    expect(result.status).toBe(1);
+    expect(record).toMatchObject({
+      ok: false,
+      error: `timed out after ${String(TIMEOUT_SECONDS)} s`,
+      score: null,
+    });
+    expect(result.stdout).toMatch(
+      new RegExp(
+        `^- SUBJECT \`hello\` rep 1: run failed: timed out after ${String(TIMEOUT_SECONDS)} s$`,
+        "m",
+      ),
+    );
+    // The process that the harness left in the background beat while it lived.
+    const beats = fs.readFileSync(heartbeat, "utf8");
+    expect(Number(beats)).toBeGreaterThan(0);
+    await new Promise((resolve) => setTimeout(resolve, HEARTBEAT_WAIT_MS));
+    expect(fs.readFileSync(heartbeat, "utf8")).toBe(beats);
+  },
+  TEST_TIMEOUT_MS,
+);
 
 test("a harness executable that cannot start is a failed run, not a crash", async () => {
   const box = sandbox();
