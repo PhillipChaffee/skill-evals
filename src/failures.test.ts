@@ -36,6 +36,8 @@ async function scored(
 }
 
 const HEARTBEAT_WAIT_MS = 300;
+// Long enough for the background process to start and beat on a loaded machine; the full suite runs files in parallel.
+const TIMEOUT_SECONDS = 3;
 
 test("a harness that outlasts the case's timeout is stopped with everything it started, and the run is invalid", async () => {
   const box = sandbox();
@@ -47,17 +49,20 @@ test("a harness that outlasts the case's timeout is stopped with everything it s
   const { result, record } = await scored(
     box,
     { ...env, SLOW_HEARTBEAT_FILE: heartbeat },
-    { timeoutSeconds: 1 },
+    { timeoutSeconds: TIMEOUT_SECONDS },
   );
 
   expect(result.status).toBe(1);
   expect(record).toMatchObject({
     ok: false,
-    error: "timed out after 1 s",
+    error: `timed out after ${String(TIMEOUT_SECONDS)} s`,
     score: null,
   });
   expect(result.stdout).toMatch(
-    /^- SUBJECT `hello` rep 1: run failed: timed out after 1 s$/m,
+    new RegExp(
+      `^- SUBJECT \`hello\` rep 1: run failed: timed out after ${String(TIMEOUT_SECONDS)} s$`,
+      "m",
+    ),
   );
   // The process that the harness left in the background beat while it lived.
   const beats = fs.readFileSync(heartbeat, "utf8");

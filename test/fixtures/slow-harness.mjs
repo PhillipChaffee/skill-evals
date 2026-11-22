@@ -9,6 +9,7 @@ const HOUR_MS = 3_600_000;
 const beat = `
   const fs = require("node:fs");
   let beats = 0;
+  fs.writeFileSync(process.env.SLOW_HEARTBEAT_FILE, String(++beats));
   setInterval(() => fs.writeFileSync(process.env.SLOW_HEARTBEAT_FILE, String(++beats)), 20);
 `;
 spawn(process.execPath, ["-e", beat], { stdio: "ignore" });
