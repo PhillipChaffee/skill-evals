@@ -2,7 +2,7 @@ import { UsageError, isObject } from "../scope.js";
 import type { FieldDef, FieldParser, FieldType } from "./fields.js";
 
 /** The most characters of the transcript rendering that a judge or decision model is shown, when `maxChars` is not set. */
-export const TRANSCRIPT_CHARS = 60_000;
+const TRANSCRIPT_CHARS = 60_000;
 
 /** What a judge or decision model may be shown besides the task. */
 const SEES_VALUES = ["final", "transcript", "files"] as const;

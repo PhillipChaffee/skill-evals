@@ -5,7 +5,7 @@ import type { Results } from "../evaluate.js";
 import { plantCase, script, skillsFolder } from "../testing/plant.js";
 import { readResults, sandbox } from "../testing/sandbox.js";
 import type { Sandbox } from "../testing/sandbox.js";
-import { SHOW_CUT, clean, shown } from "../show-text.js";
+import { SHOW_CUT, clean, quoted, shown } from "../show-text.js";
 
 const USAGE_ERROR = 2;
 const LONG = "x".repeat(SHOW_CUT + 50);
@@ -220,4 +220,14 @@ test("a cut never splits an escape or a surrogate pair, and clean escapes every 
   }
   expect(clean("a\u0000b\u001fc\u007fd")).toBe("a\\x00b\\x1fc\\x7fd");
   expect(shown("short")).toBe("short");
+});
+
+test("clean escapes C1 and bidirectional controls, and names are cut", () => {
+  expect(clean("a\u009bb\u202ec\u2067d\u0085")).toBe(
+    "a\\x9bb\\u202ec\\u2067d\\x85",
+  );
+  expect(quoted("n".repeat(500), "-")).toMatch(
+    /\[cut at 200 of 502 characters\]$/,
+  );
+  expect(quoted("ok", "-")).toBe('"ok"');
 });

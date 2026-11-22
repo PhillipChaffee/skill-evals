@@ -1,3 +1,5 @@
+import { valueOf } from "./checks/defaults.js";
+import type { Scale } from "./checks/judge-fields.js";
 import type { DecisionCheck, JudgedCheck, Outcome } from "./checks/index.js";
 import type {
   DecisionCall,
@@ -88,7 +90,7 @@ export async function decideAll(
   for (const check of checks) {
     // No `sees` and `["final"]` see the same thing, so they share a request.
     const key = JSON.stringify([
-      check.sees ?? ["final"],
+      valueOf(check, "sees"),
       check.files,
       check.maxChars,
     ]);
@@ -147,7 +149,7 @@ export async function judgedResult<
     run.images && check.sees?.includes("files")
       ? imagesOf(check.files ?? [], run.outcome.workspace)
       : [];
-  const scale = check.scale ?? "0-1";
+  const scale = valueOf(check, "scale") as Scale;
   const memo = run.cache
     ? memoOf(run.cache, {
         model: run.model,

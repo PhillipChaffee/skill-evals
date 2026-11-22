@@ -1,7 +1,7 @@
 import type { FieldDef } from "./fields.js";
 
 /** The seconds a `command` check may take when it sets no `timeoutSeconds`. */
-export const DEFAULT_TIMEOUT_SECONDS = 120;
+const DEFAULT_TIMEOUT_SECONDS = 120;
 
 // The fields of the `command` check, in the order the docs list them.
 export const COMMAND_FIELDS: Record<string, FieldDef> = {

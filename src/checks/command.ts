@@ -1,4 +1,3 @@
-import { DEFAULT_TIMEOUT_SECONDS } from "./command-fields.js";
 import { valueOf } from "./defaults.js";
 import fs from "node:fs";
 import type { CommandResult } from "../command.js";
@@ -124,7 +123,7 @@ function verdictOf(
     : "";
   const problem = shortfall(check, result);
   const ratio =
-    check.scoreFrom === "stdout"
+    valueOf(check, "scoreFrom") === "stdout"
       ? ratioOf(result.stdout)
       : { score: 1, problem: null };
   const failed = problem ?? ratio.problem;
@@ -160,7 +159,8 @@ const commandRule: Rule = async (check, outcome) => {
       reason: `the seed copy was changed: ${shown}${rest}`,
     };
   }
-  const timeout = given.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+  const timeout =
+    given.timeoutSeconds ?? (valueOf(given, "timeoutSeconds") as number);
   const result = await runCommand(given.run, outcome.command, timeout);
   return verdictOf(given, result, timeout);
 };

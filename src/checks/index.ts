@@ -16,13 +16,14 @@ import { COMMAND_CHECKS } from "./command.js";
 import { DISPATCH_CHECKS } from "./dispatch.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
-import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
+import { FIELDS, REGEX_FIELDS, readField } from "./fields.js";
 import {
   describeCalls,
   describeFiles,
   describeSeen,
   describeTranscript,
 } from "./describe.js";
+import { weightOf } from "./defaults.js";
 import { extensionsOf } from "./extensions.js";
 import type { Rubric, Scale, Sees } from "./judge-fields.js";
 import { MODEL_CHECKS } from "./model-checks.js";
@@ -334,10 +335,7 @@ export function readCheck(raw: unknown, where: string, mode: Mode): Check {
     at,
     mode,
   );
-  const weight =
-    record["weight"] === undefined || record["weight"] === null
-      ? 1
-      : readField({ weight: WEIGHT }, "weight", at);
+  const weight = weightOf(record, type, at);
   const given: Record<string, unknown> = {};
   const capabilities = ["requires", "ifUnsupported"].filter(
     (field) => record[field] !== undefined,

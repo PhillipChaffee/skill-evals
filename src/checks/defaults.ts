@@ -1,7 +1,7 @@
 import type { Spec } from "./index.js";
 import type { FieldDefault } from "./field-default.js";
-import type { FieldDef } from "./fields.js";
-import { FIELDS } from "./fields.js";
+import type { FieldAt, FieldDef } from "./fields.js";
+import { FIELDS, WEIGHT, readField } from "./fields.js";
 
 export { minOf } from "./min-of.js";
 
@@ -109,4 +109,19 @@ export function describeDefault(default_: FieldDefault): string {
       ? only[1]
       : entries.map(([type, shown]) => `${shown} for \`${type}\``).join(", ");
   return default_.note === undefined ? text : `${text}; ${default_.note}`;
+}
+
+/**
+ * Reads the `weight` of a check.
+ * @param record - The check as written.
+ * @param type - The check's type.
+ * @param at - Where the check is, for an error message.
+ * @returns The weight; its default (1) when it is absent or null, which counts as none.
+ * @throws {UsageError} When the weight is not a positive number.
+ */
+export function weightOf(record: Fields, type: string, at: FieldAt): unknown {
+  const given = record["weight"];
+  return given === undefined || given === null
+    ? defaultIn(WEIGHT, type, {})
+    : readField({ weight: WEIGHT }, "weight", at);
 }

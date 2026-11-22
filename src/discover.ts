@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { clean } from "./show-text.js";
 import { nameProblem } from "./case-id.js";
 import { UsageError } from "./scope.js";
 
@@ -64,9 +65,10 @@ export function discover(
     const id = names.join("/");
     const [problem] = names.flatMap((name) => nameProblem(name) ?? []);
     if (problem !== undefined) {
-      const message = `case ${id}: ${problem}`;
+      const safe = clean(id) === id ? id : clean(JSON.stringify(id));
+      const message = `case ${safe}: ${problem}`;
       if (!onError) throw new UsageError(message);
-      onError(id, message);
+      onError(safe, message);
       return [];
     }
     return [{ id, dir: where }];

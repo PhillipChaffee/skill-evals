@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import type { Sees } from "./checks/judge-fields.js";
-import { TRANSCRIPT_CHARS } from "./checks/judge-fields.js";
+import { valueOf } from "./checks/defaults.js";
 import { find } from "./checks/tree.js";
 import { GLOB_LIMIT } from "./glob.js";
 import type { TranscriptEvent } from "./harnesses/shared.js";
@@ -75,6 +75,12 @@ const lineOf = (event: TranscriptEvent, cap?: number): string =>
 const isOutput = (event: TranscriptEvent): boolean =>
   event.type === "tool_result" && event.output !== undefined;
 
+// What a judge check that shows the transcript looks like, for the default of `maxChars`.
+const TRANSCRIPT_VIEW: { type: string; sees: string[] } = {
+  type: "judge",
+  sees: ["transcript"],
+};
+
 /**
  * Writes a run's events for a model to read.
  * @param events - The run's events.
@@ -85,7 +91,7 @@ const isOutput = (event: TranscriptEvent): boolean =>
  */
 export function renderTranscript(
   events: TranscriptEvent[],
-  maxChars = TRANSCRIPT_CHARS,
+  maxChars = valueOf(TRANSCRIPT_VIEW, "maxChars") as number,
 ): string {
   const recorded = forRecord(events);
   const fits = (lines: string[], note: string): string | null => {
@@ -273,7 +279,7 @@ export function materialFor(
   outcome: { transcript: TranscriptEvent[]; workspace: string },
   attached: Attachment[] = [],
 ): Seen {
-  const sees = check.sees ?? ["final"];
+  const sees = check.sees ?? (valueOf({ type: "judge" }, "sees") as Sees[]);
   return {
     final: sees.includes("final"),
     ...(sees.includes("transcript")

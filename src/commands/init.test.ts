@@ -147,7 +147,7 @@ test("init leaves no half-made directory when a write fails", async () => {
   expect(made.status).toBe(USAGE_ERROR);
   expect(made.stderr).toMatch(/disk full/);
   expect(fs.existsSync(path.join(box.root, "evals/cases/half"))).toBe(false);
-  expect(fs.existsSync(path.join(box.root, "evals/cases"))).toBe(true);
+  expect(fs.existsSync(path.join(box.root, "evals"))).toBe(false);
 });
 
 test("a case directory name with a control character is a load error, as init says", async () => {
@@ -167,10 +167,37 @@ test("a case directory name with a control character is a load error, as init sa
   ]);
   expect(validated.status).toBe(USAGE_ERROR);
   expect(validated.stdout).toMatch(/control character/);
+  // eslint-disable-next-line no-control-regex
+  expect(validated.stdout).not.toMatch(/\u001b/);
+  expect(validated.stdout).toContain('case "a\\u001bb"');
 });
 
 test("the id rule names a part over 255 bytes, which no directory can have", () => {
   expect(nameProblem("y".repeat(256))).toMatch(/over 255 bytes/);
   expect(nameProblem("y".repeat(255))).toBeNull();
   expect(idProblem("ok/" + "é".repeat(128))).toMatch(/over 255 bytes/);
+});
+
+test("init removes the parent folders it made when a write fails, and still exits 2 when the cleanup fails", async () => {
+  const box = sandbox();
+  box.write("evals/cases/kept/prompt.md", "x\n");
+  const real = fs.writeFileSync;
+  const spy = vi.spyOn(fs, "writeFileSync").mockImplementation((...args) => {
+    if (String(args[0]).endsWith("case.json")) throw new Error("disk full");
+    real(...args);
+  });
+  const made = await box.cli(["init", "new/deep/leaf", "--kind", "trigger"]);
+  expect(made.status).toBe(USAGE_ERROR);
+  expect(fs.existsSync(path.join(box.root, "evals/cases/new"))).toBe(false);
+  expect(fs.existsSync(path.join(box.root, "evals/cases/kept/prompt.md"))).toBe(
+    true,
+  );
+  const rm = vi.spyOn(fs, "rmSync").mockImplementation(() => {
+    throw new Error("busy");
+  });
+  const again = await box.cli(["init", "other/leaf", "--kind", "trigger"]);
+  rm.mockRestore();
+  spy.mockRestore();
+  expect(again.status).toBe(USAGE_ERROR);
+  expect(again.stderr).toMatch(/disk full/);
 });

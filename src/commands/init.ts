@@ -30,16 +30,48 @@ function caseAbove(casesDir: string, id: string): string | null {
 }
 
 /**
+ * Finds the topmost directory on a path that does not exist yet.
+ * @param dir - A directory that may not exist.
+ * @returns The first missing directory from the top, which `mkdir -p` would create first; null when `dir` exists.
+ */
+function topMissing(dir: string): string | null {
+  let missing: string | null = null;
+  for (
+    let at = dir;
+    !fs.existsSync(at) && at !== path.dirname(at);
+    at = path.dirname(at)
+  ) {
+    missing = at;
+  }
+  return missing;
+}
+
+/**
+ * Removes what `init` made, without ever failing: the caller is already reporting an error.
+ * @param made - The topmost directory that `init` created.
+ */
+function undo(made: string): void {
+  try {
+    fs.rmSync(made, { recursive: true, force: true });
+  } catch {
+    // Nothing more can be done; the usage error that follows says what failed first.
+  }
+}
+
+/**
  * Creates the case directory and its two files, or leaves nothing of it.
  * @param dir - The case's directory.
  * @param template - What to write.
  * @throws {UsageError} When the directory exists (another `init` may have just made it), a folder on its path is a
- *   file, or any file system call fails. A directory that this call made is removed when a later write fails.
+ *   file, or any file system call fails. Every directory that this call made, the parents included, is removed when
+ *   a later step fails, except after finding the case directory already there, which is another `init`'s.
  */
 function writeCase(dir: string, template: Template): void {
+  const made = topMissing(path.dirname(dir)) ?? dir;
   try {
     fs.mkdirSync(path.dirname(dir), { recursive: true });
   } catch (error) {
+    undo(made);
     throw new UsageError(`cannot create ${dir}: ${messageOf(error)}`);
   }
   try {
@@ -47,11 +79,13 @@ function writeCase(dir: string, template: Template): void {
     fs.mkdirSync(dir);
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
-    throw new UsageError(
-      code === "EEXIST"
-        ? `${dir} already exists; init never overwrites a case`
-        : `cannot create ${dir}: ${messageOf(error)}`,
-    );
+    if (code === "EEXIST") {
+      throw new UsageError(
+        `${dir} already exists; init never overwrites a case`,
+      );
+    }
+    undo(made);
+    throw new UsageError(`cannot create ${dir}: ${messageOf(error)}`);
   }
   try {
     fs.writeFileSync(path.join(dir, "prompt.md"), template.prompt, {
@@ -63,7 +97,7 @@ function writeCase(dir: string, template: Template): void {
       { flag: "wx" },
     );
   } catch (error) {
-    fs.rmSync(dir, { recursive: true, force: true });
+    undo(made);
     throw new UsageError(`cannot write ${dir}: ${messageOf(error)}`);
   }
 }
