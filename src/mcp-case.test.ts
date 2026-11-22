@@ -26,7 +26,7 @@ const TOOL = {
   responses: [{ text: "one" }],
 };
 const CLAUDE = "claude-code";
-const MOCK_LOG = "mock-log";
+const CALLS_LOG = "mock-log";
 const QUALIFIED = "tracker.get_issue";
 const GO = "go\n";
 const LATER = "2026-01-02T00:00:00Z";
@@ -132,13 +132,13 @@ test("the mock log is merged by time when events state one, and last when none d
   expect(last.transcript.map((e) => [e.type, e.kind, e.source])).toEqual([
     ["text", undefined, undefined],
     ["tool_call", "read", undefined],
-    ["tool_call", "mcp", MOCK_LOG],
-    ["tool_result", "mcp", MOCK_LOG],
+    ["tool_call", "mcp", CALLS_LOG],
+    ["tool_result", "mcp", CALLS_LOG],
   ]);
   expect(last.transcript.map((e) => e.index)).toEqual([0, 1, 2, 3]);
   expect(last.toolCalls.map((c) => [c.name, c.source, c.agent?.type])).toEqual([
     ["Read", undefined, "main"],
-    [QUALIFIED, MOCK_LOG, "unknown"],
+    [QUALIFIED, CALLS_LOG, "unknown"],
   ]);
   // With times: a call goes after the last event that is not later than it.
   const timed = {
@@ -162,7 +162,7 @@ test("the mock log is merged by time when events state one, and last when none d
   ]);
   // A call before every stamped event goes first.
   const early = mergeMockLog(timed, [logged("2025-01-01T00:00:00Z")]);
-  expect(early.transcript[0]?.source).toBe(MOCK_LOG);
+  expect(early.transcript[0]?.source).toBe(CALLS_LOG);
   // Nothing to merge, or a stream that shows its MCP calls already: the run is as it was.
   expect(mergeMockLog(parsed, [])).toBe(parsed);
   expect(mergeMockLog(last, [logged("2026-01-01T00:00:05Z")])).toBe(last);
@@ -223,6 +223,7 @@ test("a call that only the mock log showed has no agent that a main or subagent 
   // An order, a first call and a turn cannot be determined: the check is unscored, which makes the run invalid.
   for (const given of [
     { type: "first_tool", kind: "mcp" },
+    { type: "tool_called", kind: "mcp", min: 1, turn: 1 },
     { type: "tool_called", kind: "mcp", first: true },
     { type: "tool_called", kind: "mcp", min: 1, sameTurn: true },
     { type: "tool_order", before: { kind: "mcp" }, after: { kind: "read" } },

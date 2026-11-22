@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Harness, Parsed } from "../harnesses/shared.js";
 import { messageOf, tempDir } from "../scope.js";
+import { snapshot } from "../snapshot.js";
+import { canonical, sha256 } from "../tree-hash.js";
 import { mergeMockLog } from "./merge.js";
 import type { McpCall, McpServerEntry, McpSource } from "./types.js";
 
@@ -16,12 +18,38 @@ export interface StagedMcp {
   log: string;
   /** The servers, ready for `Harness.registerMcp`. */
   servers: McpServerEntry[];
+  /** A hash of every file of the directory but the log, taken before the harness starts; `startMcp` sets it. */
+  sealed: string;
   /** Removes the directory. */
   dispose: () => void;
 }
 
 /**
- * Copies the mock server's script into the run's directory under a neutral name, so that the command the agent can read
+ * Hashes what the harness's servers run from: the script, the tool files and the config, not the log they write.
+ * @param dir - The run's mock directory.
+ * @returns The hash. A change to any file, an added file included, changes it.
+ */
+function seal(dir: string): string {
+  const files = new Map(snapshot(dir));
+  files.delete(LOG_NAME);
+  return sha256(canonical(Object.fromEntries(files)));
+}
+
+/**
+ * Makes the text of the server script that goes into a run: without its shebang, comments and blank lines, so that
+ * nothing in it says what it is for or whose it is.
+ * @param source - The script as this package ships it.
+ * @returns The same program without comments.
+ */
+const neutral = (source: string): string =>
+  source
+    .replace(/^#!.*\n/, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^[ \t]*\/\/.*\n/gm, "")
+    .replace(/\n\s*\n/g, "\n");
+
+/**
+ * Writes the mock server's script into the run's directory under a neutral name, so that the command the agent can read
  * names neither this package nor its sources. The script imports nothing of the package at run time.
  * @param dir - The run's mock directory.
  * @returns The executable and its leading arguments; the server's name and directory follow.
@@ -31,10 +59,8 @@ function stageCommand(dir: string): { command: string; args: string[] } {
   const ext = path.extname(import.meta.filename) === ".ts" ? ".mts" : ".mjs";
   const script = path.join(dir, `server${ext}`);
   const original = path.extname(import.meta.filename);
-  fs.copyFileSync(
-    path.join(import.meta.dirname, `mock-server${original}`),
-    script,
-  );
+  const source = path.join(import.meta.dirname, `mock-server${original}`);
+  fs.writeFileSync(script, neutral(fs.readFileSync(source, "utf8")));
   return { command: process.execPath, args: [script] };
 }
 
@@ -55,10 +81,10 @@ export function stageMcp(source: McpSource): StagedMcp {
       name,
       command,
       args: [...args, name, copy],
-      env: { MOCK_LOG: log },
+      env: { CALLS_LOG: log },
     };
   });
-  return { dir: temp.dir, log, servers, dispose: temp.dispose };
+  return { dir: temp.dir, log, servers, sealed: "", dispose: temp.dispose };
 }
 
 /**
@@ -123,6 +149,8 @@ export function startMcp(
   }
   try {
     harness.registerMcp(staged.servers, { dir: staged.dir, ...dirs });
+    // Sealed once everything the servers read is in place, so that an edit made while the agent runs is seen.
+    staged.sealed = seal(staged.dir);
     return { staged, failure: null };
   } catch (error) {
     return {
@@ -204,12 +232,22 @@ export function withMockLog(
   if (started === null) return { parsed, mcpLog: null, mcpProblems: [] };
   const mcpLog = readLogText(started.staged.log);
   const calls = parseLog(mcpLog);
+  // An agent that edits the servers' files can make them answer anything and still log correctly.
+  const changed =
+    seal(started.staged.dir) === started.staged.sealed
+      ? []
+      : ["the mock servers' files were changed during the run"];
   if (!harness.capabilities.has("mcp")) {
-    return { parsed, mcpLog, mcpProblems: [] };
+    return { parsed, mcpLog, mcpProblems: changed };
   }
   if (harness.mcpCalls === "log") {
-    return { parsed: mergeMockLog(parsed, calls), mcpLog, mcpProblems: [] };
+    const merged = mergeMockLog(parsed, calls);
+    return { parsed: merged, mcpLog, mcpProblems: changed };
   }
   const servers = started.staged.servers.map((server) => server.name);
-  return { parsed, mcpLog, mcpProblems: disagreement(parsed, calls, servers) };
+  return {
+    parsed,
+    mcpLog,
+    mcpProblems: [...changed, ...disagreement(parsed, calls, servers)],
+  };
 }

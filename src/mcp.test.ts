@@ -242,9 +242,7 @@ test("main needs a server name and a directory, and serves what it is given", as
   const dir = plantServer(sandbox());
   const usage = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   expect(await main([], {})).toBe(2);
-  expect(usage).toHaveBeenCalledWith(
-    "usage: skill-evals-mcp-mock <server> <directory>\n",
-  );
+  expect(usage).toHaveBeenCalledWith("usage: server <name> <directory>\n");
   usage.mockRestore();
   const served = main(["tracker", dir], {}, { input, output });
   input.end(`${JSON.stringify(request(1, "ping"))}\n`);

@@ -59,7 +59,7 @@
     },
     {
       "type": "output_lacks",
-      "pattern": "deploy 8812",
+      "pattern": "(?:chat|#checkout-oncall)(?![^.]{0,200}(?:unavailable|could not|couldn't|unable|failed|authentication|denied|not reachable))[^.]{0,200}\\b(?:says?|said|reports?|reported|shows?|showed|states?|stated|notes?|noted|confirms?|confirmed|mentions?|mentioned|indicates?|rolled back|rolling back|roll(?:ed)? back|maya|deploy)\\b|according to (?:the )?(?:on-call )?chat",
       "flags": "i"
     }
   ],

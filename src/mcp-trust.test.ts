@@ -5,7 +5,12 @@ import { HARNESSES } from "./harnesses/index.js";
 import { plugin } from "./testing/plant.js";
 import { scoreSubject } from "./testing/runs.js";
 import { sandbox } from "./testing/sandbox.js";
-import { FORGED_ISSUE, GET_ISSUE, plantLookup } from "./testing/mcp.js";
+import {
+  FORGED_ISSUE,
+  GET_ISSUE,
+  TAMPERED_SERVER,
+  plantLookup,
+} from "./testing/mcp.js";
 
 const NONE = "none";
 const MCP_FLAG = "--mcp-config";
@@ -115,4 +120,23 @@ test("claude-code names the mock config, turns the claude.ai connectors off, and
   const plain = claude.invocation(base);
   expect(plain.args).not.toContain(MCP_FLAG);
   expect(plain.env).not.toHaveProperty("ENABLE_CLAUDEAI_MCP_SERVERS");
+});
+
+test("an agent that edits the files the mock servers run from makes the run invalid", async () => {
+  const box = sandbox();
+  const cases = plantLookup(box, [TAMPERED_SERVER, GET_ISSUE]);
+  const ran = await scoreSubject(box, { subject: NONE, cases });
+  expect(ran.status).toBe(EXIT.invalid);
+  const [record] = ran.records;
+  expect(record?.score).toBeNull();
+  expect(record?.mcpProblems).toEqual([
+    "the mock servers' files were changed during the run",
+  ]);
+  // The same run without the edit is valid.
+  const honest = sandbox();
+  const same = await scoreSubject(honest, {
+    subject: NONE,
+    cases: plantLookup(honest, [GET_ISSUE]),
+  });
+  expect(same.records[0]?.mcpProblems).toBeUndefined();
 });

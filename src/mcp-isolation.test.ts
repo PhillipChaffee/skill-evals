@@ -31,7 +31,7 @@ test("the mock directory is never inside the workspace", async () => {
   // The config, the log and the server's own files all lie outside the workspace and the home.
   const named = [
     seen.configFile,
-    server?.env["MOCK_LOG"] ?? "",
+    server?.env["CALLS_LOG"] ?? "",
     server?.args.at(-1) ?? "",
   ];
   for (const file of named) {
@@ -62,19 +62,19 @@ test("the cases path never appears in what the agent can see", async () => {
   expect(inside(cases, copy)).toBe(false);
 });
 
-test("MOCK_LOG reaches the servers only, never the agent's environment", async () => {
+test("CALLS_LOG reaches the servers only, never the agent's environment", async () => {
   const box = sandbox();
   const leaked = "/leak/by/environment";
   await scoreSubject(box, {
     subject: NONE,
     cases: plantLookup(box),
-    env: { MOCK_LOG: leaked },
+    env: { CALLS_LOG: leaked },
   });
   const seen = seenBy(box);
-  expect(seen.env).not.toContain("MOCK_LOG");
+  expect(seen.env).not.toContain("CALLS_LOG");
   const env = configOf(seen).mcpServers[SERVER]?.env ?? {};
-  expect(Object.keys(env)).toEqual(["MOCK_LOG"]);
-  expect(env["MOCK_LOG"]).not.toBe(leaked);
+  expect(Object.keys(env)).toEqual(["CALLS_LOG"]);
+  expect(env["CALLS_LOG"]).not.toBe(leaked);
 });
 
 test("the mock log is kept in the out directory, after the run's own copy is gone", async () => {

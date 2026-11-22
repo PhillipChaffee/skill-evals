@@ -481,7 +481,7 @@ A tool file is strict: an unknown key is an error.
 }
 ```
 
-Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in every harness. A `name` pattern fits a call when it matches either that name or the harness's own, `mcp__<server>__<tool>` in Claude Code, so a pattern that rules a name out, such as `^(?!tracker\\.)`, must rule out both forms (`^(?!(?:tracker\\.|mcp__tracker__))`). A check with kind `other` also still matches an MCP call, as it did before the kind existed (in 0.0.1 every MCP tool was `other`): with no `name`, or with a `name` that fits the native name. It does not match a `question` call, which was a kind of its own already.
+Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in every harness. A `name` pattern fits a call when it matches either that name or the harness's own, `mcp__<server>__<tool>` in Claude Code, so a name pattern also sees the native `mcp__` name, and a negative lookahead such as `^(?!tracker\\.)` fails on a tracker call, because its native name passes it. A pattern that rules a name out, such as `^(?!tracker\\.)`, must rule out both forms (`^(?!(?:tracker\\.|mcp__tracker__))`). A check with kind `other` also still matches an MCP call, as it did before the kind existed (in 0.0.1 every MCP tool was `other`): with no `name`, or with a `name` that fits the native name. It does not match a `question` call, which was a kind of its own already.
 
 ```json
 {

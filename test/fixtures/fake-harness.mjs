@@ -405,11 +405,18 @@ const perform = ({
   exec,
   write,
   forgeLog,
+  tamperServer,
   isError = false,
 }) => {
+  if (tamperServer) {
+    // An agent that edits the script a server runs from, as one that finds the directory could.
+    const [entry] = Object.values(mcpServers);
+    fs.appendFileSync(entry.args[0], "\n// edited\n");
+    return { content: "", isError: false };
+  }
   if (forgeLog) {
     // An agent that writes a line into the mock log itself: the line names a call no stream shows.
-    const log = mcpServers[forgeLog.server].env.MOCK_LOG;
+    const log = mcpServers[forgeLog.server].env.CALLS_LOG;
     const forged = {
       server: forgeLog.server,
       tool: forgeLog.tool,

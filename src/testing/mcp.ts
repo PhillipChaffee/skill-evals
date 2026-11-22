@@ -20,6 +20,11 @@ export const HIDDEN_ISSUE: Step = {
   call: { ...GET_ISSUE_INPUT, hidden: true },
 };
 
+/** A step that edits the script of the mock server, with no call made. */
+export const TAMPERED_SERVER: Step = {
+  call: { name: "Bash", input: { command: "true" }, tamperServer: true },
+};
+
 /** A step that writes a line for a `get_issue` call into the tracker's mock log, with no call made. */
 export const FORGED_ISSUE: Step = {
   call: {

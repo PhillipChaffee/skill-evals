@@ -77,9 +77,14 @@ test("the staged servers are a copy, and removing them leaves the case alone", (
   expect(server?.args[0]).not.toContain("skill-evals");
   expect(path.basename(staged.dir)).toMatch(/^svc-/);
   expect(path.basename(staged.log)).toBe("calls.log");
+  expect(Object.keys(server?.env ?? {})).toEqual(["CALLS_LOG"]);
+  // The script the agent can read says nothing of what it is for or whose it is.
+  const script = fs.readFileSync(server?.args[0] ?? "", "utf8");
+  expect(script).not.toMatch(/mock|skill-evals|^#!/im);
+  expect(script).not.toContain("//");
   expect(server?.args.at(-2)).toBe(SERVER);
   expect(server?.args.at(-1)).toBe(path.join(staged.dir, "servers/tracker"));
-  expect(server?.env).toEqual({ MOCK_LOG: staged.log });
+  expect(server?.env).toEqual({ CALLS_LOG: staged.log });
   expect(fs.existsSync(path.join(staged.dir, "servers/tracker/get.json"))).toBe(
     true,
   );

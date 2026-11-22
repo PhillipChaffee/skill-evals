@@ -95,7 +95,7 @@
     },
     {
       "type": "output_lacks",
-      "pattern": "(?:do(?:es)?\\s+not|don't|doesn't|aren't|isn't|never)\\s+(?:\\w+\\s+){0,2}(?:disagree|conflict|contradict)|\\bno\\s+(?:real\\s+)?(?:conflict|contradiction|disagreement|inconsisten)",
+      "pattern": "(?:\\b(?:not|no|nothing|never|none|cannot)\\b|n't)[ \\t]+(?:\\w+[ \\t]+){0,3}(?:disagree|conflict|contradict|inconsisten|at odds)|(?:disagree|conflict|contradict|inconsisten)\\w*[ \\t]+(?:\\w+[ \\t]+){0,2}(?:nothing|none)\\b",
       "flags": "i"
     }
   ],

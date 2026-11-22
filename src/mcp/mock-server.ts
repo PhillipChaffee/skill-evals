@@ -320,7 +320,7 @@ export function serve(
 /**
  * Starts the server the command line names.
  * @param argv - The server's name and the directory of its tool files.
- * @param env - The environment; `MOCK_LOG` names the log file.
+ * @param env - The environment; `CALLS_LOG` names the log file.
  * @param streams - Where the messages come from and go to. Default: standard input and output.
  * @returns The exit code: 0 after the input ended, 2 for a command line that does not name a server and a directory.
  */
@@ -331,10 +331,10 @@ export async function main(
 ): Promise<number> {
   const [name, dir] = argv;
   if (name === undefined || dir === undefined) {
-    process.stderr.write("usage: skill-evals-mcp-mock <server> <directory>\n");
+    process.stderr.write("usage: server <name> <directory>\n");
     return USAGE;
   }
-  await serve(readServer(name, dir), streams, env["MOCK_LOG"]);
+  await serve(readServer(name, dir), streams, env["CALLS_LOG"]);
   return 0;
 }
 

@@ -14,7 +14,7 @@ const ORDERED = ["tool_order", "first_tool"];
  * @param check - Any check of the case.
  * @param outcome - What the run left behind.
  * @returns Undefined when the run has no such call, or the check does not look at who made a call or when. Otherwise
- *   a verdict that makes the check unscored (so the run is invalid) for an order, a first call or a turn, and score 0 for
+ *   a verdict that makes the check unscored (so the run is invalid) for an order, a first call, a turn or a check scoped to a user turn, and score 0 for
  *   a `by` that names anyone but `{ agent: "unknown" }`: such a check must not pass because the log cannot say who
  *   made the call.
  */
@@ -25,7 +25,12 @@ export function mockLogVerdict(
   if (!outcome.toolCalls.some((call) => call.source === "mock-log")) {
     return undefined;
   }
-  if (ORDERED.includes(check.type) || check.first || check.sameTurn) {
+  if (
+    ORDERED.includes(check.type) ||
+    check.first ||
+    check.sameTurn ||
+    check.turn !== undefined
+  ) {
     return {
       score: null,
       reason:

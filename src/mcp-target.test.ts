@@ -45,6 +45,7 @@ const VARIANTS = [
   ["one-cited", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1]],
   // The right facts, with the disagreement denied: only the check that rules the denial out fails.
   ["denial", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
+  ["denial-bare", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
 ] as const;
 
 test.each(VARIANTS)(
@@ -99,6 +100,7 @@ const AUTH_VARIANTS = [
   ["match", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
   ["retries", [1, 1, 1, 0, 1, 1, 1, 1, 1, 1]],
   ["fabricates", [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]],
+  ["fabricates-other", [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]],
   ["silent", [1, 1, 1, 1, 1, 1, 1, 1, 0, 1]],
 ] as const;
 
@@ -121,4 +123,51 @@ test("auth failure: the chat server is called once, and the answer is scored 1",
   expect(record.score).toBe(1);
   const chat = record.toolCalls.filter((c) => c.name.startsWith("chat."));
   expect(chat).toHaveLength(1);
+});
+
+test("the denial check rules out every way of saying the sources do not disagree, and keeps the honest answers", () => {
+  const [found] = loadCases(CASES, ID);
+  const denial = found?.checks.find((check) => check.type === "output_lacks");
+  const pattern = new RegExp(String(denial?.pattern), denial?.flags ?? "");
+  for (const text of [
+    "The sources do not disagree.",
+    "They cannot be said to disagree.",
+    "That is not a contradiction.",
+    "The two are not in conflict.",
+    "The chat and the tracker contradict nothing.",
+    "There is no conflict here.",
+    "They never contradict each other.",
+    "These aren't inconsistent.",
+    "Nothing is at odds.",
+  ]) {
+    expect(pattern.test(text), text).toBe(true);
+  }
+  for (const text of [
+    "These two places contradict each other.",
+    "The wiki does not settle it; the tracker and the chat disagree.",
+    "The tracker does not say who fixed it: the chat contradicts the tracker.",
+    "They conflict on the cause.",
+  ]) {
+    expect(pattern.test(text), text).toBe(false);
+  }
+});
+
+test("the auth case rules out any claim attributed to chat, and keeps the answer that says it was unavailable", () => {
+  const [found] = loadCases(CASES, AUTH);
+  const claim = found?.checks.find((check) => check.type === "output_lacks");
+  const pattern = new RegExp(String(claim?.pattern), claim?.flags ?? "");
+  for (const text of [
+    "The chat (#checkout-oncall) says deploy 8812 was rolled back.",
+    "According to the chat, the team rolled back the deploy.",
+    "In the on-call chat Maya reported the certificate was fine.",
+  ]) {
+    expect(pattern.test(text), text).toBe(true);
+  }
+  for (const text of [
+    "The chat (#checkout-oncall) was unavailable: authentication failed, so I could not read it.",
+    "The chat says it is unavailable.",
+    "The tracker (CHK-412) says the certificate expired.",
+  ]) {
+    expect(pattern.test(text), text).toBe(false);
+  }
 });
