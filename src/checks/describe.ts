@@ -44,6 +44,9 @@ export function describeCalls(check: Check): string[] {
       : []),
     ...(check.anyOf ? [`anyOf ${check.anyOf.join(", ")}`] : []),
     ...(check.agent === undefined ? [] : [`agent ${check.agent}`]),
+    ...(check.dispatches === undefined
+      ? []
+      : [`dispatches ${check.dispatches}`]),
     ...(check.briefWindow === undefined
       ? []
       : [`briefWindow ${String(check.briefWindow)}`]),

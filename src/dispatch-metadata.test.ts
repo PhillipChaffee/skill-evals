@@ -173,3 +173,34 @@ test("a run keeps the dispatch of each subagent call and the tokens of each agen
   ]);
   expect(record?.agentTokens).toHaveProperty("main");
 });
+
+const SHAPE = { type: null, model: null, effort: null };
+
+test.each([
+  [
+    "codex",
+    {
+      type: "item.completed",
+      item: { type: "collab_tool_call", tool: "spawn", prompt: "go" },
+    },
+  ],
+  [
+    "cursor",
+    {
+      type: "tool_call",
+      subtype: "started",
+      tool_call: { taskToolCall: { args: { prompt: "go" } } },
+    },
+  ],
+  [
+    "opencode",
+    {
+      type: "tool_use",
+      part: { tool: "task", callID: "c1", state: { input: { prompt: "go" } } },
+    },
+  ],
+])("%s: a dispatch call carries the dispatch field shape", (id, event) => {
+  const [call] = parseText(id, lines(event)).toolCalls;
+  expect(call?.kind).toBe("subagent");
+  expect(call?.dispatch).toEqual(SHAPE);
+});

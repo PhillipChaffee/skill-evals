@@ -1,5 +1,5 @@
 {
-  "description": "A skill-authoring case: a baseline subagent runs before the new skill is first written, the new file has valid front matter, and the loaded subject is left as it was.",
+  "description": "A skill-authoring case. The command check proves the new skill has a name and description in its front matter, tool_order proves a baseline subagent ran before the skill file was first written, and subject_unchanged proves the loaded copy of the subject was left alone (a change to the source directory itself is a hard error of the command, not a check).",
   "tags": ["skills", "authoring", "target"],
   "checks": [
     {
@@ -20,7 +20,9 @@
         "which": "first"
       }
     },
-    { "type": "subject_unchanged" }
+    {
+      "type": "subject_unchanged"
+    }
   ],
   "timeoutSeconds": 300
 }

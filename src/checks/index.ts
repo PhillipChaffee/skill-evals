@@ -61,6 +61,7 @@ interface CheckFields {
   maxDurationMs?: number;
   by?: By;
   agent?: string;
+  dispatches?: string;
   briefMatches?: string;
   briefWindow?: number;
   modelMatches?: string;

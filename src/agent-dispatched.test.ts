@@ -10,6 +10,8 @@ import { plantCase } from "./testing/plant.js";
 import { sandbox } from "./testing/sandbox.js";
 import { CLAUDE_CODE, check, harnessOf } from "./testing/attribution.js";
 
+const GENERIC = "general-purpose";
+const INLINED = "matched by inlined definition";
 const NO_DISPATCH: Dispatch = { type: null, model: null, effort: null };
 
 /**
@@ -68,7 +70,7 @@ test("agent_dispatched counts by normalized name", () => {
 
 test("agent_dispatched falls back to an inlined definition", () => {
   const inlined = (prompt: string) =>
-    dispatched({ subagent_type: "general-purpose", prompt });
+    dispatched({ subagent_type: GENERIC, prompt });
   const given = {
     type: "agent_dispatched",
     agent: "comment-sicko",
@@ -81,14 +83,14 @@ test("agent_dispatched falls back to an inlined definition", () => {
     ),
   );
   expect(front.score).toBe(1);
-  expect(front.reason).toContain("matched by inlined definition");
+  expect(front.reason).toContain(INLINED);
   // The bare name, as a whole word in the first 400 characters; a dispatch with no type is generic too.
   const bare = run(
     given,
     dispatched({ prompt: "You are comment-sicko. Review it." }),
   );
   expect(bare.score).toBe(1);
-  expect(bare.reason).toContain("matched by inlined definition");
+  expect(bare.reason).toContain(INLINED);
   // Past the window the bare name does not count, until the check widens the window.
   const late = inlined(`${"x ".repeat(250)}comment-sicko`);
   expect(run(given, late).score).toBe(0);
@@ -185,7 +187,7 @@ test("a planner that was dispatched and produced no events passes a claim that i
     run(
       claim,
       dispatched({
-        subagent_type: "general-purpose",
+        subagent_type: GENERIC,
         prompt: "name: research-planner",
       }),
     ).score,
@@ -227,4 +229,80 @@ test("agent_dispatched rejects a window that is no positive whole number, and sh
   expect(described).toContain("planner");
   expect(described).toContain("briefWindow 100");
   expect(described).toContain("min 2");
+});
+
+test("the bare-name rule does not read meaning: a negated mention counts", () => {
+  const given = {
+    type: "agent_dispatched",
+    agent: "research-synthesizer",
+  } as const;
+  const negated = dispatched({
+    subagent_type: GENERIC,
+    prompt: "Do not act like the research-synthesizer. Only list files.",
+  });
+  expect(run(given, negated).reason).toContain(INLINED);
+});
+
+test("the dispatches matcher key fits a call by the rule of agent_dispatched, in every matcher", () => {
+  const prefixed = dispatched({ subagent_type: "magic:researcher:researcher" });
+  const inlined = dispatched({
+    subagent_type: GENERIC,
+    prompt: "name: researcher\nRead it.",
+  });
+  const other = dispatched({ subagent_type: "planner", prompt: "researcher" });
+  const read: ToolCall = { name: "Read", kind: "read", input: {} };
+  const calls = [prefixed, inlined, other, read];
+  const count = (given: Given) => run(given, ...calls).score;
+  expect(
+    count({ type: "tool_called", dispatches: "researcher", min: 2, max: 2 }),
+  ).toBe(1);
+  expect(count({ type: "tool_called", dispatches: "researcher", min: 3 })).toBe(
+    0,
+  );
+  expect(count({ type: "tool_not_called", dispatches: "planner" })).toBe(0);
+  expect(count({ type: "tool_not_called", dispatches: "reviewer" })).toBe(1);
+  expect(
+    count({
+      type: "tool_order",
+      before: { dispatches: "researcher", which: "last" },
+      after: { dispatches: "planner" },
+    }),
+  ).toBe(1);
+  expect(
+    count({ type: "first_tool", matches: { dispatches: "researcher" } }),
+  ).toBe(1);
+  expect(
+    count({
+      type: "first_tool",
+      matches: { kind: "read" },
+      ignoring: [{ dispatches: "researcher" }, { dispatches: "planner" }],
+    }),
+  ).toBe(1);
+  // Only a subagent call can be a dispatch.
+  expect(
+    run(
+      { type: "tool_called", dispatches: "researcher" },
+      { name: "Bash", kind: "shell", input: { command: "name: researcher" } },
+    ).score,
+  ).toBe(0);
+});
+
+test("dispatches needs subagents, in a check and in a matcher, and shows in describeCheck", () => {
+  const box = sandbox();
+  plantCase(box, [
+    { type: "tool_called", dispatches: "planner" },
+    {
+      type: "tool_order",
+      sequence: [{ dispatches: "a" }, { dispatches: "b" }],
+    },
+  ]);
+  const [loaded] = loadCases(path.join(box.root, "cases"));
+  if (!loaded) throw new Error("no case");
+  expect(applicability(harnessOf("pi"), loaded)).toMatchObject({
+    applicable: false,
+    missing: ["subagents"],
+  });
+  expect(describeCheck({ ...loaded.checks[0], weight: 1 } as never)).toContain(
+    "dispatches planner",
+  );
 });

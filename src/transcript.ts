@@ -139,6 +139,7 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
         kind: e.kind ?? "other",
         input: e.input,
         agent: e.agent,
+        // An adapter that attaches no `dispatch` to its subagent calls gets all nulls, never a missing field.
         ...(e.kind === "subagent"
           ? { dispatch: e.dispatch ?? { ...NO_DISPATCH } }
           : {}),

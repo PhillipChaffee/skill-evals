@@ -25,8 +25,9 @@ const TOOL_FIELDS = {
     "minDurationMs",
     "maxDurationMs",
     "by",
+    "dispatches",
   ],
-  oneOf: ["kind", "name", "by"],
+  oneOf: ["kind", "name", "by", "dispatches"],
 } satisfies Partial<Spec>;
 
 const calls = (n: number): string =>
@@ -43,6 +44,7 @@ const ownMatcher = ({
   minDurationMs,
   maxDurationMs,
   by,
+  dispatches,
 }: RuledCheck): ToolMatcher => ({
   ...(kind !== undefined && { kind }),
   ...(name !== undefined && { name }),
@@ -53,6 +55,7 @@ const ownMatcher = ({
   ...(minDurationMs !== undefined && { minDurationMs }),
   ...(maxDurationMs !== undefined && { maxDurationMs }),
   ...(by !== undefined && { by }),
+  ...(dispatches !== undefined && { dispatches }),
 });
 
 /**

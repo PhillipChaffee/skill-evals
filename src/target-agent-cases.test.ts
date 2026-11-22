@@ -1,8 +1,17 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { expect, onTestFinished, test } from "vitest";
 import { loadCases } from "./cases.js";
 import { snapshot } from "./snapshot.js";
-import { BLINDING, CASES, TARGET, play, scores } from "./testing/target.js";
+import {
+  BLINDING,
+  CASES,
+  TARGET,
+  play,
+  run,
+  scores,
+} from "./testing/target.js";
 
 test("the agent target cases tell the agent nothing about being graded", () => {
   for (const id of [
@@ -21,7 +30,10 @@ const PIPELINE = [
   ["one-researcher", [1, 0, 1, 1, 1, 1, 1, 1, 1]],
   ["sequential", [1, 0, 1, 1, 1, 1, 1, 1, 1]],
   ["two-synthesizers", [1, 1, 0, 1, 1, 1, 1, 1, 1]],
+  // The first pair is one researcher and the second comes after the synthesizer, so it fails sameTurn as well as the order.
   ["synthesizer-early", [1, 0, 1, 0, 1, 1, 1, 1, 1]],
+  // A generic dispatch whose brief never names the synthesizer is not one.
+  ["generic-synthesizer", [1, 1, 0, 0, 1, 1, 1, 1, 1]],
   ["researcher-edits", [1, 1, 1, 1, 0, 1, 1, 1, 0]],
   ["researcher-writes", [1, 1, 1, 1, 1, 0, 0, 1, 1]],
   ["two-files", [1, 1, 1, 1, 1, 1, 0, 1, 1]],
@@ -120,4 +132,30 @@ test("kit editing: a run that edits the loaded subject is flagged and leaves the
   expect(record.subjectMutated).toBe(true);
   expect(record.subjectChanges?.modified).toContain("bug-fix/SKILL.md");
   expect(snapshot(source)).toEqual(before);
+});
+
+test.each(["prefixed", "inlined-synthesizer"])(
+  "research pipeline: %s dispatches still pass every check",
+  async (name) => {
+    const record = await play(`research-pipeline-shape.${name}`);
+    expect(scores(record)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1]);
+  },
+);
+
+test("research pipeline: the inlined synthesizer is found by its definition", async () => {
+  const record = await play("research-pipeline-shape.inlined-synthesizer");
+  expect(record.checks[2]?.reason).toContain("matched by inlined definition");
+});
+
+test("kit editing: a script that edits the source directory itself makes the command fail", async () => {
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), "subject-"));
+  onTestFinished(() => {
+    fs.rmSync(source, { recursive: true, force: true });
+  });
+  fs.cpSync(path.join(TARGET, "subject"), source, { recursive: true });
+  const ran = await run("kit-editing-in-isolation.edits-source", source);
+  expect(ran.status).toBe(1);
+  expect(ran.stderr).toContain(
+    `the subject directory changed during the run: ${path.join(source, "bug-fix/SKILL.md")}`,
+  );
 });

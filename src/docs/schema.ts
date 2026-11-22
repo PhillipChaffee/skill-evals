@@ -86,13 +86,13 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
 /**
  * Makes the schema of a matcher.
  * @param extras - The keys of the field besides the matcher keys.
- * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name`, `inputMatches` and `by`.
+ * @returns A strict object with the keys a matcher loads with, and at least one of `kind`, `name`, `inputMatches`, `by` and `dispatches`.
  */
 function matcherSchema(extras: Record<string, FieldDef> = {}): Schema {
   return {
     type: "object",
     properties: propertiesOf({ ...MATCHER_KEYS, ...extras }),
-    anyOf: ["kind", "name", "inputMatches", "by"].map((key) => ({
+    anyOf: ["kind", "name", "inputMatches", "by", "dispatches"].map((key) => ({
       required: [key],
     })),
     additionalProperties: false,

@@ -3,54 +3,8 @@ import type { ToolCall } from "../harnesses/shared.js";
 import { checkBounds } from "./bounds.js";
 import type { RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS, regex } from "./rules.js";
-
-const DEFAULT_WINDOW = 400;
-const SPECIAL = /[.*+?^${}()|[\]\\]/g;
-
-/** How a dispatch was found to start the agent. */
-type Rule = "type" | "inlined definition";
-
-/**
- * Reads the brief of a dispatch call.
- * @param call - A call of kind `subagent`.
- * @returns The text of its input's `prompt`, then its `description`, one on each line; empty when it has neither.
- */
-function briefOf(call: ToolCall): string {
-  const given = Object(call.input) as Record<string, unknown>;
-  return ["prompt", "description"]
-    .flatMap((key) => (typeof given[key] === "string" ? [given[key]] : []))
-    .join("\n");
-}
-
-/**
- * Names the type a dispatch asked for.
- * @param call - A call of kind `subagent`.
- * @returns The normalized type; empty when the dispatch names none.
- */
-const typeOf = (call: ToolCall): string =>
-  normalizeAgent(call.dispatch?.type ?? "");
-
-/**
- * Finds how a dispatch starts an agent, if it does.
- * @param call - A call of kind `subagent`.
- * @param agent - The agent's normalized name.
- * @param window - How far into the brief the bare name counts.
- * @returns `type` when the dispatch's type is the agent. Only for a dispatch of no type or the generic one:
- *   `inlined definition` when a line `name: <agent>` is anywhere in the brief, or the name is a whole word in the first
- *   `window` characters of it; otherwise null.
- */
-function ruleOf(call: ToolCall, agent: string, window: number): Rule | null {
-  const type = typeOf(call);
-  if (type === agent) return "type";
-  if (type !== "" && type !== GENERIC_AGENT) return null;
-  const brief = briefOf(call);
-  const name = agent.replace(SPECIAL, "\\$&");
-  const alone = `(?<![\\w-])${name}(?![\\w-])`;
-  const line = new RegExp(`^\\s*name:\\s*["']?${name}["']?\\s*$`, "m");
-  return line.test(brief) || new RegExp(alone).test(brief.slice(0, window))
-    ? "inlined definition"
-    : null;
-}
+import type { Rule } from "../dispatch-rule.js";
+import { DEFAULT_WINDOW, briefOf, ruleOf, typeOf } from "../dispatch-rule.js";
 
 /** What a dispatch must be to count. */
 interface Wants {
@@ -135,7 +89,7 @@ export const DISPATCH_CHECKS = {
     ],
     scores:
       "The number of dispatches that start the agent is from `min` to `max`, and each one's brief fits `briefMatches` and its model fits `modelMatches`, where given.",
-    note: "A dispatch starts the agent when its type, normalized, is the `agent` (`matched by type`). A dispatch of no type, or of `general-purpose`, starts it when its brief holds a line `name: <agent>` anywhere, or the agent name as a whole word in the first `briefWindow` (default 400) characters (`matched by inlined definition`); a dispatch with a type of its own is judged by the type alone. The brief is the dispatch's `prompt` text, then its `description`. A dispatch that carries no model does not match `modelMatches`, and the reason says so. `min` defaults to 1, and to 0 when `max` is 0. Needs a harness with `subagents`.",
+    note: "A dispatch starts the agent when its type, normalized, is the `agent` (`matched by type`). A dispatch of no type, or of `general-purpose`, starts it when its brief holds a line `name: <agent>` anywhere, or the agent name as a whole word in the first `briefWindow` (default 400) characters (`matched by inlined definition`); the bare-name rule does not read meaning, so a negated mention such as `do not act like the research-synthesizer` also counts; a dispatch with a type of its own is judged by the type alone. The brief is the dispatch's `prompt` text, then its `description`. A dispatch that carries no model does not match `modelMatches`, and the reason says so. `min` defaults to 1, and to 0 when `max` is 0. Needs a harness with `subagents`.",
     needs: () => ["subagents"],
     validate: checkBounds,
     rule: (check, outcome) => dispatched(check, outcome.toolCalls),

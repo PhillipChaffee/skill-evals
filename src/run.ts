@@ -36,7 +36,7 @@ export interface RunRecord extends Usage {
   finalText: string;
   toolCalls: ToolCall[];
   /** The run's tokens by agent id (`main`, or the id of the dispatch call), summed from the usage of each assistant message; null where the stream does not state usage per message. `tokens` is unchanged. Absent from earlier records. */
-  agentTokens: Record<string, Tokens> | null;
+  agentTokens?: Record<string, Tokens> | null;
   skillsLoaded: string[];
   /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
   skillEvents: SkillEvent[];

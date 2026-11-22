@@ -46,7 +46,7 @@ export function durationNeeds(check: Check): Capability[] {
 /**
  * Lists what a check needs for its `by` keys.
  * @param check - Any check.
- * @returns `childText` when a `transcript_matches` or `transcript_lacks` check has a `by`; `childCalls` when any other
+ * @returns `subagents` when the check, or any matcher in it, has `dispatches`; `childText` when a `transcript_matches` or `transcript_lacks` check has a `by`; `childCalls` when any other
  *   check, or any matcher in a check, has one. Without the capability the main thread cannot be told from a subagent,
  *   so `by: "main"` would silently mean every agent.
  */
@@ -55,9 +55,13 @@ export function byNeeds(check: Check): Capability[] {
   const text = own && TEXT_CHECKS.includes(check.type);
   const calls =
     (own && !text) || matchersOf(check).some((one) => one.by !== undefined);
+  const dispatches =
+    check.dispatches !== undefined ||
+    matchersOf(check).some((one) => one.dispatches !== undefined);
   return [
     ...(text ? (["childText"] as const) : []),
     ...(calls ? (["childCalls"] as const) : []),
+    ...(dispatches ? (["subagents"] as const) : []),
   ];
 }
 

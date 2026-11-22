@@ -46,6 +46,11 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
     meaning:
       "The agent type a dispatch must name, with or without a plugin prefix (`magic:comment-sicko:comment-sicko` and `comment-sicko` are the same).",
   },
+  dispatches: {
+    type: "text",
+    meaning:
+      "An agent name: matches the `subagent` calls that start that agent, by the rule of `agent_dispatched` (the dispatch's type with any plugin prefix dropped, or for a generic dispatch a `name: <agent>` line in its brief, or the name as a whole word in its first 400 characters). Needs a harness with `subagents`.",
+  },
   briefMatches: {
     type: "regex",
     meaning:

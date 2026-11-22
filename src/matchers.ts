@@ -3,7 +3,8 @@ import { FIELDS, readField, registerParser } from "./checks/fields.js";
 import { checkLineBounds } from "./checks/bounds.js";
 import { regex } from "./checks/rules.js";
 import type { By } from "./agents.js";
-import { fitsBy } from "./agents.js";
+import { fitsBy, normalizeAgent } from "./agents.js";
+import { ruleOf } from "./dispatch-rule.js";
 import type { ToolCall, ToolKind } from "./harnesses/shared.js";
 import { countLines, longestString } from "./lines.js";
 import { UsageError } from "./scope.js";
@@ -29,6 +30,12 @@ export interface ToolMatcher {
   maxDurationMs?: number;
   /** Whose calls fit: the main thread, any subagent, or the agents of one type. Absent: every agent. Needs `childCalls`. */
   by?: By;
+  /**
+   * An agent name: the call must be a `subagent` call that starts that agent, by the rule of `agent_dispatched`: its
+   * type, with any plugin prefix dropped, is the name, or, for a dispatch of no type or `general-purpose`, its brief
+   * has a line `name: <agent>` or holds the name as a whole word in its first 400 characters. Needs `subagents`.
+   */
+  dispatches?: string;
 }
 
 // The keys a matcher takes today, with the definitions of the check fields of the same name.
@@ -42,8 +49,9 @@ const KEYS = [
   "minDurationMs",
   "maxDurationMs",
   "by",
+  "dispatches",
 ];
-const SUBJECT_KEYS = ["kind", "name", "inputMatches", "by"];
+const SUBJECT_KEYS = ["kind", "name", "inputMatches", "by", "dispatches"];
 
 /** The keys of a matcher that load, each with its definition. The JSON Schema is written from this. */
 export const MATCHER_KEYS = Object.fromEntries(
@@ -149,10 +157,16 @@ function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
   const input = tester(matcher.inputMatches, matcher.flags);
   const { inputLinesMax, inputLinesMin, minDurationMs, maxDurationMs, by } =
     matcher;
+  const agent =
+    matcher.dispatches === undefined
+      ? undefined
+      : normalizeAgent(matcher.dispatches);
   const longest = (call: ToolCall): number =>
     countLines(longestString(call.input));
   return (call) =>
     fitsBy(by, call.agent) &&
+    (agent === undefined ||
+      (call.kind === "subagent" && ruleOf(call, agent) !== null)) &&
     (matcher.kind === undefined || call.kind === matcher.kind) &&
     name(call.name) &&
     input(inputJson(call)) &&

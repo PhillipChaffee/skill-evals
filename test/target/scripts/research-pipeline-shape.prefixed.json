@@ -1,0 +1,78 @@
+{
+  "turns": [
+    [
+      {
+        "text": "Tier: complex. Two researchers first, then one synthesizer."
+      },
+      {
+        "parallel": [
+          {
+            "agent": {
+              "type": "magic:researcher:researcher",
+              "prompt": "Research in-process caching for the records service. Read only.",
+              "steps": [
+                {
+                  "call": {
+                    "name": "Read",
+                    "input": {
+                      "file_path": "src/store.js"
+                    }
+                  }
+                },
+                {
+                  "text": "Findings on in-process caching."
+                }
+              ]
+            }
+          },
+          {
+            "agent": {
+              "type": "magic:researcher:researcher",
+              "prompt": "Research shared caching for the records service. Read only.",
+              "steps": [
+                {
+                  "call": {
+                    "name": "Read",
+                    "input": {
+                      "file_path": "src/store.js"
+                    }
+                  }
+                },
+                {
+                  "text": "Findings on shared caching."
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "agent": {
+          "type": "magic:research-synthesizer:research-synthesizer",
+          "prompt": "Combine the two reports into one recommendation.",
+          "steps": [
+            {
+              "text": "Combined."
+            }
+          ]
+        }
+      },
+      {
+        "call": {
+          "name": "Write",
+          "input": {
+            "file_path": "docs/research/cache-options.md",
+            "content": "# Cache options\n\nRecommendation.\n"
+          },
+          "write": {
+            "path": "docs/research/cache-options.md",
+            "content": "# Cache options\n\nRecommendation.\n"
+          }
+        }
+      },
+      {
+        "final": "Saved docs/research/cache-options.md."
+      }
+    ]
+  ]
+}
