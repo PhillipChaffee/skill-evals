@@ -4,7 +4,7 @@ import type { Ending } from "./retry.js";
 import { retryKind } from "./retry.js";
 
 const harness = { isRateLimit: looksRateLimited };
-const CLEAN = { unexpected: [], subjectLoaded: true };
+const CLEAN = { isolated: false, unexpected: [], subjectLoaded: true };
 const EXITED = { kind: null, exit: 1, signal: null } as const;
 const crashed: Ending = {
   error: "no result event",
@@ -43,6 +43,15 @@ test.each([
     {
       ...crashed,
       error: "spawn x EAGAIN",
+      exec: { kind: "spawn", exit: null, signal: null },
+    },
+    "crash",
+  ],
+  [
+    "a start that failed for want of file table entries",
+    {
+      ...crashed,
+      error: "spawn x ENFILE",
       exec: { kind: "spawn", exit: null, signal: null },
     },
     "crash",
@@ -99,9 +108,16 @@ test.each([
 test.each([
   [
     "loaded something outside the subject",
-    { unexpected: ["/opt/org/plugin"], subjectLoaded: true },
+    {
+      isolated: true,
+      unexpected: ["/opt/org/plugin"],
+      subjectLoaded: true,
+    },
   ],
-  ["did not load the subject", { unexpected: [], subjectLoaded: false }],
+  [
+    "did not load the subject",
+    { isolated: false, unexpected: [], subjectLoaded: false },
+  ],
 ])(
   "a crash in a run that %s is not retried, because it would breach again",
   (_, record) => {
@@ -110,9 +126,22 @@ test.each([
   },
 );
 
+test("outside --isolated, what the harness loads besides the subject does not stop a retry", () => {
+  const record = {
+    isolated: false,
+    unexpected: ["/opt/org/plugin"],
+    subjectLoaded: true,
+  };
+  expect(retryKind(harness, crashed, record)).toBe("crash");
+});
+
 test("a subject that the harness did not report on is still retried", () => {
   expect(
-    retryKind(harness, crashed, { unexpected: [], subjectLoaded: null }),
+    retryKind(harness, crashed, {
+      isolated: false,
+      unexpected: [],
+      subjectLoaded: null,
+    }),
   ).toBe("crash");
 });
 
@@ -136,6 +165,8 @@ test("provider-shaped rate limit and overload text matches", () => {
     "status: 429",
     "status 529",
     "HTTP 429",
+    "API Error: 429 rate_limit_error",
+    "API Error: 529 Overloaded",
     "request failed with HTTP status 429",
   ]) {
     expect(looksRateLimited(text), text).toBe(true);

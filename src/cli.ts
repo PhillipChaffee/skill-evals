@@ -252,7 +252,12 @@ function readFlag(
     return items;
   }
   if (typeof given === "boolean") return given;
-  return (spec.read ?? String)(given);
+  if (spec.read === undefined) return given;
+  const number = spec.read(given);
+  if (Number.isNaN(number)) {
+    throw new UsageError(`--${flag} is not a decimal number: "${given}"`);
+  }
+  return number;
 }
 
 /**

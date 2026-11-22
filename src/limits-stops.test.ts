@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import type { Harness } from "./harnesses/shared.js";
 import { noteSections } from "./report-notes.js";
+import { retryKind } from "./retry.js";
 import { session } from "./session.js";
 import { judgeAsker } from "./startup.js";
 import { scored, slowRun } from "./testing/limits.js";
@@ -125,6 +126,10 @@ test(
       error: "the turn counter failed: boom",
       stoppedBy: "agent",
     });
+    // The run died without a final event, as a crash does, but the fault is the runner's: no retry.
+    expect(ran.ending.fault).toBe("the turn counter failed: boom");
+    const record = { isolated: false, unexpected: [], subjectLoaded: null };
+    expect(retryKind(counting, ran.ending, record)).toBeNull();
   },
   TEST_TIMEOUT_MS,
 );

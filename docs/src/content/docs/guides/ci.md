@@ -74,7 +74,7 @@ claude-code plain-words b1: score 0.86 [7/60] $1.2400 ETA 18:30
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | harness crash               | The harness exited non-zero, or died of a signal, and its stream has no final event. A start that failed with `EAGAIN`, `EMFILE` or `ENFILE` counts too. |
 | rate limit                  | The adapter's `isRateLimit` says the run's error is one. A rate-limited run waits 30 seconds times the attempt number first.                             |
-| timeout before first output | The time limit stopped a harness that had written nothing.                                                                                               |
+| timeout before first output | The time limit stopped a harness that had produced no agent event (a message or a tool call). Its opening `init` event does not count.                   |
 
 A crash and a timeout are tried again at once. A setup failure, a precondition, a fault of the runner's own turn counter, a run that loaded outside the subject or did not load it (an isolation breach), any other invalid run, and a low score are never retried: they are about the case or the agent, and a second try would hide them.
 
@@ -85,7 +85,7 @@ The record of the last attempt is the run's record. Its `attempts` lists the err
   "caseId": "plain-words",
   "score": 1,
   "error": null,
-  "attempts": [{ "error": "no result event" }]
+  "attempts": [{ "error": "no result event", "costUsd": null, "durationMs": 1840 }]
 }
 ```
 

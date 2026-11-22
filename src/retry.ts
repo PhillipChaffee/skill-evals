@@ -7,7 +7,8 @@ import type { StoppedBy } from "./session-end.js";
  * - "crash": the harness exited non-zero or died of a signal and its stream has no final event, or it could not be
  *   started for want of a process or a file descriptor (EAGAIN, EMFILE, ENFILE).
  * - "rate limit": the adapter says the error is a rate limit.
- * - "timeout before first output": the time limit stopped a harness that had produced no agent event.
+ * - "timeout before first output": the time limit stopped a harness that had produced no agent event (a message or a
+ *   tool call); its opening `init` event does not count.
  */
 export type RetryKind = "crash" | "rate limit" | "timeout before first output";
 
@@ -34,8 +35,10 @@ const RESOURCE_LIMITS = /\b(?:EAGAIN|EMFILE|ENFILE)\b/;
  * invalid reason, a fault of the turn counter and a low score are never retried.
  * @param harness - The adapter, which may know a rate limit by its error text.
  * @param end - How the run ended.
- * @param record - What the run's record says of what it loaded; a run that loaded outside the subject, or did not load
- *   the subject, would only breach again.
+ * @param record - What the run's record says of what it loaded. An isolated run that loaded outside the subject, or a run
+ *   that did not load the subject, would only breach again. Outside `--isolated`, what the harness loads besides the
+ *   subject does not invalidate a run, and does not stop a retry.
+ * @param record.isolated - Whether the run was started with `--isolated`.
  * @param record.unexpected - What the harness reported that does not come from the subject.
  * @param record.subjectLoaded - Whether the harness reported the subject as loaded.
  * @returns The reason to retry; null when the run must not be retried.
@@ -43,13 +46,20 @@ const RESOURCE_LIMITS = /\b(?:EAGAIN|EMFILE|ENFILE)\b/;
 export function retryKind(
   harness: Pick<Harness, "isRateLimit">,
   end: Ending,
-  record: { unexpected: string[]; subjectLoaded: boolean | null },
+  record: {
+    isolated: boolean;
+    unexpected: string[];
+    subjectLoaded: boolean | null;
+  },
 ): RetryKind | null {
   const { error, exec } = end;
   const started =
     exec.kind !== null || exec.exit !== null || exec.signal !== null;
   if (error === null || !started || end.fault !== null) return null;
-  if (record.unexpected.length > 0 || record.subjectLoaded === false) {
+  if (
+    (record.isolated && record.unexpected.length > 0) ||
+    record.subjectLoaded === false
+  ) {
     return null;
   }
   if (exec.kind === "spawn") {

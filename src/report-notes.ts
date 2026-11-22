@@ -1,4 +1,9 @@
 const MS_PER_SECOND = 1000;
+// The flag that each reason of a stopped command names; the other reasons are not stops by a limit.
+const LIMIT_FLAGS: Record<string, string | undefined> = {
+  budget: "--max-cost",
+  duration: "--max-duration",
+};
 const COST_DECIMALS = 4;
 import type { Evaluation } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
@@ -15,7 +20,8 @@ import { plannedRuns } from "./not-run.js";
 function partialSection(evaluation: Evaluation): string[] {
   const { partial, notRun } = evaluation;
   if (partial === null) return [];
-  const limit = partial.reason === "budget" ? "--max-cost" : "--max-duration";
+  const limit = LIMIT_FLAGS[partial.reason];
+  if (limit === undefined) return [];
   const labels = evaluation.subjects.map((subject) => subject.label);
   const planned = plannedRuns({
     harnesses: evaluation.harnesses,
@@ -72,10 +78,11 @@ function retriedSection(evaluation: Evaluation): string[] {
   const seconds =
     attempts.reduce((sum, attempt) => sum + attempt.durationMs, 0) /
     MS_PER_SECOND;
+  const lower = costs.length < attempts.length ? "\u2265" : "";
   const cost =
     costs.length === 0
       ? ""
-      : `, $${costs.reduce((sum, value) => sum + value, 0).toFixed(COST_DECIMALS)}`;
+      : `, ${lower}$${costs.reduce((sum, value) => sum + value, 0).toFixed(COST_DECIMALS)}`;
   return [
     "",
     "## Retried runs",

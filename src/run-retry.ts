@@ -29,7 +29,7 @@ const pause = (ms: number): Promise<void> =>
 
 /**
  * Makes a run, and makes it again when it failed for a reason that is not the agent's: a harness crash, a rate limit,
- * or a timeout before the harness wrote anything. The gate is asked before each retry; once a limit is reached the
+ * or a timeout before the harness produced any agent event. The gate is asked before each retry; once a limit is reached the
  * failed attempt stands. Every attempt is paid for in the gate, whether or not it is kept.
  * @param plan - The run to make.
  * @param options - The most retries, the gate that may stop them, and the wait after a rate limit.

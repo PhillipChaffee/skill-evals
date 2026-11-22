@@ -95,7 +95,9 @@ test("jobs must be a positive integer, in the flag and in the config file", asyn
       `--jobs=${bad}`,
     ]);
     expect(ran.status).toBe(2);
-    expect(ran.stderr).toContain("jobs must be a positive integer");
+    expect(ran.stderr).toMatch(
+      /jobs must be a positive integer|--jobs is not a decimal number/,
+    );
   }
   box.write("skill-evals.config.json", { jobs: 2 });
   const out = path.join(box.root, "results");

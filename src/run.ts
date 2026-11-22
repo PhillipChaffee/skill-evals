@@ -75,7 +75,7 @@ export interface RunRecord extends Usage, LimitFields {
   decision: (Usage & { calls: number }) | null;
   /**
    * The error, the cost (null when none was reported) and the duration of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
-   * before the harness wrote anything. This record is the last attempt; its `attempt` in `results.jsonl` is the number
+   * before the harness produced any agent event. This record is the last attempt; its `attempt` in `results.jsonl` is the number
    * of the attempt. Absent when the run was made once.
    */
   attempts?: { error: string; costUsd: number | null; durationMs: number }[];

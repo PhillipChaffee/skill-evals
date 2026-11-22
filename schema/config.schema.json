@@ -31,7 +31,7 @@
     },
     "retries": {
       "title": "retries",
-      "description": "Tries after the first for a run that failed for a reason that is not the agent's: a harness crash (a non-zero exit with no final event), a rate limit (the adapter says so), or a timeout before the harness wrote anything. A non-negative integer. A rate-limited run waits 30 seconds times its attempt number first. A setup failure, an isolation breach, any other invalid run and a low score are never retried. The run record's attempts lists the errors of the earlier attempts.",
+      "description": "Tries after the first for a run that failed for a reason that is not the agent's: a harness crash (a non-zero exit with no final event), a rate limit (the adapter says so), or a timeout before the harness produced any agent event (its opening init event does not count). A non-negative integer. A rate-limited run waits 30 seconds times its attempt number first. A setup failure, an isolation breach, any other invalid run and a low score are never retried. The run record's attempts lists the error, cost (null when none was reported) and duration of each earlier attempt.",
       "type": "number"
     },
     "maxCost": {

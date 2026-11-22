@@ -14,7 +14,11 @@ const evaluation = await evaluate({
   minScore: 0.8,
   onRun: (record) => console.error(record.caseId, record.score),
 });
-if (evaluation.belowBar.length || evaluation.invalid.length)
+if (
+  evaluation.belowBar.length ||
+  evaluation.invalid.length ||
+  evaluation.partial
+)
   process.exitCode = 1;
 ```
 
@@ -26,7 +30,7 @@ if (evaluation.belowBar.length || evaluation.invalid.length)
 
 Every option, every field of the result, and every exported type is in the API reference, which is generated from the doc comments in [`src/index.ts`](https://github.com/PhillipChaffee/skill-evals/blob/main/src/index.ts) and the files it exports from when the docs site is built. In the docs site its pages are next to this one in the sidebar.
 
-In what `evaluate` resolves to, `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
+In what `evaluate` resolves to, `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty, `sourceChanged` is empty and `partial` is null: a command that stopped at `maxCost` or `maxDuration` has `partial` set and `notRun` listing the runs that did not run, so its scores cover finished runs only. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
 
 The package ships type declarations, so `evaluate`'s options and what it resolves to are typed in TypeScript.
 

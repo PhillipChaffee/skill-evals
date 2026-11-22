@@ -9,6 +9,8 @@ import type { RetryKind } from "./retry.js";
 vi.mock("./run.js", () => ({ runAttempt: vi.fn() }));
 
 const plan = {} as RunPlan;
+const LIMITED = "429";
+const RATE = "rate limit";
 const BACKOFF_MS = 100;
 
 /**
@@ -79,8 +81,8 @@ test("a crash is retried at once, up to the number of retries, and the last atte
 test("a rate limit waits the backoff times the attempt that failed", async () => {
   vi.useFakeTimers();
   attempts(
-    [attempted("429"), "rate limit"],
-    [attempted("429 again"), "rate limit"],
+    [attempted(LIMITED), RATE],
+    [attempted("429 again"), RATE],
     [attempted(null), null],
   );
   const running = runWithRetries(plan, {
@@ -125,4 +127,24 @@ test("a limit reached before the first retry leaves the failed attempt as the re
   const done = await runWithRetries(plan, { retries: 5, gate });
   expect(done.attempt).toBe(1);
   expect(done.record).not.toHaveProperty("attempts");
+});
+
+test("a limit reached while a rate-limited run waits stops the retry", async () => {
+  vi.useFakeTimers();
+  const gate = createGate({ maxCost: undefined, maxDurationMs: 50 }, () =>
+    Date.now(),
+  );
+  attempts([attempted(LIMITED), RATE], [attempted(null), null]);
+  const running = runWithRetries(plan, {
+    retries: 3,
+    gate,
+    backoffMs: BACKOFF_MS,
+  });
+  // The gate says go when the wait begins, and stop when it ends, 100 ms later.
+  await vi.advanceTimersByTimeAsync(BACKOFF_MS);
+  const done = await running;
+  expect(runAttempt).toHaveBeenCalledTimes(1);
+  expect(done.attempt).toBe(1);
+  expect(done.record.error).toBe(LIMITED);
+  expect(gate.stopped()).toBe("duration");
 });

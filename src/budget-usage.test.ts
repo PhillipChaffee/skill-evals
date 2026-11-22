@@ -12,6 +12,7 @@ const RESULTS = "results";
 const MAX_COST = "--max-cost";
 const MAX_DURATION = "--max-duration";
 const DURATION_MESSAGE = "maxDuration must be a positive number of minutes";
+const NOT_DECIMAL = "is not a decimal number";
 const RETRIES_MESSAGE = "retries must be a non-negative integer";
 const COST_MESSAGE = "maxCost must be a positive number of US dollars";
 
@@ -95,12 +96,12 @@ test("--max-cost is a usage error when the judge or a decision check cannot repo
 test.each([
   [[MAX_COST, "0"], COST_MESSAGE],
   [["--max-cost=-1"], COST_MESSAGE],
-  [[MAX_COST, "abc"], COST_MESSAGE],
+  [[MAX_COST, "abc"], NOT_DECIMAL],
   [[MAX_DURATION, "0"], DURATION_MESSAGE],
-  [[MAX_DURATION, "Infinity"], DURATION_MESSAGE],
+  [[MAX_DURATION, "Infinity"], NOT_DECIMAL],
   [["--retries=-1"], RETRIES_MESSAGE],
   [["--retries", "1.5"], RETRIES_MESSAGE],
-  [["--retries", "x"], RETRIES_MESSAGE],
+  [["--retries", "x"], NOT_DECIMAL],
 ])("%j is a usage error before any run", async (flags, message) => {
   const box = sandbox();
   plantSuite(box, ["alpha"]);

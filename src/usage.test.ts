@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
-const RETRIES = "retries must be a non-negative integer";
-import { plantSuite } from "./testing/suite.js";
 import { readDecimal } from "./decimal.js";
 import { sandbox } from "./testing/sandbox.js";
+import { plantSuite } from "./testing/suite.js";
+
+const NOT_DECIMAL = "is not a decimal number";
 
 test.each([
   ["3", 3],
@@ -13,7 +14,10 @@ test.each([
   ["5.", 5],
   ["1e3", 1000],
   ["0", 0],
-])("%s is the number %d", (text, value) => {
+  [" 3 ", 3],
+  ["\t3", 3],
+  ["3\n", 3],
+])("%j is the number %d", (text, value) => {
   expect(readDecimal(text)).toBe(value);
 });
 
@@ -23,33 +27,49 @@ test.each([
   "  ",
   "0x1",
   "0b1",
-  " 5",
-  "5 ",
+  "0o7",
   "abc",
   "1,5",
   "Infinity",
   "NaN",
   "1_0",
+  "1 2",
 ])("%j is not a number", (text) => {
   expect(readDecimal(text)).toBeNaN();
 });
 
 test.each([
-  ["--retries", "", RETRIES],
-  ["--retries", "0x1", RETRIES],
-  ["--retries", " ", RETRIES],
-  ["--max-cost", "", "maxCost must be a positive number"],
-  ["--max-cost", "0x10", "maxCost must be a positive number"],
-  ["--jobs", "0x2", "jobs must be a positive integer"],
-  ["--jobs", "", "jobs must be a positive integer"],
-])("%s %j is a usage error", async (flag, value, message) => {
+  ["--retries", ""],
+  ["--retries", "0x1"],
+  ["--retries", " "],
+  ["--max-cost", ""],
+  ["--max-cost", "0x10"],
+  ["--max-duration", "0b1"],
+  ["--jobs", "0o2"],
+  ["--jobs", ""],
+  ["--reps", ""],
+  ["--min-score", "0x1"],
+])(
+  "%s %j says it is not a decimal number, before any range check",
+  async (flag, value) => {
+    const box = sandbox();
+    const cases = plantSuite(box, ["alpha"]);
+    const ran = await box.cli([
+      ...["score", "--subject", "none", "--cases", cases],
+      flag,
+      value,
+    ]);
+    expect(ran.status).toBe(2);
+    expect(ran.stderr).toContain(`${flag} ${NOT_DECIMAL}`);
+  },
+);
+
+test("a number with surrounding whitespace is read, as in 0.0.1", async () => {
   const box = sandbox();
   const cases = plantSuite(box, ["alpha"]);
   const ran = await box.cli([
-    ...["score", "--subject", "none", "--cases", cases, "--reps", "1"],
-    flag,
-    value,
+    ...["score", "--subject", "none", "--cases", cases],
+    ...["--reps", " 1 ", "--min-score", "\t0.5"],
   ]);
-  expect(ran.status).toBe(2);
-  expect(ran.stderr).toContain(message);
+  expect(ran.status, ran.stderr).toBe(0);
 });

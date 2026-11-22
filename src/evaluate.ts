@@ -10,14 +10,16 @@ import type { Progress } from "./progress.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
+import type { Store } from "./store.js";
 import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
-import { outputDir } from "./scope.js";
+import { onInterrupt, outputDir } from "./scope.js";
 import type { Subject, SubjectSummary } from "./subject.js";
 import { changedAtSource } from "./subject.js";
 import type { Partition } from "./applicability.js";
+import type { StopReason } from "./gate.js";
 import type { NotRun } from "./not-run.js";
 import { notRunOf, plannedRuns } from "./not-run.js";
 
@@ -73,7 +75,7 @@ export interface EvaluateOptions extends SelectionOptions {
   outDir?: string | undefined;
   /** How many runs may be in flight at once, a positive integer. Default: 1. */
   jobs?: number | undefined;
-  /** Tries after the first for a run that failed for a reason that is not the agent's: a harness crash, a rate limit, or a timeout before the harness wrote anything. A non-negative integer. Default: 0. */
+  /** Tries after the first for a run that failed for a reason that is not the agent's: a harness crash, a rate limit, or a timeout before the harness produced any agent event (its opening init event does not count). The record's `attempts` lists the error, cost and duration of each earlier attempt. A non-negative integer. Default: 0. */
   retries?: number | undefined;
   /** Stop starting runs once the command has spent this many US dollars, summing agent, judge and decision costs of this command's attempts; a positive number. In-flight runs finish with their judged and decision checks skipped. A usage error when a harness, the judge or a decision check reports no cost. Default: no limit. */
   maxCost?: number | undefined;
@@ -238,6 +240,46 @@ function summarize(finished: Finished): Results {
 }
 
 /**
+ * Writes the last `results.json` of a command that ran its runs. A signal while the subjects are checked still leaves
+ * the file saying "interrupted", not "running".
+ * @param store - Where the results go.
+ * @param finished - What the results are summed up from, besides the records.
+ * @param ran - What `runAll` returned.
+ * @param ran.records - The finished runs.
+ * @param ran.stopped - Why the command stopped early, or null.
+ * @returns The results that were written.
+ */
+function finalWrite(
+  store: Store,
+  finished: Omit<Finished, "records" | "sourceChanged" | "partial">,
+  ran: { records: RunRecord[]; stopped: StopReason | null },
+): Results {
+  const { records, stopped } = ran;
+  const off = onInterrupt(() => {
+    store.flush(
+      summarize({
+        ...finished,
+        records,
+        sourceChanged: [],
+        partial: { reason: "interrupted" },
+      }),
+    );
+  });
+  try {
+    const results = summarize({
+      ...finished,
+      records,
+      sourceChanged: changedAtSource(finished.subjects),
+      partial: stopped === null ? null : { reason: stopped },
+    });
+    store.flush(results);
+    return results;
+  } finally {
+    off();
+  }
+}
+
+/**
  * Makes the runs, writing each record as its run ends, and sums them up.
  * @param prepared - What `prepare` returned.
  * @param subjects - The subjects, resolved.
@@ -288,14 +330,10 @@ async function runSuite(
       began: hooks.began,
       rateLimitBackoffMs: options.rateLimitBackoffMs,
     });
-    const results = summarize({
-      ...finished,
-      records,
-      sourceChanged: changedAtSource(subjects),
-      partial: stopped === null ? null : { reason: stopped },
-    });
-    store.flush(results);
-    return { results, outDir };
+    return {
+      results: finalWrite(store, finished, { records, stopped }),
+      outDir,
+    };
   } finally {
     release();
   }

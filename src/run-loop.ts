@@ -12,42 +12,12 @@ import { etaOf } from "./progress.js";
 import type { Judge, RunPlan, RunRecord } from "./run.js";
 import { runWithRetries } from "./run-retry.js";
 import { pool } from "./schedule.js";
+import { slotsOf } from "./slots.js";
 import { onInterrupt } from "./scope.js";
 import { throttled } from "./throttle.js";
 import type { Store } from "./store.js";
 import { slotName } from "./store.js";
 import type { Subject } from "./subject.js";
-
-/** One run of a plan, before it is made. */
-export interface Slot<S> {
-  located: Located;
-  caseDef: Case;
-  rep: number;
-  subject: S;
-}
-
-/**
- * Lists the runs of a plan in plan order: for each harness, each case, each rep, each subject.
- * @param plan - The harnesses, the cases each runs, the reps, and the subjects or whatever stands for them.
- * @returns Every run.
- */
-const slotsOf = <S>(
-  plan: Pick<Plan, "chosen" | "applied" | "reps"> & { subjects: S[] },
-): Slot<S>[] => {
-  const { chosen, applied, reps, subjects } = plan;
-  return chosen.flatMap((located) =>
-    (applied[located.harness.id] ?? []).flatMap((caseDef) =>
-      Array.from({ length: caseDef.reps ?? reps }, (_, index) =>
-        subjects.map((subject) => ({
-          located,
-          caseDef,
-          rep: index + 1,
-          subject,
-        })),
-      ).flat(),
-    ),
-  );
-};
 
 /** What the runs of a plan are made from. */
 export interface PlanBase {

@@ -1,5 +1,6 @@
 import type { Case } from "./cases.js";
 import type { RunRecord } from "./run.js";
+import { slotsOf } from "./slots.js";
 
 /** A run of the plan that has no valid finished record: it was not started, or it was started and its graders were skipped. */
 export interface NotRun {
@@ -24,18 +25,17 @@ export const plannedRuns = (plan: {
   reps: number;
   labels: string[];
 }): NotRun[] =>
-  plan.harnesses.flatMap((harness) =>
-    (plan.applied[harness] ?? []).flatMap((caseDef) =>
-      Array.from({ length: caseDef.reps ?? plan.reps }, (_, index) =>
-        plan.labels.map((subject) => ({
-          harness,
-          caseId: caseDef.id,
-          subject,
-          rep: index + 1,
-        })),
-      ).flat(),
-    ),
-  );
+  slotsOf({
+    chosen: plan.harnesses.map((id) => ({ harness: { id } })),
+    applied: plan.applied,
+    reps: plan.reps,
+    subjects: plan.labels,
+  }).map(({ located, caseDef, rep, subject }) => ({
+    harness: located.harness.id,
+    caseId: caseDef.id,
+    subject,
+    rep,
+  }));
 
 /**
  * Finds the runs that did not run: those with no record, and those whose graders were skipped.

@@ -8,6 +8,7 @@ const RATE_LIMITED = new RegExp(
     String.raw`\b529 overloaded\b`,
     String.raw`\bstatus[: =]+(?:429|529)\b(?!:\d)`,
     String.raw`\bhttp (?:status )?(?:429|529)\b(?!:\d)`,
+    String.raw`\bapi error:? (?:429|529)\b(?!:\d)`,
     String.raw`\brate_limit_error\b`,
     String.raw`\boverloaded_error\b`,
     String.raw`\brate limit (?:reached|exceeded)\b`,

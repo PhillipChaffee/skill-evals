@@ -4,6 +4,7 @@ import { evaluate } from "./evaluate.js";
 import { scoreArgs, scriptedCase } from "./testing/budget.js";
 
 const RESULTS = "results";
+const FOREIGN = { name: "org", path: "/opt/org/plugin" };
 import { asProcess, readResults, sandbox } from "./testing/sandbox.js";
 import { linesIn, startsOf } from "./testing/suite.js";
 import fs from "node:fs";
@@ -144,7 +145,10 @@ test("a rate limit is retried, with the wait overridden to nothing", async () =>
   const box = sandbox();
   scriptedCase(box, "limited", {
     before: [
-      { onStart: [1, 2], step: { fail: "429 Too Many Requests: rate limit" } },
+      {
+        onStart: [1, 2],
+        step: { fail: "API Error: 429 rate_limit_error" },
+      },
     ],
   });
   const out = path.join(box.root, "results");
@@ -164,7 +168,7 @@ test("a rate limit is retried, with the wait overridden to nothing", async () =>
   const [record] = value.records;
   expect(record?.score).toBe(1);
   expect(record?.attempts).toHaveLength(2);
-  expect(record?.attempts?.[0]?.error).toMatch(/rate limit/);
+  expect(record?.attempts?.[0]?.error).toMatch(/429/);
   expect(fs.existsSync(path.join(out, "results.json"))).toBe(true);
 });
 
@@ -180,10 +184,21 @@ test("an error with a stack trace that has 429 and a rate-limit path in it is no
   expect(startsOf(box)).toBe(1);
 });
 
+test("without --isolated, a foreign plugin does not stop a retry", async () => {
+  const box = sandbox();
+  scriptedCase(box, "synced", {
+    init: { plugins: [FOREIGN] },
+    before: [{ onStart: [1], step: { crash: "segfault" } }],
+  });
+  const ran = await box.cli(scoreArgs(box, RESULTS, "--retries", "2"));
+  expect(ran.status, ran.stderr).toBe(0);
+  expect(startsOf(box)).toBe(2);
+});
+
 test("a crash in a run that loaded outside the subject is not retried", async () => {
   const box = sandbox();
   scriptedCase(box, "breach", {
-    init: { plugins: [{ name: "org", path: "/opt/org/plugin" }] },
+    init: { plugins: [FOREIGN] },
     before: [{ onStart: [1, 2, 3], step: { crash: "segfault" } }],
   });
   const ran = await box.cli(
@@ -212,8 +227,9 @@ test("retries in the config file apply, and the flag wins", async () => {
 test("a run that reports a rate limit is not retried without retries", async () => {
   const box = sandbox();
   scriptedCase(box, "limited", {
-    before: [{ step: { fail: "rate limit" }, onStart: [1] }],
+    before: [{ step: { fail: "429 Too Many Requests" }, onStart: [1] }],
   });
+  // Without retries the run is made once, whatever its error says.
   const ran = await box.cli(scoreArgs(box, "results"));
   expect(ran.status).toBe(1);
   expect(startsOf(box)).toBe(1);

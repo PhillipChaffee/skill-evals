@@ -67,7 +67,7 @@ test.each([
     const { result, outDir, received } = await unanswered(extra, config);
     expect(result.status).toBe(USAGE_ERROR);
     expect(result.stderr).toMatch(
-      /decisionTimeout must be a positive integer of seconds, at most 4294967/,
+      /decisionTimeout must be a positive integer of seconds, at most 4294967|--decision-timeout is not a decimal number/,
     );
     expect(received).toHaveLength(0);
     expect(fs.existsSync(outDir), "no run started").toBe(false);
