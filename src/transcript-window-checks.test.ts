@@ -23,18 +23,19 @@ test("first_message and final_message with another where are a load error", () =
   ]) {
     expect(() => load(scope, "tool_input")).toThrow(/read assistant text/);
   }
-  expect(() =>
-    readCheck(
-      {
-        type: "transcript_matches",
-        pattern: "a",
-        scope: "final_message",
-        where: "all",
-      },
-      "case.json",
-      { lenient: false },
-    ),
-  ).toThrow(/read assistant text/);
+  for (const scope of [
+    "first_message",
+    "final_message",
+    { first_message: true, before: EDIT },
+  ]) {
+    expect(() =>
+      readCheck(
+        { type: "transcript_matches", pattern: "a", scope, where: "all" },
+        "case.json",
+        { lenient: false },
+      ),
+    ).toThrow(/read assistant text/);
+  }
   expect(load("first_message", "assistant_text")).toBeTruthy();
   expect(load({ before: EDIT }, "all")).toBeTruthy();
 });
@@ -57,4 +58,21 @@ test("transcript_lacks over tool outputs fails closed for a call with no result 
   );
   expect(lacks({ before: EDIT }, "all").score).toBe(0);
   expect(lacks({ after: EDIT }, "tool_output").score).toBe(1);
+});
+
+test("transcript_lacks over tool inputs does not need outputs", () => {
+  const run = played(
+    call(BASH, { command: "one" }, "a"),
+    call("Edit", { file_path: "x" }, "b"),
+  );
+  const lacks = scored(
+    {
+      type: "transcript_lacks",
+      pattern: "zzz",
+      where: "tool_input",
+      scope: { before: EDIT },
+    },
+    run,
+  );
+  expect(lacks.score).toBe(1);
 });

@@ -130,7 +130,10 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   ) {
     return { score: 0, reason: `the run has no ${where} text to test` };
   }
-  const silent = where === "assistant_text" ? -1 : silentCall(check, outcome);
+  const silent =
+    where === "tool_output" || where === "all"
+      ? silentCall(check, outcome)
+      : -1;
   if (found.hits.length === 0 && silent >= 0) {
     return {
       score: 0,
