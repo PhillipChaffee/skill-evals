@@ -1,0 +1,18 @@
+{
+  "turns": [
+    [
+      { "call": { "name": "Skill", "input": { "skill": "refactor" } } },
+      {
+        "call": {
+          "name": "Edit",
+          "input": {
+            "file_path": "src/config.js",
+            "old_string": "?? 0",
+            "new_string": "?? 30"
+          }
+        }
+      },
+      { "final": "Changed the timeout fallback to 30." }
+    ]
+  ]
+}

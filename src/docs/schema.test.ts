@@ -21,7 +21,11 @@ const problems = (value: unknown): string[] =>
   validate(value, caseDoc, caseDoc);
 
 test("every example case and every compat case validates against case.schema.json", () => {
-  const files = ["examples/cases", "test/compat/cases"].flatMap((dir) =>
+  const files = [
+    "examples/cases",
+    "test/compat/cases",
+    "test/target/cases",
+  ].flatMap((dir) =>
     fs
       .globSync("**/case.json", { cwd: path.join(root, dir) })
       .map((file) => path.join(root, dir, file)),

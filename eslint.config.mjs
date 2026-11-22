@@ -32,6 +32,7 @@ export default defineConfig(
       "docs/dist/",
       "docs/.astro/",
       "examples/cases/**/workspace/",
+      "test/target/cases/**/workspace/",
     ],
   },
   {

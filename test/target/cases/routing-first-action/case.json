@@ -1,0 +1,16 @@
+{
+  "description": "A bug report: the entry skill is the first skill loaded and comes before every tool call except a read of its adapter notes, the nearby skill stays out, and the source is edited.",
+  "tags": ["routing", "target"],
+  "targets": ["bug-fix"],
+  "checks": [
+    {
+      "type": "skill_loaded",
+      "skill": "bug-fix",
+      "first": true,
+      "ignoring": [{ "kind": "read", "inputMatches": "harness-adapter" }]
+    },
+    { "type": "skill_not_loaded", "skill": "refactor" },
+    { "type": "tool_called", "kind": "edit", "inputMatches": "src/config" }
+  ],
+  "timeoutSeconds": 300
+}
