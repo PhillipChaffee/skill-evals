@@ -52,7 +52,7 @@ interface ToolPart {
 /**
  * Reads the transcript parts of a stream.
  * @param events - The events of the stream, in order.
- * @returns Text parts; for each tool, one call (a `running` and a `completed` event with the same `callID` make one),
+ * @returns Text parts; for each tool, one call (a `running` and a `completed` event with the same `callID` make one when the tool is the same),
  *   and, when the state holds an output or an error, its result with the duration from its start and end times, when
  *   both are numbers. The `turn` of an event counts the `step_start` events seen so far.
  */
@@ -66,8 +66,9 @@ function transcriptParts(events: Event[]): EventInput[] {
     }
     if (e.type !== "tool_use") return [];
     const { tool, callID: callId, state } = e.part;
-    const first = !callId || !called.has(callId);
-    if (callId) called.add(callId);
+    const key = `${callId ?? ""}\u0000${tool}`;
+    const first = !callId || !called.has(key);
+    if (callId) called.add(key);
     const call = first
       ? [callPart(KINDS, { name: tool, input: state?.input, callId }, { turn })]
       : [];
@@ -78,7 +79,7 @@ function transcriptParts(events: Event[]): EventInput[] {
       ...call,
       resultPart(callId, output, {
         isError: state?.status === "error",
-        ...(typeof start === "number" && typeof end === "number"
+        ...(typeof start === "number" && typeof end === "number" && end >= start
           ? { durationMs: end - start }
           : {}),
       }),

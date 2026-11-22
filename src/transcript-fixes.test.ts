@@ -246,3 +246,56 @@ test("a call carries the duration of its result", () => {
   ]);
   expect(callsOf(listed).map((c) => c.durationMs)).toEqual([42, undefined]);
 });
+
+test("pi keeps a turn's text when the stream has no message_end, and does not repeat it when it has", () => {
+  const message = (text: string) => ({
+    role: "assistant",
+    content: [{ type: "text", text }],
+    stopReason: "stop",
+  });
+  const older = parseText(
+    "pi",
+    lines(
+      { type: "turn_end", message: message("one") },
+      { type: "turn_end", message: message("two") },
+    ),
+  );
+  expect(older.transcript.map((e) => [e.text, e.turn])).toEqual([
+    ["one", 0],
+    ["two", 1],
+  ]);
+  const newer = parseText(
+    "pi",
+    lines(
+      { type: "message_end", message: message("one") },
+      { type: "turn_end", message: message("one") },
+      { type: "turn_end", message: message("two") },
+    ),
+  );
+  expect(newer.transcript.map((e) => e.text)).toEqual(["one", "two"]);
+});
+
+test("opencode keeps two different calls that share a callID, and gives no negative duration", () => {
+  const use = (tool: string, output: string, time?: object) => ({
+    type: "tool_use",
+    part: { tool, callID: "same", state: { input: {}, output, time } },
+  });
+  const parsed = parseText(
+    "opencode",
+    lines(
+      use("bash", "a", { start: 9, end: 5 }),
+      use("read", "b"),
+      use("read", "c"),
+    ),
+  );
+  expect(parsed.toolCalls.map((c) => c.name)).toEqual(["bash", "read"]);
+  expect(
+    parsed.transcript.map((e) => [e.type, e.output, e.durationMs]),
+  ).toEqual([
+    ["tool_call", undefined, undefined],
+    ["tool_result", "a", undefined],
+    ["tool_call", undefined, undefined],
+    ["tool_result", "b", undefined],
+    ["tool_result", "c", undefined],
+  ]);
+});

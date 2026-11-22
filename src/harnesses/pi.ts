@@ -75,6 +75,7 @@ type Event =
  */
 function transcriptParts(events: Event[]): EventInput[] {
   let ended = 0;
+  let seen = false;
   return events.flatMap((e): EventInput[] => {
     if (e.type === "tool_execution_start") {
       const { toolName: name, args: input, toolCallId: callId } = e;
@@ -86,10 +87,18 @@ function transcriptParts(events: Event[]): EventInput[] {
         resultPart(e.toolCallId, output, { isError: e.isError === true }),
       ];
     }
-    if (e.type === "turn_end") ended += 1;
-    if (e.type !== "message_end" || e.message?.role !== "assistant") return [];
+    if (e.type !== "message_end" && e.type !== "turn_end") return [];
+    if (e.message?.role !== "assistant") {
+      if (e.type === "turn_end") ended += 1;
+      return [];
+    }
     const text = joinText(e.message.content);
-    return text ? [textPart(text, { turn: ended })] : [];
+    // A turn_end repeats its message, so it adds text only when no message_end of the turn was seen (an older CLI).
+    const repeats = e.type === "turn_end" && seen;
+    seen = e.type === "message_end";
+    const turn = ended;
+    if (e.type === "turn_end") ended += 1;
+    return text && !repeats ? [textPart(text, { turn })] : [];
   });
 }
 

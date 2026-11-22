@@ -149,7 +149,7 @@ test("opencode records a tool's duration and an error, and a tool that has no ou
   ]);
 });
 
-test("pi reads a result's text, its error flag and the text of a finished turn", () => {
+test("pi reads a result's text, its error flag and the text of an assistant message", () => {
   const parsed = parseText(
     "pi",
     lines(
