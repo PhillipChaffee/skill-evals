@@ -34,6 +34,13 @@ export function readPreconditions(
   }
   return given.map((one: unknown, index) => {
     const where = `${file} preconditions[${String(index)}]`;
+    for (const key of ["weight", "ifUnsupported"]) {
+      if ((one as Record<string, unknown> | null)?.[key] !== undefined) {
+        throw new UsageError(
+          `${where}: a precondition takes no "${key}": it never counts in the score and is never skipped`,
+        );
+      }
+    }
     const check = readCheck(one, where, mode);
     if (CHECKS[check.type]?.precondition !== true) {
       throw new UsageError(

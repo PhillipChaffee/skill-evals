@@ -107,6 +107,12 @@ export function runKey(plan: RunPlan): string {
       caseHash: caseHash(plan.caseDef),
       subjectRevision: plan.subject.revision,
       harness: plan.harness.id,
+      // Only a revision above the first has the key, so that the key of an earlier run stays what it was.
+      ...(plan.harness.argvRevision > 1 && {
+        argvRevision: plan.harness.argvRevision,
+      }),
+      // Only a subject that names rules has the key, so that the key of any other run stays what it was.
+      ...(plan.subject.rules && { rules: plan.subject.rules }),
       model: plan.model ?? null,
       // Only a case with a history has the key, so that the key of any other run stays what it was.
       ...(plan.caseDef.history && {

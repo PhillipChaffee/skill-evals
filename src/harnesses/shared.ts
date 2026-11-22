@@ -220,6 +220,12 @@ export interface Harness extends HistoryAdapter {
   authEnv: string[];
   /** What the adapter can observe or do, each proven by a parser test on a stream. A case that needs more is not applicable. */
   capabilities: ReadonlySet<Capability>;
+  /**
+   * The revision of the command line the adapter builds, from 1. A change to the arguments that can change what a run
+   * does, such as a new flag, raises it, so that a stored result made with the earlier command line is not reused. The
+   * run key carries it for a revision above 1 only, so the keys of earlier runs stay what they were.
+   */
+  argvRevision: number;
   /** How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified). */
   status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
@@ -293,7 +299,7 @@ export interface Harness extends HistoryAdapter {
    * harness starts; it never overwrites a file.
    * @param files - The rule files and the instruction file, in the run's copy of the subject.
    * @param input - The run's home and workspace.
-   * @returns What it installed, as paths relative to the home or the workspace, in the order of `files`.
+   * @returns What it installed, as `home/<path>` or `workspace/<path>`, in the order of `files`.
    * @throws {Error} When a place is taken or a file cannot be copied; the run is then invalid.
    */
   installRules?: (

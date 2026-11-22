@@ -1,0 +1,36 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "cat build.sh"
+          },
+          "exec": true
+        }
+      },
+      {
+        "text": "It says that the build finished."
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "BUILD_SECONDS=1 sh build.sh"
+          },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "cat build/build-result"
+          },
+          "exec": true
+        }
+      }
+    ]
+  ]
+}

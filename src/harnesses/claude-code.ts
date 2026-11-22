@@ -131,14 +131,19 @@ function stoppedOn(
  * @returns One place for each file.
  */
 function rulesTargets(files: RulesFile[]): RulesTarget[] {
-  return files.map((file) => ({
-    root: "home",
-    path:
-      file.role === "instruction"
-        ? ".claude/CLAUDE.md"
-        : `.claude/rules/${file.relative}`,
-  }));
+  return files.map((file) =>
+    file.role === "instruction"
+      ? { root: "home", path: ".claude/CLAUDE.md" }
+      : {
+          root: "home",
+          path: `.claude/rules/${file.relative}`,
+          area: ".claude/rules",
+        },
+  );
 }
+
+// The revision of the command line this adapter builds: 2 added `--include-hook-events`.
+const ARGV_REVISION = 2;
 
 const claudeCode: Harness = {
   id: "claude-code",
@@ -185,6 +190,7 @@ const claudeCode: Harness = {
     // Not declared: `compact`. `claude --help` shows only `--autocompact` (the automatic window), no way to ask for a
     // compaction in a `-p` process. The stream's `compact_boundary` event is parsed, so a harness that reports one shows it.
   ]),
+  argvRevision: ARGV_REVISION,
   status: "real-model",
   reportsCost: true,
   isRateLimit: looksRateLimited,

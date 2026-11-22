@@ -18,6 +18,7 @@ import { readResults } from "./sandbox.js";
  */
 export const reportingRules: Harness = {
   ...claudeCode,
+  capabilities: new Set([...claudeCode.capabilities, "rulesReport"]),
   parse(stdout) {
     const parsed = claudeCode.parse(stdout);
     const reported = stdout
@@ -50,6 +51,7 @@ const inWorkspace = (files: RulesFile[]): RulesTarget[] =>
   files.map((file) => ({
     root: "workspace",
     path: `.agent-rules/${file.relative}`,
+    area: ".agent-rules",
   }));
 
 /** `reportingRules`, installing into the workspace, so that a case's own file can clash with a rule. */

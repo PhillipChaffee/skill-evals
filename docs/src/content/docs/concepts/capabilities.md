@@ -64,6 +64,7 @@ Each harness's suite score is over its own applicable cases, and it is printed a
 | `childCalls`    | The stream attributes each tool call to the agent that made it, so a check can tell a subagent's calls from the parent's.                                                                |
 | `childText`     | The stream carries the text that a subagent wrote, apart from the parent's.                                                                                                              |
 | `rules`         | The adapter installs the subject's rules and instruction file (the config's `rules` and `instructionFile`) the way the harness reads them, so a case can plant a rule and see it obeyed. |
+| `rulesReport`   | The harness reports the rule and instruction texts it loaded, so a check can show that a rule reached the model.                                                                         |
 | `hooks`         | The stream shows each hook that ran, with its event, exit code and the context it added, so a check can read a hook's result.                                                            |
 | `history`       | A case can start from a conversation that already happened, written into the first prompt or into the harness's own store.                                                               |
 | `historyNative` | A case can start from a conversation written into the harness's own session store and resumed from it.                                                                                   |
@@ -94,6 +95,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `childCalls`    | no   | yes           | no       | no         | no      |
 | `childText`     | no   | yes           | no       | no         | no      |
 | `rules`         | no   | yes           | no       | no         | no      |
+| `rulesReport`   | no   | no            | no       | no         | no      |
 | `hooks`         | no   | yes           | no       | no         | no      |
 | `history`       | yes  | yes           | yes      | yes        | yes     |
 | `historyNative` | no   | no            | no       | no         | no      |

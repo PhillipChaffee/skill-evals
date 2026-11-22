@@ -7,26 +7,38 @@ interface HookResponse {
   stdout?: string;
   output?: string;
   exit_code?: number;
+  outcome?: string;
 }
 
+// The events whose plain standard output the CLI adds to the model's context (`M7a` in the binary).
+const PLAIN_EVENTS = ["SessionStart", "UserPromptSubmit"];
+
 /**
- * Reads the text a hook puts in front of the model from its standard output. A hook that prints JSON with
- * `hookSpecificOutput.additionalContext` adds that text; any other output is added as it is.
- * @param stdout - What the hook wrote.
- * @returns The context; undefined for an empty output.
+ * Reads the text a hook puts in front of the model.
+ * @param one - The `hook_response` event.
+ * @returns For any event, the `hookSpecificOutput.additionalContext` of the hook's JSON output. Plain output counts for
+ *   `SessionStart` and `UserPromptSubmit` only, and only when the hook succeeded (exit 0, or outcome `success`); JSON
+ *   output without that field adds nothing. Any other output is not context, so undefined.
  */
-function contextOf(stdout: string | undefined): string | undefined {
-  if (stdout === undefined || stdout.trim() === "") return undefined;
+function contextOf(one: HookResponse): string | undefined {
+  const raw = one.stdout ?? one.output;
+  if (raw === undefined || raw.trim() === "") return undefined;
+  let parsed: unknown = null;
   try {
-    const parsed: unknown = JSON.parse(stdout);
-    const added = (
-      parsed as { hookSpecificOutput?: { additionalContext?: unknown } } | null
-    )?.hookSpecificOutput?.additionalContext;
-    if (typeof added === "string") return added;
+    parsed = JSON.parse(raw);
   } catch {
-    // Not JSON: the text is the context.
+    // Not JSON: plain output.
   }
-  return stdout;
+  if (parsed !== null && typeof parsed === "object") {
+    const added = (
+      parsed as { hookSpecificOutput?: { additionalContext?: unknown } }
+    ).hookSpecificOutput?.additionalContext;
+    return typeof added === "string" ? added : undefined;
+  }
+  const succeeded = one.exit_code === 0 || one.outcome === "success";
+  return PLAIN_EVENTS.includes(one.hook_event ?? "") && succeeded
+    ? raw
+    : undefined;
 }
 
 /**
@@ -34,12 +46,12 @@ function contextOf(stdout: string | undefined): string | undefined {
  * `{ type: "system", subtype: "hook_response", hook_id, hook_name, hook_event, output, stdout, stderr, exit_code?,
  * outcome }`. It does not carry the hook's command, so `command` is null.
  * @param one - The event.
- * @returns The hook event; its context is the `additionalContext` of the hook's JSON output, else its standard output.
+ * @returns The hook event, with the context that `contextOf` finds.
  */
 export function hookOfClaude(one: HookResponse): HookEvent {
   return hookEvent({
     event: one.hook_event ?? "",
     exit: one.exit_code,
-    context: contextOf(one.stdout ?? one.output),
+    context: contextOf(one),
   });
 }

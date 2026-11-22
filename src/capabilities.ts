@@ -22,6 +22,8 @@ export const CAPABILITIES = {
     "The stream carries the text that a subagent wrote, apart from the parent's.",
   rules:
     "The adapter installs the subject's rules and instruction file (the config's `rules` and `instructionFile`) the way the harness reads them, so a case can plant a rule and see it obeyed.",
+  rulesReport:
+    "The harness reports the rule and instruction texts it loaded, so a check can show that a rule reached the model.",
   hooks:
     "The stream shows each hook that ran, with its event, exit code and the context it added, so a check can read a hook's result.",
   history:

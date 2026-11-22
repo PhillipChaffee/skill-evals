@@ -7,6 +7,7 @@ import type {
   TranscriptEvent,
 } from "./harnesses/shared.js";
 import { NO_DISPATCH, joinText, toolCall } from "./harnesses/shared.js";
+import { shownHook } from "./harnesses/hook.js";
 import { MAIN_AGENT } from "./agents.js";
 
 /** The default cut of `forRecord`: the most bytes of one `text` or `output`. */
@@ -203,7 +204,11 @@ export function forRecord(
   events: TranscriptEvent[],
   capBytes = RECORD_CAP_BYTES,
 ): TranscriptEvent[] {
-  return events.map((one) => {
+  return events.map((hooked) => {
+    // A hook's context is shown cut at 4,000 characters, though the transcript file keeps more for the checks.
+    const one = hooked.hook
+      ? { ...hooked, hook: shownHook(hooked.hook) }
+      : hooked;
     const over = (value: string | undefined): value is string =>
       value !== undefined && Buffer.byteLength(value) > capBytes;
     if (!over(one.text) && !over(one.output)) return one;

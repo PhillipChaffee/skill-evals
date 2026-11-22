@@ -4,18 +4,24 @@
       {
         "call": {
           "name": "Bash",
-          "input": { "command": "sh build.sh" },
+          "input": {
+            "command": "BUILD_SECONDS=2 sh build.sh >/dev/null 2>&1 &"
+          },
           "exec": true
         }
       },
       {
         "call": {
           "name": "Bash",
-          "input": { "command": "sleep 45 && ls build" },
-          "output": "done.flag\nresult.txt"
+          "input": {
+            "command": "sleep 3; cat build/build-result # waiting: sleep 45"
+          },
+          "exec": true
         }
       },
-      { "text": "It says: build ok." }
+      {
+        "text": "It says that the build finished."
+      }
     ]
   ]
 }

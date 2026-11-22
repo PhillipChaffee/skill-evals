@@ -23,6 +23,7 @@ import { startupRecord } from "./startup.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
+import { relativeToHome } from "./rules-install.js";
 import { fileState } from "./run-files.js";
 import { keptArchive, stageKept } from "./run-archive.js";
 import { seenFields } from "./run-seen.js";
@@ -239,7 +240,7 @@ const rulesOf = (ran: SessionResult): Pick<RunRecord, "rules"> =>
     ? {
         rules: {
           installed: ran.rulesInstalled,
-          reportedLoaded: ran.parsed.loaded.rules,
+          reportedLoaded: relativeToHome(ran.home, ran.parsed.loaded.rules),
         },
       }
     : {};

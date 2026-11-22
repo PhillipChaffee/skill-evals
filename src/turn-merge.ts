@@ -72,7 +72,7 @@ function union<T>(lists: (T[] | null | undefined)[]): T[] | null {
  *   once, by its path.
  */
 export function unionLoaded(reports: Loaded[]): Loaded {
-  const named = (key: "rawSkills" | "plugins"): boolean =>
+  const named = (key: "rawSkills" | "plugins" | "ruleTexts"): boolean =>
     reports.some((one) => key in one);
   const plugins = union(reports.map((one) => one.plugins));
   return {
@@ -83,6 +83,9 @@ export function unionLoaded(reports: Loaded[]): Loaded {
     hooks: union(reports.map((one) => one.hooks)),
     mcpServers: union(reports.map((one) => one.mcpServers)),
     // An adapter that does not name these keys leaves them out; one that names them null keeps null.
+    ...(named("ruleTexts")
+      ? { ruleTexts: union(reports.map((one) => one.ruleTexts)) }
+      : {}),
     ...(named("rawSkills")
       ? { rawSkills: union(reports.map((one) => one.rawSkills)) }
       : {}),

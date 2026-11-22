@@ -71,11 +71,9 @@ test("context_injected matches the injected bootstrap text", async () => {
       { type: "context_injected", pattern: "USING-THE-KIT", flags: "i" },
       { type: "context_injected", pattern: KIT, source: "hooks" },
       { type: "context_injected", pattern: "never mentioned" },
-      { type: "context_injected", pattern: KIT, source: "rules" },
     ],
   });
-  expect(record?.checks.map((check) => check.score)).toEqual([1, 1, 1, 0, 0]);
-  expect(record?.checks[4]?.reason).toContain("reports no rule text");
+  expect(record?.checks.map((check) => check.score)).toEqual([1, 1, 1, 0]);
 });
 
 test("an unmet precondition invalidates the run and calls no judge", async () => {
@@ -118,10 +116,14 @@ test("rules are installed and recorded", async () => {
   });
   expect(ran.status, ran.stderr).toBe(0);
   expect(record?.rules?.installed).toEqual([
+    "home/.claude/rules/no-sleep.md",
+    "home/.claude/CLAUDE.md",
+  ]);
+  // What the harness reported, relative to the run's home like `installed`.
+  expect(record?.rules?.reportedLoaded).toEqual([
     ".claude/rules/no-sleep.md",
     ".claude/CLAUDE.md",
   ]);
-  expect(record?.rules?.reportedLoaded).toHaveLength(2);
   expect(record?.checks.map((check) => check.score)).toEqual([1, 1]);
 });
 
@@ -137,18 +139,31 @@ test("a rules case on a harness without rules is not applicable", () => {
     preconditions: [{ type: "context_injected", pattern: "x" }],
     checks: [{ type: "output_contains", text: "x" }],
   });
-  const [needs, pre] = loadCases(path.join(box.root, "cases"));
+  box.write("cases/pre2/prompt.md", "go\n");
+  box.write("cases/pre2/case.json", {
+    preconditions: [
+      { type: "context_injected", pattern: "x", source: "rules" },
+    ],
+    checks: [{ type: "output_contains", text: "x" }],
+  });
+  const [needs, pre, pre2] = loadCases(path.join(box.root, "cases"));
   const bare: Harness = { ...claudeCode, capabilities: new Set(["history"]) };
   const hooksOnly: Harness = { ...bare, capabilities: new Set(["hooks"]) };
   expect(needs && applicability(bare, needs)).toMatchObject({
     applicable: false,
     missing: ["rules"],
   });
+  // Installing is not reporting: source "rules" needs the harness to report the text it loaded.
+  expect(pre2 && applicability(claudeCode, pre2)).toMatchObject({
+    applicable: false,
+    missing: ["rulesReport"],
+  });
   expect(needs && applicability(claudeCode, needs).applicable).toBe(true);
   // A precondition's needs count: "any" wants hooks or rules, and a harness with neither cannot show either.
   expect(pre && applicability(bare, pre)).toMatchObject({
     applicable: false,
-    missing: ["hooks", "rules"],
+    missing: ["hooks", "rulesReport"],
+    reason: "needs one of hooks, rulesReport",
   });
   expect(pre && applicability(hooksOnly, pre).applicable).toBe(true);
 });
@@ -161,6 +176,6 @@ test("a non-precondition check type under preconditions is a load error", () => 
     checks: [{ type: "output_contains", text: "x" }],
   });
   expect(() => loadCases(path.join(box.root, "cases"))).toThrow(
-    /output_contains cannot be a precondition; allowed: .*context_injected.*hook_fired.*skill_available.*skill_loaded/,
+    /output_contains cannot be a precondition; allowed: context_injected, hook_fired, skill_available\b/,
   );
 });

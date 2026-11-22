@@ -117,7 +117,7 @@ test("the host set holds the executables on PATH that the cases name", () => {
 });
 
 test("every capability has a one-sentence meaning, and the names are the fixed list", () => {
-  expect(Object.keys(CAPABILITIES)).toHaveLength(23);
+  expect(Object.keys(CAPABILITIES)).toHaveLength(24);
   for (const meaning of Object.values(CAPABILITIES)) {
     expect(meaning).toMatch(/^[A-Z].*\.$/);
   }

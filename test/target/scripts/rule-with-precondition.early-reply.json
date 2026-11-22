@@ -2,13 +2,13 @@
   "turns": [
     [
       {
-        "text": "It says: build ok."
+        "text": "It says that the build finished."
       },
       {
         "call": {
           "name": "Bash",
           "input": {
-            "command": "sh build.sh"
+            "command": "BUILD_SECONDS=2 sh build.sh >/dev/null 2>&1 &"
           },
           "exec": true
         }
@@ -17,7 +17,7 @@
         "call": {
           "name": "Bash",
           "input": {
-            "command": "ls build"
+            "command": "sleep 3; cat build/build-result"
           },
           "exec": true
         }

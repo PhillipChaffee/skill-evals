@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import claudeCode from "./harnesses/claude-code.js";
-import { HOOK_CONTEXT_CAP } from "./harnesses/hook.js";
 import { script } from "./testing/plant.js";
 import {
   installInPlaceOfClaude,
@@ -59,7 +57,7 @@ test("a precondition next to a judge check calls no judge when it fails, and one
   expect(judgePrompts(met)).toBe(1);
 });
 
-test("a precondition never counts in the score, whatever its weight", async () => {
+test("a precondition never counts in the score", async () => {
   const box = sandbox();
   script(box, "plain", {
     turns: [
@@ -74,7 +72,7 @@ test("a precondition never counts in the score, whatever its weight", async () =
   const { records } = await scoredCase(box, plainSubject(box), {
     checks: [{ type: "output_contains", text: "absent" }],
     more: {
-      preconditions: [{ type: "hook_fired", event: "SessionStart", weight: 9 }],
+      preconditions: [{ type: "hook_fired", event: "SessionStart" }],
     },
   });
   expect(records[0]?.score).toBe(0);
@@ -84,6 +82,8 @@ test("a precondition never counts in the score, whatever its weight", async () =
 
 test("context_injected never matches text that was installed but not reported", async () => {
   const box = sandbox();
+  // This harness can report rules, but its stream states none in this run, as when the rule never loaded.
+  installInPlaceOfClaude(reportingRules);
   script(box, "plain", { turns: [[{ final: "done" }]] });
   const subject = ruledSubject(box, { "secret.md": "SECRETWORD lives here." });
   const { records } = await scoredCase(box, subject, {
@@ -94,7 +94,7 @@ test("context_injected never matches text that was installed but not reported", 
   });
   const [record] = records;
   // The adapter installed the file, and its stream reports no rule, so the text that the file holds is not evidence.
-  expect(record?.rules?.installed).toEqual([".claude/rules/secret.md"]);
+  expect(record?.rules?.installed).toEqual(["home/.claude/rules/secret.md"]);
   expect(record?.rules?.reportedLoaded).toBeNull();
   expect(record?.checks.map((check) => check.score)).toEqual([0, 0]);
 });
@@ -177,96 +177,6 @@ test("a hook event does not satisfy tool_called", () => {
   expect(scored({ type: "tool_called", max: 0 }, outcome).score).toBe(1);
   const mixed = played(call("Bash", { command: "ls" }, "a"), hook("Stop"));
   expect(mixed.toolCalls.map((one) => one.name)).toEqual(["Bash"]);
-});
-
-test("the Claude Code adapter reads a hook_response into a hook event, and cuts a long context", () => {
-  const long = "x".repeat(HOOK_CONTEXT_CAP + 100);
-  const stream = [
-    { type: "system", subtype: "init", plugins: [], skills: [] },
-    { type: "system", subtype: "hook_started", hook_event: "SessionStart" },
-    {
-      type: "system",
-      subtype: "hook_response",
-      hook_event: "SessionStart",
-      stdout: JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "SessionStart",
-          additionalContext: "From the hook.",
-        },
-      }),
-      exit_code: 0,
-      outcome: "success",
-    },
-    {
-      type: "system",
-      subtype: "hook_response",
-      hook_event: "Stop",
-      stdout: long,
-      exit_code: 2,
-    },
-    { type: "result", subtype: "success", result: "done" },
-  ]
-    .map((event) => JSON.stringify(event))
-    .join("\n");
-  const parsed = claudeCode.parse(stream);
-  expect(parsed.toolCalls).toEqual([]);
-  const hooks = parsed.transcript.flatMap((one) =>
-    one.type === "hook" && one.hook ? [one.hook] : [],
-  );
-  expect(hooks[0]).toEqual({
-    event: "SessionStart",
-    command: null,
-    exit: 0,
-    contextBytes: 14,
-    context: "From the hook.",
-  });
-  expect(hooks).toHaveLength(2);
-  expect(hooks[1]?.exit).toBe(2);
-  expect(hooks[1]?.contextBytes).toBe(long.length);
-  expect(hooks[1]?.context).toBe(
-    `${"x".repeat(HOOK_CONTEXT_CAP)}\n[cut: the first ${String(HOOK_CONTEXT_CAP)} of ${String(long.length)} characters are kept]`,
-  );
-  expect(
-    claudeCode.invocation({
-      subject: null,
-      home: "/h",
-      workspace: "/w",
-      prompt: "p",
-      turn: { index: 0, message: "p", invoke: null, event: null },
-      session: null,
-    }).args,
-  ).toContain("--include-hook-events");
-});
-
-test("a hook_response with no stdout, no event name or odd JSON still reads as a hook event", () => {
-  const stream = [
-    { type: "system", subtype: "hook_response", output: "from output" },
-    { type: "system", subtype: "hook_response", hook_event: "A", stdout: "  " },
-    {
-      type: "system",
-      subtype: "hook_response",
-      hook_event: "B",
-      stdout: "null",
-    },
-    {
-      type: "system",
-      subtype: "hook_response",
-      hook_event: "C",
-      stdout: '{"x":1}',
-    },
-    { type: "result", subtype: "success", result: "done" },
-  ]
-    .map((event) => JSON.stringify(event))
-    .join("\n");
-  const hooks = claudeCode
-    .parse(stream)
-    .transcript.flatMap((one) => (one.hook ? [one.hook] : []));
-  expect(hooks.map((one) => [one.event, one.exit, one.context])).toEqual([
-    ["", null, "from output"],
-    ["A", null, null],
-    ["B", null, "null"],
-    ["C", null, '{"x":1}'],
-  ]);
 });
 
 test("context_injected says which source it tested when it finds nothing", () => {

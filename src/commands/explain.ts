@@ -47,6 +47,7 @@ function resolve(casesDir: string, id: string, lenient: boolean): Case[] {
 // What `resolved` rewrites: the paths and the checks, which it shows in their own form.
 const REWRITTEN = new Set([
   "checks",
+  "preconditions",
   "fixtureDirs",
   "workspaceDir",
   "fixtureDir",
@@ -89,6 +90,11 @@ function resolved(one: Case, casesDir: string): object {
     },
     requiredCapabilities: [...new Set(askedBy([one]))],
     checks: one.checks.map((check) => withDefaults(check, CHECKS[check.type])),
+    ...(one.preconditions && {
+      preconditions: one.preconditions.map((check) =>
+        withDefaults(check, CHECKS[check.type]),
+      ),
+    }),
     turns:
       one.turns?.map((turn) => ({
         ...turn,

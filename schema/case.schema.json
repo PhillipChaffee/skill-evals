@@ -51,7 +51,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+        "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
       }
     },
     "harnesses": {
@@ -250,15 +250,14 @@
     },
     "preconditions": {
       "title": "preconditions",
-      "description": "A non-empty list of checks that say what the run must have started with, such as `{ \"type\": \"context_injected\", \"pattern\": \"...\" }`. Only a check type that is allowed as a precondition may be listed: `context_injected`, `hook_fired`, `skill_available` and `skill_loaded`. They are scored first. A precondition that scores 0 makes the run invalid, with the reason `precondition not met: <check>`, not a zero, and the judged, decision and command checks of that run are not run. A precondition never counts in the run's score. What a precondition needs makes the case not applicable on a harness that lacks it.",
+      "description": "A non-empty list of checks that say what the run must have started with, such as `{ \"type\": \"context_injected\", \"pattern\": \"...\" }`. Only a check type that is allowed as a precondition may be listed: `context_injected`, `hook_fired` and `skill_available` (`skill_loaded` is the behaviour under test, not a precondition). They are scored first. A precondition that scores 0 makes the run invalid, with the reason `precondition not met: <check>`, not a zero, and the judged, decision and command checks of that run are not run. A precondition never counts in the run's score, so it takes no `weight`, and it is never skipped, so it takes no `ifUnsupported`; either is a load error. What a precondition needs makes the case not applicable on a harness that lacks it.",
       "type": "array",
       "minItems": 1,
       "items": {
         "oneOf": [
           { "$ref": "#/$defs/check-context_injected" },
           { "$ref": "#/$defs/check-hook_fired" },
-          { "$ref": "#/$defs/check-skill_available" },
-          { "$ref": "#/$defs/check-skill_loaded" }
+          { "$ref": "#/$defs/check-skill_available" }
         ]
       }
     },
@@ -604,7 +603,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -682,7 +681,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -722,7 +721,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -762,7 +761,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -827,7 +826,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -873,7 +872,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -919,7 +918,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -959,7 +958,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -999,7 +998,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1051,7 +1050,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1116,7 +1115,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1181,7 +1180,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1240,7 +1239,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1288,7 +1287,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1335,7 +1334,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1382,7 +1381,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1436,7 +1435,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1495,7 +1494,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1542,7 +1541,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1676,7 +1675,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -1794,7 +1793,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2028,7 +2027,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2104,7 +2103,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2169,7 +2168,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2203,7 +2202,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2543,7 +2542,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -2924,7 +2923,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3300,7 +3299,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3447,7 +3446,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3594,7 +3593,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3729,7 +3728,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3781,7 +3780,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3796,7 +3795,7 @@
     },
     "check-context_injected": {
       "title": "context_injected",
-      "description": "A hook's context, or a rule or instruction text that the harness reported it loaded, matches the regular expression. It never reads the rule files that the run installed itself, which would make the check true of every run. With `source` \"hooks\" it needs `hooks`, with \"rules\" it needs `rules`, and with \"any\", the default, it needs at least one of them. A harness that reports no rule text can only satisfy it from a hook.",
+      "description": "A hook's context, or a rule or instruction text that the harness reported it loaded, matches the regular expression. It never reads the rule files that the run installed itself, which would make the check true of every run. With `source` \"hooks\" it needs `hooks`, with \"rules\" it needs `rulesReport` (the harness reports the rule texts it loaded; installing them is the `rules` capability and proves nothing), and with \"any\", the default, it needs `hooks` or `rulesReport`.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
@@ -3833,7 +3832,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3867,7 +3866,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -3943,7 +3942,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -4025,7 +4024,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {
@@ -4103,7 +4102,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|rulesReport|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
           }
         },
         "ifUnsupported": {

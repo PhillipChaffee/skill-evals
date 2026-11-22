@@ -12,7 +12,7 @@ import {
   quoteCalls,
 } from "../matchers.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
-import { checkBounds, checkLineBounds } from "./bounds.js";
+import { checkBounds, checkLineBounds, checkOpenMin } from "./bounds.js";
 import { PASS } from "./rules.js";
 import { byNeeds, durationNeeds, unseenAgent } from "./by-needs.js";
 
@@ -193,6 +193,7 @@ export const TOOL_CHECKS = {
     ],
     validate: (given, where) => {
       checkBounds(given, where);
+      checkOpenMin(given, where);
       checkLineBounds(given, where);
     },
     rule: (check, outcome) =>

@@ -111,6 +111,9 @@ function transcriptParts(events: Event[]): EventInput[] {
   });
 }
 
+// The revision of the command line this adapter builds; raise it when a change to the arguments changes what a run does.
+const ARGV_REVISION = 1;
+
 const cursor: Harness = {
   id: "cursor",
   bin: "cursor-agent",
@@ -123,6 +126,7 @@ const cursor: Harness = {
     // The runner writes the history as a block in front of the first prompt, so every adapter has it.
     "history",
   ]),
+  argvRevision: ARGV_REVISION,
   status: "unverified",
   reportsCost: false,
   isRateLimit: looksRateLimited,

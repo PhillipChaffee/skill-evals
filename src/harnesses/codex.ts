@@ -190,6 +190,9 @@ function installedSkills(input: RunInput): Record<string, string> {
   }
 }
 
+// The revision of the command line this adapter builds; raise it when a change to the arguments changes what a run does.
+const ARGV_REVISION = 1;
+
 const codex: Harness = {
   id: "codex",
   bin: "codex",
@@ -205,6 +208,7 @@ const codex: Harness = {
     // The runner writes the history as a block in front of the first prompt, so every adapter has it.
     "history",
   ]),
+  argvRevision: ARGV_REVISION,
   status: "scripted",
   reportsCost: false,
   isRateLimit: looksRateLimited,

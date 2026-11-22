@@ -113,6 +113,26 @@ const lacking = (harness: Harness, host: Host, needs: Need[]): Need[] =>
   );
 
 /**
+ * Lists what a harness and the host lack of one check's needs.
+ * @param where - The adapter, and the host capabilities that are present.
+ * @param where.harness - The adapter.
+ * @param where.host - The host capabilities that are present.
+ * @param check - Any check of a case.
+ * @param groups - Receives `one of a, b` for a check that needs one of a group of which the harness has none.
+ * @returns The needs that are missing; a group's members all count when none is present.
+ */
+function absentOf(
+  where: { harness: Harness; host: Host },
+  check: Check,
+  groups: Set<string>,
+): Need[] {
+  const { harness, host } = where;
+  const either = lackingAll(harness, eitherNeeds(check));
+  if (either.length > 0) groups.add(`one of ${either.join(", ")}`);
+  return [...lacking(harness, host, checkNeeds(check)), ...either];
+}
+
+/**
  * Decides whether a harness can run a case, in the default history mode of the adapter.
  * @param harness - The adapter, which declares what it can observe or do.
  * @param caseDef - The case, with what it requires and what its checks imply.
@@ -161,12 +181,10 @@ export function applicabilityUnder(
   for (const need of seeded.blocked) missing.add(need);
   const skipped: number[] = [];
   const skippedMissing = new Set<Need>();
+  const groups = new Set<string>();
   const checks = allChecks(caseDef);
   checks.forEach((check, index) => {
-    const absent = [
-      ...lacking(harness, host, checkNeeds(check)),
-      ...lackingAll(harness, eitherNeeds(check)),
-    ];
+    const absent = absentOf({ harness, host }, check, groups);
     if (absent.length === 0) return;
     if (check.ifUnsupported === "skip") {
       skipped.push(index);
@@ -177,22 +195,22 @@ export function applicabilityUnder(
   });
   // A precondition is never skipped: what it needs, the whole case needs.
   for (const one of caseDef.preconditions ?? []) {
-    for (const need of [
-      ...lacking(harness, host, checkNeeds(one)),
-      ...lackingAll(harness, eitherNeeds(one)),
-    ]) {
+    for (const need of absentOf({ harness, host }, one, groups))
       missing.add(need);
-    }
   }
   if (missing.size === 0 && skipped.length === checks.length) {
     for (const need of skippedMissing) missing.add(need);
   }
   if (missing.size > 0) {
     const list = [...missing];
+    const members = new Set(
+      [...groups].flatMap((group) => group.slice("one of ".length).split(", ")),
+    );
+    const plain = list.filter((need) => !members.has(need));
     return {
       applicable: false,
       missing: list,
-      reason: `needs ${list.join(", ")}`,
+      reason: `needs ${[...plain, ...groups].join(", ")}`,
     };
   }
   return { applicable: true, skipped };
@@ -257,7 +275,7 @@ function partition(
           missing: [
             ...new Set(
               dropped.flatMap((check) =>
-                lacking(harness, host, checkNeeds(check)),
+                absentOf({ harness, host }, check, new Set()),
               ),
             ),
           ],

@@ -1,6 +1,12 @@
 #!/bin/sh
-# Slow work: the result is written at the end, and the marker file after it.
-sleep 1
+# Slow work. BUILD_SECONDS shortens it for a caller that knows better; by default it takes about a minute and a half.
+seconds=${BUILD_SECONDS:-80}
 mkdir -p build
-echo "build ok" > build/result.txt
-touch build/done.flag
+i=0
+while [ "$i" -lt "$seconds" ]; do
+  i=$((i + 1))
+  sleep 1
+  echo "step $i of $seconds" > build/progress.txt
+done
+# The line differs on every run, so only a run that waited for this build can quote it.
+echo "build finished $(date +%s%N)-$$" > "build/$(basename "$0" .sh)-result"

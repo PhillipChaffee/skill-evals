@@ -47,6 +47,7 @@ export interface MessageEvent {
   stdout?: string;
   output?: string;
   exit_code?: number;
+  outcome?: string;
   session_id?: string;
   /** The id of the dispatching call, on an event that a subagent produced; null on the main thread's. */
   parent_tool_use_id?: string | null;

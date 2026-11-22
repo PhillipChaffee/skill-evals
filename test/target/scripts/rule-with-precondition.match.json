@@ -4,18 +4,33 @@
       {
         "call": {
           "name": "Bash",
-          "input": { "command": "sh build.sh" },
+          "input": {
+            "command": "BUILD_SECONDS=2 sh build.sh >/dev/null 2>&1 &"
+          },
           "exec": true
         }
       },
       {
         "call": {
           "name": "Bash",
-          "input": { "command": "ls build" },
+          "input": {
+            "command": "sleep 3; cat build/progress.txt"
+          },
           "exec": true
         }
       },
-      { "text": "It says: build ok." }
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "cat build/build-result"
+          },
+          "exec": true
+        }
+      },
+      {
+        "text": "It says that the build finished."
+      }
     ]
   ]
 }

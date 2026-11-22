@@ -15,6 +15,7 @@ import { loadSelection, selectionOf } from "../select.js";
 import { UsageError } from "../scope.js";
 import { snapshot } from "../snapshot.js";
 import { resolveSubject } from "../subject.js";
+import { rulesClashes } from "../rules-clash.js";
 import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
 
@@ -229,6 +230,20 @@ function judgedShare(cases: Case[], context: LintContext): Lint[] {
 }
 
 /**
+ * Reports the files of a case that the subject's rules would be installed over, for each installed harness.
+ * @param cases - The loaded cases.
+ * @param context - The subject and the installed harnesses.
+ * @returns One problem for each clash, as `score` and `plan` refuse it before a run.
+ */
+function rulesClash(cases: Case[], context: LintContext): Lint[] {
+  if (context.subject === null) return [];
+  return rulesClashes(
+    context.harnesses.map(({ harness }) => ({ harness, cases })),
+    [context.subject],
+  ).map(({ caseId, text }): Lint => ({ level: "problem", caseId, text }));
+}
+
+/**
  * Every lint, in the order its lines are written. A later task adds a lint by appending a function here.
  */
 export const LINTS: LintRule[] = [
@@ -238,6 +253,7 @@ export const LINTS: LintRule[] = [
   unwatchedReplies,
   judgedShare,
   filesOutside,
+  rulesClash,
 ];
 
 const line = ({ level, caseId, text }: Lint): string =>

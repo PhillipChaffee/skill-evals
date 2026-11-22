@@ -1,6 +1,27 @@
+import path from "node:path";
 import type { Harness } from "./harnesses/shared.js";
 import type { RulesFile } from "./harnesses/rules.js";
 import { messageOf } from "./scope.js";
+
+/**
+ * Names what a harness reported loaded relative to the run's home, so that it reads like `installed`.
+ * @param home - The run's home directory.
+ * @param reported - The paths the harness reported; null when it reported none.
+ * @returns Each path under the home as a posix path relative to it; a path elsewhere stays as reported; null stays null.
+ */
+export function relativeToHome(
+  home: string,
+  reported: string[] | null,
+): string[] | null {
+  return (
+    reported?.map((file) => {
+      const relative = path.relative(home, file);
+      return relative.startsWith("..") || path.isAbsolute(relative)
+        ? file
+        : relative.split(path.sep).join("/");
+    }) ?? null
+  );
+}
 
 /** What installing a run's rules came to. */
 export interface RulesInstalled {

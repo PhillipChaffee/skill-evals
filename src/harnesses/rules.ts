@@ -15,6 +15,11 @@ export interface RulesTarget {
   root: "workspace" | "home";
   /** Relative to `root`, with `/` as the separator. */
   path: string;
+  /**
+   * The directory, relative to `root`, that holds the rules; a rule that goes in it makes the whole directory the
+   * subject's, so a file of a case in it is a clash too. Absent for a single file such as an instruction file.
+   */
+  area?: string;
 }
 
 /**
@@ -24,7 +29,7 @@ export interface RulesTarget {
  * @param dirs - The run's directories.
  * @param dirs.home - The run's home directory, where user-level files go.
  * @param dirs.workspace - The directory the agent works in.
- * @returns The places, as paths relative to their root, in the order of `files`.
+ * @returns The places, as `home/<path>` or `workspace/<path>`, in the order of `files`.
  * @throws {Error} When a place is already taken, which an install never overwrites.
  */
 export function placeRules(
@@ -40,6 +45,6 @@ export function placeRules(
     }
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.copyFileSync(file.path, to);
-    return target.path;
+    return `${target.root}/${target.path}`;
   });
 }

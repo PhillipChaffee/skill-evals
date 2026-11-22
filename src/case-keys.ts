@@ -13,7 +13,7 @@ export const CASE_KEYS: Record<string, FieldDef> = {
   preconditions: {
     type: "object",
     meaning:
-      'A non-empty list of checks that say what the run must have started with, such as `{ "type": "context_injected", "pattern": "..." }`. Only a check type that is allowed as a precondition may be listed: `context_injected`, `hook_fired`, `skill_available` and `skill_loaded`. They are scored first. A precondition that scores 0 makes the run invalid, with the reason `precondition not met: <check>`, not a zero, and the judged, decision and command checks of that run are not run. A precondition never counts in the run\'s score. What a precondition needs makes the case not applicable on a harness that lacks it.',
+      'A non-empty list of checks that say what the run must have started with, such as `{ "type": "context_injected", "pattern": "..." }`. Only a check type that is allowed as a precondition may be listed: `context_injected`, `hook_fired` and `skill_available` (`skill_loaded` is the behaviour under test, not a precondition). They are scored first. A precondition that scores 0 makes the run invalid, with the reason `precondition not met: <check>`, not a zero, and the judged, decision and command checks of that run are not run. A precondition never counts in the run\'s score, so it takes no `weight`, and it is never skipped, so it takes no `ifUnsupported`; either is a load error. What a precondition needs makes the case not applicable on a harness that lacks it.',
   },
   weight: {
     ...WEIGHT,

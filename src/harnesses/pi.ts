@@ -113,6 +113,9 @@ function countTurns(line: unknown, state: TurnState): void {
   if ((Object(line) as Event).type === "turn_start") state.turns += 1;
 }
 
+// The revision of the command line this adapter builds; raise it when a change to the arguments changes what a run does.
+const ARGV_REVISION = 1;
+
 const pi: Harness = {
   id: "pi",
   bin: "pi",
@@ -127,6 +130,7 @@ const pi: Harness = {
     // The runner writes the history as a block in front of the first prompt, so every adapter has it.
     "history",
   ]),
+  argvRevision: ARGV_REVISION,
   status: "scripted",
   reportsCost: true,
   isRateLimit: looksRateLimited,

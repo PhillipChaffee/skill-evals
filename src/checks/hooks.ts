@@ -1,7 +1,7 @@
 import type { Capability } from "../capabilities.js";
 import { tester } from "../matchers.js";
 import type { Check, Outcome, Spec, Verdict } from "./index.js";
-import { checkBounds } from "./bounds.js";
+import { checkBounds, checkOpenMin } from "./bounds.js";
 import { minOf, valueOf } from "./defaults.js";
 import type { Source } from "./hook-fields.js";
 import { PASS } from "./rules.js";
@@ -79,20 +79,24 @@ function contextInjected(check: Check, outcome: Outcome): Verdict {
 /**
  * Lists what `context_injected` needs for a source that names one.
  * @param check - A `context_injected` check.
- * @returns `hooks` for the source "hooks", `rules` for "rules"; none for "any", which needs one of them.
+ * @returns `hooks` for the source "hooks", `rulesReport` for "rules"; none for "any", which needs one of them.
  */
 function injectedNeeds(check: Check): Capability[] {
   const source = valueOf(check, "source") as Source;
-  return source === "any" ? [] : [source];
+  return source === "rules"
+    ? ["rulesReport"]
+    : source === "hooks"
+      ? ["hooks"]
+      : [];
 }
 
 /**
  * Lists what `context_injected` needs one of.
  * @param check - A `context_injected` check.
- * @returns `hooks` and `rules` for the source "any"; none otherwise.
+ * @returns `hooks` and `rulesReport` for the source "any"; none otherwise.
  */
 const injectedEither = (check: Check): Capability[] =>
-  valueOf(check, "source") === "any" ? ["hooks", "rules"] : [];
+  valueOf(check, "source") === "any" ? ["hooks", "rulesReport"] : [];
 
 // The checks of hooks and of the context that reached the model.
 export const HOOK_CHECKS = {
@@ -104,7 +108,10 @@ export const HOOK_CHECKS = {
       "The number of hooks of that event that ran is from `min` to `max`.",
     note: "`min` is 1, and 0 when `max` is 0. A hook event is never a tool call, so `tool_called` does not count it. Needs a harness with `hooks`.",
     needs: () => ["hooks"],
-    validate: checkBounds,
+    validate: (given, where) => {
+      checkBounds(given, where);
+      checkOpenMin(given, where);
+    },
     rule: hookFired,
   },
   context_injected: {
@@ -113,7 +120,7 @@ export const HOOK_CHECKS = {
     precondition: true,
     scores:
       "A hook's context, or a rule or instruction text that the harness reported it loaded, matches the regular expression.",
-    note: 'It never reads the rule files that the run installed itself, which would make the check true of every run. With `source` "hooks" it needs `hooks`, with "rules" it needs `rules`, and with "any", the default, it needs at least one of them. A harness that reports no rule text can only satisfy it from a hook.',
+    note: 'It never reads the rule files that the run installed itself, which would make the check true of every run. With `source` "hooks" it needs `hooks`, with "rules" it needs `rulesReport` (the harness reports the rule texts it loaded; installing them is the `rules` capability and proves nothing), and with "any", the default, it needs `hooks` or `rulesReport`.',
     needs: injectedNeeds,
     needsAny: injectedEither,
     rule: contextInjected,

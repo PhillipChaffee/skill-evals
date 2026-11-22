@@ -19,6 +19,23 @@ export function checkBounds(
 }
 
 /**
+ * Refuses a count whose `min` is 0 and that has no `max`, which no run can fail.
+ * @param given - The fields that are set.
+ * @param where - Names the file and the check in an error message.
+ * @throws {UsageError} When `min` is 0 and `max` is absent.
+ */
+export function checkOpenMin(
+  given: Record<string, unknown>,
+  where: string,
+): void {
+  if (given["min"] === 0 && given["max"] === undefined) {
+    throw new UsageError(
+      `${where}: "min" 0 with no "max" passes every run; set "max", or drop "min"`,
+    );
+  }
+}
+
+/**
  * Checks that the line bounds and the duration bounds of a call matcher can be met.
  * @param given - The fields that are set.
  * @param where - Names the file and the check in an error message.

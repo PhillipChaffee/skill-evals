@@ -10,6 +10,7 @@ import type { History } from "../history-types.js";
 import { within } from "../rescore.js";
 import type { RunRecord } from "../run.js";
 import { resultsByCall } from "../transcript.js";
+import { shownHook } from "../harnesses/hook.js";
 import { UsageError, messageOf } from "../scope.js";
 import { SHOW_CUT, clean, quoted, shown } from "../show-text.js";
 import type { Options } from "../usage.js";
@@ -24,6 +25,10 @@ const SCORE_DIGITS = 2;
  *   characters with a note. A lifecycle or hook event that carries no text is empty.
  */
 function payload(event: TranscriptEvent): string {
+  if (event.hook) {
+    const { event: name, exit, context } = shownHook(event.hook);
+    return `hook ${shown(JSON.stringify({ event: name, exit, context }))}`;
+  }
   const [label, value] =
     event.input !== undefined
       ? ["input", event.input]
@@ -132,19 +137,30 @@ function transcriptLines(record: RunRecord, dir: string): string[] {
 }
 
 /**
- * Writes the checks of a run, each with its score and its reason.
+ * Writes a list of check results, each with its score and its reason.
+ * @param list - The results, in order.
+ * @returns One line for each, numbered from 1, then its reason indented.
+ */
+const scoreLines = (list: RunRecord["checks"]): string[] =>
+  list.flatMap((check, index) => [
+    `${String(index + 1)}. ${clean(describeCheck(check))}: ${check.score === null ? (check.notScored ? "not scored" : "no score") : check.score.toFixed(SCORE_DIGITS)}`,
+    ...(check.reason === undefined
+      ? []
+      : check.reason.split("\n").map((row) => `   ${shown(row)}`)),
+  ]);
+
+/**
+ * Writes the preconditions and the checks of a run, each with its score and its reason.
  * @param record - The stored run.
- * @returns One line for each check, then its reason indented, which quotes the calls it is about.
+ * @returns The preconditions when the run has any, then the checks.
  */
 function checkLines(record: RunRecord): string[] {
   return [
+    ...(record.preconditions
+      ? ["preconditions", ...scoreLines(record.preconditions)]
+      : []),
     `checks${record.ok ? "" : ` (run invalid: ${clean(String(record.error))})`}`,
-    ...record.checks.flatMap((check, index) => [
-      `${String(index + 1)}. ${clean(describeCheck(check))}: ${check.score === null ? (check.notScored ? "not scored" : "no score") : check.score.toFixed(SCORE_DIGITS)}`,
-      ...(check.reason === undefined
-        ? []
-        : check.reason.split("\n").map((row) => `   ${shown(row)}`)),
-    ]),
+    ...scoreLines(record.checks),
   ];
 }
 
