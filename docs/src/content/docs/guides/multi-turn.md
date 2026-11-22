@@ -175,7 +175,7 @@ There are two modes, and the run record's `historyMode` says which one a run use
 | `preamble` | The runner puts a block in front of the first message: `Earlier in this conversation (12 messages):`, the messages in a fence that has more backticks than any run of backticks in them, and `Latest message:`. The words name no eval, no case and no tool. Every harness can do it. | `history`       |
 | `native`   | The adapter writes the history as a session in the harness's own store and resumes it, so the assistant turns and tool results are real events of the session, and a skill that reads its own transcript on disk finds them there.                                                    | `historyNative` |
 
-The default is `preamble` for every harness. `--history-mode native|preamble` (config key `historyMode`) forces a mode. Forcing `native` on a harness that does not declare `historyNative` is not a usage error: a case with a history is not applicable there, with the reason `needs historyNative`. A case that says `"requires": ["historyNative"]` is not applicable under `preamble`, whether `preamble` is the default or was forced, and so is a case whose first turn is an `invoke`, because a block in front of a slash command would stop it being one. Results of the two modes are not comparable, and the report keeps the mode of each run.
+The default is `preamble` for every harness. `--history-mode native|preamble` (config key `historyMode`) forces a mode. Forcing `native` on a harness that does not declare `historyNative` is not a usage error: a case with a history is not applicable there, with the reason `needs historyNative`. A case that says `"requires": ["historyNative"]` is not applicable under `preamble`, whether `preamble` is the default or was forced, and so is a case whose first message is a slash command (an `invoke` turn, or a prompt that starts with `/`), because a block in front of it would stop it being one. Results of the two modes are not comparable, and the report keeps the mode of each run.
 
 In a case with `turns` the block goes in front of the first turn only, and a native history is the session that the first turn resumes.
 
@@ -183,7 +183,11 @@ No harness declares `historyNative` or `sessionStore` yet. The Claude Code adapt
 
 ### What the checks see
 
-The seeded messages are in the transcript file, with `userTurn` -1, and no check reads them: a `tool_called` for `Bash` is not satisfied by a `Bash` call of the history, `transcript_matches` and the skill checks never match its text or its skill loads, and a file check does not count the files that the run planted as the agent's changes. The record's `toolCalls` and `skillsLoaded` are the agent's own. There is no way to include the history in a check in this release.
+No check reads the history. A `tool_called` for `Bash` is not satisfied by a `Bash` call of the history, `transcript_matches` and the skill checks never match its text or its skill loads, and a file check does not count the files that the run planted as the agent's changes. The record's `toolCalls` and `skillsLoaded` are the agent's own, and there is no way to include the history in a check in this release.
+
+The transcript file (`<run>.transcript.json`, and `SKILL_EVALS_TRANSCRIPT` for a `command` check) holds the agent's events only, numbered from 0 as a check's reason quotes them. The seeded messages are in `<run>.history.json`, as `history.json` has them, and a `command` check gets its path in `SKILL_EVALS_HISTORY`. `show` prints the agent's events at their own index, then the history as `h0`, `h1`, … with each message's role.
+
+The judge sees no history either. The task text it is given is the case's prompt (`prompt.md`, or the turns written as one text); under `preamble` the block in front of turn 1 is not part of it.
 
 ### Earlier sessions
 
@@ -194,13 +198,13 @@ The seeded messages are in the transcript file, with `userTurn` -1, and no check
   {
     "id": "older-one",
     "startedAt": "2026-01-05T09:00:00Z",
-    "cwd": "/srv/app",
+    "cwd": "app",
     "messages": [{ "role": "user", "text": "start the migration" }],
   },
 ]
 ```
 
-`id` is letters, digits, `.`, `_` and `-`, and may not start with `.` (an adapter may use it as a file name). `startedAt` is a date, `cwd` is optional (the default is the run's workspace), and `messages` is a history. A case with `sessions/` needs `sessionStore`, so it is not applicable on a harness that declares none. The files are written after the setup steps and the login files and before the harness starts, and they are in the home as the harness's prompt finds it: a check on the home does not report them as the agent's changes, and `--keep-workspaces` archives them with the rest of the home (the login files are still left out). [`examples/cases/sessions`](https://github.com/PhillipChaffee/skill-evals/tree/main/examples/cases/sessions) shows one.
+`id` is letters, digits, `.`, `_` and `-`, and may not start with `.` (an adapter may use it as a file name). `startedAt` is a date, `cwd` is optional and relative: a path below the run's workspace, resolved against its real path (the default is the workspace itself); an absolute path, or one that leaves the workspace, is a load error, because the path is written into a file that the agent can read, and `messages` is a history. A case with `sessions/` needs `sessionStore`, so it is not applicable on a harness that declares none. The files are written after the setup steps and the login files and before the harness starts, and they are in the home as the harness's prompt finds it: a check on the home does not report them as the agent's changes, and `--keep-workspaces` archives them with the rest of the home (the login files are still left out). [`examples/cases/sessions`](https://github.com/PhillipChaffee/skill-evals/tree/main/examples/cases/sessions) shows one.
 
 ## Lifecycle events
 

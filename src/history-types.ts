@@ -24,7 +24,7 @@ export interface PriorSession {
   id: string;
   /** When the session began, as a date the JavaScript `Date` reads, such as `2026-01-05T09:00:00Z`. */
   startedAt: string;
-  /** The directory the session ran in; absent: the run's workspace. */
+  /** The directory the session ran in, relative to the run's workspace, which may not be left; absent: the workspace itself. */
   cwd?: string;
   messages: History;
 }
@@ -44,6 +44,8 @@ export interface Seeding {
   home: string;
   /** The run's workspace. */
   workspace: string;
+  /** The start, in milliseconds, of the latest earlier session that was planted; a history is written after it. */
+  after?: number;
 }
 
 /** The parts of an adapter that seed a conversation or earlier sessions; `Harness` has them. */

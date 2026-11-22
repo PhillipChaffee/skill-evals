@@ -1,6 +1,6 @@
-import type { Harness, TranscriptEvent } from "./harnesses/shared.js";
-import { historyEvents, modeFor, renderPreamble } from "./history.js";
-import type { HistoryMode, Seeding } from "./history-types.js";
+import type { Harness } from "./harnesses/shared.js";
+import { modeFor, renderPreamble } from "./history.js";
+import type { History, HistoryMode, Seeding } from "./history-types.js";
 import { messageOf } from "./scope.js";
 import type { Layers } from "./workspace.js";
 
@@ -10,8 +10,8 @@ export interface Seeded {
   session: string | null;
   /** The block that goes in front of the first message, for a history in `preamble` mode; null otherwise. */
   preamble: string | null;
-  /** The history as transcript events, with `userTurn` -1; empty for a run with no history. */
-  events: TranscriptEvent[];
+  /** The case's history, for the run's history file; null for a run with no history. */
+  history: History | null;
   /** Why planting failed, which makes the run invalid before the harness starts; null when it worked. */
   failure: string | null;
 }
@@ -20,7 +20,7 @@ export interface Seeded {
 export const UNSEEDED: Seeded = {
   session: null,
   preamble: null,
-  events: [],
+  history: null,
   failure: null,
 };
 
@@ -45,25 +45,29 @@ export function plantHistory(
 ): Seeded {
   const { harness, layers } = run;
   const { history, sessions } = layers ?? {};
+  const starts = (sessions ?? []).map(({ startedAt }) => Date.parse(startedAt));
+  const seeding: Seeding = {
+    ...where,
+    ...(starts.length === 0 ? {} : { after: Math.max(...starts) }),
+  };
   try {
     if (sessions !== undefined) {
       if (harness.installSessions === undefined) {
         throw new Error(`${harness.id} has no prior-session store`);
       }
-      harness.installSessions(sessions, where);
+      harness.installSessions(sessions, seeding);
     }
     if (history === undefined) return UNSEEDED;
-    const events = historyEvents(history);
     if (modeFor(harness, run.historyMode) === "preamble") {
-      return { ...UNSEEDED, preamble: renderPreamble(history), events };
+      return { ...UNSEEDED, preamble: renderPreamble(history), history };
     }
     if (harness.installHistory === undefined) {
       throw new Error(`${harness.id} has no native history store`);
     }
     return {
       ...UNSEEDED,
-      session: harness.installHistory(history, where).session,
-      events,
+      session: harness.installHistory(history, seeding).session,
+      history,
     };
   } catch (error) {
     return {

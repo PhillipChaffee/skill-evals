@@ -21,6 +21,7 @@ const HASH_MULTIPLIER = 31;
 // How many characters of a hash make a message id or a call id.
 const ID_LENGTH = 24;
 const MS_PER_SECOND = 1000;
+const MS_PER_HOUR = 3_600_000;
 const OWNER_ONLY = 0o600;
 // A history has no times, so its messages are a second apart from a fixed start.
 const HISTORY_START = "2026-01-01T00:00:00.000Z";
@@ -135,7 +136,7 @@ function pushAssistant(
 ): void {
   const calls = (message.toolCalls ?? []).map((call, order) => ({
     call,
-    id: idOf("toolu", `${stamp.sessionId}:${String(at)}:${String(order)}`),
+    id: idOf("toolu", `${stamp.sessionId}:call:${String(at)}:${String(order)}`),
   }));
   if (message.text === "" && calls.length === 0) {
     throw new Error(`message ${String(at + 1)} has no text and no calls`);
@@ -143,7 +144,7 @@ function pushAssistant(
   push(chain, stamp, {
     type: "assistant",
     message: {
-      id: idOf("msg", `${stamp.sessionId}:${String(at)}`),
+      id: idOf("msg", `${stamp.sessionId}:msg:${String(at)}`),
       type: "message",
       role: "assistant",
       model: "<synthetic>",
@@ -199,6 +200,36 @@ function sessionLines(history: History, stamp: Stamp): string[] {
 }
 
 /**
+ * Picks the start of the active session, which comes after every earlier session.
+ * @param after - The start of the latest earlier session, in milliseconds; undefined for none.
+ * @returns A start an hour after it, or the fixed start of a history when there is no earlier session.
+ */
+const startAfter = (after: number | undefined): number =>
+  Math.max(Date.parse(HISTORY_START), (after ?? 0) + MS_PER_HOUR);
+
+/**
+ * Refuses a path that goes through a link, so that a planted file cannot land outside the run's home.
+ * @param base - The directory the path starts in, which is not itself checked.
+ * @param parts - The path below it, one name at a time.
+ * @throws {Error} Naming the first part that is a link.
+ */
+function refuseLinks(base: string, parts: string[]): void {
+  let at = base;
+  for (const part of parts) {
+    at = path.join(at, part);
+    try {
+      if (fs.lstatSync(at).isSymbolicLink()) {
+        throw new Error(
+          `${at} is a link, and nothing is planted through a link`,
+        );
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+}
+
+/**
  * Writes one session file under the project directory of a working directory.
  * @param configDir - Claude Code's config directory, the run's `CLAUDE_CONFIG_DIR`.
  * @param stamp - The session's id, directory and start.
@@ -206,6 +237,8 @@ function sessionLines(history: History, stamp: Stamp): string[] {
  */
 function writeSession(configDir: string, stamp: Stamp, history: History): void {
   const dir = path.join(configDir, "projects", projectName(stamp.cwd));
+  const below = path.relative(path.dirname(configDir), dir).split(path.sep);
+  refuseLinks(path.dirname(configDir), [...below, `${stamp.sessionId}.jsonl`]);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
     path.join(dir, `${stamp.sessionId}.jsonl`),
@@ -230,7 +263,7 @@ export function installClaudeHistory(
   const session = uuidOf(JSON.stringify(history));
   writeSession(
     path.join(where.home, ".claude"),
-    { sessionId: session, cwd, start: Date.parse(HISTORY_START) },
+    { sessionId: session, cwd, start: startAfter(where.after) },
     history,
   );
   return { session };
@@ -251,7 +284,7 @@ export function installClaudeSessions(
       path.join(where.home, ".claude"),
       {
         sessionId: session.id,
-        cwd: session.cwd ?? workspace,
+        cwd: path.resolve(workspace, session.cwd ?? "."),
         start: Date.parse(session.startedAt),
       },
       session.messages,

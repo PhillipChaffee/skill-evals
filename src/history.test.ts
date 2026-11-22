@@ -62,20 +62,19 @@ test("history tool calls never satisfy tool_called", async () => {
   const [record] = results?.records ?? [];
   expect(record?.toolCalls).toEqual([]);
   expect(record?.checks.map(({ score }) => score)).toEqual([0, 0, 1, 1]);
-  // The file keeps the history, apart from the agent's events, which are numbered as they would be without it.
+  // The transcript file holds the agent's events only, numbered from 0 as the reasons quote them; the history is its own file.
   const file = path.join(
     path.join(box.root, "results"),
     record?.transcriptFile ?? "",
   );
   const events = JSON.parse(fs.readFileSync(file, "utf8")) as TranscriptEvent[];
-  const seeded = events.filter(({ userTurn }) => userTurn === -1);
-  expect(seeded).toHaveLength(14);
-  expect(seeded.map(({ index }) => index)).toEqual(seeded.map((_, at) => at));
-  expect(seeded.find(({ type }) => type === "tool_call")).toMatchObject({
-    name: BASH,
-    input: { command: GIT_STATUS },
-  });
-  expect(events.slice(14).every(({ userTurn }) => userTurn === 0)).toBe(true);
+  expect(events.every(({ userTurn }) => userTurn === 0)).toBe(true);
+  expect(events.map(({ index }) => index)).toEqual(events.map((_, at) => at));
+  const history = JSON.parse(
+    fs.readFileSync(file.replace(".transcript.json", ".history.json"), "utf8"),
+  ) as { role: string; toolCalls?: { name: string }[] }[];
+  expect(history).toHaveLength(12);
+  expect(history[3]?.toolCalls?.[0]?.name).toBe(BASH);
 });
 
 test("history tool calls are excluded from transcript_matches and from skill checks", async () => {

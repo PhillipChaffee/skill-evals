@@ -32,7 +32,7 @@ const OLDER: PriorSession = {
 const NEWER: PriorSession = {
   id: "newer-one",
   startedAt: "2026-01-06T09:00:00Z",
-  cwd: "/srv/other project",
+  cwd: "other project",
   messages: [{ role: "user", text: "check the cache" }],
 };
 
@@ -92,9 +92,16 @@ test("sessions are written as Claude Code's project files, one JSON object per l
       { type: "text", text: "migration started" },
     ]);
     // A session with its own directory is under that directory's name.
+    const nested = path.join(where.workspace, "other project");
     expect(
-      fs.existsSync(path.join(projects, "-srv-other-project/newer-one.jsonl")),
+      fs.existsSync(
+        path.join(projects, projectName(nested), "newer-one.jsonl"),
+      ),
     ).toBe(true);
+    expect(
+      linesOf(path.join(projects, projectName(nested), "newer-one.jsonl"))[0]
+        ?.cwd,
+    ).toBe(nested);
   });
   // A name past 200 characters is cut and gets the hash of the whole path, as the binary does.
   expect(projectName("/a".repeat(150))).toMatch(/^(-a){100}-[0-9a-z]+$/);

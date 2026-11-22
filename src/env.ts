@@ -80,6 +80,10 @@ export interface ChildEnvInput {
   caseEnv?: Record<string, string>;
 }
 
+// Variables that no run gets, whatever the config's `env` says. Claude Code names its project directory after this one
+// when it is set, so a planted session would not be where the run looks for it.
+const NEVER_PASSED = ["CLAUDE_CODE_PROJECT_DIR_NAME"];
+
 /**
  * Builds the environment of a harness process.
  * @param input - Where the home is, what to take from the base, and what to withhold.
@@ -107,7 +111,9 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
     ...caseEnv,
   };
   return Object.fromEntries(
-    Object.entries(env).filter(([name]) => !withhold.includes(name)),
+    Object.entries(env).filter(
+      ([name]) => !withhold.includes(name) && !NEVER_PASSED.includes(name),
+    ),
   );
 }
 

@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { commandContext } from "./command.js";
 import type { Check } from "./checks/index.js";
 import { isDecision, isJudged } from "./checks/index.js";
@@ -27,11 +25,11 @@ import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
 import { keptArchive, stageKept } from "./run-archive.js";
-import { withHistory } from "./history.js";
 import { seenFields } from "./run-seen.js";
 import { flattened } from "./case-checks.js";
 import { slicesOf } from "./turn-outcome.js";
-import { failedCalls, writeTranscript } from "./transcript.js";
+import { failedCalls } from "./transcript.js";
+import { writeStreams } from "./run-streams.js";
 
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
 export type { RunRecord } from "./run-plan.js";
@@ -148,43 +146,6 @@ const judgeUsage = (replies: Usage[], hits: number): RunRecord["judge"] =>
   replies.length || hits
     ? { ...totalUsage(replies), ...(hits ? { cacheHits: hits } : {}) }
     : null;
-
-/**
- * Names the files of a run.
- * @param plan - The run.
- * @returns Its path without an extension, under the output directory.
- */
-const stemOf = (plan: RunPlan): string =>
-  path.join(
-    plan.outDir,
-    plan.harness.id,
-    plan.caseDef.id,
-    `${plan.subject.label}${String(plan.rep)}`,
-  );
-
-/**
- * Writes the run's stream, final text and transcript under the output directory.
- * @param plan - The run that was made.
- * @param ran - What the session produced.
- * @returns The transcript file: its absolute path, and its path relative to the output directory.
- */
-function writeStreams(
-  plan: RunPlan,
-  ran: SessionResult,
-): { absolute: string; relative: string; stem: string } {
-  const stem = stemOf(plan);
-  fs.mkdirSync(path.dirname(stem), { recursive: true });
-  fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
-  fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
-  // The seeded history is in the file, with `userTurn` -1; no check reads it.
-  const events = withHistory(ran.seeded, ran.parsed.transcript);
-  const absolute = path.resolve(writeTranscript(stem, events));
-  return {
-    absolute,
-    relative: path.relative(path.resolve(plan.outDir), absolute),
-    stem,
-  };
-}
 
 /**
  * Finds the skill events of a finished session.
@@ -326,7 +287,7 @@ async function record(
       skillEvents: events,
       legacySkillLoads: plan.lenient ?? false,
       ...files,
-      command: commandContext(ran, caseDef.env, transcript.absolute),
+      command: commandContext(ran, caseDef.env, transcript.files),
       subject: {
         dir: copy?.loaded.dir ?? null,
         mutated: changes ? allChanged(changes) : [],

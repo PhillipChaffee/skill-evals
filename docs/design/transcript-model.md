@@ -8,7 +8,7 @@ Every adapter turns its harness's stream into one ordered list of events. Checks
 interface TranscriptEvent {
   index: number; // position in the run
   turn: number | null; // assistant turn; null where the harness has no grouping
-  userTurn: number; // which user message this answers; -1 for seeded history
+  userTurn: number; // which user message this answers; 0 for a single prompt
   role: "user" | "assistant" | "tool" | "system";
   agent: AgentRef; // who produced it
   type: "text" | "tool_call" | "tool_result" | "hook" | "lifecycle";

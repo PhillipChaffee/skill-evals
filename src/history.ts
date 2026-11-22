@@ -1,10 +1,8 @@
-import type { Harness, TranscriptEvent } from "./harnesses/shared.js";
+import type { Harness } from "./harnesses/shared.js";
 import type { History, HistoryMode } from "./history-types.js";
-import type { EventInput } from "./transcript.js";
-import { numbered } from "./transcript.js";
 
-/** The `userTurn` of every event that comes from a seeded history. No check reads an event with it. */
-export const HISTORY_TURN = -1;
+/** What a run's stream file name ends with when it holds the seeded history, in place of `.transcript.json`. */
+export const HISTORY_SUFFIX = ".history.json";
 
 // A fence is at least three backticks.
 const MIN_FENCE = 3;
@@ -95,79 +93,3 @@ export const withPreamble = (
   preamble: string | null,
   message: string,
 ): string => (preamble === null ? message : `${preamble}\n\n${message}`);
-
-/**
- * Turns a history into the events that go in the transcript.
- * @param history - The messages of `history.json`.
- * @returns One `text` event for each message, and a `tool_call` and, where there is an output, a `tool_result` for each
- *   call, all with `userTurn` -1 and positions from 0. A call has the kind `other`: the history names tools in the
- *   harness's words, and no check reads it.
- */
-export function historyEvents(history: History): TranscriptEvent[] {
-  let calls = 0;
-  const parts = history.flatMap((message): EventInput[] => [
-    {
-      role: message.role,
-      type: "text",
-      text: message.text,
-      userTurn: HISTORY_TURN,
-    },
-    ...(message.toolCalls ?? []).flatMap((call): EventInput[] => {
-      const callId = `history-${String((calls += 1))}`;
-      return [
-        {
-          role: "assistant",
-          type: "tool_call",
-          kind: "other",
-          name: call.name,
-          input: call.input,
-          callId,
-          userTurn: HISTORY_TURN,
-        },
-        ...(call.output === undefined
-          ? []
-          : [
-              {
-                role: "tool",
-                type: "tool_result",
-                callId,
-                output: call.output,
-                userTurn: HISTORY_TURN,
-              } satisfies EventInput,
-            ]),
-      ];
-    }),
-  ]);
-  return numbered(parts);
-}
-
-/**
- * Numbers events by their place in the list.
- * @param events - Events in order.
- * @returns The same events with `index` set to the place, from 0.
- */
-const renumbered = (events: TranscriptEvent[]): TranscriptEvent[] =>
-  events.map((one, index) => ({ ...one, index }));
-
-/**
- * Puts the seeded history in front of a run's events, for the transcript file.
- * @param seeded - What `historyEvents` made; empty for a run with no history.
- * @param events - The agent's events.
- * @returns The two lists as one, numbered from 0; the agent's events themselves when there is no history.
- */
-export const withHistory = (
-  seeded: TranscriptEvent[],
-  events: TranscriptEvent[],
-): TranscriptEvent[] =>
-  seeded.length === 0 ? events : renumbered([...seeded, ...events]);
-
-/**
- * Takes the seeded history out of a transcript that was written with it.
- * @param events - The events of a transcript file.
- * @returns The agent's events, numbered from 0 as they were before the history was put in; the same list when it has
- *   no history.
- */
-export function agentEvents(events: TranscriptEvent[]): TranscriptEvent[] {
-  const own = events.filter((one) => one.userTurn !== HISTORY_TURN);
-  return own.length === events.length ? events : renumbered(own);
-}

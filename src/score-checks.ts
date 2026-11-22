@@ -118,7 +118,8 @@ const skipped = (reason: string) => ({ score: null, reason });
  * @param run.plan - Tells, through `breached`, whether a limit of the command is reached.
  * @param run.ask - Sends one request to the judge.
  * @param run.via - The judge's path, model and cache, which the scoring keys its answers by.
- * @param run.task - The prompt that the agent was given.
+ * @param run.task - The case's prompt (`prompt.md`, or its turns written as one text). It is not the text that was sent: under
+ *   `preamble` the history block in front of turn 1 is not part of it. The judge sees no history in this release.
  * @param run.outcome - What the judge reads of the run.
  * @param run.judgeable - False when the run is already invalid.
  * @param check - The check to score.

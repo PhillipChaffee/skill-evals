@@ -7,12 +7,11 @@ import type {
   Invocation,
   Parsed,
   RunInput,
-  TranscriptEvent,
 } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import type { Seeded } from "./history-plant.js";
 import { withPreamble } from "./history.js";
-import type { HistoryMode } from "./history-types.js";
+import type { History, HistoryMode } from "./history-types.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
@@ -72,8 +71,8 @@ export interface SessionInput {
 
 /** What a session produced, seen while its workspace still exists. */
 export interface SessionResult {
-  /** The seeded history as transcript events, with `userTurn` -1; empty for a run with no history. */
-  seeded: TranscriptEvent[];
+  /** The case's history, which the run writes to its history file; null for a run with no history. */
+  seeded: History | null;
   stdout: string;
   parsed: Parsed;
   /** The harness's own message when it produced a stream, else why the process failed. For turns, the first failure, with its turn. */

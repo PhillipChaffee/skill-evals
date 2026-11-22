@@ -20,10 +20,10 @@ export interface HistoryNeeds {
  * @param run.forced - `--history-mode`; undefined to take the adapter's own.
  * @returns For a `history.json`: `history` under `preamble` and `historyNative` under `native`. For `sessions/`:
  *   `sessionStore`. Under `preamble`, `blocked` holds `historyNative` when the case lists it in `requires`, and when the
- *   first turn is not a user message, because a block in front of a slash command would stop it being one.
+ *   first message is a slash command (an `invoke` turn, or a prompt that starts with `/`), because a block in front of it would stop it being one.
  */
 export function historyNeeds(
-  caseDef: Pick<Case, "history" | "sessions" | "requires" | "turns">,
+  caseDef: Pick<Case, "history" | "sessions" | "requires" | "turns" | "prompt">,
   run: {
     harness: Pick<Harness, "historyMode">;
     forced?: HistoryMode | undefined;
@@ -31,6 +31,13 @@ export function historyNeeds(
 ): HistoryNeeds {
   const preamble = modeFor(run.harness, run.forced) === "preamble";
   const first = caseDef.turns?.[0];
+  // What the user's first message is: a prompt's text, or null for an invocation, an event or a reply.
+  const opening =
+    first === undefined
+      ? caseDef.prompt
+      : "prompt" in first
+        ? first.prompt
+        : null;
   const needs: Need[] = [];
   if (caseDef.history !== undefined) {
     needs.push(preamble ? "history" : "historyNative");
@@ -38,8 +45,7 @@ export function historyNeeds(
   if (caseDef.sessions !== undefined) needs.push("sessionStore");
   const unfitFirst =
     caseDef.history !== undefined &&
-    first !== undefined &&
-    !("prompt" in first);
+    (opening === null || opening.startsWith("/"));
   const blocked: Need[] =
     preamble && (unfitFirst || caseDef.requires.includes("historyNative"))
       ? ["historyNative"]

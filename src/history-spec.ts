@@ -1,3 +1,4 @@
+import path from "node:path";
 import type {
   History,
   HistoryCall,
@@ -90,6 +91,15 @@ function readMessage(raw: unknown, where: string): HistoryMessage {
   if (typeof text !== "string") {
     throw new UsageError(`${where}: "text" must be a string`);
   }
+  if (
+    role === "assistant" &&
+    text === "" &&
+    !(Array.isArray(toolCalls) && toolCalls.length > 0)
+  ) {
+    throw new UsageError(
+      `${where}: an assistant message needs text or tool calls`,
+    );
+  }
   if (toolCalls === undefined) return { role, text };
   if (role === "user") {
     throw new UsageError(`${where}: a user message has no "toolCalls"`);
@@ -114,6 +124,25 @@ export function readHistory(value: unknown, where: string): History {
 }
 
 /**
+ * Checks the directory of a prior session.
+ * @param cwd - The `cwd` value.
+ * @param where - Names the file and the session.
+ * @throws {UsageError} When it is no string, is empty or absolute, or leaves the workspace: it is a path below the
+ *   workspace's real path, and an absolute path would be written into a file that the agent can read.
+ */
+function requireInsideCwd(cwd: unknown, where: string): asserts cwd is string {
+  if (typeof cwd !== "string" || cwd === "") {
+    throw new UsageError(`${where}: "cwd" must be a non-empty string`);
+  }
+  const resolved = path.posix.normalize(cwd);
+  if (path.isAbsolute(cwd) || resolved === ".." || resolved.startsWith("../")) {
+    throw new UsageError(
+      `${where}: "cwd" must be a path below the workspace, not an absolute path or one that leaves it`,
+    );
+  }
+}
+
+/**
  * Reads one prior session.
  * @param raw - The value of the list's entry.
  * @param where - Names the file and the entry.
@@ -133,9 +162,7 @@ function readSession(raw: unknown, where: string): PriorSession {
   if (typeof startedAt !== "string" || Number.isNaN(Date.parse(startedAt))) {
     throw new UsageError(`${where}: "startedAt" must be a date`);
   }
-  if (cwd !== undefined && typeof cwd !== "string") {
-    throw new UsageError(`${where}: "cwd" must be a string`);
-  }
+  if (cwd !== undefined) requireInsideCwd(cwd, where);
   return {
     id,
     startedAt,

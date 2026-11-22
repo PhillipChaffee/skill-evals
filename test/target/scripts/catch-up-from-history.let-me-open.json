@@ -1,0 +1,23 @@
+{
+  "match": {
+    "prompt": "Where did we leave off"
+  },
+  "turns": [
+    [
+      {
+        "text": "Let me open the job config to check."
+      },
+      {
+        "call": {
+          "name": "Read",
+          "input": {
+            "file_path": "export/job.yaml"
+          }
+        }
+      },
+      {
+        "text": "Thanks for asking. We discussed CSV and Parquet, and eu-west and us-east, and the timeout is still 300."
+      }
+    ]
+  ]
+}

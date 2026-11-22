@@ -1,6 +1,8 @@
 import { QUESTION_CHECKS } from "../question.js";
 import { allChecks } from "../case-checks.js";
-import { applicability, hostCapabilities } from "../applicability.js";
+import { applicabilityUnder, hostCapabilities } from "../applicability.js";
+import { requireHistoryMode } from "../evaluate-setup.js";
+import type { HistoryMode } from "../history-types.js";
 import { EXIT } from "../exit-codes.js";
 import type { Case } from "../cases.js";
 import { scopeTest } from "../checks/tree.js";
@@ -36,6 +38,8 @@ export interface LintContext {
   casesDir: string;
   /** The share of a case's weight that judge and decision checks may carry before a warning. Default: 0.5. */
   maxJudgedWeightShare?: number;
+  /** The `historyMode` of the config or `--history-mode`; undefined leaves each harness its own. */
+  historyMode?: HistoryMode | undefined;
 }
 
 /** A check of the loaded cases. */
@@ -101,7 +105,10 @@ function notApplicable(cases: Case[], context: LintContext): Lint[] {
   const host = hostCapabilities(cases);
   return context.harnesses.flatMap(({ harness }) =>
     cases.flatMap((one): Lint[] => {
-      const verdict = applicability(harness, one, host);
+      const verdict = applicabilityUnder(harness, one, {
+        host,
+        forced: context.historyMode,
+      });
       return verdict.applicable
         ? []
         : [
@@ -275,6 +282,7 @@ export function validate(given: Options, project: Project): number {
       harnesses,
       project,
       casesDir,
+      historyMode: requireHistoryMode(options),
       ...(options.maxJudgedWeightShare === undefined
         ? {}
         : { maxJudgedWeightShare: options.maxJudgedWeightShare }),

@@ -1,0 +1,21 @@
+{
+  "match": {
+    "prompt": "Where did we leave off"
+  },
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "sed -i s/300/1800/ export/job.yaml"
+          },
+          "exec": true
+        }
+      },
+      {
+        "text": "Two decisions are still waiting on you: whether the export stays CSV or moves to Parquet, and which region the replica goes in, eu-west or us-east. I raised the timeout to 1800."
+      }
+    ]
+  ]
+}

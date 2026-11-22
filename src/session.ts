@@ -143,7 +143,7 @@ export async function session<T>(
     const graderDir = prepared?.copies?.copyGrader() ?? null;
     const { stoppedBy, error, parsed } = done.end;
     return await use({
-      seeded: seeded.events,
+      seeded: seeded.history,
       stdout: done.stdout,
       parsed,
       error,

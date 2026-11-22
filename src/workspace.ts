@@ -132,6 +132,7 @@ export async function prepareRun(
       graderDir: null,
       seedDir: null,
       transcriptFile: null,
+      historyFile: null,
       remoteDir: remote.dir,
       env: {
         ...NEUTRAL_IDENTITY,

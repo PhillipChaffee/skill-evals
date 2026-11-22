@@ -1,5 +1,11 @@
 import path from "node:path";
-import { applicability, askedBy, hostCapabilities } from "../applicability.js";
+import {
+  applicabilityUnder,
+  askedBy,
+  hostCapabilities,
+} from "../applicability.js";
+import { requireHistoryMode } from "../evaluate-setup.js";
+import type { HistoryMode } from "../history-types.js";
 import type { Applicability } from "../applicability.js";
 import type { Case } from "../cases.js";
 import { loadWhere } from "../cases.js";
@@ -116,6 +122,7 @@ function line(name: string, verdict: Applicability): string {
  * @param context.casesDir - The cases directory.
  * @param context.harnesses - The installed harnesses, each with its path.
  * @param context.host - The host capabilities that are present.
+ * @param context.forced - The `historyMode` of the config or flag; undefined leaves each harness its own.
  * @returns The section: a heading, the resolved case as JSON, and the harness list.
  */
 function section(
@@ -124,6 +131,7 @@ function section(
     casesDir: string;
     harnesses: ReturnType<typeof installedOf>;
     host: ReturnType<typeof hostCapabilities>;
+    forced: HistoryMode | undefined;
   },
 ): string[] {
   const { casesDir, harnesses, host } = context;
@@ -139,7 +147,10 @@ function section(
     ...(harnesses.length === 0
       ? ["- no harness is installed"]
       : harnesses.map(({ harness, bin }) =>
-          line(`${harness.id} (${bin})`, applicability(harness, one, host)),
+          line(
+            `${harness.id} (${bin})`,
+            applicabilityUnder(harness, one, { host, forced: context.forced }),
+          ),
         )),
     "",
   ];
@@ -166,6 +177,7 @@ export function explain(
     casesDir: merged.cases,
     harnesses: installedOf(),
     host: hostCapabilities(cases),
+    forced: requireHistoryMode(merged),
   };
   console.log(
     [

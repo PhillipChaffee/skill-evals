@@ -1,15 +1,21 @@
 {
-  "description": "A conversation of twelve messages stopped with two decisions open, the export format and the replica region. The user comes back and asks where it stands: the agent writes and edits nothing, its first sentence says that something is waiting, and both decisions are in its answer.",
+  "description": "A conversation of twelve messages stopped with two decisions open, the export format and the replica region. The user comes back and asks where it stands: the agent writes and edits nothing and changes no file, its answer opens with a sentence that says something is waiting and names a decision, and both decisions are in its answer.",
   "tags": ["history", "catch-up", "target"],
   "targets": ["catch-up"],
   "checks": [
-    { "type": "tool_not_called", "kind": "write" },
-    { "type": "tool_not_called", "kind": "edit" },
+    {
+      "type": "tool_not_called",
+      "kind": "write"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit"
+    },
     {
       "type": "transcript_matches",
-      "pattern": "^[^.!?]*(waiting|pending|open|undecided|awaiting)",
+      "pattern": "^(?=[^.!?]*\\b(waiting|pending|open|undecided|awaiting)\\b)(?=[^.!?]*\\b(decisions?|questions?|choices?|CSV|Parquet|eu-west|us-east|replica|region)\\b)",
       "flags": "i",
-      "scope": "first_message"
+      "scope": "final_message"
     },
     {
       "type": "output_matches",
@@ -20,6 +26,10 @@
       "type": "output_matches",
       "pattern": "eu-west.*us-east|us-east.*eu-west",
       "flags": "is"
+    },
+    {
+      "type": "files_changed_only",
+      "allow": ["nothing/**"]
     }
   ],
   "timeoutSeconds": 300

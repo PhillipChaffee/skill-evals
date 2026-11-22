@@ -16,6 +16,8 @@ export interface CommandContext {
   home: string;
   /** The absolute path of the run's transcript file, written before any check runs. Null when none was written. */
   transcriptFile: string | null;
+  /** The absolute path of the history file of a case with a `history.json`: its messages, as the case file has them. Null for a case with none. */
+  historyFile?: string | null;
   /** The run's per-run directory outside the workspace, for bare remotes and linked worktrees; null when none was made. */
   remoteDir: string | null;
   /** What the case sets in its `env`, which the command gets too. */
@@ -31,8 +33,10 @@ export interface CommandContext {
  * @param ran.graderDir - The copy of the case's `grader/` directory; null when the case has none.
  * @param ran.remoteDir - The run's remote directory; null when none was made.
  * @param env - The case's `env`.
- * @param transcriptFile - The absolute path of the run's transcript file; null when none was written.
- * @returns The context, with the transcript's path as `transcriptFile`.
+ * @param files - The run's files.
+ * @param files.transcript - The absolute path of the run's transcript file; null when none was written.
+ * @param files.history - The absolute path of the run's history file; null when the case has no history.
+ * @returns The context, with the paths as `transcriptFile` and `historyFile`.
  */
 export function commandContext(
   ran: Pick<
@@ -40,14 +44,15 @@ export function commandContext(
     "workspace" | "home" | "graderDir" | "seedDir" | "remoteDir"
   >,
   env: Record<string, string>,
-  transcriptFile: string | null = null,
+  files: { transcript?: string | null; history?: string | null } = {},
 ): CommandContext {
   return {
     workspace: ran.workspace,
     graderDir: ran.graderDir,
     seedDir: ran.seedDir,
     home: ran.home,
-    transcriptFile,
+    transcriptFile: files.transcript ?? null,
+    historyFile: files.history ?? null,
     remoteDir: ran.remoteDir,
     env,
   };
@@ -89,6 +94,7 @@ export function commandEnv(context: CommandContext): Record<string, string> {
     SKILL_EVALS_GRADER_DIR: context.graderDir,
     SKILL_EVALS_SEED_DIR: context.seedDir,
     SKILL_EVALS_TRANSCRIPT: context.transcriptFile,
+    SKILL_EVALS_HISTORY: context.historyFile ?? null,
     SKILL_EVALS_REMOTE_DIR: context.remoteDir,
   };
   return {

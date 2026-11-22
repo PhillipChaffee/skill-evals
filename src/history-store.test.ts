@@ -25,7 +25,7 @@ const OLDER: PriorSession = {
 const NEWER: PriorSession = {
   id: "newer-one",
   startedAt: "2026-01-06T09:00:00Z",
-  cwd: "/srv/other project",
+  cwd: "other project",
   messages: [{ role: "user", text: "check the cache" }],
 };
 

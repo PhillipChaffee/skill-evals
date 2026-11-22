@@ -74,7 +74,7 @@ export interface TranscriptEvent {
   index: number;
   /** The assistant turn, counted from 1; null where the harness has no grouping. */
   turn: number | null;
-  /** Which user turn this answers: from 1 in a case with `turns`, 0 for a single prompt, -1 for seeded history. */
+  /** Which user turn this answers: from 1 in a case with `turns`, 0 for a single prompt. */
   userTurn: number;
   role: "user" | "assistant" | "tool" | "system";
   agent: AgentRef;

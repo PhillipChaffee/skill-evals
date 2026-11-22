@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Unpacked } from "./archive.js";
 import { unpackArchive } from "./archive.js";
 import { allChecks } from "./case-checks.js";
-import { agentEvents } from "./history.js";
+import { existingHistory } from "./history-file.js";
 import type { Case } from "./cases.js";
 import type { Outcome } from "./checks/index.js";
 import { commandContext } from "./command.js";
@@ -67,9 +67,10 @@ function transcriptOf(
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)} has no transcript file in ${outDir}`,
     );
   }
-  // The file holds the seeded history first; no check reads it, and the agent's events are numbered as they were.
-  const events = JSON.parse(fs.readFileSync(file, "utf8")) as TranscriptEvent[];
-  return { events: agentEvents(events), file };
+  return {
+    events: JSON.parse(fs.readFileSync(file, "utf8")) as TranscriptEvent[],
+    file,
+  };
 }
 
 /**
@@ -170,7 +171,10 @@ function outcomeOf(
         remoteDir: files?.remoteDir ?? null,
       },
       context.env,
-      parts.transcript.file,
+      {
+        transcript: parts.transcript.file,
+        history: existingHistory(parts.transcript.file),
+      },
     ),
   };
 }

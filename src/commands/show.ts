@@ -5,7 +5,8 @@ import { EXIT } from "../exit-codes.js";
 import type { AgentRef, TranscriptEvent } from "../harnesses/shared.js";
 import type { Project } from "../project.js";
 import { readResultsFile } from "../results-file.js";
-import { HISTORY_TURN } from "../history.js";
+import { existingHistory } from "../history-file.js";
+import type { History } from "../history-types.js";
 import { within } from "../rescore.js";
 import type { RunRecord } from "../run.js";
 import { resultsByCall } from "../transcript.js";
@@ -37,16 +38,13 @@ function payload(event: TranscriptEvent): string {
  * @param event - The transcript event to write.
  * @param call - The number that the checks give the call, as in `#0`: the call's own for a call, the call it answers
  *   for a result, and absent for any other event.
- * @returns `<index>: [history] <agent> <kind or type> <name> [call #<n>] <payload>`, with the agent, kind and name quoted;
- *   `[history]` only for an event of the seeded history. The
+ * @returns `<index>: <agent> <kind or type> <name> [call #<n>] <payload>`, with the agent, kind and name quoted. The
  *   first number is the event's place in the transcript; `call #<n>` is the number that a check's reason quotes. An
  *   event with no agent prints `?`, so that one malformed event does not hide the rest.
  */
 const eventLine = (event: TranscriptEvent, call?: number): string =>
   [
     `${String(event.index)}:`,
-    // A seeded history is in the file, and no check reads it.
-    ...(event.userTurn === HISTORY_TURN ? ["[history]"] : []),
     quoted((event.agent as Partial<AgentRef> | undefined)?.id, "?"),
     quoted(event.kind ?? event.type, "?"),
     quoted(event.name, "-"),
@@ -77,6 +75,36 @@ function callNumbers(events: TranscriptEvent[]): Map<number, number> {
 }
 
 /**
+ * Writes the seeded history of a run as lines.
+ * @param history - The messages of the run's history file.
+ * @returns One line for each message, `h<n>: <role> text <text>`, and one for each tool call after it, with the same
+ *   `h<n>` and `call <name> input <input>`. These numbers are not the checks' call numbers: no check reads the history.
+ */
+const historyLines = (history: History): string[] =>
+  history.flatMap((message, at) => [
+    `h${String(at)}: ${message.role} text ${shown(JSON.stringify(message.text))}`,
+    ...(message.toolCalls ?? []).map(
+      (call) =>
+        `h${String(at)}: ${message.role} call ${quoted(call.name, "-")} input ${shown(JSON.stringify(call.input))}`,
+    ),
+  ]);
+
+/**
+ * Reads the history file that goes with a transcript, if the run has one.
+ * @param transcript - The absolute path of the transcript file.
+ * @returns The lines of the history, after a heading; none for a run with no history.
+ */
+function historyOf(transcript: string): string[] {
+  const file = existingHistory(transcript);
+  if (file === null) return [];
+  const history = JSON.parse(fs.readFileSync(file, "utf8")) as History;
+  return [
+    `history: ${String(history.length)} seeded messages, read by no check; h<n> is the message's place`,
+    ...historyLines(history),
+  ];
+}
+
+/**
  * Reads the transcript file of a run, and says when it cannot.
  * @param record - The stored run.
  * @param dir - The output directory.
@@ -90,12 +118,10 @@ function transcriptLines(record: RunRecord, dir: string): string[] {
     const events = JSON.parse(
       fs.readFileSync(file, "utf8"),
     ) as TranscriptEvent[];
-    // The checks number the agent's calls only, so the seeded history's calls get no number.
-    const numbers = callNumbers(
-      events.filter((one) => one.userTurn !== HISTORY_TURN),
-    );
+    const numbers = callNumbers(events);
     return [
       `transcript: ${clean(named)}, ${String(events.length)} events; each input, output, text and line of a reason is cut at ${String(SHOW_CUT)} characters`,
+      ...historyOf(file),
       ...events.map((one) => eventLine(one, numbers.get(one.index))),
     ];
   } catch (error) {

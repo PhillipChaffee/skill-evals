@@ -96,7 +96,39 @@ test("sessions.json is strict, and a lenient run does not relax it", () => {
       [{ ...OWN, startedAt: "soon" }],
       /"startedAt" must be a date/,
     ],
-    ["a cwd that is no string", [{ ...OWN, cwd: 1 }], /"cwd" must be a string/],
+    [
+      "a cwd that is no string",
+      [{ ...OWN, cwd: 1 }],
+      /"cwd" must be a non-empty string/,
+    ],
+    [
+      "an absolute cwd",
+      [{ ...OWN, cwd: "/srv/app" }],
+      /must be a path below the workspace/,
+    ],
+    [
+      "a cwd that leaves",
+      [{ ...OWN, cwd: "../elsewhere" }],
+      /must be a path below the workspace/,
+    ],
+    [
+      "a cwd that leaves by a detour",
+      [{ ...OWN, cwd: "a/../../b" }],
+      /must be a path below the workspace/,
+    ],
+  ];
+  for (const [what, sessions, problem] of bad) {
+    expect(() => seededLoad({ sessions }).load(), what).toThrow(problem);
+  }
+});
+
+test("a session's messages and directory are checked too", () => {
+  const bad: [string, unknown, RegExp][] = [
+    [
+      "an assistant message with no text and no calls",
+      [{ ...OWN, messages: [{ role: "assistant", text: "" }] }],
+      /an assistant message needs text or tool calls/,
+    ],
     ["a repeated id", [OWN, OWN], /two sessions have the id "a"/],
     ["an empty list", [], /non-empty list of sessions/],
     [
@@ -108,6 +140,6 @@ test("sessions.json is strict, and a lenient run does not relax it", () => {
   for (const [what, sessions, problem] of bad) {
     expect(() => seededLoad({ sessions }).load(), what).toThrow(problem);
   }
-  const loaded = seededLoad({ sessions: [{ ...OWN, cwd: "/srv/app" }] }).load();
-  expect(loaded?.sessions).toEqual([{ ...OWN, cwd: "/srv/app" }]);
+  const loaded = seededLoad({ sessions: [{ ...OWN, cwd: "app/src" }] }).load();
+  expect(loaded?.sessions).toEqual([{ ...OWN, cwd: "app/src" }]);
 });
