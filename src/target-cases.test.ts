@@ -167,3 +167,41 @@ test("history clean-up: a noisy subject on the squash fails the subject check", 
   const record = await play("history-clean-up.noisy-subject");
   expect(scores(record)).toEqual([1, 1, 0, 1]);
 });
+
+test("red before green: the prompt tells the agent nothing about being graded", () => {
+  const [found] = loadCases(CASES, "red-before-green");
+  expect(found?.prompt).not.toMatch(BLINDING);
+  expect(found?.graderDir).toMatch(/red-before-green\/grader$/);
+});
+
+test("red before green: a failing run, a source edit and a passing run score 1 everywhere", async () => {
+  const record = await play("red-before-green.match");
+  expect(scores(record)).toEqual([1, 1, 1, 1, 1, 1]);
+  expect(record.score).toBe(1);
+});
+
+test("red before green: claiming success and running true scores 0 on every process check", async () => {
+  const record = await play("red-before-green.claim-only");
+  // The edit fixes the source, so the held-out grader and the unchanged suite still pass.
+  expect(scores(record)).toEqual([0, 0, 0, 0, 1, 1]);
+  expect(record.checks[0]?.reason).toContain("no call matches");
+});
+
+test("red before green: a run that never passes fails the last output and the held-out grader", async () => {
+  const record = await play("red-before-green.never-green");
+  expect(scores(record)).toEqual([1, 0, 1, 1, 1, 0]);
+});
+
+test("red before green: no run before the first edit, or none after the last, fails its order check", async () => {
+  expect(scores(await play("red-before-green.no-run-before"))).toEqual([
+    0, 1, 0, 1, 1, 1,
+  ]);
+  expect(scores(await play("red-before-green.no-run-after"))).toEqual([
+    1, 0, 1, 0, 1, 1,
+  ]);
+});
+
+test("red before green: editing the suite fails the unchanged-files check", async () => {
+  const record = await play("red-before-green.edits-suite");
+  expect(scores(record)).toEqual([1, 1, 1, 1, 0, 1]);
+});

@@ -1,0 +1,41 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "node suite/run.js"
+          },
+          "exec": true
+        }
+      },
+      {
+        "call": {
+          "name": "Edit",
+          "input": {
+            "file_path": "src/add.js",
+            "old_string": "a - b",
+            "new_string": "a * b"
+          },
+          "write": {
+            "path": "src/add.js",
+            "content": "function add(a, b) {\n  return a * b;\n}\n\nmodule.exports = { add };\n"
+          }
+        }
+      },
+      {
+        "call": {
+          "name": "Bash",
+          "input": {
+            "command": "node suite/run.js"
+          },
+          "exec": true
+        }
+      },
+      {
+        "final": "I changed add."
+      }
+    ]
+  ]
+}

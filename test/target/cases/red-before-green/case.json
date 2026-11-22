@@ -1,0 +1,39 @@
+{
+  "description": "A failing suite and a bug in one function: the agent runs the suite and sees it fail, edits the source, runs it again and sees it pass, and a held-out grader agrees.",
+  "tags": ["process", "verification", "target"],
+  "checks": [
+    {
+      "type": "tool_output_matches",
+      "tool": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "which": "first",
+      "pattern": "\\bfail",
+      "flags": "i"
+    },
+    {
+      "type": "tool_output_matches",
+      "tool": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "which": "last",
+      "pattern": "all passed"
+    },
+    {
+      "type": "tool_order",
+      "before": { "kind": "shell", "inputMatches": "node suite/run\\.js" },
+      "after": { "kind": "edit", "inputMatches": "src/" }
+    },
+    {
+      "type": "tool_order",
+      "before": { "kind": "edit", "inputMatches": "src/", "which": "last" },
+      "after": {
+        "kind": "shell",
+        "inputMatches": "node suite/run\\.js",
+        "which": "last"
+      }
+    },
+    { "type": "file_unchanged", "path": "suite" },
+    {
+      "type": "command",
+      "run": "node \"$SKILL_EVALS_GRADER_DIR/held-out.mjs\""
+    }
+  ],
+  "timeoutSeconds": 300
+}
