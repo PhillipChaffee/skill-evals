@@ -143,6 +143,27 @@ export const FLAGS = {
       "The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.",
     default: "no bar",
   },
+  "min-delta": {
+    as: "minDelta",
+    read: readDecimal,
+    value: "-1..1",
+    description:
+      "The least score difference, B minus A, that the suite must show, on the suite delta and not on its interval. The command exits 1 when the delta is lower. A negative number lets B score lower by at most that much. A case's own minDelta is the same bar for that case. Only run compares two subjects: with score it is a usage error.",
+    default: "no bar",
+  },
+  noise: {
+    value: "file",
+    description:
+      'A noise.json that calibrate wrote. A delta that is no larger than the noise it records for its case, or for the suite, reads "within noise", whatever its interval. A case that the file does not list is judged by its interval alone, and the report says so. A file of the wrong shape is a usage error.',
+    default: "none: the interval alone decides",
+  },
+  seed: {
+    read: readDecimal,
+    value: "n",
+    description:
+      "The seed of the bootstrap behind every interval, a positive integer up to 4294967295. The same runs and the same seed give the same report, byte for byte. results.json records it.",
+    default: "1",
+  },
   "max-invalid": {
     as: "maxInvalid",
     read: readDecimal,

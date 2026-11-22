@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { loadCases } from "../cases.js";
 import { CHECKS } from "../checks/index.js";
 import { sandbox } from "../testing/sandbox.js";
-import { EXAMPLE_CONFIG } from "./reference.js";
+import { EXAMPLE_CONFIG } from "./example-config.js";
 import { caseSchema, configSchema } from "./schema.js";
 
 import type { Json } from "../testing/schema-validator.js";

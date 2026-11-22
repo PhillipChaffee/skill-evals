@@ -20,6 +20,16 @@ const HOSTILE = `<script>alert("x")</script> & 'q' \u0001\u0008\uD800￾ end`;
 const exists = (box: { root: string }, file: string): boolean =>
   fs.existsSync(path.join(box.root, RESULTS, file));
 
+// One case, with one check, whose id and text are hostile.
+const APPLIED = {
+  [HARNESS]: [
+    {
+      id: HOSTILE,
+      checks: [{ type: "output_contains", text: HOSTILE, weight: 1 }],
+    },
+  ],
+};
+
 /**
  * Makes an evaluation with one hostile case id and reason, for the renderers.
  * @returns What the renderers read.
@@ -77,7 +87,10 @@ function hostile(): Evaluation {
     belowBar: [HOSTILE],
     partial: { reason: "budget" },
     cases: [],
-    applied: {},
+    harnesses: [HARNESS],
+    applied: APPLIED,
+    comparison: null,
+    ...{ seed: 1, noiseFile: null, minDelta: null },
   } as unknown as Evaluation;
 }
 
@@ -111,6 +124,7 @@ test("html escapes every value and holds no script or external reference", () =>
   expect(html).not.toMatch(/(src|href)="https?:/);
   expect(html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
   expect(html).toContain("The command stopped early: budget");
+  expect(html).toContain("<h2>Flake</h2>");
 });
 
 test("--report picks the formats: md goes to standard output only when listed, the rest to files", async () => {

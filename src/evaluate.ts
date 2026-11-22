@@ -1,4 +1,5 @@
 import type { CaseMeta } from "./case-meta.js";
+import type { Comparison } from "./comparison.js";
 import type { Case } from "./cases.js";
 import type { ExitCode } from "./exit-codes.js";
 import { exitCodeOf } from "./exit-codes.js";
@@ -79,6 +80,14 @@ export interface EvaluateOptions extends SelectionOptions {
   onFinal?: ((evaluation: Evaluation) => void) | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
+  /** The least score difference, B minus A, that the suite must show, from -1 to 1. A usage error with one subject. Default: no bar. */
+  minDelta?: number | undefined;
+  /** A `noise.json` that `calibrate` wrote, which the verdicts use. A usage error when it is not one. Default: the interval alone decides. */
+  noise?: string | undefined;
+  /** The seed of the bootstrap, a positive integer up to 4294967295. Default: 1. */
+  seed?: number | undefined;
+  /** Run the first subject against itself: both labels share one export. `calibrate` sets it. Default: false. */
+  sameSubject?: boolean | undefined;
   /** The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0. */
   maxInvalid?: number | undefined;
   /** The report formats the command line writes: "md" to standard output, the others to `report.<ext>` in the output directory. `evaluate` itself writes none. Default: ["md"]. */
@@ -118,6 +127,12 @@ export interface Results {
   schemaVersion: 1;
   /** The pass bar for the suite score, `--min-score`; null when none was set. */
   minScore: number | null;
+  /** The pass bar for the suite delta, `--min-delta`; null when none was set. */
+  minDelta: number | null;
+  /** The seed of the bootstrap behind every interval. */
+  seed: number;
+  /** The noise file the verdicts used, as an absolute path; null when none was given. */
+  noiseFile: string | null;
   /** The share of the planned runs that may be invalid, `--max-invalid`. */
   maxInvalid: number;
   /** How the runs were made: tool and harness versions, models, subject revisions, case hashes. */
@@ -134,6 +149,11 @@ export interface Results {
   /** For each case id, what its file holds besides its checks: its labels, what it is about, its overrides, its `x-` keys. */
   caseMeta: Record<string, CaseMeta>;
   suites: SuiteScore[];
+  /**
+   * The delta of B over A, with its 95% bootstrap interval and verdict, for each case and for the suite of each harness.
+   * Null with one subject.
+   */
+  comparison: Comparison | null;
   /** The pass bars that were not reached. */
   belowBar: string[];
   /** The pairs of harness and case that were not run, because the harness lacks what the case needs. No score, no runs. */

@@ -1,4 +1,7 @@
 import { metaOf } from "./case-meta.js";
+import type { Comparison } from "./comparison.js";
+import { compare, failedDeltaBars } from "./comparison.js";
+import type { DeltaSetup } from "./evaluate-setup.js";
 import type { Case } from "./cases.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,6 +13,7 @@ import type { Located } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { RunMeta } from "./meta.js";
 import { harnessVersions, runMetaOf } from "./meta.js";
+import { NOISE_FILE } from "./noise.js";
 import { notRunOf, plannedRuns } from "./not-run.js";
 import type { Context } from "./prepare.js";
 import { isJudged } from "./checks/index.js";
@@ -35,6 +39,8 @@ export interface Finished {
   decisionModel: string | undefined;
   model: string | undefined;
   minScore: number | undefined;
+  /** The delta bar, the seed of the bootstrap, and the noise file. */
+  delta: DeltaSetup;
   reps: number;
   cases: Case[];
   parts: Partition;
@@ -72,22 +78,75 @@ const invalidList = (records: RunRecord[]): string[] =>
   });
 
 /**
+ * Compares subject A with subject B when there are two.
+ * @param finished - The runs and what they were made with.
+ * @param harnesses - The ids of the harnesses, in report order.
+ * @returns The comparison; null for one subject.
+ */
+function comparisonOf(
+  finished: Finished,
+  harnesses: string[],
+): Comparison | null {
+  const [first, second] = finished.subjects;
+  return first && second
+    ? compare({
+        harnesses,
+        applied: finished.parts.ran,
+        records: finished.records,
+        kinds: { a: first.kind, b: second.kind },
+        seed: finished.delta.seed,
+        noise: finished.delta.noise?.noise ?? null,
+      })
+    : null;
+}
+
+/**
+ * Lists the ids of the cases that apply to each harness.
+ * @param parts - What `partitionApplicable` returned.
+ * @returns For each harness id, the ids of the cases it ran.
+ */
+const applicableIds = (parts: Partition): Record<string, string[]> =>
+  Object.fromEntries(
+    Object.entries(parts.ran).map(([id, ran]) => [id, ran.map((c) => c.id)]),
+  );
+
+/**
+ * Says in words who scores the judged checks.
+ * @param finished - The runs and what they were made with.
+ * @returns The harness or API, and its model.
+ */
+function judgeText(finished: Finished): string {
+  const who = finished.judgeApi
+    ? `the ${finished.judgeApi.kind} API`
+    : (finished.judgeHarness?.harness.id ?? "the harness under test");
+  return `${who}, model ${finished.judgeModel ?? "the harness default"}`;
+}
+
+/**
+ * Takes the part of `results.json` that a comparison adds.
+ * @param delta - The delta bar, the seed and the noise file.
+ * @param comparison - What `comparisonOf` returned.
+ * @returns The bar, the seed, the noise file's path and the comparison.
+ */
+const deltaFields = (delta: DeltaSetup, comparison: Comparison | null) => ({
+  minDelta: delta.minDelta ?? null,
+  seed: delta.seed,
+  noiseFile: delta.noise?.file ?? null,
+  comparison,
+});
+
+/**
  * Scores the runs and sums up what ran.
  * @param finished - The runs and what they were made with.
  * @returns What goes into `results.json`. The pass bars apply to the last subject, which is the one under test.
  */
 export function summarize(finished: Finished): Results {
-  const { subjects, selection, judgeHarness, judgeModel, model } = finished;
-  const judgeWho = finished.judgeApi
-    ? `the ${finished.judgeApi.kind} API`
-    : (judgeHarness?.harness.id ?? "the harness under test");
+  const { subjects, selection, model } = finished;
   const { cases, records } = finished;
   const labels = subjects.map(({ label }) => label);
   const harnesses = selection.chosen.map(({ harness }) => harness.id);
   const { parts } = finished;
-  const applicable = Object.fromEntries(
-    Object.entries(parts.ran).map(([id, ran]) => [id, ran.map((c) => c.id)]),
-  );
+  const applicable = applicableIds(parts);
   const suites = scoreSuites({
     harnesses,
     cases,
@@ -96,21 +155,26 @@ export function summarize(finished: Finished): Results {
     applicable,
     reps: finished.reps,
   });
+  const comparison = comparisonOf(finished, harnesses);
   return {
     schemaVersion: 1,
     meta: finished.meta,
     minScore: finished.minScore ?? null,
+    ...deltaFields(finished.delta, comparison),
     maxInvalid: finished.maxInvalid,
     subjects: subjects.map(summaryOfSubject),
     harnesses,
     harnessReason: selection.reason,
     model: model ?? null,
-    judge: `${judgeWho}, model ${judgeModel ?? "the harness default"}`,
+    judge: judgeText(finished),
     decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
     caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
     suites,
-    belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
+    belowBar: [
+      ...failedBars(suites, labels.at(-1) ?? "", finished.minScore),
+      ...failedDeltaBars(comparison, finished.delta.minDelta ?? null),
+    ],
     notApplicable: parts.notApplicable,
     skippedChecks: parts.skippedChecks,
     commonSet: commonSet({
@@ -247,7 +311,7 @@ export function finalWrite(
  * @param outDir - The output directory.
  */
 export function clearStale(outDir: string): void {
-  for (const file of ["summary.json", ...Object.values(FORMATS)]) {
+  for (const file of ["summary.json", NOISE_FILE, ...Object.values(FORMATS)]) {
     if (file !== null) fs.rmSync(path.join(outDir, file), { force: true });
   }
 }

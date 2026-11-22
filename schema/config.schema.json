@@ -104,6 +104,25 @@
       "description": "The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.",
       "type": "number"
     },
+    "minDelta": {
+      "title": "minDelta",
+      "description": "The least score difference, B minus A, that the suite must show, on the suite delta and not on its interval. The command exits 1 when the delta is lower. A negative number lets B score lower by at most that much. A case's own minDelta is the same bar for that case. Only run compares two subjects: with score it is a usage error.",
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "noise": {
+      "title": "noise",
+      "description": "A noise.json that calibrate wrote. A delta that is no larger than the noise it records for its case, or for the suite, reads \"within noise\", whatever its interval. A case that the file does not list is judged by its interval alone, and the report says so. A file of the wrong shape is a usage error.",
+      "type": "string"
+    },
+    "seed": {
+      "title": "seed",
+      "description": "The seed of the bootstrap behind every interval, a positive integer up to 4294967295. The same runs and the same seed give the same report, byte for byte. results.json records it.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
     "maxInvalid": {
       "title": "maxInvalid",
       "description": "The share of the planned runs that may be invalid, from 0 to 1. The command exits 3 only when the invalid runs divided by the planned runs of the cases that apply are greater than this. A run that did not run because --max-cost or --max-duration stopped the command is not invalid.",

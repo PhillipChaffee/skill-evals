@@ -1,96 +1,23 @@
 import fs from "node:fs";
-import path from "node:path";
 import type { ParseArgsOptionDescriptor } from "node:util";
 import { parseArgs } from "node:util";
-import type { Evaluation, EvaluateOptions } from "./evaluate.js";
-import { evaluate } from "./evaluate.js";
 import { HARNESSES, findBin } from "./harnesses/index.js";
 import { check } from "./probe.js";
-import type { Progress } from "./progress.js";
-import { progressText } from "./progress.js";
 import type { Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
-import { emitReports } from "./report/emit.js";
-import { reportFormats } from "./report/formats.js";
 import { renderCoverage } from "./report/markdown.js";
-import type { RunRecord } from "./run.js";
-import { invalidReason } from "./run.js";
-import { formatScore } from "./score.js";
 import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
-import { sourceChangedMessage } from "./subject.js";
 import { EXIT } from "./exit-codes.js";
 import { failed } from "./fatal.js";
 import type { Flag, FlagSpec } from "./flags.js";
 import { FLAGS } from "./flags.js";
 import type { CommandDoc, Options } from "./usage.js";
-import { commandUsage, usageText } from "./usage.js";
-import { plan, printPlan } from "./commands/plan.js";
+import { commandUsage, commandsTaking, usageText } from "./usage.js";
+import { calibrate } from "./commands/calibrate.js";
+import { plan } from "./commands/plan.js";
+import { suite } from "./commands/suite.js";
 import { validate } from "./commands/validate.js";
-
-// What the progress line of a scored run says when the runner ended it.
-const STOPS = {
-  agent: "",
-  maxTurns: " (stopped at maxTurns)",
-  timeout: " (timed out, scored)",
-};
-
-/**
- * Words why a command stopped before the end.
- * @param evaluation - What the command made; its `partial` is set.
- * @returns One line: the limit that was reached, how many runs finished, and how to continue.
- */
-function stoppedMessage(
-  evaluation: Pick<Evaluation, "partial" | "records" | "outDir">,
-): string {
-  const limit =
-    evaluation.partial?.reason === "budget" ? "--max-cost" : "--max-duration";
-  return `skill-evals: stopped at ${limit} after ${String(evaluation.records.length)} finished runs; continue with --resume ${evaluation.outDir}`;
-}
-
-/**
- * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
- * @param options - What to evaluate; with `dryRun`, the plan is printed and nothing runs.
- * @param project - Where the config file and the default cases directory are.
- * @returns The exit code: 0 for `dryRun`; else `evaluation.exit`, from `exitCodeOf`: 4 when `--max-cost` or `--max-duration`
- *   stopped the command, 3 when a subject directory changed or the invalid runs are above `--max-invalid`, 1 when a pass
- *   bar is not reached, else 0.
- */
-async function suite(
-  options: EvaluateOptions & { dryRun?: boolean | undefined },
-  project: Project,
-): Promise<number> {
-  const { dryRun, ...given } = options;
-  if (dryRun) return printPlan({ ...given, cwd: project.cwd }, false);
-  const onRun = (
-    record: RunRecord,
-    info: { reused: boolean; progress: Progress },
-  ): void => {
-    const outcome =
-      invalidReason(record) ??
-      `score ${formatScore(record.score)}${STOPS[record.stoppedBy ?? "agent"]}`;
-    console.error(
-      `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}${info.reused ? " (reused)" : ""} ${progressText(info.progress)}`,
-    );
-  };
-  const formats = reportFormats(withConfig(project, given));
-  const evaluation = await evaluate({
-    ...given,
-    onRun,
-    // Before summary.json, so that a report that cannot be written is an error that the summary says.
-    onFinal: (done) => emitReports(done, formats),
-  });
-  console.error(
-    `skill-evals: wrote ${path.join(evaluation.outDir, "summary.json")}`,
-  );
-  if (evaluation.sourceChanged.length > 0) {
-    console.error(
-      `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
-    );
-  }
-  if (evaluation.partial !== null) console.error(stoppedMessage(evaluation));
-  return evaluation.exit;
-}
 
 /**
  * Prints the harnesses in default-preference order, each with where it is installed, and the cases.
@@ -169,6 +96,9 @@ const SUITE_FLAGS: Flag[] = [
   "dry-run",
 ];
 
+// The flags that only a comparison of two subjects uses.
+const COMPARE_FLAGS: Flag[] = ["min-delta", "noise", "seed"];
+
 /** A command: what it does with its options, the flags it takes, and what the help text says about it. */
 interface Command extends CommandDoc {
   handler: (options: Options, project: Project) => number | Promise<number>;
@@ -181,13 +111,23 @@ export const COMMANDS: Record<string, Command> = {
       "Run every case against subject A and subject B, score both, and print a comparison.",
     handler: ({ a = "main", b, ...options }, project) =>
       suite({ ...options, subjects: [a, b ?? project.root] }, project),
-    flags: ["a", "b", ...SUITE_FLAGS],
+    flags: ["a", "b", ...SUITE_FLAGS, ...COMPARE_FLAGS],
   },
   score: {
     description: "Run every case against one subject and print its scores.",
     handler: ({ subject, ...options }, project) =>
       suite({ ...options, subjects: [subject ?? project.root] }, project),
     flags: ["subject", ...SUITE_FLAGS],
+  },
+  calibrate: {
+    description:
+      'Run the subject against itself, five reps by default, and write noise.json beside results.json: how much each case score, check and the suite score move when nothing changed. run --noise reads it, so that a difference inside that spread reads "within noise".',
+    handler: calibrate,
+    flags: [
+      "subject",
+      "seed",
+      ...SUITE_FLAGS.filter((flag) => !["min-score", "dry-run"].includes(flag)),
+    ],
   },
   plan: {
     description:
@@ -198,6 +138,7 @@ export const COMMANDS: Record<string, Command> = {
       "b",
       "subject",
       ...SUITE_FLAGS.filter((flag) => flag !== "dry-run"),
+      ...COMPARE_FLAGS,
     ],
   },
   check: {
@@ -272,23 +213,46 @@ function readFlag(
 }
 
 /**
+ * Runs `parseArgs` over the flags of a command.
+ * @param name - The command's name, for the message.
+ * @param command - The command, which names the flags it takes.
+ * @param args - The command line after the command's name.
+ * @returns The values `parseArgs` read.
+ * @throws {TypeError} With a code that starts with `ERR_PARSE_ARGS`, for a flag the command does not take. When
+ *   another command takes the flag, the message says which.
+ */
+function parsed(name: string, command: Command, args: string[]) {
+  try {
+    return parseArgs({
+      args,
+      options: Object.fromEntries(
+        command.flags.map((flag) => {
+          const spec: FlagSpec = FLAGS[flag];
+          if (spec.kind === "switch") return [flag, { type: "boolean" }];
+          return [flag, { type: "string", multiple: spec.kind === "list" }];
+        }),
+      ) as Record<string, ParseArgsOptionDescriptor>,
+    }) as { values: Record<string, string | boolean | (string | boolean)[]> };
+  } catch (error) {
+    const flag = /Unknown option '--([^']+)'/.exec(String(error))?.[1];
+    if (flag === undefined || !Object.hasOwn(FLAGS, flag)) throw error;
+    const takers = commandsTaking(COMMANDS, flag as Flag).join(", ");
+    throw new UsageError(
+      `Unknown option '--${flag}' for ${name}: ${name} does not take it; it applies to ${takers}`,
+    );
+  }
+}
+
+/**
  * Reads the flags of a command.
+ * @param name - The command's name.
  * @param command - The command, which names the flags it takes.
  * @param args - The command line after the command's name.
  * @returns The options that are set, each under the name the code uses for it.
  * @throws {TypeError} With a code that starts with `ERR_PARSE_ARGS`, for a flag the command does not take.
  */
-function readOptions(command: Command, args: string[]): Options {
-  const { values } = parseArgs({
-    args,
-    options: Object.fromEntries(
-      command.flags.map((flag) => {
-        const spec: FlagSpec = FLAGS[flag];
-        if (spec.kind === "switch") return [flag, { type: "boolean" }];
-        return [flag, { type: "string", multiple: spec.kind === "list" }];
-      }),
-    ) as Record<string, ParseArgsOptionDescriptor>,
-  }) as { values: Record<string, string | boolean | (string | boolean)[]> };
+function readOptions(name: string, command: Command, args: string[]): Options {
+  const { values } = parsed(name, command, args);
   return Object.fromEntries(
     Object.entries(values).map(([flag, given]) => {
       const spec: FlagSpec = FLAGS[flag as Flag];
@@ -346,7 +310,7 @@ export async function main(argv: string[]): Promise<number> {
       const problem = name ? `unknown command "${name}"` : "missing command";
       throw new UsageError(`${problem}\n\n${USAGE}`);
     }
-    const options = readOptions(command, args);
+    const options = readOptions(name ?? "", command, args);
     return await command.handler(options, findProject(process.cwd()));
   } catch (error) {
     return failed(error);

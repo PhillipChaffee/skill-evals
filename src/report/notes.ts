@@ -196,6 +196,26 @@ function stoppedSection(evaluation: Evaluation): string[] {
 }
 
 /**
+ * Says that a case's `minDelta` was not checked, because a command with one subject has no delta.
+ * @param evaluation - What `evaluate` returned.
+ * @returns One note naming the cases; nothing for a comparison, or when no case sets a `minDelta`.
+ */
+function deltaBarsSection(evaluation: Evaluation): string[] {
+  if (evaluation.comparison !== null) return [];
+  const ids = evaluation.cases
+    .filter((caseDef) => caseDef.minDelta !== undefined)
+    .map((caseDef) => `\`${caseDef.id}\``);
+  return ids.length === 0
+    ? []
+    : [
+        "",
+        "## Delta bars",
+        "",
+        `minDelta applies to run: ${ids.join(", ")} set one, and it was not checked.`,
+      ];
+}
+
+/**
  * The report's notes on what did not run as written: the checks that were skipped, the limits that were not enforced,
  * and the cases that were not applicable.
  * @param evaluation - What `evaluate` returned.
@@ -208,4 +228,5 @@ export const noteSections = (evaluation: Evaluation): string[] => [
   ...limitsSection(evaluation),
   ...stoppedSection(evaluation),
   ...notApplicableSection(evaluation),
+  ...deltaBarsSection(evaluation),
 ];

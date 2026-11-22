@@ -9,6 +9,7 @@ import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import { VARIANT_KEYS } from "../variants.js";
 import type { Flag, FlagSpec } from "../flags.js";
+import { EXAMPLE_CONFIG } from "./example-config.js";
 import { FLAGS } from "../flags.js";
 import { commandsTaking, defaultText, flagSyntax } from "../usage.js";
 import { apiReference } from "./api.js";
@@ -154,42 +155,6 @@ ${table(
 A subject is what a run loads: a directory, a git ref of the project, or ${code("none")}. [Subjects](../concepts/subjects.md) has the details. [Set a pass bar](../guides/pass-bars.md) explains ${code("--min-score")} and the exit codes, and [Decision checks](../guides/decision-checks.md) explains the decision model's flags.
 `,
 });
-
-const CLAUDE_CODE = "claude-code";
-
-// A config file that sets every key. The tests make sure that it has exactly the keys of CONFIG_KEYS, each with a
-// value of the key's type, and that the tool accepts it.
-export const EXAMPLE_CONFIG: Record<
-  string,
-  string | number | boolean | string[]
-> = {
-  cases: "evals/cases",
-  harness: CLAUDE_CODE,
-  reps: 3,
-  jobs: 4,
-  retries: 1,
-  maxCost: 25,
-  maxDuration: 90,
-  model: "<model-id>",
-  judgeHarness: CLAUDE_CODE,
-  judgeModel: "<model-id>",
-  judgeApi: "anthropic",
-  judgeUrl: "<base-url>",
-  judgeKeyVar: "ANTHROPIC_API_KEY",
-  judgeTimeout: 120,
-  judgeFallbacks: true,
-  decisionModel: "<decision-model-id>",
-  decisionUrl: "<base-url>",
-  decisionTimeout: 60,
-  minScore: 0.8,
-  maxInvalid: 0.1,
-  report: ["md", "json"],
-  maxJudgedWeightShare: 0.5,
-  lenient: false,
-  isolated: false,
-  env: ["AWS_ENDPOINT_URL"],
-  subjectExclude: ["evals/cases/**", "notes/**"],
-};
 
 /**
  * Finds the flags a config key is the default of.

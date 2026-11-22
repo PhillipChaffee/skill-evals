@@ -132,7 +132,7 @@ test("the decision model sees the task and the answer, and nothing about the sub
   );
 
   expect(tableRow(result.stdout, "restate")).toMatch(
-    /^\| restate \| 0\.86 \/ 0\.86 \(\+0\.00\) \(A 1 of 1 runs, B 1 of 1 runs\) \| `decision "Is it plain\?" yes \(weight 2\)` A 0\.90 \(1 of 1 runs\), B 0\.90 \(1 of 1 runs\)<br>`decision "Does it mention weather\?" no` A 0\.75 \(1 of 1 runs\), B 0\.75 \(1 of 1 runs\)<br>`decision "How well is the meaning kept\?" fully\/mostly\/partly\/not at all` A 0\.74 \(1 of 1 runs\), B 0\.74 \(1 of 1 runs\)<br>`output_contains "fixed"` A 1\/1, B 1\/1 \|/,
+    /^\| restate \| 0\.86 \/ 0\.86 \(\+0\.00\) \(A 1 of 1 runs, B 1 of 1 runs\) \| within noise \(\+0\.00, 95% \+0\.00\.\.\+0\.00\) \| `decision "Is it plain\?" yes \(weight 2\)` A 0\.90 \(1 of 1 runs\), B 0\.90 \(1 of 1 runs\)<br>`decision "Does it mention weather\?" no` A 0\.75 \(1 of 1 runs\), B 0\.75 \(1 of 1 runs\)<br>`decision "How well is the meaning kept\?" fully\/mostly\/partly\/not at all` A 0\.74 \(1 of 1 runs\), B 0\.74 \(1 of 1 runs\)<br>`output_contains "fixed"` A 1\/1, B 1\/1 \| A 0%, B 0%(<br>A 0%, B 0%){3} \|/,
   );
   expect(result.stdout).toMatch(/^- Decision model: decider-one$/m);
   expect(result.stdout).toMatch(

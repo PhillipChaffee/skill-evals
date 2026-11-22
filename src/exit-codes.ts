@@ -16,7 +16,7 @@ export const EXIT = {
 /** What each exit code means, for the reference page. Every code of `EXIT` needs one. */
 export const EXIT_MEANINGS: Record<keyof typeof EXIT, string> = {
   ok: "The command ran to the end, every case has a valid run, the invalid runs are within `--max-invalid`, and every pass bar is reached.",
-  bar: "A pass bar was not reached: `--min-score`, or a case's `minScore`.",
+  bar: "A pass bar was not reached: `--min-score`, a case's `minScore`, `--min-delta`, or a case's `minDelta`.",
   usage:
     "A wrong command line, case file, config file or subject, or an unsupported platform. One line on standard error, before any run. `validate` also exits 2 when it finds a problem.",
   invalid:

@@ -10,9 +10,11 @@ import {
   decisionFor,
   labelled,
   requireJobs,
+  requireDeltaSetup,
   requireMaxInvalid,
   requireUsable,
 } from "./evaluate-setup.js";
+import type { DeltaSetup } from "./evaluate-setup.js";
 import { exclusionsOf } from "./exclusions.js";
 import { requireLimits } from "./evaluate-limits.js";
 import type { Limits } from "./gate.js";
@@ -46,6 +48,10 @@ export interface Context {
   judgeApi: JudgeApi | null;
   model: string | undefined;
   minScore: number | undefined;
+  /** What a comparison is judged with: the delta bar, the seed, and the noise file. */
+  delta: DeltaSetup;
+  /** True when the two subjects are one subject run against itself, as `calibrate` does. */
+  shared: boolean;
   /** The share of the planned runs that may be invalid before the command exits 3. */
   maxInvalid: number;
   reps: number;
@@ -112,6 +118,11 @@ export function prepare(
     judgeApi,
     model: options.model,
     minScore: options.minScore,
+    delta: requireDeltaSetup(options, {
+      subjects: pairs.length,
+      same: given.sameSubject ?? false,
+    }),
+    shared: given.sameSubject ?? false,
     maxInvalid,
     reps,
     jobs,
@@ -159,6 +170,12 @@ export function resolveAll(prepared: Prepared, into: Subject[]): void {
     cwd,
   );
   for (const { label, spec } of pairs) {
+    const first = into[0];
+    // One export, two labels: the second subject is the first under another name, and removes nothing.
+    if (context.shared && first !== undefined) {
+      into.push({ ...first, label, dispose: () => undefined });
+      continue;
+    }
     into.push(resolveSubject(label, spec, { ...project, left }));
   }
 }

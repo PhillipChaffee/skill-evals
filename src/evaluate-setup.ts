@@ -7,12 +7,17 @@ import type { Label } from "./subject.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { requireEnvNames } from "./env.js";
+import type { NoiseFile } from "./noise.js";
+import { readNoise } from "./noise.js";
 import type { Config } from "./project.js";
+import { MAX_SEED, isSeed } from "./project.js";
 import { isUnitScore } from "./score.js";
 import { MS_PER_SECOND, requireSeconds } from "./seconds.js";
 import { UsageError } from "./scope.js";
 
 const DEFAULT_REPS = 3;
+// A comparison has two subjects.
+const COMPARED = 2;
 /**
  * Rejects option values that no run could use, before any harness starts.
  * @param options - The options after the config file was applied.
@@ -44,6 +49,55 @@ export function requireMaxInvalid(options: Config): number {
     throw new UsageError("maxInvalid must be a number from 0 to 1");
   }
   return maxInvalid;
+}
+
+/** What a comparison is judged with. */
+export interface DeltaSetup {
+  /** The bar for the suite delta; undefined for none. */
+  minDelta: number | undefined;
+  /** The seed of the bootstrap. */
+  seed: number;
+  /** The noise file and where it was read from; null for none. */
+  noise: { file: string; noise: NoiseFile } | null;
+}
+
+/**
+ * Reads the options that only a comparison of two subjects uses, and refuses them for one subject.
+ * @param options - The options after the config file was applied.
+ * @param shape - How many subjects there are, and whether they are one subject run against itself.
+ * @param shape.subjects - The number of subjects: 1 or 2.
+ * @param shape.same - True for `calibrate`, which measures the noise and so ignores a bar and a noise file.
+ * @returns The bar, the seed (default 1) and the noise file.
+ * @throws {UsageError} When `minDelta` is not from -1 to 1 or is set with one subject, when `seed` is not a positive
+ *   integer up to 4294967295, or when the noise file is not one.
+ */
+export function requireDeltaSetup(
+  options: Config,
+  shape: { subjects: number; same: boolean },
+): DeltaSetup {
+  const { minDelta, seed = 1, noise: file } = options;
+  if (!isSeed(seed)) {
+    throw new UsageError(
+      `seed must be a positive integer up to ${String(MAX_SEED)}`,
+    );
+  }
+  if (minDelta !== undefined) {
+    if (!(minDelta >= -1 && minDelta <= 1)) {
+      throw new UsageError("minDelta must be a number from -1 to 1");
+    }
+    if (shape.subjects !== COMPARED) {
+      throw new UsageError(
+        "minDelta applies to run, which compares two subjects: score has one, so there is no delta to hold to a bar",
+      );
+    }
+  }
+  const compared = shape.subjects === COMPARED && !shape.same;
+  return {
+    minDelta: shape.same ? undefined : minDelta,
+    seed,
+    noise:
+      compared && file !== undefined ? { file, noise: readNoise(file) } : null,
+  };
 }
 
 /**

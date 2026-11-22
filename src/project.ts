@@ -32,6 +32,17 @@ export function findProject(cwd: string): Project {
   }
 }
 
+/** The largest seed: the generator takes 32 bits. */
+export const MAX_SEED = 4294967295;
+
+/**
+ * Tells whether a value is usable as the seed of the bootstrap.
+ * @param value - A number from a flag or the config file.
+ * @returns True for an integer from 1 to `MAX_SEED`.
+ */
+export const isSeed = (value: number): boolean =>
+  Number.isInteger(value) && value >= 1 && value <= MAX_SEED;
+
 export const CONFIG_FILE = "skill-evals.config.json";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
 export const CONFIG_KEYS: Record<
@@ -57,6 +68,9 @@ export const CONFIG_KEYS: Record<
   decisionUrl: "string",
   decisionTimeout: "number",
   minScore: "number",
+  minDelta: "number",
+  noise: "string",
+  seed: "number",
   maxInvalid: "number",
   report: "string[]",
   maxJudgedWeightShare: "number",
@@ -96,6 +110,12 @@ export interface Config {
   decisionUrl?: string;
   decisionTimeout?: number;
   minScore?: number;
+  /** The least score difference, B minus A, that the suite must show, from -1 to 1. Default: no bar. */
+  minDelta?: number;
+  /** A `noise.json` that `calibrate` wrote, which the verdicts of a comparison use. Resolves against the project root. */
+  noise?: string;
+  /** The seed of the bootstrap, a positive integer up to 4294967295. Default: 1. */
+  seed?: number;
   /** The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0. */
   maxInvalid?: number;
   /** The report formats to write: "md", "json", "junit", "html". Default: ["md"]. */
@@ -112,6 +132,24 @@ export interface Config {
 }
 
 /**
+ * Checks the range of the numeric keys that have one beyond their type.
+ * @param file - The config file, for the message.
+ * @param key - A numeric key.
+ * @param value - What the file holds.
+ * @throws {UsageError} When `minDelta` is not from -1 to 1, or `seed` is not a positive integer up to `MAX_SEED`.
+ */
+function checkRange(file: string, key: string, value: number): void {
+  if (key === "minDelta" && !(value >= -1 && value <= 1)) {
+    throw new UsageError(`${file}: "minDelta" must be a number from -1 to 1`);
+  }
+  if (key === "seed" && !isSeed(value)) {
+    throw new UsageError(
+      `${file}: "seed" must be a positive integer up to ${String(MAX_SEED)}`,
+    );
+  }
+}
+
+/**
  * Checks the value of one config key.
  * @param file - The config file, for the message.
  * @param key - A known key.
@@ -124,6 +162,7 @@ function checkValue(file: string, key: string, value: unknown): void {
     if (typeof value !== type) {
       throw new UsageError(`${file}: "${key}" must be a ${type}`);
     }
+    checkRange(file, key, value as number);
     if (
       (key === "maxJudgedWeightShare" || key === "maxInvalid") &&
       !((value as number) >= 0 && (value as number) <= 1)
@@ -184,9 +223,15 @@ function loadConfig(root: string): Config {
   const config = Object.fromEntries(
     Object.entries(parsed).filter(([key]) => key !== SCHEMA_KEY),
   ) as Config;
-  return config.cases === undefined
-    ? config
-    : { ...config, cases: path.resolve(root, config.cases) };
+  return {
+    ...config,
+    ...(config.cases === undefined
+      ? {}
+      : { cases: path.resolve(root, config.cases) }),
+    ...(config.noise === undefined
+      ? {}
+      : { noise: path.resolve(root, config.noise) }),
+  };
 }
 
 /**
@@ -197,7 +242,7 @@ function loadConfig(root: string): Config {
  */
 export function withConfig<Options extends object>(
   project: Project,
-  options: Options & { cases?: string | undefined },
+  options: Options & { cases?: string | undefined; noise?: string | undefined },
 ): Config & Options & { cases: string } {
   const set = Object.fromEntries(
     Object.entries(options).filter(([, value]) => value !== undefined),
@@ -209,5 +254,8 @@ export function withConfig<Options extends object>(
     ...(set.cases === undefined
       ? {}
       : { cases: path.resolve(project.cwd, set.cases) }),
+    ...(set.noise === undefined
+      ? {}
+      : { noise: path.resolve(project.cwd, set.noise) }),
   };
 }

@@ -206,7 +206,7 @@ test("scores are weighted means of the checks and of the cases", async () => {
     },
   ]);
   expect(better.stdout).toMatch(
-    /^\| restate \| 0\.33 \/ 1\.00 \(\+0\.67\) \(A 1 of 1 runs, B 1 of 1 runs\) \| `skill_loaded bro \(weight 3\)` A 0\/1, B 1\/1<br>/m,
+    /^\| restate \| 0\.33 \/ 1\.00 \(\+0\.67\) \(A 1 of 1 runs, B 1 of 1 runs\) \| helped \(\+0\.67, 95% \+0\.67\.\.\+0\.67\) \| `skill_loaded bro \(weight 3\)` A 0\/1, B 1\/1<br>/m,
   );
   expect(better.stdout).toMatch(
     /^Suite score: 0\.78 \/ 1\.00 \(\+0\.22\) \(2 of 2 cases, A 2 of 2 runs, B 2 of 2 runs\)$/m,

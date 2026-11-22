@@ -1,10 +1,21 @@
 import type { Case } from "../cases.js";
-import type { Check } from "../checks/index.js";
-import { describeCheck, isDecision, isJudged } from "../checks/index.js";
+import type { HarnessDelta } from "../comparison.js";
+import { verdictText } from "../delta-format.js";
+import { describeCheck, isJudged } from "../checks/index.js";
 import type { Evaluation } from "../evaluate.js";
+import { METRICS, checkRate, median, scorerLine, versus } from "./metrics.js";
 import { runsText } from "./counts.js";
+import type { DiscriminationRow } from "./delta.js";
+import {
+  discriminationRows,
+  discriminationRule,
+  flakeRate,
+  flakeText,
+  footnote,
+  verdictCell,
+} from "./delta.js";
 import { noteSections } from "./notes.js";
-import type { RunRecord, Usage } from "../run.js";
+import type { RunRecord } from "../run.js";
 import { invalidReason } from "../run.js";
 import type { SuiteScore } from "../score.js";
 import { formatScore } from "../score.js";
@@ -12,130 +23,7 @@ import type { Coverage } from "../select.js";
 import { coverageOf } from "../select.js";
 import { describeSubject } from "../subject.js";
 
-const MS_PER_SECOND = 1000;
-const COST_DECIMALS = 4;
 const SHOWN_REASON_LENGTH = 300;
-
-/** A number of a run that the report shows beside the scores. */
-interface Metric {
-  title: string;
-  value: (usage: Usage) => number | null;
-  format: (value: number) => string;
-}
-
-const METRICS: Metric[] = [
-  {
-    title: "Duration",
-    value: (usage) => usage.durationMs / MS_PER_SECOND,
-    format: (v) => `${v.toFixed(1)} s`,
-  },
-  {
-    title: "Input tokens",
-    value: (usage) => usage.tokens?.input ?? null,
-    format: (v) => String(Math.round(v)),
-  },
-  {
-    title: "Output tokens",
-    value: (usage) => usage.tokens?.output ?? null,
-    format: (v) => String(Math.round(v)),
-  },
-  {
-    title: "Cost",
-    value: (usage) => usage.costUsd,
-    format: (v) => `$${v.toFixed(COST_DECIMALS)}`,
-  },
-];
-
-/**
- * Finds the middle of a set of numbers.
- * @param values - The numbers, in any order.
- * @returns The middle value, the mean of the two middle values for an even count, or null for no values.
- */
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((x, y) => x - y);
-  const middle = sorted.slice(
-    (sorted.length - 1) >> 1,
-    (sorted.length >> 1) + 1,
-  );
-  return middle.reduce((sum, value) => sum + value, 0) / middle.length;
-}
-
-/**
- * Shows one value for each subject, and the change from the first to the second when there are two.
- * @param values - One value for each subject; null is a missing one.
- * @param format - Renders a value, and the size of the change.
- * @returns The cell text, "n/a" when every value is missing.
- */
-function versus(
-  values: (number | null)[],
-  format: (value: number) => string,
-): string {
-  if (values.every((value) => value === null)) return "n/a";
-  const shown = values
-    .map((value) => (value === null ? "n/a" : format(value)))
-    .join(" / ");
-  const [first, second] = values;
-  if (first == null || second == null) return shown;
-  const delta = second - first;
-  return `${shown} (${delta < 0 ? "-" : "+"}${format(Math.abs(delta))})`;
-}
-
-/**
- * Sums up how one check went over the valid runs of one subject.
- * @param check - Decides the form: a rule gives pass or fail, a judge or a decision model gives a score.
- * @param index - Its place among the case's checks.
- * @param runs - What stands behind the rate.
- * @param runs.valid - The valid runs of the case and subject.
- * @param runs.planned - How many runs the plan holds for them.
- * @returns For a deterministic check the share of runs that passed it, for a judged check or a decision check its
- *   mean score with the number of runs behind it.
- */
-function checkRate(
-  check: Check,
-  index: number,
-  runs: { valid: RunRecord[]; planned: number },
-): string {
-  const { valid: records, planned } = runs;
-  if (records.length === 0) return "n/a";
-  const total = records.reduce(
-    (sum, record) => sum + (record.checks[index]?.score ?? 0),
-    0,
-  );
-  return isJudged(check) || isDecision(check)
-    ? `${formatScore(total / records.length)} (${String(records.length)} of ${String(planned)} runs)`
-    : `${String(total)}/${String(records.length)}`;
-}
-
-/**
- * Reports what a scoring model cost, which the table leaves out.
- * @param title - Names the model's role: the judge, or the decision model.
- * @param judged - What the model cost each run that it scored.
- * @returns The lines to add under the table; none when it scored no run. A metric that any of the runs lacks is left out.
- */
-function scorerLine(
-  title: string,
-  judged: NonNullable<RunRecord["judge"]>[],
-): string[] {
-  if (judged.length === 0) return [];
-  const calls = judged.reduce((total, usage) => total + usage.calls, 0);
-  const totals = METRICS.flatMap((metric) => {
-    const values = judged.flatMap((usage) => metric.value(usage) ?? []);
-    if (values.length < judged.length) return [];
-    const total = values.reduce((sum, value) => sum + value, 0);
-    return [`${metric.title.toLowerCase()} ${metric.format(total)}`];
-  });
-  const hits = judged.reduce(
-    (total, usage) => total + (usage.cacheHits ?? 0),
-    0,
-  );
-  const cached = hits > 0 ? [`${String(hits)} cache hits`] : [];
-  const parts = [`${String(calls)} calls`, ...cached, ...totals];
-  return [
-    "",
-    `${title}, in total and not counted in the table: ${parts.join(", ")}`,
-  ];
-}
 
 const cell = (text: string): string => text.replaceAll("|", "\\|");
 
@@ -146,6 +34,10 @@ interface Section {
   /** The runs of this harness. */
   records: RunRecord[];
   labels: string[];
+  /** The comparison of this harness; absent with one subject. */
+  delta?: HarnessDelta | undefined;
+  /** The discrimination of this harness's cases; empty unless a subject is "none". */
+  discrimination: DiscriminationRow[];
 }
 
 /**
@@ -179,10 +71,19 @@ function caseRow(caseDef: Case, section: Section): string {
     );
     return `\`${describeCheck(check)}\` ${rates.join(", ")}`;
   });
+  const flakes = caseDef.checks.map((_check, index) =>
+    valid
+      .map(({ label, runs }) => tag(label) + flakeText(flakeRate(runs, index)))
+      .join(", "),
+  );
   const cells = [
     caseDef.id,
     `${versus(Object.values(scored?.scores ?? {}), formatScore)} ${runsText(scored?.runs ?? {}, labels)}`,
+    ...(section.delta
+      ? [verdictCell(section.delta.cases.find((one) => one.id === caseDef.id))]
+      : []),
     checks.join("<br>"),
+    flakes.join("<br>"),
     ...METRICS.map((metric) =>
       versus(
         valid.map(({ runs }) =>
@@ -195,8 +96,66 @@ function caseRow(caseDef: Case, section: Section): string {
   return `| ${cells.map(cell).join(" | ")} |`;
 }
 
-// The case, score, and checks columns that stand before the metric columns.
-const LEADING_COLUMNS = 3;
+/**
+ * Words a column title for one subject, or for a comparison.
+ * @param title - The column's name.
+ * @param labels - The subject labels.
+ * @returns The title; "Score, A / B (B - A)" for a comparison.
+ */
+const heading = (title: string, labels: string[]): string =>
+  labels.length > 1 ? `${title}, A / B (B - A)` : title;
+
+/**
+ * Lays out the cases of one harness as a table.
+ * @param those - The cases, one for each row.
+ * @param section - The scores and runs of the harness.
+ * @returns The header, the rule, and a row for each case. A comparison adds a verdict column after the score; every
+ *   table has a flake column after the checks.
+ */
+function caseTable(those: Case[], section: Section): string[] {
+  const { labels, delta } = section;
+  const columns = [
+    "Case",
+    heading("Score", labels),
+    ...(delta ? ["Verdict"] : []),
+    "Checks",
+    "Flake",
+    ...METRICS.map((metric) => heading(metric.title, labels)),
+  ];
+  return [
+    `| ${columns.join(" | ")} |`,
+    `| ${columns.map(() => "---").join(" | ")} |`,
+    ...those.map((caseDef) => caseRow(caseDef, section)),
+  ];
+}
+
+/**
+ * Words the delta of the suite and the discrimination of its cases.
+ * @param section - The scores and runs of the harness.
+ * @returns The suite verdict line, and the discrimination table when a subject is "none"; none for one subject.
+ */
+function deltaLines(section: Section): string[] {
+  const { delta, discrimination } = section;
+  if (!delta) return [];
+  return [
+    `Suite delta: ${verdictText(delta.suite)} over ${String(delta.suite.cases)} cases`,
+    ...(discrimination.length === 0
+      ? []
+      : [
+          "",
+          "### Discrimination",
+          "",
+          discriminationRule(),
+          "",
+          "| Case | None | Subject | Discrimination |",
+          "| --- | --- | --- | --- |",
+          ...discrimination.map(
+            (row) =>
+              `| ${cell(row.caseId)} | ${formatScore(row.none)} | ${formatScore(row.subject)} | ${row.label} |`,
+          ),
+        ]),
+  ];
+}
 
 /**
  * Builds the part of the report for one harness.
@@ -209,8 +168,6 @@ function harnessSection(section: Section): string {
   if (suite.applicable === 0) {
     return `## ${suite.harness}\n\nno case applies to ${suite.harness}: ${String(suite.total)} cases not applicable`;
   }
-  const heading = (title: string): string =>
-    labels.length > 1 ? `${title}, A / B (B - A)` : title;
   const invalid = records.flatMap((record) => {
     const reason = invalidReason(record);
     if (reason === null) return [];
@@ -219,13 +176,7 @@ function harnessSection(section: Section): string {
       `- ${record.subject.toUpperCase()} \`${record.caseId}\` rep ${String(record.rep)}: ${shown}`,
     ];
   });
-  const metricHeadings = METRICS.map((metric) => heading(metric.title));
-  const rule = Array<string>(METRICS.length + LEADING_COLUMNS).fill("---");
-  const tableOf = (those: Case[]): string[] => [
-    `| Case | ${heading("Score")} | Checks | ${metricHeadings.join(" | ")} |`,
-    `| ${rule.join(" | ")} |`,
-    ...those.map((caseDef) => caseRow(caseDef, section)),
-  ];
+  const tableOf = (those: Case[]): string[] => caseTable(those, section);
   const guards = cases.filter((caseDef) => caseDef.guard);
   const others = cases.filter((caseDef) => !caseDef.guard);
   return [
@@ -244,6 +195,7 @@ function harnessSection(section: Section): string {
       : []),
     "",
     `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases, ${runsText(suite.runs, labels).slice(1, -1)})`,
+    ...deltaLines(section),
     ...scorerLine(
       "Judge",
       records.flatMap((record) => record.judge ?? []),
@@ -305,17 +257,33 @@ function commonSection(evaluation: Evaluation): string[] {
   const { commonSet } = evaluation;
   if (!commonSet) return [];
   const labels = evaluation.subjects.map((subject) => subject.label);
+  const skipped = new Set(evaluation.skippedChecks.map((one) => one.caseId));
+  const withSkips = commonSet.cases.filter((id) => skipped.has(id)).length;
+  const skips =
+    withSkips === 0
+      ? ""
+      : `, ${String(withSkips)} ${withSkips === 1 ? "case" : "cases"} with skipped checks`;
   return [
     "",
     "## Common set",
     "",
-    `Common set (${String(commonSet.cases.length)} cases: ${commonSet.cases.join(", ") || "none"}). Only these scores compare harnesses.`,
+    `Common set (${String(commonSet.cases.length)} cases: ${commonSet.cases.join(", ") || "none"}${skips}). Only these scores compare harnesses.`,
     "",
     ...Object.entries(commonSet.suite).map(
       ([harness, scores]) =>
         `- ${harness}: ${versus(Object.values(scores), formatScore)} ${runsText(commonSet.runs[harness] ?? {}, labels)}`,
     ),
   ];
+}
+
+/**
+ * Words the method behind the verdicts under the tables.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The footnote after a blank line; none for one subject.
+ */
+function footnoteLines(evaluation: Evaluation): string[] {
+  const note = footnote(evaluation);
+  return note === null ? [] : ["", `> ${note}`];
 }
 
 /**
@@ -329,9 +297,16 @@ export function renderReport(evaluation: Evaluation): string {
   const compared = subjects.length > 1;
   const labels = subjects.map((subject) => subject.label);
   const judged = cases.some((caseDef) => caseDef.checks.some(isJudged));
+  const discrimination = discriminationRows(evaluation);
   const sections = evaluation.suites.map((suite) =>
     harnessSection({
       suite,
+      delta: evaluation.comparison?.harnesses.find(
+        (one) => one.harness === suite.harness,
+      ),
+      discrimination: discrimination.filter(
+        (row) => row.harness === suite.harness,
+      ),
       // The cases as this harness ran them, so that a dropped check does not shift the lines of the others.
       cases: evaluation.applied[suite.harness] ?? [],
       records: records.filter((record) => record.harness === suite.harness),
@@ -357,6 +332,7 @@ export function renderReport(evaluation: Evaluation): string {
     sections.join("\n\n"),
     ...commonSection(evaluation),
     ...coverageSection(evaluation),
+    ...footnoteLines(evaluation),
     ...noteSections(evaluation),
     ...(belowBar.length
       ? ["", "Below the pass bar:", "", ...belowBar.map((line) => `- ${line}`)]

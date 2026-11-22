@@ -9,7 +9,8 @@ import { HARNESSES } from "../harnesses/index.js";
 import { CONFIG_KEYS } from "../project.js";
 import { sandbox } from "../testing/sandbox.js";
 import { FLAGS } from "../flags.js";
-import { EXAMPLE_CONFIG, referencePages } from "./reference.js";
+import { EXAMPLE_CONFIG } from "./example-config.js";
+import { referencePages } from "./reference.js";
 import { schemaFiles } from "./schema.js";
 
 const contentDir = path.resolve(

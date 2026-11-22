@@ -7,7 +7,7 @@ import { CASE_ENV_PATTERN, ENV_NAME_PATTERN } from "../env.js";
 import { HARNESSES } from "../harnesses/index.js";
 import { MATCHER_KEYS } from "../matchers.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
-import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
+import { CONFIG_FILE, CONFIG_KEYS, MAX_SEED } from "../project.js";
 import { FORMATS } from "../report/formats.js";
 import { SCHEMA_KEY } from "../schema-key.js";
 import { VARIANT_KEYS } from "../variants.js";
@@ -332,6 +332,12 @@ export function configSchema(): Schema {
             ...((key === "maxJudgedWeightShare" || key === "maxInvalid") && {
               minimum: 0,
               maximum: 1,
+            }),
+            ...(key === "minDelta" && { minimum: -1, maximum: 1 }),
+            ...(key === "seed" && {
+              type: "integer",
+              minimum: 1,
+              maximum: MAX_SEED,
             }),
             ...(key === "report" && {
               minItems: 1,

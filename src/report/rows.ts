@@ -1,3 +1,6 @@
+import type { CaseDelta, Discrimination } from "../comparison.js";
+import { formatDelta } from "../delta-format.js";
+import type { DeltaVerdict } from "../stats.js";
 import type { Results } from "../evaluate.js";
 import { overBudget } from "../exit-codes.js";
 import { invalidReason } from "../run.js";
@@ -24,6 +27,15 @@ export interface CaseRow extends Outcome {
   score: number | null;
   validRuns: number;
   plannedRuns: number;
+  /** B minus A for the case, the same on the rows of both subjects; null with one subject and when a side has no valid run. */
+  delta: number | null;
+  /** The ends of the 95% bootstrap interval of the delta; null with it. */
+  low: number | null;
+  high: number | null;
+  /** "helped", "hurt" or "within noise"; null with the delta. */
+  verdict: DeltaVerdict | null;
+  /** Null unless a subject is "none", and for a guard case. */
+  discrimination: Discrimination | null;
   /**
    * "invalid" when any run of the case is invalid, whatever the score. Else "below" when the subject under test (the
    * last one) is under the case's `minScore`. Else "not-run" when a run of the plan did not run or no run has a score.
@@ -65,6 +77,33 @@ function invalidReasons(slot: Slot): string[] {
   });
 }
 
+const NO_DELTA: CaseDelta = {
+  id: "",
+  guard: false,
+  minDelta: null,
+  a: null,
+  b: null,
+  delta: null,
+  low: null,
+  high: null,
+  verdict: null,
+  noise: null,
+  discrimination: null,
+};
+
+/**
+ * Finds the comparison entry of a case.
+ * @param slot - The harness, case and subject.
+ * @returns The case's delta, interval, verdict and discrimination; empty with one subject.
+ */
+function deltaOf(slot: Slot): CaseDelta {
+  return (
+    slot.results.comparison?.harnesses
+      .find((one) => one.harness === slot.suite.harness)
+      ?.cases.find((one) => one.id === slot.scored.id) ?? NO_DELTA
+  );
+}
+
 /**
  * Decides how one case went by its score, leaving invalid runs out of account.
  * @param slot - The harness, case and subject.
@@ -74,16 +113,25 @@ function invalidReasons(slot: Slot): string[] {
 function byScore(slot: Slot): Outcome {
   const { results, suite, scored, label } = slot;
   const score = scored.scores[label] ?? null;
-  if (
-    label === results.subjects.at(-1)?.label &&
-    score !== null &&
-    missesBar(score, scored.minScore)
-  ) {
-    const bar = formatScore(scored.minScore ?? null);
-    return {
-      status: "below",
-      reason: `score ${formatScore(score)} is below the case's minScore ${bar}`,
-    };
+  const mine = label === results.subjects.at(-1)?.label;
+  const delta = deltaOf(slot);
+  const reasons = [
+    ...(mine && score !== null && missesBar(score, scored.minScore)
+      ? [
+          `score ${formatScore(score)} is below the case's minScore ${formatScore(scored.minScore ?? null)}`,
+        ]
+      : []),
+    ...(mine &&
+    delta.delta !== null &&
+    delta.minDelta !== null &&
+    missesBar(delta.delta, delta.minDelta)
+      ? [
+          `delta ${formatDelta(delta.delta)} is below the case's minDelta ${formatDelta(delta.minDelta)}`,
+        ]
+      : []),
+  ];
+  if (reasons.length > 0) {
+    return { status: "below", reason: reasons.join("; ") };
   }
   const missing = results.notRun.some(
     (run) =>
@@ -118,6 +166,21 @@ function statusOf(
 }
 
 /**
+ * Takes the fields of a comparison entry that a row shows.
+ * @param one - The entry.
+ * @returns Its delta, interval, verdict and discrimination.
+ */
+const pick = (
+  one: CaseDelta,
+): Pick<CaseRow, "delta" | "low" | "high" | "verdict" | "discrimination"> => ({
+  delta: one.delta,
+  low: one.low,
+  high: one.high,
+  verdict: one.verdict,
+  discrimination: one.discrimination,
+});
+
+/**
  * Lists every case for every harness and subject.
  * @param results - What `evaluate` wrote to `results.json`.
  * @returns One row for each harness, subject and case: the applicable cases in suite order, then the cases that are not
@@ -133,6 +196,7 @@ export function caseRows(results: Results): CaseRow[] {
         score: scored.scores[label] ?? null,
         validRuns: scored.runs[label]?.valid ?? 0,
         plannedRuns: scored.runs[label]?.planned ?? 0,
+        ...pick(deltaOf({ results, suite, scored, label })),
         ...statusOf({ results, suite, scored, label }),
       })),
       ...results.notApplicable
@@ -144,6 +208,7 @@ export function caseRows(results: Results): CaseRow[] {
           score: null,
           validRuns: 0,
           plannedRuns: 0,
+          ...pick(NO_DELTA),
           status: "not-applicable",
           reason: entry.reason,
           tolerated: false,

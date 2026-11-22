@@ -1,6 +1,16 @@
 import type { Evaluation } from "../evaluate.js";
 import { describeSubject } from "../subject.js";
 import { formatScore } from "../score.js";
+import { verdictText } from "../delta-format.js";
+import {
+  discriminationRows,
+  discriminationRule,
+  flakeRows,
+  flakeText,
+  PASS_AT,
+  footnote,
+  verdictCell,
+} from "./delta.js";
 import { caseRows } from "./rows.js";
 import { escapeXml } from "./xml.js";
 
@@ -31,6 +41,66 @@ function table(
   );
   return `<table><thead><tr>${header}</tr></thead><tbody>${body.join("")}</tbody></table>`;
 }
+
+/**
+ * Writes the sections that a comparison adds: the verdicts, the discrimination, and the footnote.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The HTML of the sections; nothing for one subject.
+ */
+function comparisonHtml(evaluation: Evaluation): string {
+  const { comparison } = evaluation;
+  const note = footnote(evaluation);
+  if (comparison === null || note === null) return "";
+  const verdicts = comparison.harnesses.flatMap(({ harness, cases, suite }) => [
+    ...cases.map((one) => ({
+      cells: [harness, one.id, verdictCell(one)],
+    })),
+    { cells: [harness, "suite", verdictText(suite)] },
+  ]);
+  const found = discriminationRows(evaluation);
+  const discrimination =
+    found.length === 0
+      ? ""
+      : `<h2>Discrimination</h2><p>${e(discriminationRule())}</p>${table(
+          ["Harness", "Case", "None", "Subject", "Discrimination"],
+          found.map((row) => ({
+            cells: [
+              row.harness,
+              row.caseId,
+              formatScore(row.none),
+              formatScore(row.subject),
+              row.label,
+            ],
+          })),
+        )}`;
+  return `<h2>Verdicts</h2>
+${table(["Harness", "Case", "Verdict"], verdicts)}
+${discrimination}
+<p>${e(note)}</p>
+`;
+}
+
+/**
+ * Writes the table of how much each check flipped between reps.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The HTML of the section.
+ */
+const flakeHtml = (evaluation: Evaluation): string =>
+  `<h2>Flake</h2>
+<p>A rep passes a check at a score of ${String(PASS_AT)} or more. Flake is the share of valid reps that disagree with the majority outcome; an even split is 50%.</p>
+${table(
+  ["Harness", "Subject", "Case", "Check", "Flake"],
+  flakeRows(evaluation).map((row) => ({
+    cells: [
+      row.harness,
+      row.subject,
+      row.caseId,
+      row.check,
+      flakeText(row.rate),
+    ],
+  })),
+)}
+`;
 
 /**
  * Renders an evaluation as one self-contained HTML page: inline style, tables only, no script and no reference to
@@ -86,7 +156,7 @@ export function renderHtml(evaluation: Evaluation): string {
 ${table(["Harness", "Subject", "Score", "Cases", "Runs"], suites)}
 <h2>Cases</h2>
 ${table(["Harness", "Subject", "Case", "Score", "Runs", "Status", "Reason"], cases)}
-${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
+${comparisonHtml(evaluation)}${flakeHtml(evaluation)}${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
 </body></html>
 `;
 }
