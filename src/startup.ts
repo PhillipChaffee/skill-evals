@@ -40,23 +40,35 @@ export interface StartupRecord {
  */
 export function startupRecord(
   run: { harness: Harness; isolated?: boolean | undefined },
-  ran: Pick<SessionResult, "home" | "placed"> & { parsed: { loaded: Loaded } },
+  ran: Pick<SessionResult, "home" | "placed" | "userTurns"> & {
+    parsed: { loaded: Loaded };
+  },
   copy: Copy | null,
 ): StartupRecord {
   const { loaded } = ran.parsed;
   const reports = run.harness.capabilities.has("loadedReport");
+  // Every harness process reports what it loaded, and each report is held to the same rule.
+  const reported = ran.userTurns
+    ? ran.userTurns.flatMap((turn) => turn.loaded ?? [])
+    : [loaded];
+  const subject = copy?.loaded ?? null;
+  const loads = reported.map((each) =>
+    copy && reports
+      ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, each)
+      : null,
+  );
+  const foreign = reported.flatMap((each) =>
+    foreignOf(run.harness, each, subject),
+  );
+  const unexpected = [...foreign, ...(run.harness.strays?.(ran) ?? [])];
   return {
-    subjectLoaded:
-      copy && reports
-        ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, loaded)
-        : null,
+    subjectLoaded: loads.includes(false)
+      ? false
+      : (loads.find(Boolean) ?? null),
     loaded,
     isolated: run.isolated ?? false,
-    reportMissing: reportMissing(run.harness, loaded),
-    unexpected: [
-      ...foreignOf(run.harness, loaded, copy?.loaded ?? null),
-      ...(run.harness.strays?.(ran) ?? []),
-    ],
+    reportMissing: reported.some((each) => reportMissing(run.harness, each)),
+    unexpected: ran.userTurns ? [...new Set(unexpected)] : unexpected,
   };
 }
 

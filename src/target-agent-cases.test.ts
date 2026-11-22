@@ -62,7 +62,9 @@ test.each(PIPELINE)(
 
 test("research pipeline: the reasons say which part of the shape is wrong", async () => {
   const sequential = await play("research-pipeline-shape.sequential");
-  expect(sequential.checks[1]?.reason).toContain("not all issued in one turn");
+  expect(sequential.checks[1]?.reason).toContain(
+    "not all issued in one assistant turn",
+  );
   const committed = await play("research-pipeline-shape.committed");
   expect(committed.checks[8]?.command?.stdout).toContain("status shows 0");
   const edits = await play("research-pipeline-shape.researcher-edits");

@@ -6,11 +6,16 @@
   "checks": [
     {
       "type": "skill_not_loaded",
-      "skill": "release-notes",
-      "via": "skill_tool"
+      "skill": "release-notes"
     },
-    { "type": "tool_not_called", "kind": "skill" },
-    { "type": "output_contains", "text": "2.1" }
+    {
+      "type": "tool_not_called",
+      "kind": "skill"
+    },
+    {
+      "type": "output_contains",
+      "text": "2.1"
+    }
   ],
   "timeoutSeconds": 300
 }

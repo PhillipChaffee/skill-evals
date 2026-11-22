@@ -18,6 +18,8 @@ export function caseHash(caseDef: Case): string {
   if (known !== undefined) return known;
   const { dir, workspaceDir, graderDir, fixtureDir, homeDir, ...loaded } =
     caseDef;
+  // A case with one prompt has no `turns` key, so its hash is what it was before turns existed.
+  const { turns, ...rest } = loaded;
   const own = [
     dir,
     workspaceDir,
@@ -28,7 +30,7 @@ export function caseHash(caseDef: Case): string {
   ];
   const hash = sha256(
     canonical({
-      loaded: { ...loaded, fixtureDirs: undefined },
+      loaded: { ...rest, fixtureDirs: undefined, ...(turns && { turns }) },
       files: own.flatMap((each) =>
         each === undefined || each === null ? [] : [hashTree(each)],
       ),

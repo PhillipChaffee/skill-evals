@@ -139,6 +139,10 @@ export interface FakeScript {
   syncSkill?: string;
   /** Leaves the session id out of the stream, as a harness that states none does. */
   noSessionId?: true;
+  /** The session id that turn n states, in place of the one it was resumed with; a missing entry keeps it. */
+  sessions?: string[];
+  /** Fields of the init event of turn n to replace; a missing entry replaces none. */
+  inits?: Partial<InitEvent>[];
   /** The `total_cost_usd` of the result event of each run; without it the harness states no cost. */
   costUsd?: number;
   /** The steps of each turn; turn n answers the n-th prompt of a session. */

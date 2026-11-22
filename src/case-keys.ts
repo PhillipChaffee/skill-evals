@@ -5,7 +5,11 @@ import { LIMIT_KEYS } from "./case-limits.js";
 
 // The top-level keys of a case file. Any other key is a load error, unless it starts with `x-`.
 export const CASE_KEYS: Record<string, FieldDef> = {
-  checks: { type: "object", meaning: "A non-empty list of checks." },
+  checks: {
+    type: "object",
+    meaning:
+      "A non-empty list of checks. A case with `turns` may leave it out when a turn has checks.",
+  },
   weight: {
     ...WEIGHT,
     meaning: "How much the case counts in its suite. Default: 1.",

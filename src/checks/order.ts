@@ -1,6 +1,6 @@
 import type { ToolCall } from "../harnesses/shared.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
-import { describeMatcher, hitsOf, quoteCalls } from "../matchers.js";
+import { callNo, describeMatcher, hitsOf, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
@@ -37,7 +37,7 @@ function inPair(
     `the ${side.which ?? "first"} ${side.kind ?? "matching"} call`;
   return {
     score: 0,
-    reason: `${name(ends.before)} #${String(early)} is not before ${name(ends.after)} #${String(late)}\n${quoteCalls(all, chosen)}`,
+    reason: `${name(ends.before)} #${callNo(all, early)} is not before ${name(ends.after)} #${callNo(all, late)}\n${quoteCalls(all, chosen)}`,
   };
 }
 
@@ -58,7 +58,7 @@ function firstMatches(
     const after = firsts.at(-1) ?? -1;
     const at = hits[step]?.find((position) => position > after);
     if (at === undefined) {
-      const when = step === 0 ? "" : ` after call #${String(after)}`;
+      const when = step === 0 ? "" : ` after call #${callNo(all, after)}`;
       return {
         score: 0,
         reason: `sequence[${String(step)}] matches no call${when}, for ${describeMatcher(matcher)}\n${quoteCalls(all, firsts)}`,
@@ -78,21 +78,26 @@ interface Disorder {
 
 /**
  * Finds a call that breaks the order of a strict sequence.
+ * @param all - Every tool call of the run, for the numbers a reason quotes.
  * @param hits - The positions of the calls that fit each matcher.
  * @param firsts - The first match of each.
  * @returns The first call that does, or null when none does.
  */
-function disorder(hits: number[][], firsts: number[]): Disorder | null {
+function disorder(
+  all: ToolCall[],
+  hits: number[][],
+  firsts: number[],
+): Disorder | null {
   for (let early = 0; early < hits.length; early++) {
     for (let step = early + 1; step < hits.length; step++) {
       const before = hits[step]?.find((at) => at < (firsts[early] ?? 0));
       if (before !== undefined) {
-        const reason = `sequence[${String(step)}] matches call #${String(before)} before call #${String(firsts[early])}`;
+        const reason = `sequence[${String(step)}] matches call #${callNo(all, before)} before call #${callNo(all, firsts[early] ?? 0)}`;
         return { reason, at: before };
       }
       const after = hits[early]?.find((at) => at > (firsts[step] ?? 0));
       if (after !== undefined) {
-        const reason = `sequence[${String(early)}] matches call #${String(after)} after call #${String(firsts[step])}`;
+        const reason = `sequence[${String(early)}] matches call #${callNo(all, after)} after call #${callNo(all, firsts[step] ?? 0)}`;
         return { reason, at: after };
       }
     }
@@ -115,7 +120,7 @@ function inSequence(
   const hits = sequence.map((matcher) => hitsOf(all, matcher));
   const firsts = firstMatches(all, sequence, hits);
   if (!Array.isArray(firsts)) return firsts;
-  const broken = strict ? disorder(hits, firsts) : null;
+  const broken = strict ? disorder(all, hits, firsts) : null;
   if (broken === null) return PASS;
   return {
     score: 0,

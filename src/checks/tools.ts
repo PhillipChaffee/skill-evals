@@ -4,6 +4,7 @@ import { describeBy, fitsBy } from "../agents.js";
 import type { ToolCall } from "../harnesses/shared.js";
 import type { ToolMatcher } from "../matchers.js";
 import {
+  callNo,
   describeMatcher,
   firstOutside,
   hitsOf,
@@ -70,7 +71,7 @@ function callFits(all: ToolCall[], at: number, matcher: ToolMatcher): Verdict {
   if (matches(matcher, all[at] as ToolCall)) return PASS;
   return {
     score: 0,
-    reason: `the first tool call #${String(at)} does not match ${describeMatcher(matcher)}\n${quoteCalls(all, [at])}`,
+    reason: `the first tool call #${callNo(all, at)} does not match ${describeMatcher(matcher)}\n${quoteCalls(all, [at])}`,
   };
 }
 
@@ -160,7 +161,7 @@ function counted(
     const turn = (at: number): string => String(all[at]?.turn ?? "unknown");
     return {
       score: 0,
-      reason: `the matching calls were not all issued in one turn: call #${String(apart)} is in turn ${turn(apart)}, call #${String(hits[0])} in turn ${turn(hits[0] ?? 0)}, for ${describeMatcher(matcher)}\n${quoteCalls(all, [apart])}`,
+      reason: `the matching calls were not all issued in one assistant turn: call #${callNo(all, apart)} is in assistant turn ${turn(apart)}, call #${callNo(all, hits[0] ?? 0)} in assistant turn ${turn(hits[0] ?? 0)}, for ${describeMatcher(matcher)}\n${quoteCalls(all, [apart])}`,
     };
   }
   const count = hits.length;

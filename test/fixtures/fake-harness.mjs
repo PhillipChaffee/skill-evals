@@ -22,7 +22,8 @@
 //   the later processes of that run play the same script, whatever their prompt says. Turn n answers the n-th prompt.
 // - `--resume <id>` is how the Claude Code adapter continues a session. The fake reports `session_id` in its init and
 //   result events: the id it was resumed with, else `fake-session-<pid>`. In a script's text, `$RESUMED` is that
-//   `--resume` value ("" when absent). A script's `noSessionId` leaves the id out, as a harness that states none does.
+//   `--resume` value ("" when absent). A script's `noSessionId` leaves the id out, as a harness that states none does; its `sessions` lists the id each
+//   turn states in place of that one, and its `inits` lists fields of each turn's init event to replace.
 // - A prompt of `/compact` is a compaction: it writes a `compact_boundary` system event and no assistant turn, and it does
 //   not use up a script turn.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
@@ -503,6 +504,9 @@ const installed = fs.existsSync(skillsDir)
   ? fs.readdirSync(skillsDir).sort()
   : [];
 
+// The turn of the script that this process plays, and what the script says of its session and its init event.
+const turnNo = played ? turnIndex(played.file) : null;
+if (played?.found.sessions?.[turnNo]) sessionId = played.found.sessions[turnNo];
 const init = {
   type: "system",
   subtype: "init",
@@ -514,6 +518,7 @@ const init = {
     ? []
     : installed,
   ...played?.found.init,
+  ...played?.found.inits?.[turnNo],
 };
 // A script can leave fields out of the init event, or the whole event.
 for (const key of played?.found.initOmit ?? []) delete init[key];
@@ -530,7 +535,7 @@ if (played?.found.syncSkill) {
   fs.writeFileSync(path.join(dir, "SKILL.md"), "synced\n");
 }
 if (played) {
-  const turn = turnIndex(played.file);
+  const turn = turnNo;
   process.exit(play(played.found.turns[turn] ?? [], turn) ? 1 : 0);
 }
 const used = [

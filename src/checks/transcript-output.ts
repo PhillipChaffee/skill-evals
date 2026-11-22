@@ -1,7 +1,13 @@
 import type { ToolCall, TranscriptEvent } from "../harnesses/shared.js";
 import { valueOf } from "./defaults.js";
 import type { ToolMatcher } from "../matchers.js";
-import { describeMatcher, hitsOf, quoteCalls, tester } from "../matchers.js";
+import {
+  callNo,
+  describeMatcher,
+  hitsOf,
+  quoteCalls,
+  tester,
+} from "../matchers.js";
 import { callsOf, resultsByCall } from "../transcript.js";
 import type { Outcome, RuledCheck, Verdict } from "./index.js";
 import { unseenAgent } from "./by-needs.js";
@@ -111,7 +117,10 @@ export function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
       ? undefined
       : found.picked.find(({ result }) => result?.output === undefined);
   if (silent) {
-    return { score: 0, reason: `call #${String(silent.at)} has no output` };
+    return {
+      score: 0,
+      reason: `call #${callNo(outcome.toolCalls, silent.at)} has no output`,
+    };
   }
   const shown = found.picked.flatMap(({ result }) =>
     result?.output === undefined
@@ -144,7 +153,7 @@ export function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
   if (hit.length > 0) {
     return {
       score: 0,
-      reason: `an output of call #${String(hit[0]?.at)} matches ${written(check)}\n${quotePieces(hit.map(({ piece }) => piece))}`,
+      reason: `an output of call #${callNo(outcome.toolCalls, hit[0]?.at ?? 0)} matches ${written(check)}\n${quotePieces(hit.map(({ piece }) => piece))}`,
     };
   }
   const silent = found.picked.find(
@@ -153,7 +162,7 @@ export function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
   if (!silent) return PASS;
   return {
     score: 0,
-    reason: `call #${String(silent.at)} has no output, so it cannot be shown to lack the pattern`,
+    reason: `call #${callNo(outcome.toolCalls, silent.at)} has no output, so it cannot be shown to lack the pattern`,
   };
 }
 

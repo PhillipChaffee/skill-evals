@@ -27,7 +27,7 @@ import {
 // exactly one of `expect` and `options` (the check's description says so); an `options` answer needs a name; a
 // variant's `promptAppend` needs a `prompt.md` with text beside the case file; a case has `prompt.md` or `turns`, not
 // both, and the first turn may not be an event; a turn's `prompt` names a file of the case that must exist; a variant id is unique within its case;
-// a case needs a prompt source, which is `prompt.md` or a `prompt` in every variant; a regular expression must compile;
+// a case needs at least one check, in `checks` or in a turn (the schema leaves `checks` optional); a case needs a prompt source, which is `prompt.md` or a `prompt` in every variant; a regular expression must compile;
 // and the ids of a case's directories may not hold `@` or `,`. The loader still checks all of these.
 //
 // Where the schemas are looser than the loader: a `prompt` or `promptAppend` of only whitespace, a `flags` text that
@@ -180,7 +180,6 @@ export function caseSchema(): Schema {
     description:
       "The case.json of a skill-evals case: the checks that a run of its prompt must pass.",
     type: "object",
-    required: ["checks"],
     properties: {
       [SCHEMA_KEY]: {
         type: "string",
@@ -207,6 +206,12 @@ export function caseSchema(): Schema {
         items: { $ref: "#/$defs/variant" },
       },
     },
+    // Checks may all be in the turns, which the loader checks for.
+    anyOf: [
+      { required: ["checks"] },
+      { required: ["turns"] },
+      { required: ["variants"] },
+    ],
     dependentRequired: { harnesses: ["note"] },
     patternProperties: X_KEYS,
     additionalProperties: false,

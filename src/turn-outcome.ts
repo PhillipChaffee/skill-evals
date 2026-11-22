@@ -1,4 +1,4 @@
-import type { LifecycleEvent } from "./harnesses/shared.js";
+import type { LifecycleEvent, Loaded } from "./harnesses/shared.js";
 import type { Check, Outcome, TurnSlice } from "./checks/index.js";
 import type { Parsed, TranscriptEvent } from "./harnesses/shared.js";
 import type { RunRecord } from "./run-plan.js";
@@ -29,8 +29,14 @@ export interface TurnRecord {
   event?: LifecycleEvent;
   /** Why the turn was not sent; null for a turn that ran. */
   skipped: SkipReason | null;
+  /** What stopped the run before this turn, for a turn that was not sent. */
+  why?: string;
   /** What the agent finally said in this turn; empty for a turn that did not run or has no process. */
   finalText: string;
+  /** What this turn's harness process reported as loaded at startup; null for a turn with no process. */
+  loaded: Loaded | null;
+  /** The session id this turn's process stated; null when it stated none or ran no process. */
+  sessionId: string | null;
 }
 
 const NONE: ChangedFiles = { created: [], modified: [], deleted: [] };
@@ -43,7 +49,7 @@ const NONE: ChangedFiles = { created: [], modified: [], deleted: [] };
 const skippedFor = (record: TurnRecord): string | null =>
   record.skipped === null
     ? null
-    : `turn ${String(record.turn)} was not run: the run was stopped before it`;
+    : `turn ${String(record.turn)} was not run: ${record.why || "the run was stopped before it"}`;
 
 /**
  * Cuts the run into the slice of each turn.
@@ -65,6 +71,7 @@ export function slicesOf(parts: TurnParts): TurnSlice[] {
       transcript: transcript.filter((one) => one.userTurn === record.turn),
       skillEvents: events,
       changed: parts.turnChanges[place] ?? NONE,
+      callBase: Math.max(first, 0),
       skipped: skippedFor(record),
     };
   });
@@ -89,7 +96,7 @@ export function viewFor(check: Check, outcome: Outcome): Outcome | string {
     toolCalls: slice.toolCalls,
     transcript: slice.transcript,
     skillEvents: slice.skillEvents,
-    turn: { changed: slice.changed },
+    turn: { changed: slice.changed, callBase: slice.callBase },
   };
 }
 

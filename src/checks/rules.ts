@@ -62,6 +62,8 @@ export interface TurnSlice {
   skillEvents: SkillEvent[];
   /** What the turn created, modified and deleted in the workspace, from a hash taken after it. */
   changed: ChangedFiles;
+  /** The run's number of the turn's first call, which a reason adds to a position to name a call as `show` does. */
+  callBase: number;
   /** Why the turn did not run, as a reason a check reports; null for a turn that ran. */
   skipped: string | null;
 }
@@ -101,5 +103,5 @@ export interface Outcome {
   /** One slice for each turn of a case with `turns`, in order; a check with a `turn` reads that slice. */
   turns?: TurnSlice[];
   /** Set on the outcome that a check of one turn is scored with: what that turn changed in the workspace. */
-  turn?: { changed: ChangedFiles };
+  turn?: { changed: ChangedFiles; callBase: number };
 }

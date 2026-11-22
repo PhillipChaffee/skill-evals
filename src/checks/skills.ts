@@ -1,7 +1,7 @@
 import { fitsBy } from "../agents.js";
 import { valueOf } from "./defaults.js";
 import { globToRegExp } from "../glob.js";
-import { firstOutside, quoteCalls } from "../matchers.js";
+import { callNo, firstOutside, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { SkillLoad, SkillVia } from "../skill-events.js";
 import { legacySkillLoads } from "../skill-events.js";
@@ -69,7 +69,7 @@ function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
   if (!names.includes(first.skill)) {
     return {
       score: 0,
-      reason: `the first skill load is "${first.skill}" (call #${String(first.index)}), not ${names.length === 1 ? `"${list(names)}"` : `one of ${list(names)}`}\n${quoteCalls(all, [first.index])}`,
+      reason: `the first skill load is "${first.skill}" (call #${callNo(all, first.index)}), not ${names.length === 1 ? `"${list(names)}"` : `one of ${list(names)}`}\n${quoteCalls(all, [first.index])}`,
     };
   }
   const earlier = all
@@ -84,7 +84,7 @@ function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
   if (before < 0) return PASS;
   return {
     score: 0,
-    reason: `call #${String(before)} comes before the first skill load (call #${String(first.index)})\n${quoteCalls(all, [before, first.index])}`,
+    reason: `call #${callNo(all, before)} comes before the first skill load (call #${callNo(all, first.index)})\n${quoteCalls(all, [before, first.index])}`,
   };
 }
 
@@ -125,7 +125,7 @@ function skillNotLoaded(check: RuledCheck, outcome: Outcome): Verdict {
   if (loads.length === 0) return PASS;
   return {
     score: 0,
-    reason: `"${String(check.skill)}" was loaded (call #${String(loads[0]?.index)})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
+    reason: `"${String(check.skill)}" was loaded (call #${callNo(outcome.toolCalls, loads[0]?.index ?? 0)})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
   };
 }
 

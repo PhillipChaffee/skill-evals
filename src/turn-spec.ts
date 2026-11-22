@@ -171,10 +171,13 @@ function readTurn(
     const invoke = readField(TURN_KEYS, "invoke", at);
     return { invoke: readInvoke(invoke, name, where.mode), checks };
   }
-  return {
-    event: readField(TURN_KEYS, "event", at) as LifecycleEvent,
-    checks,
-  };
+  const event = readField(TURN_KEYS, "event", at) as LifecycleEvent;
+  if (event !== "compact" && checks.length > 0) {
+    throw new UsageError(
+      `${name}: a ${event} turn sends nothing, so it has no checks; put them on the turn before or after it`,
+    );
+  }
+  return { event, checks };
 }
 
 /**

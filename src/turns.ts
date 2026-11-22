@@ -1,78 +1,20 @@
-import type { Parsed, RunInput } from "./harnesses/shared.js";
+import type { RunInput } from "./harnesses/shared.js";
 import { messageOf } from "./scope.js";
-import type { Ending } from "./retry.js";
 import type { RunEnd } from "./session-end.js";
 import { endOf } from "./session-end.js";
-import type { Attempt, Prior } from "./session-attempt.js";
 import { attempt, notStarted, parseStream } from "./session-attempt.js";
 import type { Dirs, SessionInput } from "./session-attempt.js";
-import type { ChangedFiles, Snapshot } from "./snapshot.js";
+import type { Snapshot } from "./snapshot.js";
 import { diffSnapshots, snapshot } from "./snapshot.js";
 import { lifecyclePart, numbered } from "./transcript.js";
-import { emptyParse, mergeTurns } from "./turn-merge.js";
+import { emptyParse } from "./turn-merge.js";
+import type { Ran, State, Step, TurnsRun } from "./turn-result.js";
+import { NO_CHANGES, assemble } from "./turn-result.js";
 import type { TurnRecord } from "./turn-outcome.js";
 import type { Turn } from "./turn-spec.js";
 import { describeTurn } from "./turn-spec.js";
 
 const MS = 1000;
-const NO_CHANGES: ChangedFiles = { created: [], modified: [], deleted: [] };
-
-/** A harness process that ran for a turn, and how the turn ended. */
-interface Ran {
-  attempt: Attempt;
-  end: RunEnd;
-}
-
-/** What one turn left. */
-interface Step {
-  record: TurnRecord;
-  /** The turn's own parse; empty for a turn that sent nothing. */
-  parsed: Parsed;
-  /** The harness process of the turn; null when no process ran. */
-  ran: Ran | null;
-  changes: ChangedFiles;
-}
-
-/** What `runTurns` gives back, in the shape of one attempt, plus what is per turn. */
-export interface TurnsRun {
-  /** The streams of every turn, one after the other. */
-  stdout: string;
-  durationMs: number;
-  /** The main-thread turns the runner counted, summed over the processes; null when the harness cannot count them. */
-  turns: number | null;
-  firstOutputMs: number | null;
-  placedChanges: ChangedFiles | null;
-  placed: Record<string, string> | undefined;
-  homeSeed: Snapshot;
-  /** Who ended the run, why it failed, and the parse of all turns. */
-  end: RunEnd;
-  /** How the run ended, as the process that ended it shows; that process decides whether a retry makes sense. */
-  ending: Ending;
-  userTurns: TurnRecord[];
-  turnChanges: ChangedFiles[];
-}
-
-/** Where a run stands between turns. */
-interface State {
-  /** The id to continue, when a turn has given one. */
-  session: string | null;
-  /** True once a process turn has run, until a `clear`: the next process turn continues a session. */
-  continuing: boolean;
-  /** The number of the last turn that ran a process. */
-  last: number;
-  /** Why the later turns are not sent; null while the run goes on. */
-  stop: { stoppedBy: RunEnd["stoppedBy"]; error: string | null } | null;
-  /** The harness's setup, from the first process. */
-  prior: Prior | null;
-  /** Why the first process cannot start, such as a failed setup step of the case; null otherwise. */
-  failure: string | null;
-  /** The workspace after the last turn. */
-  workspace: Snapshot;
-  /** The seconds all turns may take together. */
-  cap: number;
-  /** The milliseconds the processes have taken. */
-  spent: number;
-}
 
 /** Where a turn is: the run's directories, the turn, its place and where the run stands. */
 interface Place {
@@ -90,7 +32,13 @@ interface Place {
  * @returns The record of the turn, before it has run.
  */
 function recordOf(turn: Turn, index: number): TurnRecord {
-  const base = { turn: index + 1, skipped: null, finalText: "" };
+  const base = {
+    turn: index + 1,
+    skipped: null,
+    finalText: "",
+    loaded: null,
+    sessionId: null,
+  };
   if ("prompt" in turn) return { ...base, kind: "prompt" };
   if ("invoke" in turn) return { ...base, kind: "invoke" };
   return { ...base, kind: "event", event: turn.event };
@@ -168,10 +116,11 @@ async function runProcess(
 /**
  * Makes the step of a turn that is not sent.
  * @param record - The turn's record.
+ * @param why - The cause, in words: what stopped the run.
  * @returns The step, with the turn marked as skipped because the run was stopped.
  */
-const skippedStep = (record: TurnRecord): Step => ({
-  record: { ...record, skipped: "stopped" },
+const skippedStep = (record: TurnRecord, why: string): Step => ({
+  record: { ...record, skipped: "stopped", why },
   parsed: emptyParse(),
   ran: null,
   changes: NO_CHANGES,
@@ -211,11 +160,11 @@ const lackOf = (state: State): string | null =>
  * Tells how long a process turn may take.
  * @param run - The case's session.
  * @param state - Where the run stands.
- * @returns The seconds this turn may take: `timeoutSeconds`, or what is left of the whole run's time when that is less;
- *   0 when none is left.
+ * @returns The seconds this turn may take: `timeoutSeconds`, or exactly what is left of the whole run's time when that
+ *   is less; 0 when none is left.
  */
 function secondsLeft(run: SessionInput, state: State): number {
-  const left = Math.ceil(state.cap - state.spent / MS);
+  const left = state.cap - state.spent / MS;
   return Math.max(0, Math.min(run.timeoutSeconds, left));
 }
 
@@ -233,7 +182,13 @@ function settle(ran: Ran, state: State, turn: number): void {
   state.continuing = true;
   state.session = end.parsed.sessionId;
   if (end.error !== null || end.stoppedBy !== "agent") {
-    state.stop = { stoppedBy: end.stoppedBy, error: end.error };
+    const how =
+      end.stoppedBy === "agent" ? "failed" : `stopped at ${end.stoppedBy}`;
+    state.stop = {
+      stoppedBy: end.stoppedBy,
+      error: end.error,
+      why: `turn ${String(turn)} ${how}`,
+    };
   }
 }
 
@@ -252,6 +207,43 @@ function compacted(end: RunEnd): RunEnd {
 }
 
 /**
+ * Holds a finished turn to what the runner asked of it.
+ * @param end - How the turn ended.
+ * @param asked - What the turn was given.
+ * @param asked.given - The session id the process was told to continue; null when it started a new session.
+ * @param asked.turn - The turn's number, from 1.
+ * @param asked.shortened - Whether the whole run's time limit, not `timeoutSeconds`, set the turn's time.
+ * @param asked.cap - The whole run's time limit in seconds.
+ * @returns The end, failed when the process reported another session than the one it was given, and with the whole
+ *   run's limit in the words of a timeout that it caused.
+ */
+function checked(
+  end: RunEnd,
+  asked: {
+    given: string | null;
+    turn: number;
+    shortened: boolean;
+    cap: number;
+  },
+): RunEnd {
+  const reported = end.parsed.sessionId;
+  if (
+    end.error === null &&
+    asked.given !== null &&
+    reported !== null &&
+    reported !== asked.given
+  ) {
+    return {
+      ...end,
+      error: `turn ${String(asked.turn)} continued session ${asked.given} but reported ${reported}`,
+    };
+  }
+  return end.stoppedBy === "timeout" && asked.shortened && end.error !== null
+    ? { ...end, error: `timed out after ${String(asked.cap)} s` }
+    : end;
+}
+
+/**
  * Finds out whether the run can go on to a turn, and records why not.
  * @param run - The case's session.
  * @param place - Where the turn is.
@@ -262,14 +254,20 @@ function blocked(run: SessionInput, place: Place, record: TurnRecord): boolean {
   const { state } = place;
   const keepsSession = record.kind === "event" && record.event === "clear";
   const lack = state.stop === null && !keepsSession ? lackOf(state) : null;
-  if (lack !== null) state.stop = { stoppedBy: "agent", error: lack };
+  if (lack !== null) {
+    state.stop = { stoppedBy: "agent", error: lack, why: lack };
+  }
   const processes = !(record.kind === "event" && record.event !== "compact");
   if (state.stop === null && processes && secondsLeft(run, state) === 0) {
     const error =
       run.onTimeout === "score"
         ? null
         : `timed out after ${String(state.cap)} s`;
-    state.stop = { stoppedBy: "timeout", error };
+    state.stop = {
+      stoppedBy: "timeout",
+      error,
+      why: "the run's time limit was reached",
+    };
   }
   return state.stop !== null;
 }
@@ -283,7 +281,9 @@ function blocked(run: SessionInput, place: Place, record: TurnRecord): boolean {
 async function runTurn(run: SessionInput, place: Place): Promise<Step> {
   const { turn, index, state } = place;
   const record = recordOf(turn, index);
-  if (blocked(run, place, record)) return skippedStep(record);
+  if (blocked(run, place, record)) {
+    return skippedStep(record, state.stop?.why ?? "");
+  }
   if (record.kind === "event" && record.event !== "compact") {
     return runnerEvent(record, state);
   }
@@ -295,11 +295,22 @@ async function runTurn(run: SessionInput, place: Place): Promise<Step> {
   );
   const ran = {
     ...made,
-    end: record.event === "compact" ? compacted(made.end) : made.end,
+    end: checked(record.event === "compact" ? compacted(made.end) : made.end, {
+      given: state.session,
+      turn: record.turn,
+      shortened: seconds < run.timeoutSeconds,
+      cap: state.cap,
+    }),
   };
   settle(ran, state, record.turn);
+  const { parsed } = ran.end;
   return {
-    record: { ...record, finalText: ran.end.parsed.finalText },
+    record: {
+      ...record,
+      finalText: parsed.finalText,
+      loaded: parsed.loaded,
+      sessionId: parsed.sessionId,
+    },
     parsed: ran.end.parsed,
     ran,
     changes: NO_CHANGES,
@@ -319,75 +330,6 @@ function withChanges(step: Step, state: State, workspace: string): Step {
   const changes = diffSnapshots(state.workspace, after);
   state.workspace = after;
   return { ...step, changes };
-}
-
-/**
- * Joins the streams of the processes of a run.
- * @param attempts - The processes, in order.
- * @returns The streams one after the other, each ending its last line.
- */
-const streamsOf = (attempts: Attempt[]): string =>
-  attempts
-    .map((one) =>
-      one.stdout === "" || one.stdout.endsWith("\n")
-        ? one.stdout
-        : `${one.stdout}\n`,
-    )
-    .join("");
-
-/**
- * Puts the steps of the turns into the result of one run.
- * @param steps - What each turn left.
- * @param state - Where the run stands; its stop is the error of a run that was not sent on.
- * @returns The run's streams, usage, end and per-turn records.
- */
-function assemble(steps: Step[], state: State): TurnsRun {
-  const processes = steps.flatMap((step) => (step.ran ? [step.ran] : []));
-  const attempts = processes.map((one) => one.attempt);
-  const failing = steps.find(
-    (step) =>
-      step.ran !== null &&
-      (step.ran.end.error !== null || step.ran.end.stoppedBy !== "agent"),
-  );
-  const decisive = failing ?? steps.filter((step) => step.ran !== null).at(-1);
-  const first = attempts[0];
-  const parsed = mergeTurns(
-    steps.map((step) => step.parsed),
-    steps.map((step) => step.ran !== null),
-  );
-  const own = failing?.ran?.end.error ?? null;
-  const error =
-    own === null
-      ? (state.stop?.error ?? null)
-      : `turn ${String(failing?.record.turn)}: ${own}`;
-  const stoppedBy =
-    failing?.ran?.end.stoppedBy ?? state.stop?.stoppedBy ?? "agent";
-  const counted = attempts.flatMap((one) => one.turns ?? []);
-  return {
-    stdout: streamsOf(attempts),
-    durationMs: attempts.reduce((total, one) => total + one.durationMs, 0),
-    turns: counted.length === 0 ? null : counted.reduce((a, b) => a + b, 0),
-    firstOutputMs: first?.firstOutputMs ?? null,
-    placedChanges: state.prior?.changes() ?? first?.placedChanges ?? null,
-    placed: state.prior?.placed ?? first?.placed,
-    homeSeed:
-      state.prior?.homeSeed ?? first?.homeSeed ?? new Map<string, string>(),
-    end: { stoppedBy, error, parsed: { ...parsed, error } },
-    ending: {
-      error,
-      stoppedBy,
-      agentEvents: decisive?.parsed.transcript.length ?? 0,
-      unfinished: decisive?.parsed.unfinished === true,
-      fault: decisive?.ran?.attempt.fault ?? null,
-      exec: decisive?.ran?.attempt.exec ?? {
-        kind: null,
-        exit: null,
-        signal: null,
-      },
-    },
-    userTurns: steps.map((step) => step.record),
-    turnChanges: steps.map((step) => step.changes),
-  };
 }
 
 /**

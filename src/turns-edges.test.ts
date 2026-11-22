@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import type { Check, Outcome } from "./checks/index.js";
 import claudeCode from "./harnesses/claude-code.js";
-import type { Harness } from "./harnesses/shared.js";
 import { session } from "./session.js";
 import { sandbox } from "./testing/sandbox.js";
 import { emptyParse, mergeTurns } from "./turn-merge.js";
@@ -30,16 +29,13 @@ function played(more: {
   onTimeout?: "score";
 }) {
   const box = sandbox();
-  const noSyntax = Object.fromEntries(
-    Object.entries(claudeCode).filter(([key]) => key !== "userInvocation"),
-  ) as unknown as Harness;
   const turns: Turn[] = [
     say("one"),
     more.invoke ? { invoke: { skill: "bug-fix" }, checks: CHECKS } : say("two"),
   ];
   return session(
     {
-      harness: more.invoke ? noSyntax : claudeCode,
+      harness: claudeCode,
       bin: String(box.env["SKILL_EVALS_BIN_CLAUDE_CODE"]),
       subject: null,
       prompt: "unused",
@@ -83,7 +79,14 @@ test("a check of a turn that a stored run has no record of scores 0 with the rea
     toolCalls: [],
     skillEvents: [],
     userTurns: [
-      { turn: 1, kind: "prompt" as const, skipped: null, finalText: "a" },
+      {
+        turn: 1,
+        kind: "prompt" as const,
+        skipped: null,
+        finalText: "a",
+        loaded: null,
+        sessionId: null,
+      },
     ],
   };
   // A stored run from before the turns had no changes: the slice shows none, and the turn still has its text.

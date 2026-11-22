@@ -89,23 +89,30 @@ function firstCall(
   return { at, call };
 }
 
+/** The calls that bound a `first_message`, and the run's number of the first call of the events. */
+interface Bound {
+  matcher: ToolMatcher;
+  callBase: number;
+}
+
 /**
  * Tests the bounded form of `first_message`.
  * @param events - The run's events.
  * @param first - The first non-empty text of the agent the check names, if any.
- * @param matcher - The calls that must not come before it.
+ * @param bound - The calls that must not come before it, and the run's number of the first call of `events`.
  * @returns That text alone, or why it cannot be tested: there is none, or it comes after the matcher's first call.
  */
 function boundedFirst(
   events: TranscriptEvent[],
   first: TranscriptEvent | undefined,
-  matcher: ToolMatcher,
+  bound: Bound,
 ): { events: TranscriptEvent[] } | { problem: string } {
   if (!first) return { problem: "no assistant text" };
+  const { matcher, callBase } = bound;
   const cut = firstCall(events, matcher);
   if (cut && events.indexOf(first) > cut.at) {
     return {
-      problem: `the first assistant text comes after the first call to ${describeMatcher(matcher)} (call #${String(cut.call)})\n${quoteEvent(first)}`,
+      problem: `the first assistant text comes after the first call to ${describeMatcher(matcher)} (call #${String(cut.call + callBase)})\n${quoteEvent(first)}`,
     };
   }
   return { events: [first] };
@@ -114,15 +121,14 @@ function boundedFirst(
 /**
  * Cuts the events a scope names.
  * @param events - The run's events.
- * @param scope - Which events to keep.
- * @param by - Whose first or last message the message scopes read; default: the main agent.
+ * @param cut - Which events to keep (`scope`), and whose first or last message the message scopes read (`by`; default: the main agent).
  * @returns The events, or the reason the scope holds none that a check can test.
  */
 function scoped(
   events: TranscriptEvent[],
-  scope: Scope,
-  by?: By,
+  cut: Cut,
 ): { events: TranscriptEvent[] } | { problem: string } {
+  const { scope, by } = cut;
   if (scope === "any") return { events };
   const texts = spoken(events, by);
   if (typeof scope === "string") {
@@ -130,18 +136,21 @@ function scoped(
     return one ? { events: [one] } : { problem: "no assistant text" };
   }
   if ("first_message" in scope)
-    return boundedFirst(events, texts[0], scope.before);
+    return boundedFirst(events, texts[0], {
+      matcher: scope.before,
+      callBase: cut.callBase ?? 0,
+    });
   const side = "before" in scope ? "before" : "after";
   const matcher = "before" in scope ? scope.before : scope.after;
-  const cut = firstCall(events, matcher);
-  if (!cut) {
+  const hit = firstCall(events, matcher);
+  if (!hit) {
     return {
       problem: `no call matches ${describeMatcher(matcher)}, so nothing is ${side} it`,
     };
   }
   return {
     events:
-      side === "before" ? events.slice(0, cut.at) : events.slice(cut.at + 1),
+      side === "before" ? events.slice(0, hit.at) : events.slice(hit.at + 1),
   };
 }
 
@@ -173,6 +182,8 @@ export interface Cut {
   where: Where;
   /** Whose events to keep, after the scope has cut them; the message scopes read the first or last text of these agents, and the main agent without `by`. */
   by?: By | undefined;
+  /** The run's number of the first call of `events`, so that a reason names a call as `show` does. Default: 0. */
+  callBase?: number | undefined;
 }
 
 /**
@@ -184,8 +195,8 @@ export interface Cut {
  *   the bounding call.
  */
 export function pieces(events: TranscriptEvent[], cut: Cut): Sliced {
-  const { scope, where, by } = cut;
-  const scopedEvents = scoped(events, scope, by);
+  const { where, by } = cut;
+  const scopedEvents = scoped(events, cut);
   if ("problem" in scopedEvents) return scopedEvents;
   const window =
     by === undefined

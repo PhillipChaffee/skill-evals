@@ -4,42 +4,14 @@ import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
 import { inputHash } from "./input-hash.js";
 import { caseHash } from "./run-key.js";
-import type { Sandbox } from "./testing/sandbox.js";
 import { sandbox } from "./testing/sandbox.js";
+import { CHECK, SECOND, failure, plant } from "./testing/turns-case.js";
 import { validate } from "./testing/schema-validator.js";
 import { caseSchema } from "./docs/schema.js";
 import { canonical, sha256 } from "./tree-hash.js";
 
-const CHECK = { type: "output_contains", text: "x" };
-const FILE = "cases/talk/case.json";
-const SECOND = "the second message\n";
 const INSIDE = "must stay inside the case";
 const CLAUDE_CODE = "claude-code";
-
-/**
- * Plants a case with two prompt files and the given case file.
- * @param box - The sandbox.
- * @param file - The keys of the case file; `checks` is added when absent.
- * @returns The cases directory.
- */
-function plant(box: Sandbox, file: Record<string, unknown>): string {
-  box.write("cases/talk/one.md", "the first message\n");
-  box.write("cases/talk/two.md", SECOND);
-  box.write(FILE, { checks: [CHECK], ...file });
-  return path.join(box.root, "cases");
-}
-
-const failure = (box: Sandbox, file: Record<string, unknown>): string => {
-  try {
-    loadCases(plant(box, file));
-  } catch (error) {
-    return String(error instanceof Error ? error.message : error).replaceAll(
-      box.root,
-      "ROOT",
-    );
-  }
-  return "";
-};
 
 test("prompt.md plus turns is a load error", () => {
   const box = sandbox();
@@ -174,9 +146,9 @@ test("a prompt file stays inside the case, is a file with text, and is not in gr
 
 test("a variant may override the turns, and needs exactly one prompt source", () => {
   const box = sandbox();
+  box.write("cases/talk/prompt.md", "the case prompt\n");
   const [plain, pushed] = loadCases(
     plant(box, {
-      turns: [{ prompt: "one.md" }],
       variants: [
         { id: "pushed", turns: [{ prompt: "one.md" }, { prompt: "two.md" }] },
         { id: "plain", prompt: "just one message" },
@@ -190,7 +162,6 @@ test("a variant may override the turns, and needs exactly one prompt source", ()
   expect(plain?.prompt).toBe("just one message");
   expect(
     failure(sandbox(), {
-      turns: [{ prompt: "one.md" }],
       variants: [{ id: "a", prompt: "x", turns: [{ prompt: "one.md" }] }],
     }),
   ).toContain('exactly one of "prompt", "promptAppend" and "turns"');

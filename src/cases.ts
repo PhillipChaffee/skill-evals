@@ -10,6 +10,7 @@ import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
+import { allChecks } from "./case-checks.js";
 import { CASE_KEYS } from "./case-keys.js";
 import { layersOf } from "./case-layers.js";
 import { limitsOf } from "./case-limits.js";
@@ -219,6 +220,24 @@ function requirePromptSource(
 }
 
 /**
+ * Reads the `checks` list of a case file. A case whose checks are all in its turns may leave the key out, which
+ * `loadCase` checks by looking at the whole case; a list that is given may not be empty.
+ * @param raw - The case file.
+ * @param file - The case file's name, for the message.
+ * @returns The list, empty when the key is left out of a case with `turns` or `variants`.
+ * @throws {UsageError} When the list is empty or is no list, or is missing from a case with neither `turns` nor `variants`.
+ */
+function listedChecks(raw: Record<string, unknown>, file: string): unknown[] {
+  const given = raw["checks"];
+  const open = raw["turns"] !== undefined || raw["variants"] !== undefined;
+  const checks = given ?? (open ? [] : null);
+  if (!Array.isArray(checks) || (given !== undefined && checks.length === 0)) {
+    throw new UsageError(`${file}: "checks" must be a non-empty array`);
+  }
+  return checks;
+}
+
+/**
  * Loads one case from its directory.
  * @param found - The case's id and its directory, which holds `prompt.md`, `case.json`, and an optional `workspace/`.
  * @param mode - Whether a key that the case file does not take is an error or is dropped with a warning.
@@ -236,10 +255,7 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
     hasTurns,
     hasVariants: raw?.["variants"] !== undefined,
   });
-  const checks = raw?.["checks"];
-  if (!Array.isArray(checks) || checks.length === 0) {
-    throw new UsageError(`${file}: "checks" must be a non-empty array`);
-  }
+  const checks = listedChecks(raw ?? {}, file);
   const at = { where: file, owner: "a case", siblings: raw ?? {} };
   checkSchemaKey(file, at.siblings);
   const extensions = extensionsOf(
@@ -278,11 +294,17 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
         mode,
       })
     : null;
-  return expand(
+  const made = expand(
     { id, extensions, shared, turns },
-    variants && readVariants(variants, prompt, { file, dir, mode }),
+    variants && readVariants(variants, prompt, { file, dir, mode, hasTurns }),
     prompt,
   );
+  if (made.some((one) => allChecks(one).length === 0)) {
+    throw new UsageError(
+      `${file}: a case needs at least one check, in "checks" or in a turn`,
+    );
+  }
+  return made;
 }
 
 /** What loading cases takes besides the directory. */

@@ -246,6 +246,16 @@ const quoteLine = (call: ToolCall, position: number): string =>
   ].join(" ");
 
 /**
+ * Names a call the way a reason quotes it, by its place in the whole run. In a turn's slice a call's position is its
+ * place among that turn's calls, but its `index` is its place in the run, which `show` and the quoted lines use.
+ * @param calls - The calls a check looks at.
+ * @param position - A position in `calls`.
+ * @returns The call's own `index` when it has one, else the position, as text.
+ */
+export const callNo = (calls: ToolCall[], position: number): string =>
+  String(calls[position]?.index ?? position);
+
+/**
  * Quotes the part of a run's call list that a reason is about.
  * @param calls - Every tool call of the run, in order.
  * @param around - The positions in `calls` that matter. Each is quoted with the call before it and the call after it.

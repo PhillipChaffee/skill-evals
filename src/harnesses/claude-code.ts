@@ -115,18 +115,14 @@ const claudeCode: Harness = {
     "multiTurn",
     "resume",
     "clear",
-    // Confirmed from the same help text: "Skills still resolve via /skill-name" (`--bare`) and
-    // `--disable-slash-commands` "Disable all skills and commands", so `/<skill> <args>` is the user's syntax.
-    "userInvoke",
+    // Not declared: `userInvoke`. `claude --help` says "Skills still resolve via /skill-name" (`--bare`), but whether a
+    // `/skill args` prompt in a `-p` process loads the skill is unconfirmed without a real model; Task 29 confirms it.
     // Not declared: `compact`. `claude --help` shows only `--autocompact` (the automatic window), no way to ask for a
     // compaction in a `-p` process. The stream's `compact_boundary` event is parsed, so a harness that reports one shows it.
   ]),
   status: "real-model",
   reportsCost: true,
   isRateLimit: looksRateLimited,
-
-  userInvocation: ({ skill, args }) =>
-    args === undefined || args === "" ? `/${skill}` : `/${skill} ${args}`,
 
   invocation({ subject, home, prompt, model, maxTurns, isolated, session }) {
     const configDir = path.join(home, ".claude");

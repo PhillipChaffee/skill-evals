@@ -146,7 +146,6 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "multiTurn",
         "resume",
         "clear",
-        "userInvoke",
       ],
     ],
     cursor: ["unverified", ["subagents"]],

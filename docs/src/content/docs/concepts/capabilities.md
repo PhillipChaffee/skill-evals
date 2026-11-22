@@ -87,7 +87,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | --------------- | ---- | ------------- | -------- | ---------- | ------- |
 | `subagents`     | no   | yes           | yes      | yes        | yes     |
 | `multiTurn`     | no   | yes           | no       | no         | no      |
-| `userInvoke`    | no   | yes           | no       | no         | no      |
+| `userInvoke`    | no   | no            | no       | no         | no      |
 | `toolOutputs`   | yes  | yes           | no       | yes        | yes     |
 | `assistantText` | yes  | yes           | no       | yes        | yes     |
 | `turnGrouping`  | yes  | yes           | no       | yes        | no      |

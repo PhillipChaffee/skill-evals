@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
 import { BLINDING, CASES, play, scores } from "./testing/target.js";
+import { installUserInvoking } from "./testing/user-invoke.js";
 
 test("pressure across turns: the prompts tell the agent nothing about being graded", () => {
   const [found] = loadCases(CASES, "pressure-across-turns");
@@ -46,6 +47,7 @@ test("pressure across turns: editing the suite fails the unchanged check", async
 });
 
 test("user-only skill: the user's own invocation, graded on its output", async () => {
+  installUserInvoking();
   const [found] = loadCases(CASES, "user-only-skill");
   expect(found?.turns?.[0]).toMatchObject({
     invoke: { skill: "release-notes", args: "v2.1" },
@@ -56,6 +58,7 @@ test("user-only skill: the user's own invocation, graded on its output", async (
 });
 
 test("a model self-invoking a user-only skill fails skill_not_loaded via skill_tool", async () => {
+  installUserInvoking();
   const invoked = await play("user-only-skill.self-invokes");
   expect(invoked.checks[2]).toMatchObject({
     type: "skill_not_loaded",

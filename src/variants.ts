@@ -122,6 +122,11 @@ function sourceOf(
       `${where}: a variant needs exactly one of "prompt", "promptAppend" and "turns"`,
     );
   }
+  if (at.hasTurns && raw["turns"] === undefined) {
+    throw new UsageError(
+      `${where}: the case has "turns", so a variant must give "turns" too; "${given[0] ?? ""}" would drop them and every check of a turn`,
+    );
+  }
   if (raw["turns"] !== undefined) {
     const turns = readTurns(read("turns") as Record<string, unknown>[], {
       file: where,
@@ -151,6 +156,8 @@ interface VariantAt {
   file: string;
   /** The case's directory, which a turn's prompt file is relative to. */
   dir: string;
+  /** Whether the case has its own `turns`, which a variant must then replace with `turns`. */
+  hasTurns: boolean;
   mode: Mode;
 }
 

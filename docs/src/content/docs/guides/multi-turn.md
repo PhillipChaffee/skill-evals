@@ -7,7 +7,7 @@ One prompt and one turn cannot say "the agent still runs the checks when the use
 
 ## Write the turns
 
-A case has a `prompt.md` or a `turns` list, never both. Each turn is one of three things:
+A case has a `prompt.md` or a `turns` list, never both. A case needs one check at least, and all of them may be in its turns: `checks` may then be left out. Each turn is one of three things:
 
 | Turn                                             | What the user does                                                                                      |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -15,7 +15,7 @@ A case has a `prompt.md` or a `turns` list, never both. Each turn is one of thre
 | `{ "invoke": { "skill": "<name>", "args": "…" }` | Types the harness's own command for a skill, such as `/release-notes v2.1` in Claude Code.              |
 | `{ "event": "compact" }`                         | A lifecycle event between messages: `compact`, `clear` or `resume`. The first turn may not be an event. |
 
-Every turn may also have `checks`. This is a complete case, in two turns:
+Every turn may also have `checks`, except a `clear` or `resume` turn, which sends nothing to look at. This is a complete case, in two turns:
 
 ```json
 {
@@ -51,7 +51,7 @@ Every turn may also have `checks`. This is a complete case, in two turns:
 
 The repository has this case in [`examples/cases/turns`](https://github.com/PhillipChaffee/skill-evals/tree/main/examples/cases/turns). A prompt file stays inside the case's directory: a path that leaves it, a link that leads out of it, and a file in `grader/` are load errors, as for the other files of a case. The files count in the hash that tells a later run whether the agent's input changed, so changing `push.md` makes `--resume` run the case again.
 
-A [variant](organise-a-suite.md#variants) may give its own `turns`, in place of the case's, to put the same fixture under another pressure. A variant gives exactly one of `prompt`, `promptAppend` and `turns`.
+A [variant](organise-a-suite.md#variants) may give its own `turns`, in place of the case's, to put the same fixture under another pressure. A variant gives exactly one of `prompt`, `promptAppend` and `turns`, and a variant of a case that has `turns` must give `turns`: a `prompt` there would drop the turns and every check of a turn, so it is a load error.
 
 ## How a run goes
 
@@ -70,6 +70,8 @@ A check at case level sees the whole session. A check in a turn sees that turn:
 - `file_changed`, `file_unchanged` and `files_changed_only` in a turn compare the workspace as turn N left it with the workspace as turn N−1 left it. The run takes a hash of every file after each turn, and keeps no copy of any file. The record's `turnChanges` lists what each turn created, modified and deleted. This sees a change that a shell command made, which no tool call names.
 - Every other file check, and every `command` check, sees the workspace as the last turn left it. A `command` check in a turn is therefore the same as one at case level.
 - A turn's checks may not be `judge` or `decision` checks, which read the whole run: put those at case level. A file-change check in a turn may not use `"root": "home"`.
+
+A reason in a turn names a call by its number in the whole run, the number `show` prints, and a turn that was not sent says what stopped the run, such as `turn 1 stopped at maxTurns`. A process that is resumed with one session id and reports another invalidates the run. Under `--isolated`, the report of every process is checked, not only the first's.
 
 The report names the checks of a turn as `turn N`, and each result in `results.json` has `turn`.
 
@@ -103,4 +105,4 @@ A case that needs more than a harness declares is not applicable there, and neve
 | An `invoke` turn                       | `userInvoke`                   |
 | A `compact`, `clear` or `resume` event | `compact`, `clear` or `resume` |
 
-Only Claude Code declares `multiTurn`, `userInvoke`, `clear` and `resume`, because its `--help` confirms the continuation flag (`-r, --resume`) and the `/skill` syntax. No harness declares `compact`: `claude --help` has no way to ask for a compaction in a print-mode process, and no other CLI was installed to read. [Harnesses](../agents/harnesses.md) lists what each adapter declares and [Capabilities](../concepts/capabilities.md) says what each means.
+Only Claude Code declares `multiTurn`, `clear` and `resume`, because its `--help` confirms the continuation flag (`-r, --resume`). No harness declares `userInvoke` yet: the `/skill` syntax is in the help text, but whether a `/skill` prompt in a print-mode process loads the skill needs a real model to confirm. No harness declares `compact`: `claude --help` has no way to ask for a compaction in a print-mode process, and no other CLI was installed to read. [Harnesses](../agents/harnesses.md) lists what each adapter declares and [Capabilities](../concepts/capabilities.md) says what each means.

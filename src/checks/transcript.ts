@@ -1,6 +1,6 @@
 import type { Capability } from "../capabilities.js";
 import { valueOf } from "./defaults.js";
-import { tester } from "../matchers.js";
+import { callNo, tester } from "../matchers.js";
 import { resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { UsageError } from "../scope.js";
@@ -76,6 +76,7 @@ function tested(
     scope: scopeOf(check),
     where: whereOf(check),
     by: check.by,
+    callBase: outcome.turn?.callBase ?? 0,
   });
   if ("problem" in cut) return cut;
   const fits = tester(check.pattern, check.flags);
@@ -109,6 +110,7 @@ function silentCall(check: RuledCheck, outcome: Outcome): number {
     scope: scopeOf(check),
     where: "all",
     by: check.by,
+    callBase: outcome.turn?.callBase ?? 0,
   });
   if ("problem" in cut) return -1;
   const results = resultsByCall(outcome.transcript);
@@ -157,7 +159,7 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   if (found.hits.length === 0 && silent >= 0) {
     return {
       score: 0,
-      reason: `call #${String(silent)} has no output, so it cannot be shown to lack the pattern`,
+      reason: `call #${callNo(outcome.toolCalls, silent)} has no output, so it cannot be shown to lack the pattern`,
     };
   }
   if (found.hits.length === 0) return PASS;

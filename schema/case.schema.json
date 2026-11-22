@@ -4,7 +4,6 @@
   "title": "skill-evals case",
   "description": "The case.json of a skill-evals case: the checks that a run of its prompt must pass.",
   "type": "object",
-  "required": ["checks"],
   "properties": {
     "$schema": {
       "type": "string",
@@ -204,7 +203,7 @@
     },
     "checks": {
       "title": "checks",
-      "description": "A non-empty list of checks.",
+      "description": "A non-empty list of checks. A case with `turns` may leave it out when a turn has checks.",
       "type": "array",
       "minItems": 1,
       "items": {
@@ -253,6 +252,11 @@
       "items": { "$ref": "#/$defs/variant" }
     }
   },
+  "anyOf": [
+    { "required": ["checks"] },
+    { "required": ["turns"] },
+    { "required": ["variants"] }
+  ],
   "dependentRequired": { "harnesses": ["note"] },
   "patternProperties": { "^x-": {} },
   "additionalProperties": false,

@@ -178,7 +178,7 @@ test("two researchers in one turn, then one synthesizer, none after", async () =
   const late = await scored([...TWO_THEN_ONE, agent("researcher")], checks);
   expect(late.map((one) => one.score)).toEqual([0, 1, 0]);
   expect(late[0]?.reason).toMatch(
-    /not all issued in one turn: call #3 is in turn 3, call #0 in turn 1/,
+    /not all issued in one assistant turn: call #3 is in assistant turn 3, call #0 in assistant turn 1/,
   );
   expect(late[0]?.reason).toContain("#3 t3 main subagent Agent");
   expect(late[2]?.reason).toMatch(
@@ -189,7 +189,9 @@ test("two researchers in one turn, then one synthesizer, none after", async () =
     checks,
   );
   expect(apart[0]?.score).toBe(0);
-  expect(apart[0]?.reason).toMatch(/not all issued in one turn: call #1/);
+  expect(apart[0]?.reason).toMatch(
+    /not all issued in one assistant turn: call #1/,
+  );
   const short = await scored([agent("researcher")], checks);
   expect(short[0]?.reason).toMatch(/1 matching call, min 2/);
 });
@@ -204,7 +206,9 @@ test("a straggler researcher outside the launch turn fails sameTurn with min 2",
     [{ type: "tool_called", ...RESEARCHER, min: 2, sameTurn: true }],
   );
   expect(verdict?.score).toBe(0);
-  expect(verdict?.reason).toMatch(/call #2 is in turn 2, call #0 in turn 1/);
+  expect(verdict?.reason).toMatch(
+    /call #2 is in assistant turn 2, call #0 in assistant turn 1/,
+  );
   expect(verdict?.reason).toContain("#2 t2 main subagent Agent");
 });
 

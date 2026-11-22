@@ -6,56 +6,22 @@ import type { Case } from "./cases.js";
 import { loadCases } from "./cases.js";
 import claudeCode from "./harnesses/claude-code.js";
 import type { Harness } from "./harnesses/shared.js";
-import { session } from "./session.js";
 import { script } from "./testing/plant.js";
 import { exec } from "./testing/runs.js";
+import { installUserInvoking, userInvoking } from "./testing/user-invoke.js";
 import type { Sandbox } from "./testing/sandbox.js";
-import { readResults, sandbox } from "./testing/sandbox.js";
+import { sandbox } from "./testing/sandbox.js";
+import {
+  compacting,
+  planted,
+  played,
+  say,
+  scored,
+} from "./testing/turns-run.js";
 import type { Turn } from "./turn-spec.js";
 
-const SHELL_PATH = "/usr/local/bin:/usr/bin:/bin";
-const SEEN = { type: "output_matches", pattern: "." };
-
-/**
- * Plants a case whose turns are the given ones, with a prompt file for each prompt.
- * @param box - The sandbox.
- * @param turns - The `turns` of the case file.
- * @param more - More keys of the case file.
- * @returns The cases directory.
- */
-function planted(
-  box: Sandbox,
-  turns: unknown[],
-  more: Record<string, unknown> = {},
-): string {
-  box.write("cases/talk/one.md", "do talk, first\n");
-  box.write("cases/talk/two.md", "the follow-up\n");
-  box.write("cases/talk/case.json", { checks: [SEEN], turns, ...more });
-  return path.join(box.root, "cases");
-}
-
-/**
- * Scores the cases of a sandbox with the fake harness, on Claude Code and optionally Pi.
- * @param box - The sandbox.
- * @param harnesses - The harness ids.
- * @returns The command's result and `results.json`.
- */
-async function scored(box: Sandbox, harnesses = "claude-code") {
-  const out = path.join(box.root, "results");
-  const ran = await box.cli(
-    [
-      ...["score", "--subject", "none", "--reps", "1", "--out", out],
-      ...["--cases", path.join(box.root, "cases"), "--harness", harnesses],
-    ],
-    {
-      SKILL_EVALS_BIN_PI: box.pi,
-      PATH: `${String(box.env["PATH"])}:${SHELL_PATH}`,
-    },
-  );
-  return { ran, results: readResults(out) };
-}
-
 test("an invoke turn reaches the harness in its user syntax", async () => {
+  installUserInvoking();
   const box = sandbox();
   planted(box, [
     { prompt: "one.md" },
@@ -74,10 +40,10 @@ test("an invoke turn reaches the harness in its user syntax", async () => {
     "invoke",
     "invoke",
   ]);
-  expect(claudeCode.userInvocation?.({ skill: "a", args: "b c" })).toBe(
+  expect(userInvoking.userInvocation?.({ skill: "a", args: "b c" })).toBe(
     "/a b c",
   );
-  expect(claudeCode.userInvocation?.({ skill: "a", args: "" })).toBe("/a");
+  expect(userInvoking.userInvocation?.({ skill: "a", args: "" })).toBe("/a");
 });
 
 test("a multi-turn case on a harness without multiTurn is not applicable", async () => {
@@ -121,7 +87,7 @@ test("what a case's turns need is multiTurn, userInvoke and the events", () => {
       { event: "compact" },
       { invoke: { skill: "x" } },
     ]),
-  ).toEqual(["compact"]);
+  ).toEqual(["userInvoke", "compact"]);
   const pi = (turns: unknown[]) => {
     const box = sandbox();
     planted(box, turns);
@@ -134,46 +100,6 @@ test("what a case's turns need is multiTurn, userInvoke and the events", () => {
   expect(
     pi([{ prompt: "one.md" }, { invoke: { skill: "x" } }, { event: "resume" }]),
   ).toEqual(["multiTurn", "userInvoke", "resume"]);
-});
-
-// Claude Code has no confirmed way to compact in `-p`, so it does not declare `compact`. This harness does, by sending
-// `/compact` in a resumed session, which the fake answers with a compact_boundary event.
-const compacting: Harness = {
-  ...claudeCode,
-  capabilities: new Set([...claudeCode.capabilities, "compact"]),
-  invocation: (input) =>
-    claudeCode.invocation({
-      ...input,
-      prompt: input.turn.event === "compact" ? "/compact" : input.prompt,
-    }),
-};
-
-/**
- * Runs turns through the session runner with the fake harness behind `harness`.
- * @param box - The sandbox, whose fake scripts are used.
- * @param harness - The adapter that parses the stream and builds the command line.
- * @param turns - The turns of the case.
- * @returns What the session produced.
- */
-function played(box: Sandbox, harness: Harness, turns: Turn[]) {
-  return session(
-    {
-      harness,
-      bin: String(box.env["SKILL_EVALS_BIN_CLAUDE_CODE"]),
-      subject: null,
-      prompt: "unused",
-      turns,
-      timeoutSeconds: 30,
-      pass: [],
-    },
-    (result) => result,
-  );
-}
-
-const say = (file: string, text: string): Turn => ({
-  prompt: text,
-  file,
-  checks: [],
 });
 
 test("a compact event between turns", async () => {
@@ -308,7 +234,7 @@ test("a stopped turn skips the rest", async () => {
   // The run is scored, and the check of the turn that was never sent scores 0 and says why.
   expect(record?.checks.map(({ score }) => score)).toEqual([1, 0]);
   expect(record?.checks[1]?.reason).toBe(
-    "turn 2 was not run: the run was stopped before it",
+    "turn 2 was not run: turn 1 stopped at maxTurns",
   );
 });
 
