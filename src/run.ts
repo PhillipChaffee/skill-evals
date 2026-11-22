@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { commandContext } from "./command.js";
+import type { Check } from "./checks/index.js";
 import { isDecision, isJudged } from "./checks/index.js";
 import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
@@ -26,6 +27,9 @@ import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
+import type { WorkspaceArchive } from "./run-archive.js";
+import { keptArchive } from "./run-archive.js";
+import { inputHash } from "./input-hash.js";
 import { failedCalls, writeTranscript } from "./transcript.js";
 
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
@@ -48,6 +52,10 @@ export interface RunRecord extends Usage, LimitFields {
   skillEvents: SkillEvent[];
   /** The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records. */
   transcriptFile?: string | null;
+  /** The sha256 of what the agent saw: the prompt, files, setup, harness, model, `maxTurns` and env names; not the checks. Absent from earlier records. */
+  inputHash?: string;
+  /** The archive of the run's workspace, seed, remotes and home (`--keep-workspaces`); null when none was kept. Absent from earlier records. */
+  workspaceArchive?: WorkspaceArchive | null;
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
   /** What the harness reported as loaded at startup; a kind it does not report is null. */
@@ -105,6 +113,17 @@ export const modesOf = (options: {
 });
 
 /**
+ * Names the kind of a check for the reason that it has no score.
+ * @param check - A check without a score.
+ * @returns "decision" or "judged" for a model's check, "command" for a command, else "file".
+ */
+function checkKind(check: Check): string {
+  if (isDecision(check)) return "decision";
+  if (isJudged(check)) return "judged";
+  return check.type === "command" ? "command" : "file";
+}
+
+/**
  * Decides whether a run counts.
  * @param record - The parts of a run record that can disqualify it.
  * @returns Why the record must not be counted, or null when it is a valid run.
@@ -134,12 +153,7 @@ export function invalidReason(
   if (record.isolated && record.judgeProblem) return record.judgeProblem;
   const unscored = record.checks.find((check) => check.score === null);
   if (unscored) {
-    const kind = isDecision(unscored)
-      ? "decision"
-      : isJudged(unscored)
-        ? "judged"
-        : "command";
-    return `a ${kind} check has no score: ${String(unscored.reason)}`;
+    return `a ${checkKind(unscored)} check has no score: ${String(unscored.reason)}`;
   }
   return null;
 }
@@ -174,6 +188,19 @@ const judgeUsage = (replies: Usage[], hits: number): RunRecord["judge"] =>
     : null;
 
 /**
+ * Names the files of a run.
+ * @param plan - The run.
+ * @returns Its path without an extension, under the output directory.
+ */
+const stemOf = (plan: RunPlan): string =>
+  path.join(
+    plan.outDir,
+    plan.harness.id,
+    plan.caseDef.id,
+    `${plan.subject.label}${String(plan.rep)}`,
+  );
+
+/**
  * Writes the run's stream, final text and transcript under the output directory.
  * @param plan - The run that was made.
  * @param ran - What the session produced.
@@ -182,14 +209,8 @@ const judgeUsage = (replies: Usage[], hits: number): RunRecord["judge"] =>
 function writeStreams(
   plan: RunPlan,
   ran: SessionResult,
-): { absolute: string; relative: string } {
-  const { harness, subject, caseDef, rep } = plan;
-  const stem = path.join(
-    plan.outDir,
-    harness.id,
-    caseDef.id,
-    `${subject.label}${String(rep)}`,
-  );
+): { absolute: string; relative: string; stem: string } {
+  const stem = stemOf(plan);
   fs.mkdirSync(path.dirname(stem), { recursive: true });
   fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
   fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
@@ -197,6 +218,7 @@ function writeStreams(
   return {
     absolute,
     relative: path.relative(path.resolve(plan.outDir), absolute),
+    stem,
   };
 }
 
@@ -249,7 +271,7 @@ function guardedBy(plan: RunPlan, agentCost: number | null): RunPlan {
  * @param agentCost - What the agent cost; null when the harness stated none.
  * @returns The record, with a score unless the run is invalid, and the spend.
  */
-function assemble(
+export function assemble(
   base: Omit<
     RunRecord,
     "judgeProblem" | "checks" | "score" | "judge" | "decision"
@@ -302,6 +324,7 @@ async function record(
     skillsLoaded: loaded,
     skillEvents: events,
     transcriptFile: transcript.relative,
+    inputHash: inputHash(caseDef, { harness: harness.id, model: plan.model }),
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
@@ -328,7 +351,9 @@ async function record(
     },
     invalidReason({ ...base, judgeProblem: null, checks: [] }) === null,
   );
-  return assemble(base, scored, parsed.costUsd);
+  const kept = keptArchive(plan, ran, transcript.stem);
+  const archived = kept === null ? {} : { workspaceArchive: kept };
+  return assemble({ ...base, ...archived }, scored, parsed.costUsd);
 }
 
 /** One attempt at a run: its record, and whether the failure that it shows is worth another attempt. */
@@ -368,6 +393,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         layers: caseDef,
         withhold: withheld(plan),
         pass: plan.pass,
+        keepSeed: plan.keepWorkspaces,
       },
       async (ran) => {
         const made = await record(plan, ran, copy);

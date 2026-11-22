@@ -154,6 +154,11 @@
       "description": "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
       "type": "boolean"
     },
+    "keepWorkspaces": {
+      "title": "keepWorkspaces",
+      "description": "After a run's checks, archive its workspace, the seed it started from, its remote directory and its throwaway home as <run>.workspace.tar in the output directory, with the system tar. The harness's login files are left out of the home, and the grader's copy is never in it. results.json records each archive as workspaceArchive. rejudge reads the archive to score the checks that need files again. Needs tar on PATH.",
+      "type": "boolean"
+    },
     "env": {
       "title": "env",
       "description": "Names of environment variables the harness gets besides the allowlist. An exact variable name: not empty, without `=`, not `_`, and not starting with `SKILL_EVALS_` or `npm_`. Anything else is an error.",

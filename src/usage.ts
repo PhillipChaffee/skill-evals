@@ -14,6 +14,7 @@ export type Options = Omit<
     b?: string;
     targets?: boolean;
     dryRun?: boolean;
+    strict?: boolean;
   };
 
 /** What the help text and the docs say about a command. */
@@ -22,6 +23,8 @@ export interface CommandDoc {
   description: string;
   /** The flags it takes. */
   flags: Flag[];
+  /** What the command takes besides flags, in order, as the usage line writes it: `["a", "b"]` for `<a> <b>`. */
+  positionals?: string[];
 }
 
 /**
@@ -120,11 +123,14 @@ export function commandUsage(
   const command = commands[name];
   const flags = command?.flags ?? [];
   const syntax = pad(flags.map(flagSyntax));
+  const taking = (command?.positionals ?? [])
+    .map((one) => ` <${one}>`)
+    .join("");
   const defaultOf = (flag: Flag): string => {
     const spec: FlagSpec = FLAGS[flag];
     return spec.defaultIn?.[name] ?? spec.default;
   };
-  return `Usage: skill-evals ${name} [options]
+  return `Usage: skill-evals ${name}${taking} [options]
 
 ${command?.description ?? ""}
 

@@ -171,7 +171,7 @@ const PERMISSION_BITS = 0o7777;
  * @param dir - The tree.
  * @param writable - True to let the owner write again, so that the tree can be removed.
  */
-function setWritable(dir: string, writable: boolean): void {
+export function setWritable(dir: string, writable: boolean): void {
   const change = (entry: string): void => {
     const mode = fs.lstatSync(entry).mode & PERMISSION_BITS;
     fs.chmodSync(entry, writable ? mode | OWNER_WRITE : mode & ~WRITE_BITS);

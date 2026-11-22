@@ -40,6 +40,8 @@ export interface SessionInput {
   pass?: string[] | undefined;
   /** Variables a case sets for the agent, with their values. They reach the agent's process only. */
   env?: Record<string, string> | undefined;
+  /** Take the seed copy of the workspace even when the case has no `command` check, so that the run can be archived. */
+  keepSeed?: boolean | undefined;
 }
 
 /** What a session produced, seen while its workspace still exists. */
@@ -71,7 +73,7 @@ export interface SessionResult {
   homeSeed: Snapshot;
   /** Where the adapter placed each skill: skill name to directory; absent when it placed none. */
   placed: Record<string, string> | undefined;
-  /** The workspace as the copy left it, kept as a directory; null unless the case has a command check. */
+  /** The workspace as the copy left it, kept as a directory; null unless the case has a command check or the run is kept. */
   seedDir: string | null;
   /** The run's directory for bare remotes and linked worktrees, which exists until the callback returns; null without a case. */
   remoteDir: string | null;
@@ -332,6 +334,22 @@ const inputOf = (
 });
 
 /**
+ * Builds the workspace the case describes. Setup runs before the login files are in the home, so no step can read them.
+ * @param run - The case's layers, and whether the run is kept.
+ * @param dirs - The run's empty workspace and throwaway home.
+ * @param dirs.workspace - The directory that the case's files are copied into.
+ * @param dirs.home - The throwaway home that the setup steps get as `HOME`.
+ * @returns The prepared run; null when the session has no case.
+ */
+const prepareOf = (
+  run: SessionInput,
+  dirs: { workspace: string; home: string },
+): Promise<PreparedRun | null> =>
+  run.layers
+    ? prepareRun(run.layers, dirs, { keepSeed: run.keepSeed ?? false })
+    : Promise.resolve(null);
+
+/**
  * Runs one prompt in one harness, in a fresh home and workspace that are removed afterwards.
  * @param run - The harness, the prompt, and what to load.
  * @param use - Reads the result while the workspace still exists.
@@ -346,13 +364,10 @@ export async function session<T>(
   const workspace = tempDir("proj-");
   let prepared: PreparedRun | null = null;
   try {
-    // Setup runs before the login files are in the home, so no step can read them.
-    prepared = run.layers
-      ? await prepareRun(run.layers, {
-          workspace: workspace.dir,
-          home: home.dir,
-        })
-      : null;
+    prepared = await prepareOf(run, {
+      workspace: workspace.dir,
+      home: home.dir,
+    });
     const seed = prepared?.seed ?? snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
     const input = inputOf(run, home.dir, workspace.dir);

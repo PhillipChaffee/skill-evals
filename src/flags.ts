@@ -238,6 +238,14 @@ export const FLAGS = {
       "Start the harness with nothing loaded but the subject, and mark a run invalid when the harness reports anything else as loaded. Only harnesses that declare the isolated capability take it.",
     default: "off: the harness loads what its settings say",
   },
+  "keep-workspaces": {
+    as: "keepWorkspaces",
+    kind: "switch",
+    value: "",
+    description:
+      "After a run's checks, archive its workspace, the seed it started from, its remote directory and its throwaway home as <run>.workspace.tar in the output directory, with the system tar. The harness's login files are left out of the home, and the grader's copy is never in it. results.json records each archive as workspaceArchive. rejudge reads the archive to score the checks that need files again. Needs tar on PATH.",
+    default: "off: no archive",
+  },
   out: {
     as: "outDir",
     value: "dir",
@@ -250,6 +258,13 @@ export const FLAGS = {
     description:
       "Continue the earlier command whose output directory this is. It implies --out and must name the same directory as --out when both are given. A run whose key matches a valid record in results.jsonl is not repeated; every other run is made and added. It also turns the judge cache on.",
     default: "none: a fresh run",
+  },
+  strict: {
+    kind: "switch",
+    value: "",
+    description:
+      "Turn any warning at the top of the diff into exit code 2. Without it diff informs and exits 0.",
+    default: "off",
   },
   "dry-run": {
     as: "dryRun",

@@ -31,8 +31,8 @@ import type { Partition } from "./applicability.js";
 
 /** What a finished evaluation is summed up from. */
 export interface Finished {
-  subjects: Subject[];
-  selection: { chosen: Located[]; reason: string };
+  subjects: SubjectSummary[];
+  selection: { chosen: { harness: { id: string } }[]; reason: string };
   judgeHarness: Located | undefined;
   judgeModel: string | undefined;
   judgeApi: JudgeApi | null;
@@ -49,6 +49,8 @@ export interface Finished {
   records: RunRecord[];
   sourceChanged: string[];
   partial: Results["partial"];
+  /** Who scored the judged checks, in words; absent: `judgeText` says it from the judge fields. */
+  judgeLabel?: string;
 }
 
 /**
@@ -56,7 +58,7 @@ export interface Finished {
  * @param subject - A resolved subject.
  * @returns Its label, spec, kind, directory, skills and commit.
  */
-const summaryOfSubject = (subject: Subject): SubjectSummary => ({
+const summaryOfSubject = (subject: SubjectSummary): SubjectSummary => ({
   label: subject.label,
   spec: subject.spec,
   kind: subject.kind,
@@ -115,7 +117,9 @@ const applicableIds = (parts: Partition): Record<string, string[]> =>
  * @param finished - The runs and what they were made with.
  * @returns The harness or API, and its model.
  */
-function judgeText(finished: Finished): string {
+export function judgeText(
+  finished: Pick<Finished, "judgeApi" | "judgeHarness" | "judgeModel">,
+): string {
   const who = finished.judgeApi
     ? `the ${finished.judgeApi.kind} API`
     : (finished.judgeHarness?.harness.id ?? "the harness under test");
@@ -174,7 +178,7 @@ export function summarize(finished: Finished): Results {
     harnesses,
     harnessReason: selection.reason,
     model: model ?? null,
-    judge: judgeText(finished),
+    judge: finished.judgeLabel ?? judgeText(finished),
     decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
     caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
@@ -270,7 +274,10 @@ export function writeLast(
  */
 export function finalWrite(
   store: Store,
-  finished: Omit<Finished, "records" | "sourceChanged" | "partial">,
+  finished: Omit<
+    Finished,
+    "records" | "sourceChanged" | "partial" | "subjects"
+  > & { subjects: Subject[] },
   ran: {
     records: RunRecord[];
     stopped: StopReason | null;

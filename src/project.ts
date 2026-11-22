@@ -76,6 +76,7 @@ export const CONFIG_KEYS: Record<
   maxJudgedWeightShare: "number",
   lenient: "boolean",
   isolated: "boolean",
+  keepWorkspaces: "boolean",
   env: "string[]",
   subjectExclude: "string[]",
 };
@@ -125,6 +126,8 @@ export interface Config {
   lenient?: boolean;
   /** Start every run with nothing loaded but the subject, and invalidate a run that loaded anything else. */
   isolated?: boolean;
+  /** Archive each run's workspace, seed, remotes and home, less the login files, next to its other files. Default: false. */
+  keepWorkspaces?: boolean;
   /** Exact names of variables of this process that the harness gets besides the allowlist. */
   env?: string[];
   /** Globs, relative to the subject, of paths that a run never gets: they are left out of its copy. */

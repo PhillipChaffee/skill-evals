@@ -101,6 +101,8 @@ async function runSteps(
  * @param dirs - The run's empty workspace and its throwaway home.
  * @param dirs.workspace - The directory the case's files are copied into and the steps run in.
  * @param dirs.home - The home, which the steps get as `HOME`.
+ * @param options - How the run is kept.
+ * @param options.keepSeed - Also take the seed copy when the case has no `command` check, for `--keep-workspaces`.
  * @returns The seed, the copies for command checks, the remote directory, and why setup failed if it did. The caller
  *   calls `dispose` when the run's checks are done.
  * @throws {Error} When a file cannot be copied; the remote directory is removed first.
@@ -108,6 +110,7 @@ async function runSteps(
 export async function prepareRun(
   caseDef: Layers,
   dirs: { workspace: string; home: string },
+  options: { keepSeed?: boolean } = {},
 ): Promise<PreparedRun> {
   const remote = tempDir(REMOTE_PREFIX);
   const fixture = caseDef.fixtureDir
@@ -138,7 +141,9 @@ export async function prepareRun(
     });
     fixture?.dispose();
     const wantsCopies =
-      failure === null && caseDef.checks.some((one) => one.type === "command");
+      failure === null &&
+      (options.keepSeed === true ||
+        caseDef.checks.some((one) => one.type === "command"));
     copies = wantsCopies
       ? copiesForCommands(dirs.workspace, caseDef.graderDir)
       : null;

@@ -1,12 +1,9 @@
-import fs from "node:fs";
 import type { ParseArgsOptionDescriptor } from "node:util";
 import { parseArgs } from "node:util";
-import { HARNESSES, findBin } from "./harnesses/index.js";
 import { check } from "./probe.js";
 import type { Project } from "./project.js";
-import { findProject, withConfig } from "./project.js";
-import { renderCoverage } from "./report/markdown.js";
-import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
+import { findProject } from "./project.js";
+import { splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
 import { EXIT } from "./exit-codes.js";
 import { failed } from "./fatal.js";
@@ -15,54 +12,12 @@ import { FLAGS } from "./flags.js";
 import type { CommandDoc, Options } from "./usage.js";
 import { commandUsage, commandsTaking, usageText } from "./usage.js";
 import { calibrate } from "./commands/calibrate.js";
+import { diff } from "./commands/diff.js";
+import { list } from "./commands/list.js";
+import { rejudge } from "./commands/rejudge.js";
 import { plan } from "./commands/plan.js";
 import { suite } from "./commands/suite.js";
 import { validate } from "./commands/validate.js";
-
-/**
- * Prints the harnesses in default-preference order, each with where it is installed, and the cases.
- * @param given - The options of the command line.
- * @param project - Where the config file and the default cases directory are.
- * @returns The exit code, always 0: a missing cases directory is a line of the listing.
- */
-function list(given: Options, project: Project): number {
-  const options = withConfig(project, given);
-  const installed = HARNESSES.map((harness) => ({
-    harness,
-    bin: findBin(harness),
-  }));
-  const first = installed.find((entry) => entry.bin);
-  const chosen = fs.existsSync(options.cases)
-    ? loadSelection(options.cases, selectionOf(options), {
-        lenient: options.lenient ?? false,
-      })
-    : null;
-  const cases = chosen
-    ? [
-        ...chosen.map(
-          (caseDef) =>
-            `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
-        ),
-        "",
-        `${String(chosen.length)} cases selected`,
-        ...(options.targets ? ["", ...renderCoverage(coverageOf(chosen))] : []),
-      ]
-    : ["- none: the directory does not exist"];
-  console.log(
-    [
-      "Harnesses, in default-preference order:",
-      ...installed.map(
-        ({ harness, bin }) =>
-          `- ${harness.id}: ${bin ? `installed (${bin})` : `not installed ("${harness.bin}" not found)`}`,
-      ),
-      `Default harness: ${first ? first.harness.id : "none installed"}`,
-      "",
-      `Cases in ${options.cases}:`,
-      ...cases,
-    ].join("\n"),
-  );
-  return 0;
-}
 
 const SUITE_FLAGS: Flag[] = [
   "harness",
@@ -91,6 +46,7 @@ const SUITE_FLAGS: Flag[] = [
   "decision-timeout",
   "lenient",
   "isolated",
+  "keep-workspaces",
   "out",
   "resume",
   "dry-run",
@@ -101,7 +57,11 @@ const COMPARE_FLAGS: Flag[] = ["min-delta", "noise", "seed"];
 
 /** A command: what it does with its options, the flags it takes, and what the help text says about it. */
 interface Command extends CommandDoc {
-  handler: (options: Options, project: Project) => number | Promise<number>;
+  handler: (
+    options: Options,
+    project: Project,
+    args: string[],
+  ) => number | Promise<number>;
 }
 
 // Every command. The help text and the docs are written from this table and from FLAGS.
@@ -162,6 +122,27 @@ export const COMMANDS: Record<string, Command> = {
       "not-tag",
       "heldout",
     ],
+  },
+  rejudge: {
+    description:
+      "rejudge <out dir>: score the runs of an earlier command again, against the cases as they are now, without starting the agent. It reads the directory under its lock and never changes its results.json or results.jsonl: it writes results.rejudged.json beside them and prints the report, or the full set of files into --out. Judge answers come from the judge cache of the directory. A run whose prompt, files or setup changed is not re-scored; a run without a workspace archive (--keep-workspaces) keeps the old score of each check that needs files.",
+    handler: rejudge,
+    positionals: ["out dir"],
+    flags: [
+      "cases",
+      "case",
+      "judge-model",
+      "judge-api",
+      "judge-harness",
+      "out",
+    ],
+  },
+  diff: {
+    description:
+      "diff <a> <b>: compare two sets of results, each an output directory or a results.json: the score change of each case with its run counts, the checks that started or stopped failing, and the change in cost and duration. A warning block comes first when the models, harnesses, tool version or any case differ. It informs and exits 0; --strict turns a warning into exit 2.",
+    handler: diff,
+    positionals: ["a", "b"],
+    flags: ["strict"],
   },
   list: {
     description:
@@ -225,6 +206,7 @@ function parsed(name: string, command: Command, args: string[]) {
   try {
     return parseArgs({
       args,
+      allowPositionals: true,
       options: Object.fromEntries(
         command.flags.map((flag) => {
           const spec: FlagSpec = FLAGS[flag];
@@ -232,7 +214,10 @@ function parsed(name: string, command: Command, args: string[]) {
           return [flag, { type: "string", multiple: spec.kind === "list" }];
         }),
       ) as Record<string, ParseArgsOptionDescriptor>,
-    }) as { values: Record<string, string | boolean | (string | boolean)[]> };
+    }) as {
+      values: Record<string, string | boolean | (string | boolean)[]>;
+      positionals: string[];
+    };
   } catch (error) {
     const flag = /Unknown option '--([^']+)'/.exec(String(error))?.[1];
     if (flag === undefined || !Object.hasOwn(FLAGS, flag)) throw error;
@@ -244,21 +229,39 @@ function parsed(name: string, command: Command, args: string[]) {
 }
 
 /**
- * Reads the flags of a command.
+ * Reads the flags and the arguments of a command.
  * @param name - The command's name.
- * @param command - The command, which names the flags it takes.
+ * @param command - The command, which names the flags and the arguments it takes.
  * @param args - The command line after the command's name.
- * @returns The options that are set, each under the name the code uses for it.
+ * @returns The options that are set, each under the name the code uses for it, and the arguments.
  * @throws {TypeError} With a code that starts with `ERR_PARSE_ARGS`, for a flag the command does not take.
+ * @throws {UsageError} When the number of arguments is not the number the command takes.
  */
-function readOptions(name: string, command: Command, args: string[]): Options {
-  const { values } = parsed(name, command, args);
-  return Object.fromEntries(
-    Object.entries(values).map(([flag, given]) => {
-      const spec: FlagSpec = FLAGS[flag as Flag];
-      return [spec.as ?? flag, readFlag(flag, spec, given)];
-    }),
-  );
+function readOptions(
+  name: string,
+  command: Command,
+  args: string[],
+): { options: Options; positionals: string[] } {
+  const { values, positionals } = parsed(name, command, args);
+  const takes = command.positionals ?? [];
+  if (positionals.length !== takes.length) {
+    const wanted =
+      takes.length === 0
+        ? "no arguments"
+        : `exactly ${takes.map((one) => `<${one}>`).join(" ")}`;
+    throw new UsageError(
+      `${name} takes ${wanted}, not ${String(positionals.length)} arguments`,
+    );
+  }
+  return {
+    positionals,
+    options: Object.fromEntries(
+      Object.entries(values).map(([flag, given]) => {
+        const spec: FlagSpec = FLAGS[flag as Flag];
+        return [spec.as ?? flag, readFlag(flag, spec, given)];
+      }),
+    ),
+  };
 }
 
 /**
@@ -310,8 +313,12 @@ export async function main(argv: string[]): Promise<number> {
       const problem = name ? `unknown command "${name}"` : "missing command";
       throw new UsageError(`${problem}\n\n${USAGE}`);
     }
-    const options = readOptions(name ?? "", command, args);
-    return await command.handler(options, findProject(process.cwd()));
+    const { options, positionals } = readOptions(name ?? "", command, args);
+    return await command.handler(
+      options,
+      findProject(process.cwd()),
+      positionals,
+    );
   } catch (error) {
     return failed(error);
   }

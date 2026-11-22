@@ -57,6 +57,10 @@ const OPTIONAL_FIELDS: Record<string, Shape> = {
       ),
   ),
   skippedGraders: optional((value) => value === true),
+  inputHash: optional(text),
+  workspaceArchive: optional(
+    orNull((value) => isObject(value) && text(value["path"])),
+  ),
 };
 
 /**

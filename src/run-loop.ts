@@ -34,6 +34,8 @@ export interface PlanBase {
   model: string | undefined;
   isolated: boolean;
   lenient: boolean;
+  /** Archive each run's files, less the login files. */
+  keepWorkspaces: boolean;
   outDir: string;
   judgeApi: JudgeApi | null;
   /** How many runs may be in flight at once. */
@@ -108,6 +110,7 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       pass: plan.pass,
       isolated: plan.isolated,
       lenient: plan.lenient,
+      keepWorkspaces: plan.keepWorkspaces,
       outDir: plan.outDir,
       judgeApi: plan.judgeApi ?? undefined,
     };

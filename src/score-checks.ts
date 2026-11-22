@@ -8,7 +8,7 @@ import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import { removeLogin } from "./command.js";
 import type { Via } from "./score-models.js";
 import { decideAll, judgedResult } from "./score-models.js";
-import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
+import type { CheckResult, ScoringPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
@@ -53,7 +53,7 @@ async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
  * @param slots - The results by place in the case; each command's place is filled in.
  */
 async function runCommands(
-  plan: RunPlan,
+  plan: ScoringPlan,
   run: { outcome: Outcome; judgeable: boolean },
   slots: (CheckResult | undefined)[],
 ): Promise<void> {
@@ -83,7 +83,7 @@ async function runCommands(
  * @param problems - Receives why a judge session does not prove it loaded nothing.
  * @returns The function that asks the judge, and what the scoring of a judge check needs to know of it.
  */
-function judgeOf(plan: RunPlan, problems: string[]) {
+function judgeOf(plan: ScoringPlan, problems: string[]) {
   const { judgeApi, caseDef } = plan;
   const model = caseDef.judgeModel ?? (judgeApi ?? plan.judge).model;
   const ask = judgeApi
@@ -123,7 +123,7 @@ const skipped = (reason: string) => ({ score: null, reason });
  */
 async function judgedSlot(
   run: {
-    plan: RunPlan;
+    plan: ScoringPlan;
     ask: ReturnType<typeof judgeOf>["ask"];
     via: Via;
     task: string;
@@ -157,7 +157,7 @@ async function judgedSlot(
  * @param plan - The run, whose `breached` tells.
  * @returns The reason to put on the checks; null when they may be asked.
  */
-function skippedFor(plan: RunPlan): string | null {
+function skippedFor(plan: ScoringPlan): string | null {
   const reached = plan.breached?.(0) ?? null;
   return reached === null ? null : `skipped: ${reached} reached`;
 }
@@ -181,7 +181,7 @@ interface Scored {
  * @returns The check results in case order, every reply of the judge, and every request to the decision model.
  */
 export async function scoreChecks(
-  plan: RunPlan,
+  plan: ScoringPlan,
   outcome: Outcome,
   judgeable: boolean,
 ): Promise<{

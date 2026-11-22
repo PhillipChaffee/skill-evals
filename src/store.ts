@@ -116,7 +116,7 @@ export function readRuns(outDir: string): Read {
  * @param run - A run record or a stored run.
  * @returns The stem; two runs with one stem write the same files.
  */
-const stemOf = (
+export const stemOf = (
   run: Pick<RunRecord, "harness" | "caseId" | "subject" | "rep">,
 ): string => [run.harness, run.caseId, run.subject, run.rep].join("\n");
 
@@ -163,7 +163,7 @@ export function requireFresh(outDir: string): void {
  * @param target - The file.
  * @param value - What it holds.
  */
-function writeAtomic(target: string, value: unknown): void {
+export function writeAtomic(target: string, value: unknown): void {
   fs.writeFileSync(`${target}.tmp`, JSON.stringify(value, null, "\t"));
   fs.renameSync(`${target}.tmp`, target);
 }

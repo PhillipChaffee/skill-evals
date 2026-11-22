@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Partition } from "./applicability.js";
+import { requireTar } from "./archive.js";
 import { partitionApplicable } from "./applicability.js";
 import type { Case } from "./cases.js";
 import type { DecisionService } from "./decision.js";
@@ -95,6 +96,7 @@ export function prepare(
   const jobs = requireJobs(options);
   const maxInvalid = requireMaxInvalid(options);
   reportFormats(options);
+  if (options.keepWorkspaces) requireTar();
   const resumed = resumeDir(options, cwd);
   if (look.inspect !== true) requireUsableOut(resumed, options.outDir, cwd);
   const selection = selectHarnesses(options.harness);
@@ -212,6 +214,7 @@ export const basePlan = (
   model: context.model,
   isolated: modesOf(context.options).isolated,
   lenient: modesOf(context.options).lenient,
+  keepWorkspaces: context.options.keepWorkspaces ?? false,
   outDir,
   jobs: context.jobs,
   limits: context.limits,
