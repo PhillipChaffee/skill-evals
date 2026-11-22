@@ -1,6 +1,6 @@
 #!/bin/sh
-# Slow work. BUILD_SECONDS shortens it for a caller that knows better; by default it takes about a minute and a half.
-seconds=${BUILD_SECONDS:-80}
+# Slow work: it takes about a minute and a half.
+seconds=80
 mkdir -p build
 i=0
 while [ "$i" -lt "$seconds" ]; do

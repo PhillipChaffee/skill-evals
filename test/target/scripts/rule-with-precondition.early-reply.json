@@ -8,7 +8,7 @@
         "call": {
           "name": "Bash",
           "input": {
-            "command": "BUILD_SECONDS=2 sh build.sh >/dev/null 2>&1 &"
+            "command": "sh build.sh >/dev/null 2>&1 &"
           },
           "exec": true
         }

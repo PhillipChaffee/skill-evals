@@ -16,6 +16,8 @@ interface Setting {
   subject?: string;
   /** More flags of `score`, such as `--history-mode native`. Default: none. */
   flags?: string[];
+  /** The cases directory. Default: the target cases. */
+  cases?: string;
   /** The project's config file. Default: none. */
   config?: Record<string, unknown>;
   /** Files to plant in the sandbox, from path to text. Default: none. */
@@ -44,7 +46,7 @@ export function runWith(name: string, setting: Setting = {}) {
   );
   return scoreSubject(box, {
     subject,
-    cases: CASES,
+    cases: setting.cases ?? CASES,
     only: name.split(".")[0] ?? "",
     flags: setting.flags ?? [],
     // The setup steps run bash and git, which the sandbox's own PATH leaves out.

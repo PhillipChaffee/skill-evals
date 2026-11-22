@@ -17,7 +17,7 @@
         "call": {
           "name": "Bash",
           "input": {
-            "command": "BUILD_SECONDS=1 sh build.sh"
+            "command": "sh build.sh"
           },
           "exec": true
         }
