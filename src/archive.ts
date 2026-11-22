@@ -17,6 +17,8 @@ const REMOTES = "remotes";
 const HOME = "home";
 // The hashes of the home as the harness's prompt found it, which the home alone cannot give back.
 const HOME_SEED = "home-seed.json";
+// A login file shorter than this is not told by its content.
+const MIN_SECRET_BYTES = 32;
 const STAGE_PREFIX = "stage-";
 const UNPACK_PREFIX = "unpack-";
 
@@ -63,6 +65,8 @@ export function requireTar(
 
 /** What must not be copied into an archive: the login files by path, and any file with their content. */
 interface Banned {
+  /** Receives the archive path of each file left out because it holds a login file's content. */
+  omitted: string[];
   /** The home directory that `paths` are relative to, when the directory being copied is the home. */
   home?: string;
   /** The login files' paths, relative to the home. */
@@ -88,6 +92,8 @@ function loginHashes(
       try {
         if (!fs.lstatSync(file).isFile()) continue;
         const content = fs.readFileSync(file);
+        // A short or generic file, such as `{}`, says nothing about a login: ordinary files hold the same.
+        if (content.length < MIN_SECRET_BYTES) continue;
         const sums = found.get(content.length) ?? new Set<string>();
         sums.add(createHash("sha256").update(content).digest("hex"));
         found.set(content.length, sums);
@@ -133,11 +139,22 @@ function stage(from: string | null, to: string, banned: Banned): void {
   fs.cpSync(from, to, {
     recursive: true,
     verbatimSymlinks: true,
-    filter: (source) =>
-      !(
+    filter: (source) => {
+      if (
         banned.home !== undefined &&
         isLogin(path.relative(banned.home, source), banned.paths)
-      ) && !holdsLogin(source, banned.hashes),
+      ) {
+        return false;
+      }
+      if (!holdsLogin(source, banned.hashes)) return true;
+      banned.omitted.push(
+        path.posix.join(
+          path.basename(to),
+          path.relative(from, source).split(path.sep).join("/"),
+        ),
+      );
+      return false;
+    },
   });
 }
 
@@ -156,6 +173,8 @@ const isLogin = (relative: string, authFiles: string[]): boolean =>
 export interface Staged {
   dir: string;
   names: string[];
+  /** The archive paths of the files left out because they hold a login file's content. */
+  omitted: string[];
   dispose: () => void;
 }
 
@@ -173,6 +192,7 @@ export function stageRun(source: Archivable): Staged {
   });
   try {
     const banned: Banned = {
+      omitted: [],
       paths: source.authFiles,
       hashes: loginHashes(source.authFiles, [os.homedir(), source.home]),
     };
@@ -200,7 +220,12 @@ export function stageRun(source: Archivable): Staged {
       JSON.stringify(Object.fromEntries(kept)),
     );
     setWritable(area.dir, true);
-    return { dir: area.dir, names, dispose: area.dispose };
+    return {
+      dir: area.dir,
+      names,
+      omitted: banned.omitted,
+      dispose: area.dispose,
+    };
   } catch (error) {
     area.dispose();
     throw error;

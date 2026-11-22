@@ -95,6 +95,15 @@ function recordedJudge(results: Results): Recorded {
 }
 
 /**
+ * Settles the decision model once, for the request and for the cache key. `rejudge` has no flag for it.
+ * @param source - The earlier command's results, which record the decision model.
+ * @param options - The options after the config file was applied.
+ * @returns The recorded model, else the config's.
+ */
+const decisionModelOf = (source: Source, options: Merged): string | undefined =>
+  source.results.decisionModel ?? options.decisionModel;
+
+/**
  * Settles who judges, once the cases that are re-scored are known, before any harness starts. The default is the way
  * the earlier command judged; a flag replaces it, with one warning, because the judge cache answers only the same judge.
  * @param source - The earlier command's results, whose judge and decision model are the defaults.
@@ -120,9 +129,14 @@ function judgingOf(source: Source, cases: Case[], options: Merged): Judging {
   if (api !== undefined) judging.judgeApi = api;
   if (harness !== undefined && api === undefined)
     judging.judgeHarness = harness;
+  // Naming the harness under test is the default, not a change.
+  const underTest =
+    results.harnesses.length === 1 ? results.harnesses[0] : undefined;
   const sameWay =
     (api !== undefined ? "api" : "harness") === recorded.via &&
-    (api !== undefined || (harness ?? null) === recorded.harness);
+    (api !== undefined ||
+      (harness ?? underTest ?? null) ===
+        (recorded.harness ?? underTest ?? null));
   const named =
     options.judgeModel ?? (sameWay ? (recorded.model ?? undefined) : undefined);
   if (named !== undefined) judging.judgeModel = named;
@@ -138,7 +152,7 @@ function judgingOf(source: Source, cases: Case[], options: Merged): Judging {
   }
   const { judgeApi, judgeModel } = judgeSetup(cases, judging);
   const deciding: Config = { ...config };
-  const decided = options.decisionModel ?? results.decisionModel ?? undefined;
+  const decided = decisionModelOf(source, options);
   if (decided !== undefined) deciding.decisionModel = decided;
   return {
     judgeApi,
@@ -212,8 +226,7 @@ function rescoreOne(
       judge,
       judgeApi: judging.judgeApi ?? undefined,
       decision: judging.decision,
-      decisionModel:
-        how.source.results.decisionModel ?? how.options.decisionModel,
+      decisionModel: decisionModelOf(how.source, how.options),
       isolated: how.source.results.meta.isolated,
       pass: how.options.env,
       cache: run.cache,
@@ -238,6 +251,12 @@ async function rescoreKept(
   how: { judging: Judging; source: Source; options: Merged },
 ): Promise<{ record: RunRecord; notes: string[] }> {
   const name = runName(run.record);
+  const omitted = run.record.workspaceArchive?.omitted?.length ?? 0;
+  if (omitted > 0) {
+    console.error(
+      `skill-evals: warning: ${name}: the archive omitted ${String(omitted)} files matching login contents`,
+    );
+  }
   try {
     const again = await rescoreOne(run, how);
     console.error(`${name}: score ${formatScore(again.score)} (re-scored)`);

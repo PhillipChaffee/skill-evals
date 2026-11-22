@@ -96,7 +96,7 @@ async function rejudgeIn(
   const all = loadSelection(
     options.cases,
     { heldout: true },
-    { lenient: options.lenient ?? false },
+    { lenient: options.lenient ?? source.results.meta.lenient ?? false },
   );
   const plan = planRejudge(source.results, {
     all,
@@ -165,13 +165,22 @@ export async function rejudge(
       `--out ${outDir} is the directory being re-judged; leave --out out to write ${REJUDGED_FILE} beside its results, or name another directory`,
     );
   }
+  const inside = path.relative(dir, out ?? dir);
+  if (out !== null && !inside.startsWith("..") && !path.isAbsolute(inside)) {
+    throw new UsageError(
+      `--out ${String(outDir)} is inside the directory being re-judged; name a directory outside it`,
+    );
+  }
   requireSource(dir);
   const merged = withConfig(project, options);
   const formats = reportFormats(merged);
-  if (out !== null) requireEmpty(out);
   const release = lockDir(dir);
-  const releaseOut = out === null ? () => undefined : lockDir(out);
+  let releaseOut = (): void => undefined;
   try {
+    if (out !== null) {
+      requireEmpty(out);
+      releaseOut = lockDir(out);
+    }
     return await rejudgeIn(dir, out, { options: merged, formats });
   } finally {
     releaseOut();

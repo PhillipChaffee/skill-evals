@@ -17,7 +17,7 @@ import { sandbox } from "./testing/sandbox.js";
 const PLAIN_WORDS = { prompt: "plain words" };
 const LOGIN = ".claude/.credentials.json";
 const OUTSIDE = "outside/.claude/.credentials.json";
-const SECRET = "secret-token";
+const SECRET = "secret-token-0123456789-abcdefghijklmnop";
 const EXISTS = { type: "file_exists", path: "notes.txt" };
 
 /**
@@ -107,6 +107,37 @@ test("a copy of the login elsewhere in the home or the workspace is left out of 
   expect(names).not.toContain("home/copy.json");
   expect(names).not.toContain("workspace/stolen.txt");
   expect(names).toContain("workspace/notes.txt");
+  expect(record.workspaceArchive?.omitted?.sort()).toEqual([
+    "home/copy.json",
+    "workspace/stolen.txt",
+  ]);
+  const ran = await scored.rejudge();
+  expect(
+    ran.stderr.match(/the archive omitted 2 files matching login/g),
+  ).toHaveLength(1);
+});
+
+test("an empty or generic file survives when the login is empty or short", async () => {
+  const scored = await scoredWith([EXISTS], {
+    flags: [KEEP],
+    plant: (box) => {
+      box.write(LOGIN, "");
+      box.write("cases/restate/workspace/pkg/__init__.py", "");
+      box.write("cases/restate/workspace/tsconfig.json", "{}");
+    },
+  });
+  const record = onlyRecord(scored.out);
+  const { names } = inside(
+    path.join(scored.out, record.workspaceArchive?.path ?? ""),
+  );
+  for (const kept of [
+    "workspace/pkg/__init__.py",
+    "workspace/tsconfig.json",
+    "seed/pkg/__init__.py",
+  ]) {
+    expect(names).toContain(kept);
+  }
+  expect(record.workspaceArchive?.omitted).toEqual([]);
 });
 
 test("what a command check writes, such as a copy of the grader, is not in the archive", async () => {

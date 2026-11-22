@@ -54,3 +54,13 @@ test("a check is followed by its identity when a run lists its checks in another
   expect(one?.newlyFailing).toHaveLength(1);
   expect(one?.newlyFailing[0]).toMatchObject({ from: 0.5, to: 0 });
 });
+
+test("a check that only B has is not listed as a change", () => {
+  const added = { ...result(0), text: "added" };
+  const b = record([1]);
+  b.checks = [result(1), added] as unknown as RunRecord["checks"];
+  const [one] =
+    diffResults(results([record([1])]), results([b])).sections[0]?.cases ?? [];
+  expect(one?.newlyFailing).toEqual([]);
+  expect(one?.newlyPassing).toEqual([]);
+});
