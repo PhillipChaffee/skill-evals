@@ -5,6 +5,10 @@ import { messageOf } from "./scope.js";
 export const DEFAULT_API_MODEL = "claude-opus-5-5";
 
 const SHOWN_MESSAGE_LENGTH = 200;
+const BAD_REQUEST = 400;
+const UNAUTHORIZED = 401;
+const FORBIDDEN = 403;
+const REJECTED = new Set([BAD_REQUEST, UNAUTHORIZED, FORBIDDEN]);
 const MAX_TOKENS = 16_000;
 const ANTHROPIC_VERSION = "2023-06-01";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -45,6 +49,8 @@ export interface ApiAnswer {
   usage: Usage;
   /** Why the answer is unusable: the key is not set, the request failed, the API refused or answered an error. */
   error: string | null;
+  /** True when asking again cannot help: the API rejected the request (400, 401, 403). */
+  final?: boolean;
 }
 
 /** The parts of the API's reply that are read. Nothing is trusted to be there. */
@@ -196,7 +202,11 @@ export async function askApi(
     return done("", `the request to ${endpoint} failed: ${messageOf(error)}`);
   }
   if (!response.ok) {
-    return done("", `HTTP ${String(response.status)}: ${apiMessage(raw)}`);
+    const answer = done(
+      "",
+      `HTTP ${String(response.status)}: ${apiMessage(raw)}`,
+    );
+    return REJECTED.has(response.status) ? { ...answer, final: true } : answer;
   }
   const { text, error, tokens } = readReply(raw);
   return done(text, error, tokens);
@@ -209,6 +219,10 @@ export async function askApi(
  */
 export const apiAsker =
   (config: JudgeApi) => async (prompt: string, attachments: Attachment[]) => {
-    const { text, error, usage } = await askApi(config, prompt, attachments);
-    return { finalText: text, error, ...usage };
+    const { text, error, usage, final } = await askApi(
+      config,
+      prompt,
+      attachments,
+    );
+    return { finalText: text, error, ...usage, ...(final ? { final } : {}) };
   };

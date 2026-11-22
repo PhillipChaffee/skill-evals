@@ -188,38 +188,39 @@ What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and
 
 What `evaluate` takes. An option that is not set takes its value from the project's config file.
 
-| Property           | Type                                         | Description                                                                                                    |
-| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `cwd?`             | `string \| undefined`                        | The working directory, which sets the project and what relative paths resolve against. Default: the process's. |
-| `subjects`         | `string[]`                                   | One or two of a directory, a git ref of the project, or "none".                                                |
-| `harness?`         | `string \| undefined`                        | Comma-separated harness ids, or "all". Default: the first installed harness.                                   |
-| `cases?`           | `string \| undefined`                        | The directory that holds the cases. Default: `evals/cases` in the project.                                     |
-| `env?`             | `string[] \| undefined`                      | Names of variables the harness gets besides the allowlist. Default: `env` of the config file.                  |
-| `subjectExclude?`  | `string[] \| undefined`                      | Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file.        |
-| `reps?`            | `number \| undefined`                        | Runs for each subject and case. A case's own `reps` wins. Default: 3.                                          |
-| `model?`           | `string \| undefined`                        | Passed to the harness. A case's own `model` wins. Default: the harness's own default.                          |
-| `judgeHarness?`    | `string \| undefined`                        | The harness that scores judged checks. Default: the harness under test.                                        |
-| `judgeModel?`      | `string \| undefined`                        | The model that scores judged checks. A case's own `judgeModel` wins. Default: `model`.                         |
-| `judgeApi?`        | `string \| undefined`                        | Ask the judge model over this API and start no harness for it: "anthropic". Default: a harness session.        |
-| `judgeUrl?`        | `string \| undefined`                        | The base URL of the judge API. Default: the provider's own.                                                    |
-| `judgeKeyVar?`     | `string \| undefined`                        | The variable that holds the judge API's key. Default: `ANTHROPIC_API_KEY`.                                     |
-| `judgeTimeout?`    | `number \| undefined`                        | The seconds one judge request may take, a positive integer. Default: 120.                                      |
-| `judgeFallbacks?`  | `boolean \| undefined`                       | Ask the server to fall back when the judge model refuses. Default: true.                                       |
-| `decisionModel?`   | `string \| undefined`                        | The model that scores decision checks. No default: a suite with a decision check needs it.                     |
-| `decisionUrl?`     | `string \| undefined`                        | The base URL of the decision model's API. Default: the provider's own.                                         |
-| `decisionTimeout?` | `number \| undefined`                        | The seconds one request to the decision model may take, a positive integer. Default: 60.                       |
-| `lenient?`         | `boolean \| undefined`                       | Drop a key that a case file does not take, and warn, instead of failing. Default: false.                       |
-| `isolated?`        | `boolean \| undefined`                       | Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false. |
-| `onWarning?`       | `((text: string) => void) \| undefined`      | Called with a line of text for each key that `lenient` drops.                                                  |
-| `minScore?`        | `number \| undefined`                        | The pass bar for the suite score of the subject under test.                                                    |
-| `outDir?`          | `string \| undefined`                        | Where results go. Default: a new temp directory.                                                               |
-| `onRun?`           | `((record: RunRecord) => void) \| undefined` | Called with each run's record as soon as the run ends.                                                         |
-| `caseGlob?`        | `string \| string[] \| undefined`            | Globs over case ids to run; one glob, or a list of them. Default: every case.                                  |
-| `notCase?`         | `string[] \| undefined`                      | Globs over case ids to leave out.                                                                              |
-| `tag?`             | `string[] \| undefined`                      | Run a case that has any of these tags.                                                                         |
-| `tagAll?`          | `string[] \| undefined`                      | Run a case that has all of these tags.                                                                         |
-| `notTag?`          | `string[] \| undefined`                      | Leave out a case that has any of these tags.                                                                   |
-| `heldout?`         | `boolean \| undefined`                       | Also run the held-out variants.                                                                                |
+| Property           | Type                                         | Description                                                                                                       |
+| ------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `cwd?`             | `string \| undefined`                        | The working directory, which sets the project and what relative paths resolve against. Default: the process's.    |
+| `subjects`         | `string[]`                                   | One or two of a directory, a git ref of the project, or "none".                                                   |
+| `harness?`         | `string \| undefined`                        | Comma-separated harness ids, or "all". Default: the first installed harness.                                      |
+| `cases?`           | `string \| undefined`                        | The directory that holds the cases. Default: `evals/cases` in the project.                                        |
+| `env?`             | `string[] \| undefined`                      | Names of variables the harness gets besides the allowlist. Default: `env` of the config file.                     |
+| `subjectExclude?`  | `string[] \| undefined`                      | Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file.           |
+| `reps?`            | `number \| undefined`                        | Runs for each subject and case. A case's own `reps` wins. Default: 3.                                             |
+| `model?`           | `string \| undefined`                        | Passed to the harness. A case's own `model` wins. Default: the harness's own default.                             |
+| `judgeHarness?`    | `string \| undefined`                        | The harness that scores judged checks. Default: the harness under test.                                           |
+| `judgeModel?`      | `string \| undefined`                        | The model that scores judged checks. A case's own `judgeModel` wins. Default: `model`.                            |
+| `judgeApi?`        | `string \| undefined`                        | Ask the judge model over this API and start no harness for it: "anthropic". Default: a harness session.           |
+| `judgeUrl?`        | `string \| undefined`                        | The base URL of the judge API. Default: the provider's own.                                                       |
+| `judgeKeyVar?`     | `string \| undefined`                        | The variable that holds the judge API's key. Default: `ANTHROPIC_API_KEY`.                                        |
+| `judgeTimeout?`    | `number \| undefined`                        | The seconds one judge request may take, a positive integer. Default: 120.                                         |
+| `judgeFallbacks?`  | `boolean \| undefined`                       | Ask the server to fall back when the judge model refuses. Default: true.                                          |
+| `useCache?`        | `boolean \| undefined`                       | Serve judge answers from `judge-cache.jsonl` in the output directory. A fresh run only writes it. Default: false. |
+| `decisionModel?`   | `string \| undefined`                        | The model that scores decision checks. No default: a suite with a decision check needs it.                        |
+| `decisionUrl?`     | `string \| undefined`                        | The base URL of the decision model's API. Default: the provider's own.                                            |
+| `decisionTimeout?` | `number \| undefined`                        | The seconds one request to the decision model may take, a positive integer. Default: 60.                          |
+| `lenient?`         | `boolean \| undefined`                       | Drop a key that a case file does not take, and warn, instead of failing. Default: false.                          |
+| `isolated?`        | `boolean \| undefined`                       | Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false.    |
+| `onWarning?`       | `((text: string) => void) \| undefined`      | Called with a line of text for each key that `lenient` drops.                                                     |
+| `minScore?`        | `number \| undefined`                        | The pass bar for the suite score of the subject under test.                                                       |
+| `outDir?`          | `string \| undefined`                        | Where results go. Default: a new temp directory.                                                                  |
+| `onRun?`           | `((record: RunRecord) => void) \| undefined` | Called with each run's record as soon as the run ends.                                                            |
+| `caseGlob?`        | `string \| string[] \| undefined`            | Globs over case ids to run; one glob, or a list of them. Default: every case.                                     |
+| `notCase?`         | `string[] \| undefined`                      | Globs over case ids to leave out.                                                                                 |
+| `tag?`             | `string[] \| undefined`                      | Run a case that has any of these tags.                                                                            |
+| `tagAll?`          | `string[] \| undefined`                      | Run a case that has all of these tags.                                                                            |
+| `notTag?`          | `string[] \| undefined`                      | Leave out a case that has any of these tags.                                                                      |
+| `heldout?`         | `boolean \| undefined`                       | Also run the held-out variants.                                                                                   |
 
 ### Results
 

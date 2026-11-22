@@ -56,6 +56,8 @@ export interface EvaluateOptions extends SelectionOptions {
   judgeTimeout?: number | undefined;
   /** Ask the server to fall back when the judge model refuses. Default: true. */
   judgeFallbacks?: boolean | undefined;
+  /** Serve judge answers from `judge-cache.jsonl` in the output directory. A fresh run only writes it. Default: false. */
+  useCache?: boolean | undefined;
   /** The model that scores decision checks. No default: a suite with a decision check needs it. */
   decisionModel?: string | undefined;
   /** The base URL of the decision model's API. Default: the provider's own. */
@@ -165,6 +167,7 @@ interface Plan {
   lenient: boolean;
   outDir: string;
   judgeApi: JudgeApi | null;
+  useCache: boolean;
   onRun: EvaluateOptions["onRun"];
 }
 
@@ -178,7 +181,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
   const { isolated, lenient } = plan;
   const records: RunRecord[] = [];
   // Read at the start, and added to after each judged answer.
-  const cache = openCache(outDir);
+  const cache = openCache(outDir, plan.useCache);
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
     for (const caseDef of plan.applied[located.harness.id] ?? []) {

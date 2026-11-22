@@ -28,6 +28,8 @@ export interface Via {
   cache: Cache | null;
   /** The judge's model, for the cache key; empty when the harness picks. */
   model: string;
+  /** The judge harness's id, or "api", for the cache key. */
+  path: string;
 }
 
 /**
@@ -96,7 +98,12 @@ export async function judgedResult<
       : [];
   const scale = check.scale ?? "0-1";
   const memo = run.cache
-    ? memoOf(run.cache, { model: run.model, attachments, scale })
+    ? memoOf(run.cache, {
+        model: run.model,
+        via: run.path,
+        attachments,
+        scale,
+      })
     : undefined;
   const verdict = await judge<Reply>(
     ask,

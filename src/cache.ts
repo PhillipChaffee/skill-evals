@@ -34,6 +34,8 @@ interface Question {
   scale: Scale;
   /** The index of the vote, so that votes of one question are independent. */
   vote: number;
+  /** How the judge is reached: the judge harness's id, or "api". */
+  via: string;
 }
 
 /**
@@ -51,6 +53,7 @@ export const cacheKey = (question: Question): string =>
         question.model,
         question.scale,
         question.vote,
+        question.via,
       ]),
     )
     .digest("hex");
@@ -58,13 +61,15 @@ export const cacheKey = (question: Question): string =>
 /**
  * Opens the judge cache of an output directory.
  * @param outDir - The output directory, which exists.
- * @returns A cache that holds what `judge-cache.jsonl` there holds now; a line that is damaged or has no score is
- *   left out. `set` adds a line to the file.
+ * @param read - Whether answers are served from the cache. Default: false, so a fresh run asks every question and
+ *   only writes; `--resume` and `rejudge` turn it on.
+ * @returns A cache that, when it reads, holds what `judge-cache.jsonl` there holds now, and every answer added since;
+ *   a line that is damaged or has no score is left out. `set` always adds a line to the file.
  */
-export function openCache(outDir: string): Cache {
+export function openCache(outDir: string, read = false): Cache {
   const file = path.join(outDir, CACHE_FILE);
   const kept = new Map<string, CacheValue>();
-  if (fs.existsSync(file)) {
+  if (read && fs.existsSync(file)) {
     for (const line of fs.readFileSync(file, "utf8").split("\n")) {
       try {
         const { key, ...value } = JSON.parse(line) as {
@@ -79,7 +84,7 @@ export function openCache(outDir: string): Cache {
   return {
     get: (key) => kept.get(key),
     set(key, value) {
-      kept.set(key, value);
+      if (read) kept.set(key, value);
       fs.appendFileSync(file, `${JSON.stringify({ key, ...value })}\n`);
     },
   };
@@ -92,6 +97,7 @@ export function openCache(outDir: string): Cache {
  * @param fixed.model - The judge's model; empty when the harness picks.
  * @param fixed.attachments - The files sent with the prompt.
  * @param fixed.scale - How the judge scores.
+ * @param fixed.via - The judge harness's id, or "api".
  * @returns What `judge` asks before a vote and tells after one.
  */
 export function memoOf(

@@ -20,7 +20,7 @@ const linesOf = (out: string): { key: string }[] =>
     : [];
 
 test("a cached verdict is reused on a second identical question", async () => {
-  const { run, received, out } = await apiCase({ rubric: RUBRIC }, [
+  const { run, evaluated, received, out } = await apiCase({ rubric: RUBRIC }, [
     reply(SCORE_HALF),
   ]);
   const first = await run();
@@ -34,37 +34,48 @@ test("a cached verdict is reused on a second identical question", async () => {
     usage: { tokens: { input: 100, output: 10 } },
   });
 
-  const again = await run();
+  const again = await evaluated({ useCache: true });
   expect(received).toHaveLength(1);
   expect(again.check?.score).toBe(0.5);
   expect(again.check?.reason).toBe("ok");
   expect(again.record?.judge).toMatchObject({ calls: 0, cacheHits: 1 });
   expect(linesOf(out)).toHaveLength(1);
-  expect(again.ran.stdout).toMatch(
-    /^Judge, in total and not counted in the table: 0 calls, 1 cache hits, /m,
-  );
 });
 
-test("two reps with the same answer ask once", async () => {
-  const { run, received } = await apiCase({ rubric: RUBRIC }, [
+test("a normal run writes the cache and never reads it", async () => {
+  const { run, received, out } = await apiCase({ rubric: RUBRIC }, [
     reply(SCORE_HALF),
   ]);
-  const { ran } = await run(["--reps", "2"]);
-  expect(ran.status, ran.stderr).toBe(0);
+  await run();
+  const again = await run(["--reps", "2"]);
+  // Two reps with the same answer are two questions, so judge noise shows.
+  expect(received).toHaveLength(3);
+  expect(again.record?.judge).not.toHaveProperty("cacheHits");
+  expect(linesOf(out)).toHaveLength(3);
+});
+
+test("with the cache on, two reps with the same answer ask once", async () => {
+  const { evaluated, received } = await apiCase({ rubric: RUBRIC }, [
+    reply(SCORE_HALF),
+  ]);
+  await evaluated({ reps: 2, useCache: true });
   expect(received).toHaveLength(1);
 });
 
 test("votes are independent: each vote is cached on its own", async () => {
-  const { run, received, out } = await apiCase({ rubric: RUBRIC, votes: 3 }, [
-    reply(SCORE_HALF),
-    reply('{"reason": "b", "score": 0.7}'),
-    reply('{"reason": "c", "score": 0.9}'),
-  ]);
+  const { run, evaluated, received, out } = await apiCase(
+    { rubric: RUBRIC, votes: 3 },
+    [
+      reply(SCORE_HALF),
+      reply('{"reason": "b", "score": 0.7}'),
+      reply('{"reason": "c", "score": 0.9}'),
+    ],
+  );
   const first = await run();
   expect(received).toHaveLength(3);
   expect(first.check?.score).toBe(0.7);
   expect(linesOf(out)).toHaveLength(3);
-  const again = await run();
+  const again = await evaluated({ useCache: true });
   expect(received).toHaveLength(3);
   expect(again.check?.score).toBe(0.7);
   expect(again.check?.ballots?.map(({ score }) => score)).toEqual([
@@ -74,7 +85,7 @@ test("votes are independent: each vote is cached on its own", async () => {
 });
 
 test("an unusable answer is not cached, so the next run asks again", async () => {
-  const { run, received, out } = await apiCase({ rubric: RUBRIC }, [
+  const { run, evaluated, received, out } = await apiCase({ rubric: RUBRIC }, [
     reply("no json here"),
     reply("still none"),
     reply(SCORE_HALF),
@@ -82,7 +93,7 @@ test("an unusable answer is not cached, so the next run asks again", async () =>
   const first = await run();
   expect(first.check?.score).toBeNull();
   expect(linesOf(out)).toHaveLength(0);
-  const second = await run();
+  const second = await evaluated({ useCache: true });
   expect(received).toHaveLength(3);
   expect(second.check?.score).toBe(0.5);
 });
@@ -93,21 +104,21 @@ test("a cached entry with no score is ignored, and so is a damaged line", () => 
     CACHE_FILE,
     `${JSON.stringify({ key: "a", score: null, reason: "x", usage: {} })}\nnot json\n${JSON.stringify({ key: "b", score: 1, reason: "y", usage: {} })}\n`,
   );
-  const cache = openCache(path.dirname(file));
+  const cache = openCache(path.dirname(file), true);
+  expect(openCache(path.dirname(file)).get("b")).toBeUndefined();
   expect(cache.get("a")).toBeUndefined();
   expect(cache.get("b")).toMatchObject({ score: 1, reason: "y" });
 });
 
-test("the harness path uses the cache too", async () => {
+test("the harness path uses the cache too, when it is on", async () => {
   const { prompts, ran, out } = await judgedWith(
     { rubric: RUBRIC, scale: "binary" },
     [PASS],
-    {
-      flags: ["--reps", "2"],
-    },
+    { flags: ["--reps", "2"] },
   );
-  expect(ran.status, ran.stderr).toBe(0);
-  expect(prompts).toHaveLength(1);
+  expect(ran.status, ran.stderr).toBe(1);
+  // Off: both reps asked (the fake had one reply, so the second was unusable) and the one usable answer was written.
+  expect(prompts).toHaveLength(3);
   expect(linesOf(out)).toHaveLength(1);
 });
 
@@ -118,6 +129,7 @@ test("the key changes with the prompt, an attachment, the model, the scale and t
     model: "m",
     scale: "binary" as const,
     vote: 0,
+    via: "api",
   };
   const base = cacheKey(same);
   expect(base).toMatch(/^[0-9a-f]{64}$/);
@@ -129,6 +141,7 @@ test("the key changes with the prompt, an attachment, the model, the scale and t
     { model: "n" },
     { scale: "0-1" as const },
     { vote: 1 },
+    { via: "codex" },
   ].map((change) => cacheKey({ ...same, ...change }));
-  expect(new Set([base, ...others]).size).toBe(7);
+  expect(new Set([base, ...others]).size).toBe(8);
 });

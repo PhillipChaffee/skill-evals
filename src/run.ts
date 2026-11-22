@@ -74,14 +74,17 @@ export interface RunRecord extends Usage {
  * @param options - Options that may set either.
  * @param options.isolated - Start the harness with nothing loaded but the subject.
  * @param options.lenient - Keep the 0.0.1 rule for skill loads.
- * @returns `isolated` and `lenient`, each false when not set.
+ * @param options.useCache - Serve judge answers from the cache.
+ * @returns `isolated`, `lenient` and `useCache`, each false when not set.
  */
 export const modesOf = (options: {
   isolated?: boolean | undefined;
   lenient?: boolean | undefined;
-}): { isolated: boolean; lenient: boolean } => ({
+  useCache?: boolean | undefined;
+}): { isolated: boolean; lenient: boolean; useCache: boolean } => ({
   isolated: options.isolated ?? false,
   lenient: options.lenient ?? false,
+  useCache: options.useCache ?? false,
 });
 
 /**

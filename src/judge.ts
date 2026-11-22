@@ -181,7 +181,7 @@ interface Ballot<Reply> {
  *   answers, which the memo is not told.
  */
 async function oneVote<
-  Reply extends { finalText: string; error: string | null },
+  Reply extends { finalText: string; error: string | null; final?: boolean },
 >(ask: Ask<Reply>, ballot: Ballot<Reply>): Promise<Judged<Reply>> {
   const { prompt, scale, memo, index } = ballot;
   const hit = memo?.recall({ prompt, vote: index });
@@ -199,6 +199,8 @@ async function oneVote<
       return { ...given, replies };
     } catch (error) {
       failure = messageOf(error);
+      // An answer that no second request can change: it ends this vote's attempts.
+      if (reply.final) break;
     }
   }
   return {
@@ -218,7 +220,7 @@ async function oneVote<
  *   usable ones, and each vote. The score is null when no vote was usable.
  */
 export async function judge<
-  Reply extends { finalText: string; error: string | null },
+  Reply extends { finalText: string; error: string | null; final?: boolean },
 >(
   ask: Ask<Reply>,
   question: Question,

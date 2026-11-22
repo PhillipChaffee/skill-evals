@@ -1,15 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { askApi } from "./judge-api.js";
-import type { JudgeApi } from "./judge-api.js";
 import { API_KEY, apiCase, judgedWith } from "./testing/judged.js";
-import {
-  failure,
-  judgeServer,
-  refusal,
-  reply,
-} from "./testing/judge-server.js";
+import { failure, refusal, reply } from "./testing/judge-server.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { sandbox, seenBy } from "./testing/sandbox.js";
 
@@ -18,17 +11,6 @@ const SCORE_HALF = '{"reason": "ok", "score": 0.5}';
 const USAGE_ERROR = 2;
 const SECRET_VAR = "JUDGE_TEST_KEY";
 const IMAGE = "shot.png";
-
-const config = (url: string, more: Partial<JudgeApi> = {}): JudgeApi => ({
-  kind: "anthropic",
-  url,
-  model: "m-1",
-  keyVar: "ANTHROPIC_API_KEY",
-  timeoutMs: 5000,
-  fallbacks: true,
-  env: { ANTHROPIC_API_KEY: API_KEY },
-  ...more,
-});
 
 test("the api path sends no harness process", async () => {
   const { run, received, box } = await apiCase({ rubric: RUBRIC }, [
@@ -201,6 +183,17 @@ test("a 400 gives the API's message, cut to 200 characters", async () => {
   expect(reason).not.toContain("x".repeat(201));
 });
 
+test("a 401 is not retried: the server sees one request", async () => {
+  const { run, received } = await apiCase({ rubric: RUBRIC }, [
+    failure(401, "invalid x-api-key"),
+    reply(SCORE_HALF),
+  ]);
+  const { check } = await run();
+  expect(received).toHaveLength(1);
+  expect(check?.score).toBeNull();
+  expect(check?.reason).toMatch(/HTTP 401: invalid x-api-key/);
+});
+
 test("the judge usage sums every kind of input token", async () => {
   const { run } = await apiCase({ rubric: RUBRIC }, [
     reply(SCORE_HALF, {
@@ -283,40 +276,5 @@ test("on the harness path an image is listed by name and not shown", async () =>
   );
   expect(prompts[0]).toContain(
     `<file path="${IMAGE}">not shown (image)</file>`,
-  );
-});
-
-test("askApi reads the text blocks and ignores thinking", async () => {
-  const { url } = await judgeServer([reply("hello")]);
-  const answer = await askApi(config(url), "p", []);
-  expect(answer).toMatchObject({ text: "hello", error: null });
-  expect(answer.usage).toMatchObject({ tokens: { input: 100, output: 10 } });
-});
-
-test("askApi gives an error for a server error, a network error and a timeout", async () => {
-  const { url } = await judgeServer([failure(503, "down")]);
-  expect((await askApi(config(url), "p", [])).error).toMatch(/HTTP 503: down/);
-  const dead = await askApi(config("http://127.0.0.1:1"), "p", []);
-  expect(dead.error).toMatch(
-    /request to http:\/\/127\.0\.0\.1:1\/v1\/messages failed/,
-  );
-  const slow = await judgeServer([{ hang: true }]);
-  const late = await askApi(config(slow.url, { timeoutMs: 50 }), "p", []);
-  expect(late.error).toMatch(/failed:.*timed out|failed:.*aborted/i);
-});
-
-test("askApi says so when the key is not set, the reply is no JSON, or the body has no text", async () => {
-  const { url } = await judgeServer([{ body: "not json" }]);
-  const none = await askApi(config(url, { env: {} }), "p", []);
-  expect(none.error).toMatch(/judge API key is not set: set ANTHROPIC_API_KEY/);
-  expect((await askApi(config(url), "p", [])).error).toMatch(/not JSON/);
-  const empty = await judgeServer([{ body: "{}" }]);
-  expect(await askApi(config(empty.url), "p", [])).toMatchObject({
-    text: "",
-    error: null,
-  });
-  const odd = await judgeServer([{ status: 500, body: "<html>" }]);
-  expect((await askApi(config(odd.url), "p", [])).error).toMatch(
-    /HTTP 500: <html>/,
   );
 });

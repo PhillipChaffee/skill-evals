@@ -96,6 +96,7 @@ function judgeOf(plan: RunPlan, problems: string[]) {
     images: judgeApi !== undefined,
     cache: plan.cache ?? null,
     model: model ?? "",
+    path: judgeApi ? "api" : plan.judge.harness.id,
   };
   return { ask, via };
 }

@@ -3,7 +3,9 @@ import path from "node:path";
 import type { Canned } from "./judge-server.js";
 import { judgeServer } from "./judge-server.js";
 import { plantCase, plugin } from "./plant.js";
-import { readResults, sandbox } from "./sandbox.js";
+import type { EvaluateOptions } from "../evaluate.js";
+import { evaluate } from "../evaluate.js";
+import { asProcess, readResults, sandbox } from "./sandbox.js";
 
 export const REPLIES_FILE = "fake/judge/replies.json";
 const PROMPTS_FILE = "fake/judge/prompts.jsonl";
@@ -67,7 +69,8 @@ export const API_KEY = "skill-evals-judge-key";
  * @param more.plant - Plants more files in the sandbox.
  * @param more.config - The project's config file.
  * @param more.answer - What the agent says; null for the fake's report of what it saw. Default: a fixed sentence.
- * @returns The sandbox, the API's received requests, and a function that scores the case.
+ * @returns The sandbox, the API's received requests, a function that scores the case through the command line, and one
+ *   that calls `evaluate` with more options.
  */
 export async function apiCase(
   judged: Record<string, unknown>,
@@ -111,5 +114,33 @@ export async function apiCase(
       : undefined;
     return { ran, record, check: record?.checks[0] };
   };
-  return { box, out, received: server.received, run };
+  const evaluated = (more: Partial<EvaluateOptions> = {}) =>
+    evaluateCase(box, {
+      subjects: [owned],
+      cases,
+      reps: 1,
+      outDir: out,
+      judgeApi: "anthropic",
+      judgeUrl: server.url,
+      ...more,
+    });
+  return { box, out, received: server.received, run, evaluated };
+}
+
+/**
+ * Calls `evaluate` itself, for options that no flag sets: `--resume` and `rejudge` will turn the cache on.
+ * @param box - The sandbox, whose environment the call gets, with the judge key.
+ * @param options - What to evaluate.
+ * @returns The first run's record and its first check.
+ */
+async function evaluateCase(
+  box: ReturnType<typeof sandbox>,
+  options: EvaluateOptions,
+) {
+  const { value } = await asProcess(
+    { env: { ...box.env, ANTHROPIC_API_KEY: API_KEY }, cwd: box.root },
+    () => evaluate(options),
+  );
+  const [record] = value.records;
+  return { record, check: record?.checks[0] };
 }
