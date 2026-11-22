@@ -95,6 +95,8 @@ export interface Invocation {
 export type LoadedSubject = Pick<Subject, "skills" | "skillDirs"> & {
   kind: "plugin" | "skills";
   dir: string;
+  /** The plugin's own name, which prefixes its skills in the skill tool. Absent or null: no name is known. */
+  pluginName?: string | null;
 };
 
 /** What an adapter gets to build an invocation from. */
@@ -148,6 +150,17 @@ export interface Harness {
    *   and for every call of a harness that has no read kind.
    */
   pathOf: (call: ToolCall) => string | null;
+  /**
+   * The skill that a skill-kind call names, with any plugin prefix still on it. Absent: the first string among the
+   * arguments `skill`, `name` and `id`.
+   */
+  skillOf?: (call: ToolCall) => string | null;
+  /**
+   * Finds the skill copies that the harness itself made during setup, which `invocation` could not place because they
+   * do not exist until the setup steps have run. Called after them and before the prompt.
+   * @returns Skill name to the directory of its copy, with none for a missing one. The run adds them to `placed`.
+   */
+  placedAfterSetup?: (input: RunInput) => Record<string, string>;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
   /**
@@ -281,6 +294,17 @@ export function stringArg(call: ToolCall, keys: string[]): string | null {
     .find((v) => typeof v === "string" && v !== "");
   return typeof value === "string" ? value : null;
 }
+
+/** The arguments in which a skill tool most often names its skill. */
+const SKILL_ARGS = ["skill", "name", "id"];
+
+/**
+ * Reads the skill a skill-kind call names, for an adapter that has no `skillOf` of its own.
+ * @param call - A tool call.
+ * @returns The name as the call gave it, plugin prefix included; null when no argument holds one.
+ */
+export const skillNameArg = (call: ToolCall): string | null =>
+  stringArg(call, SKILL_ARGS);
 
 /**
  * Builds a ToolCall from an adapter's table of native tool name to kind.

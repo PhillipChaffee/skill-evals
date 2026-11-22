@@ -74,3 +74,8 @@ test("routing first-action: an edit before the skill fails the first-skill check
   );
   expect(scores(record)).toEqual([0, 1, 1]);
 });
+
+test("routing first-action: loading the nearby skill after the entry skill fails only the check that keeps it out", async () => {
+  const record = await play("routing-first-action.wrong-skill-after");
+  expect(scores(record)).toEqual([1, 0, 1]);
+});

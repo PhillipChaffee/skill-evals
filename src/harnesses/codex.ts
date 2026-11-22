@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Harness, ToolKind } from "./shared.js";
+import type { Harness, RunInput, ToolKind } from "./shared.js";
 import {
   NOT_REPORTED,
   OPENAI_ENV,
@@ -54,18 +54,62 @@ const KINDS: Record<string, ToolKind> = {
 };
 
 /**
+ * Reads the marketplace file of a Codex plugin directory.
+ * @param dir - A plugin directory with a Codex marketplace file.
+ * @returns The marketplace's name and the name of its first plugin.
+ */
+function marketplaceOf(dir: string): { market: string; plugin: string } {
+  const marketplace = JSON.parse(
+    fs.readFileSync(path.join(dir, ".agents/plugins/marketplace.json"), "utf8"),
+  ) as { name: string; plugins: [{ name: string }] };
+  return { market: marketplace.name, plugin: marketplace.plugins[0].name };
+}
+
+/**
  * Codex has no flag that loads a plugin directory for one run, so the plugin is installed into the throwaway home first.
  * @param dir - A plugin directory with a Codex marketplace file.
  * @returns The `codex` argument vectors that register the marketplace and add its first plugin.
  */
 function installPlugin(dir: string): string[][] {
-  const marketplace = JSON.parse(
-    fs.readFileSync(path.join(dir, ".agents/plugins/marketplace.json"), "utf8"),
-  ) as { name: string; plugins: [{ name: string }] };
+  const { market, plugin } = marketplaceOf(dir);
   return [
     ["plugin", "marketplace", "add", dir],
-    ["plugin", "add", `${marketplace.plugins[0].name}@${marketplace.name}`],
+    ["plugin", "add", `${plugin}@${market}`],
   ];
+}
+
+/**
+ * Finds the skill directories of the plugin that `installPlugin` put in Codex's plugin cache, which is where the agent
+ * reads the plugin's skills: `$CODEX_HOME/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>`.
+ * @param input - The run's input.
+ * @returns Skill name to its directory in the cache; the newest version in name order wins. A plugin that is not
+ *   there, or a subject with no plugin, gives none.
+ */
+function installedSkills(input: RunInput): Record<string, string> {
+  const dir = pluginDir(input.subject);
+  if (!dir) return {};
+  try {
+    const { market, plugin } = marketplaceOf(dir);
+    const base = path.join(input.home, ".codex/plugins/cache", market, plugin);
+    return Object.fromEntries(
+      fs
+        .readdirSync(base)
+        .sort()
+        .flatMap((version) =>
+          fs
+            .readdirSync(path.join(base, version, "skills"), {
+              withFileTypes: true,
+            })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => [
+              entry.name,
+              path.join(base, version, "skills", entry.name),
+            ]),
+        ),
+    );
+  } catch {
+    return {};
+  }
 }
 
 const codex: Harness = {
@@ -73,6 +117,7 @@ const codex: Harness = {
   bin: "codex",
   // Codex has no read kind: it reads files through shell commands, which `shell_read` covers.
   pathOf: () => null,
+  placedAfterSetup: installedSkills,
   authFiles: [".codex/auth.json"],
   authEnv: OPENAI_ENV,
   capabilities: new Set(["subagents"]),

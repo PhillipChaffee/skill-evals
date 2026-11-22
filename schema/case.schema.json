@@ -422,7 +422,7 @@
     },
     "check-skill_available": {
       "title": "skill_available",
-      "description": "The harness listed that skill among the skills it loaded. It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable.",
+      "description": "The harness listed that skill among the skills it loaded. It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable, and a run whose harness reported no skills scores 0.",
       "type": "object",
       "required": ["type", "skill"],
       "properties": {
@@ -462,7 +462,7 @@
     },
     "check-skill_not_available": {
       "title": "skill_not_available",
-      "description": "The harness did not list that skill among the skills it loaded. It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable.",
+      "description": "The harness did not list that skill among the skills it loaded. It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable, and a run whose harness reported no skills scores 0.",
       "type": "object",
       "required": ["type", "skill"],
       "properties": {

@@ -8,7 +8,7 @@ import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import { watchDirs } from "./isolate.js";
 import { messageOf, tempDir } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
-import { snapshot } from "./snapshot.js";
+import { mergeChanges, snapshot } from "./snapshot.js";
 
 /** One prompt for one harness. */
 export interface SessionInput {
@@ -142,6 +142,32 @@ async function setupFailure(
 }
 
 /**
+ * Finds the skill copies that the harness made itself during setup, and starts watching them.
+ * @param harness - The adapter, which may know where its setup put them.
+ * @param input - What the adapter builds the command line from.
+ * @returns The copies, and a function that lists what changed in them since now.
+ */
+function afterSetup(
+  harness: Harness,
+  input: RunInput,
+): { placed: Record<string, string>; changes: () => ChangedFiles | null } {
+  const placed = harness.placedAfterSetup?.(input) ?? {};
+  return { placed, changes: watchPlaced(input.subject, placed) };
+}
+
+/**
+ * Joins two lists of changes, either of which may be absent.
+ * @param first - The changes of the copies the adapter placed.
+ * @param second - The changes of the copies the harness made in setup.
+ * @returns Both merged; whichever exists when only one does; null when neither does.
+ */
+const joined = (
+  first: ChangedFiles | null,
+  second: ChangedFiles | null,
+): ChangedFiles | null =>
+  first && second ? mergeChanges(first, second) : (first ?? second);
+
+/**
  * Prepares the harness and runs the prompt.
  * @param session - Which harness, and how long it may take.
  * @param input - What the adapter builds the command line from.
@@ -191,6 +217,7 @@ async function attempt(
       homeSeed: snapshot(input.home),
     };
   }
+  const late = afterSetup(harness, input);
   const homeSeed = snapshot(input.home);
   const started = Date.now();
   const result = await exec(bin, invocation.args, {
@@ -201,8 +228,8 @@ async function attempt(
   return {
     ...result,
     durationMs: Date.now() - started,
-    placedChanges: placedChanges(),
-    placed: invocation.placed,
+    placedChanges: joined(placedChanges(), late.changes()),
+    placed: { ...invocation.placed, ...late.placed },
     homeSeed,
   };
 }

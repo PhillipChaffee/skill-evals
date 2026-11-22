@@ -1,27 +1,8 @@
-import { UsageError } from "../scope.js";
-import type { FieldDef, FieldParser } from "./fields.js";
+import type { FieldDef } from "./fields.js";
 import { SKILL_FIELDS } from "./skill-fields.js";
 
-/**
- * Reads a `via`: one mechanism, or a non-empty list of them.
- * @param value - The parsed value.
- * @param at - Where it is, and what it is.
- * @returns The value, unchanged.
- * @throws {UsageError} When it is not one of the field's allowed words, or a non-empty list of them.
- */
-export const parseVias: FieldParser = (value, at) => {
-  const given = [value].flat();
-  const allowed = at.def.values ?? [];
-  if (
-    given.length === 0 ||
-    !given.every((one) => allowed.includes(String(one)))
-  ) {
-    throw new UsageError(
-      `${at.where}: "${at.name}" must be one of ${allowed.join(", ")}, or a list of them`,
-    );
-  }
-  return value;
-};
+// The skill fields and their parser belong to skill-fields.ts; fields.ts reads them through this table of fields.
+export { parseVias } from "./skill-fields.js";
 
 // The key that `before` and `after` take besides the matcher keys.
 const WHICH: Record<string, FieldDef> = {

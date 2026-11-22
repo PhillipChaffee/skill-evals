@@ -41,7 +41,7 @@ function world() {
   const events = (calls: ToolCall[]) =>
     skillEvents(
       calls,
-      { dir, skillDirs: { foo } },
+      { skillDirs: { foo }, pluginName: "kit" },
       {
         home,
         workspace,
@@ -77,12 +77,12 @@ test("a read-kind call of SKILL.md is a file_read load, and a file under the dir
     read(path.join(foo, SKILL_MD)),
     read(path.join(foo, REFERENCE)),
     read(path.join(foo, "skill.MD")),
+    read(path.join(foo, "references/nope.md")),
     read(path.join(foo, "references")),
   ]);
   expect(found.map(({ type, file, index }) => [type, file, index])).toEqual([
     ["load", undefined, 0],
     ["file_read", "references/a.md", 1],
-    ["load", undefined, 2],
   ]);
   expect(skillsLoaded(found)).toEqual(["foo"]);
 });
@@ -187,14 +187,14 @@ test("a skill copy that the adapter placed counts like the subject's own, and a 
   const calls = [shell(`cat ${path.join(placed, SKILL_MD)}`)];
   const both = skillEvents(
     calls,
-    { dir: null, skillDirs: {}, placed: { foo: placed } },
+    { skillDirs: {}, placed: { foo: placed } },
     paths,
   );
   expect(both.map(({ skill, via: how }) => [skill, how])).toEqual([
     ["foo", "shell_read"],
   ]);
-  expect(skillEvents(calls, { dir: null, skillDirs: {} }, paths)).toEqual([]);
-  expect(base).toBeTruthy();
+  expect(skillEvents(calls, { skillDirs: {} }, paths)).toEqual([]);
+  expect(fs.existsSync(path.join(base, "home/.claude/skills/foo"))).toBe(true);
 });
 
 test("the 0.0.1 rule counts any input that mentions skills/<name>/SKILL.md, in any case", () => {
@@ -206,4 +206,76 @@ test("the 0.0.1 rule counts any input that mentions skills/<name>/SKILL.md, in a
     { skill: "Alpha", index: 0 },
     { skill: "beta", index: 1 },
   ]);
+});
+
+test("a prefixed skill-tool name resolves only under the subject plugin's own name", () => {
+  const { events } = world();
+  const named = (skill: string): ToolCall => ({
+    name: "Skill",
+    kind: "skill",
+    input: { skill },
+  });
+  expect(
+    events([named("kit:foo"), named("other:foo"), named("foo")]).map(
+      ({ skill, resolved }) => [skill, resolved],
+    ),
+  ).toEqual([
+    ["foo", true],
+    ["foo", false],
+    ["foo", true],
+  ]);
+  const folder = skillEvents(
+    [named("kit:foo"), named("foo")],
+    { skillDirs: { foo: "/x" } },
+    { home: "/h", workspace: "/w", pathOf: () => null },
+  );
+  expect(folder.map(({ resolved }) => resolved)).toEqual([false, true]);
+});
+
+test("redirect targets and here-document bodies are not reads", () => {
+  const { foo, events } = world();
+  const file = path.join(foo, SKILL_MD);
+  const not = [
+    `cat > ${file} <<'EOF'\nbody\nEOF`,
+    `cat >> ${file}`,
+    `cat 2>${file} /dev/null`,
+    `cat &> ${file}`,
+    `echo hi\ncat <<EOF\ncat ${file}\nEOF`,
+    `sed -i -n 1p ${file}`,
+    `sed -ni 1p ${file}`,
+    `sed --in-place -n 1p ${file}`,
+    `sed -e 's/x/y/' ${file}`,
+  ];
+  expect(events(not.map(shell))).toEqual([]);
+  const reads = [
+    `sed -e 's/x/y/' -n ${file}`,
+    `cat < ${file}`,
+    `cat <<EOF >/dev/null\nx\nEOF\ncat ${file}`,
+    `cat \\\n${file}`,
+    `sed -ne 1p ${file}`,
+  ];
+  expect(events(reads.map(shell)).map(({ index }) => index)).toEqual([
+    0, 1, 2, 3, 4,
+  ]);
+});
+
+test("a cd of one command string sets where later commands of it start, and no other call's", () => {
+  const { dir, events } = world();
+  const found = events([
+    shell(`cd ${dir} && cat skills/foo/SKILL.md`),
+    shell(`cd ${dir}; head skills/foo/references/a.md`),
+    shell(`cd ${dir}`),
+    shell("cat skills/foo/SKILL.md"),
+    shell(`cat skills/foo/SKILL.md && cd ${dir}`),
+  ]);
+  expect(found.map(({ index }) => index)).toEqual([0, 1]);
+});
+
+test("$HOME is not expanded inside single quotes, and a script of bash -c expands its own", () => {
+  const { home, foo, events } = world();
+  fs.symlinkSync(foo, path.join(home, "foo"));
+  expect(events([shell("cat '$HOME/foo/SKILL.md'")])).toEqual([]);
+  expect(events([shell('cat "$HOME/foo/SKILL.md"')])).toHaveLength(1);
+  expect(events([shell("bash -c 'cat $HOME/foo/SKILL.md'")])).toHaveLength(1);
+  expect(events([shell("cat ~/foo/SKILL.md")])).toHaveLength(1);
 });

@@ -33,6 +33,8 @@ export interface SubjectSummary {
 export interface Subject extends SubjectSummary {
   /** Skill name to its directory in `dir`. */
   skillDirs: Record<string, string>;
+  /** A plugin's own name from its manifest, which prefixes its skills in the skill tool; null for any other subject. */
+  pluginName: string | null;
   /** The export that every run copies; null for "none". It has left out what the subject excludes. */
   exported: string | null;
   /** Lists what a run edited in the export, which would reach later runs; none unless one did. */
@@ -41,6 +43,29 @@ export interface Subject extends SubjectSummary {
   sourceChanges: () => string[];
   /** Removes the export. */
   dispose: () => void;
+}
+
+/**
+ * Reads a plugin's own name, which prefixes its skills in a harness's skill tool (`<name>:<skill>`).
+ * @param dir - The plugin directory.
+ * @returns The `name` of the first manifest that has one; null when the directory is no plugin or no manifest names it.
+ */
+function pluginNameOf(dir: string): string | null {
+  const manifests = [
+    ...PLUGIN_MARKERS.filter((marker) => marker.endsWith("plugin.json")),
+    "package.json",
+  ];
+  for (const manifest of manifests) {
+    try {
+      const { name } = JSON.parse(
+        fs.readFileSync(path.join(dir, manifest), "utf8"),
+      ) as { name?: unknown };
+      if (typeof name === "string" && name !== "") return name;
+    } catch {
+      // No such manifest, or not JSON: the next one may name the plugin.
+    }
+  }
+  return null;
 }
 
 /** What only a subject that is not "none" has. */
@@ -206,6 +231,7 @@ const baseline = (label: Label): Subject => ({
   dir: null,
   skills: [],
   skillDirs: {},
+  pluginName: null,
   commit: null,
   exported: null,
   exportChanged: () => [],
@@ -263,6 +289,7 @@ export function resolveSubject(
       dir: source.dir,
       skills: Object.keys(skillDirs),
       skillDirs,
+      pluginName: kind === "plugin" ? pluginNameOf(exported.dir) : null,
       commit: source.commit,
       exported: exported.dir,
       exportChanged: exported.changed,

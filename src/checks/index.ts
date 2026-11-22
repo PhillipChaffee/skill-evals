@@ -88,7 +88,6 @@ export type Check = RuledCheck | JudgedCheck | DecisionCheck;
 export interface Outcome {
   finalText: string;
   toolCalls: ToolCall[];
-  skillsLoaded: string[];
   /** Every call that gave the agent a skill or a file of one, with its mechanism and position. */
   skillEvents: SkillEvent[];
   /** What the harness said it loaded at startup; `skills` is null for a harness that lists none. */

@@ -9,7 +9,6 @@ const score = (mutated: string[], observed?: boolean) =>
     {
       finalText: "",
       toolCalls: [],
-      skillsLoaded: [],
       skillEvents: [],
       loaded: NOT_REPORTED,
       workspace: "",

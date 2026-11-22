@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { expect, onTestFinished, test } from "vitest";
 import type { Project } from "./project.js";
 import { UsageError } from "./scope.js";
 import type { Subject } from "./subject.js";
@@ -201,4 +201,26 @@ test("a ref that is no subject is a usage error and leaves no export behind", ()
     /no skills found in trunk~2/,
   );
   expect(worktrees()).toBe(1);
+});
+
+test("a plugin subject carries the name of its manifest, and no other subject has one", () => {
+  const box = sandbox();
+  box.write("kit/.claude-plugin/plugin.json", { name: "magic" });
+  box.write("kit/skills/bro/SKILL.md", "b");
+  box.write("pi/package.json", { name: "pi-kit", pi: {} });
+  box.write("pi/skills/bro/SKILL.md", "b");
+  box.write("bare/.claude-plugin/plugin.json", "not json");
+  box.write("bare/skills/bro/SKILL.md", "b");
+  box.write("mine/bro/SKILL.md", "b");
+  const named = (spec: string) => {
+    const subject = resolveSubject("subject", spec, projectAt(box.root));
+    onTestFinished(subject.dispose);
+    return subject.pluginName;
+  };
+  expect([named("kit"), named("pi"), named("bare"), named("mine")]).toEqual([
+    "magic",
+    "pi-kit",
+    null,
+    null,
+  ]);
 });

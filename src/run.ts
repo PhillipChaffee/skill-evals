@@ -283,11 +283,16 @@ const skillEventsOf = (
   skillEvents(
     ran.parsed.toolCalls,
     {
-      dir: copy?.loaded.dir ?? null,
       skillDirs: copy?.loaded.skillDirs ?? {},
       placed: ran.placed,
+      pluginName: copy?.loaded.pluginName,
     },
-    { home: ran.home, workspace: ran.workspace, pathOf: harness.pathOf },
+    {
+      home: ran.home,
+      workspace: ran.workspace,
+      pathOf: harness.pathOf,
+      skillOf: harness.skillOf,
+    },
   );
 
 /**
@@ -333,7 +338,6 @@ async function record(
     plan,
     {
       ...parsed,
-      skillsLoaded: loaded,
       skillEvents: events,
       legacySkillLoads: plan.lenient ?? false,
       ...files,

@@ -156,8 +156,18 @@ function checkSkillFields(given: Record<string, unknown>, where: string): void {
   }
 }
 
+/**
+ * Fails a listing check when the harness reported no skills, which proves neither that a skill is there nor that it is not.
+ * @param outcome - What the run left behind.
+ * @returns A score of 0 with the reason when `loaded.skills` is null; undefined when the listing is known.
+ */
+const listing = (outcome: Outcome): Verdict | undefined =>
+  outcome.loaded.skills === null
+    ? { score: 0, reason: "the harness did not report its skills" }
+    : undefined;
+
 const LISTING_NOTE =
-  "It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable.";
+  "It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable, and a run whose harness reported no skills scores 0.";
 
 // The checks of which skills the agent loaded.
 export const SKILL_CHECKS = {
@@ -185,12 +195,13 @@ export const SKILL_CHECKS = {
     note: LISTING_NOTE,
     needs: () => ["skillListing"],
     rule: (check, outcome) =>
-      (outcome.loaded.skills ?? []).includes(String(check.skill))
+      listing(outcome) ??
+      (outcome.loaded.skills?.includes(String(check.skill))
         ? PASS
         : {
             score: 0,
             reason: `"${String(check.skill)}" is not in the harness's listing (listed: ${list(outcome.loaded.skills ?? []) || "none"})`,
-          },
+          }),
   },
   skill_not_available: {
     fields: ["skill"],
@@ -198,12 +209,13 @@ export const SKILL_CHECKS = {
     note: LISTING_NOTE,
     needs: () => ["skillListing"],
     rule: (check, outcome) =>
-      (outcome.loaded.skills ?? []).includes(String(check.skill))
+      listing(outcome) ??
+      (outcome.loaded.skills?.includes(String(check.skill))
         ? {
             score: 0,
             reason: `"${String(check.skill)}" is in the harness's listing`,
           }
-        : PASS,
+        : PASS),
   },
   skill_file_read: {
     fields: ["skill", "path"],

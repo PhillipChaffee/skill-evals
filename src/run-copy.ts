@@ -29,14 +29,17 @@ export function copyOf(subject: Subject): Copy | null {
     );
   }
   const copy = copyForRun(subject.exported);
-  const { kind, skills } = subject;
+  const { kind, skills, pluginName } = subject;
   const skillDirs = Object.fromEntries(
     Object.entries(subject.skillDirs).map(([name, dir]) => [
       name,
       path.join(copy.dir, path.relative(subject.dir, dir)),
     ]),
   );
-  return { ...copy, loaded: { kind, dir: copy.dir, skills, skillDirs } };
+  return {
+    ...copy,
+    loaded: { kind, dir: copy.dir, skills, skillDirs, pluginName },
+  };
 }
 
 /**

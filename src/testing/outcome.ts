@@ -27,7 +27,6 @@ export const NO_FILES = {
 const bareOutcome = (more: Partial<Outcome> = {}): Outcome => ({
   finalText: "",
   toolCalls: [],
-  skillsLoaded: [],
   skillEvents: [],
   loaded: NOT_REPORTED,
   workspace: "",

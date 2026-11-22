@@ -52,7 +52,6 @@ const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
     {
       toolCalls: parse(id, name).toolCalls,
       finalText: "",
-      skillsLoaded: [],
       skillEvents: [],
       loaded: NOT_REPORTED,
       workspace: "",

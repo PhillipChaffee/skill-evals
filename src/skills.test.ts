@@ -112,16 +112,22 @@ const FIXTURE = "skills/foo/SKILL.md";
  * @param more - `subject` replaces the skills folder (`none` loads nothing); `init` replaces fields of the init event.
  * @param more.subject - The `--subject` value.
  * @param more.init - Fields of the init event.
+ * @param more.initOmit - Init fields to leave out.
  * @returns The record of the run.
  */
 async function played(
   steps: Steps,
   checks: unknown[],
-  more: { subject?: string; init?: Record<string, unknown> } = {},
+  more: {
+    subject?: string;
+    init?: Record<string, unknown>;
+    initOmit?: "skills"[];
+  } = {},
 ) {
   const box = sandbox();
   script(box, "run", {
     ...(more.init && { init: more.init }),
+    ...(more.initOmit && { initOmit: more.initOmit }),
     turns: [[...steps, { final: "done" }]],
   });
   const mine = skillsFolder(box, "mine", { foo: "# foo\n" });
@@ -301,4 +307,20 @@ test("a plugin subject's skill is loaded by reading its SKILL.md in the plugin d
   expect(ran.status, ran.stderr).toBe(0);
   expect(scoresOf(ran.records[0] ?? { checks: [] })).toEqual([1, 0]);
   expect(ran.records[0]?.skillEvents[0]).toMatchObject({ via: "file_read" });
+});
+
+test("a harness that reported no skills fails both listing checks", async () => {
+  const record = await played(
+    [],
+    [
+      { type: "skill_available", skill: "foo" },
+      { type: "skill_not_available", skill: "foo" },
+    ],
+    { initOmit: ["skills"] },
+  );
+  expect(scoresOf(record)).toEqual([0, 0]);
+  expect(record.checks.map(({ reason }) => reason)).toEqual([
+    "the harness did not report its skills",
+    "the harness did not report its skills",
+  ]);
 });

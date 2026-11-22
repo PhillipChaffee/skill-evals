@@ -19,7 +19,6 @@ const score = (check: Omit<RuledCheck, "weight">, calls: ToolCall[]) =>
     {
       toolCalls: calls.map((one, index) => ({ ...one, index })),
       finalText: "",
-      skillsLoaded: [],
       skillEvents: [],
       loaded: NOT_REPORTED,
       workspace: "",

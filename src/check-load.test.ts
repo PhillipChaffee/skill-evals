@@ -22,6 +22,11 @@ const BAD: [string, unknown, RegExp][] = [
     /"via" must be one of/,
   ],
   [
+    "a via list inside a list",
+    { type: SKILL, skill: "a", via: [["file_read"]] },
+    /"via" must be one of/,
+  ],
+  [
     "a resolved that is not a boolean",
     { type: SKILL, skill: "a", resolved: "yes" },
     /resolved must be true or false/,

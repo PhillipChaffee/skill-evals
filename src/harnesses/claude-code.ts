@@ -100,6 +100,8 @@ const claudeCode: Harness = {
   bin: "claude",
   // Claude Code's Read tool takes `file_path` (seen in test/fixtures/claude-code-tools.stream.jsonl).
   pathOf: (call) => stringArg(call, ["file_path"]),
+  // Claude Code's Skill tool takes `skill`, as `plugin:skill` for a plugin's skill.
+  skillOf: (call) => stringArg(call, ["skill"]),
   authFiles: [".claude/.credentials.json"],
   authEnv: ANTHROPIC_ENV,
   capabilities: new Set([

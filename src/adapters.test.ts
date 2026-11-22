@@ -1,19 +1,8 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
-import { skillEvents, skillsLoaded } from "./skill-events.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
-const harnessOf = (id: string) => {
-  const found = HARNESSES.find((harness) => harness.id === id);
-  if (!found) throw new Error(`no harness ${id}`);
-  return found;
-};
-const PI_BRO = "/work/kit-9fq1/skills/bro";
-// Where each captured stream reads the skill `bro` from, when not the pi stream's path.
-const BRO_DIRS: Record<string, string> = {
-  codex: "/tmp/home-4c1d/.codex/plugins/cache/magic-dev/magic/0.2.0/skills/bro",
-};
 const plainWords =
   /^In plain words: it keeps fixing things until they match\.$/;
 const CLAUDE_CODE = "claude-code";
@@ -40,7 +29,6 @@ const STREAMS = [
         turn: 1,
       },
     ],
-    skills: ["bro"],
     tokens: { input: 4 + 73969 + 16918, output: 378 },
     costUsd: 0.00431269,
     loaded: {
@@ -67,7 +55,6 @@ const STREAMS = [
         input: { path: "/work/kit-9fq1/skills/bro/SKILL.md" },
       },
     ],
-    skills: ["bro"],
     tokens: { input: 2400, output: 68 },
     costUsd: 0,
     loaded: NOT_REPORTED,
@@ -77,7 +64,6 @@ const STREAMS = [
     name: "opencode.stream.jsonl",
     finalText: plainWords,
     toolCalls: [{ name: "skill", kind: "skill", input: { name: "bro" } }],
-    skills: ["bro"],
     tokens: { input: 2400, output: 68 },
     costUsd: 0,
     loaded: NOT_REPORTED,
@@ -96,7 +82,6 @@ const STREAMS = [
         },
       },
     ],
-    skills: ["bro"],
     tokens: { input: 2400, output: 68 },
     costUsd: null,
     loaded: NOT_REPORTED,
@@ -117,7 +102,6 @@ const STREAMS = [
         },
       },
     ],
-    skills: [],
     tokens: null,
     costUsd: null,
     loaded: NOT_REPORTED,
@@ -129,17 +113,6 @@ test.each(STREAMS)("$id adapter normalizes a successful stream", (expected) => {
   expect(parsed.error).toBeNull();
   expect(parsed.finalText).toMatch(expected.finalText);
   expect(parsed.toolCalls).toEqual(expected.toolCalls);
-  // The subject's skill `bro` sits where the pi stream reads it.
-  const events = skillEvents(
-    parsed.toolCalls,
-    { dir: null, skillDirs: { bro: BRO_DIRS[expected.id] ?? PI_BRO } },
-    {
-      home: "/home",
-      workspace: "/work/proj",
-      pathOf: (call) => harnessOf(expected.id).pathOf(call),
-    },
-  );
-  expect(skillsLoaded(events)).toEqual(expected.skills);
   expect(parsed.tokens).toEqual(expected.tokens);
   expect(parsed.costUsd).toBe(expected.costUsd);
   expect(parsed.loaded).toEqual(expected.loaded);
@@ -286,19 +259,4 @@ test("only claude-code declares turnGrouping", () => {
       (h) => h.id,
     ),
   ).toEqual([CLAUDE_CODE]);
-});
-
-test.each([
-  [CLAUDE_CODE, { file_path: "/a/SKILL.md" }, "/a/SKILL.md"],
-  ["pi", { path: "/b/SKILL.md" }, "/b/SKILL.md"],
-  ["cursor", { path: "c/SKILL.md" }, "c/SKILL.md"],
-  ["opencode", { filePath: "/d/SKILL.md" }, "/d/SKILL.md"],
-  ["opencode", { path: "/e/SKILL.md" }, "/e/SKILL.md"],
-  [CLAUDE_CODE, { path: "/f/SKILL.md" }, null],
-  [CLAUDE_CODE, { file_path: "" }, null],
-  ["pi", "/g/SKILL.md", null],
-  ["codex", { command: "cat /h/SKILL.md" }, null],
-])("%s pathOf reads the path of a read call from %j", (id, input, expected) => {
-  const call = { name: "read", kind: "read" as const, input };
-  expect(harnessOf(id).pathOf(call)).toBe(expected);
 });
