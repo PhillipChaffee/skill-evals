@@ -120,7 +120,7 @@ test("caseHashes are the hashes that a run key uses: a check a harness dropped i
   const box = sandbox();
   scriptedCase(box, "whole");
   scriptedCase(box, "trimmed", {
-    checks: [{ ...NEVER, requires: ["mcp"], ifUnsupported: "skip" }],
+    checks: [{ ...NEVER, requires: ["compact"], ifUnsupported: "skip" }],
   });
   const ran = await box.cli(scoreArgs(box, RESULTS));
   expect(ran.status, ran.stderr).toBe(0);

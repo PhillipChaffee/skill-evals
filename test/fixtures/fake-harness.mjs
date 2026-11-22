@@ -40,6 +40,12 @@
 // - A plugin whose `behavior.json` says `"reportAgents": true` lists its `agents/*.md` as `agents` of its init event.
 // - A plugin whose `hooks/hooks.json` has `routes` (skill names) has a bootstrap hook: with no script, the run announces a
 //   `SessionStart` hook and loads each routed skill that the plugin has under `skills/`. Without the file, nothing is routed.
+// - Given `--mcp-config <file>` it reads the mock servers of the file, lists them as `mcp_servers` of its init event, and
+//   writes what the agent could see (`argv`, `config`, `cwd`, `env` names) to `mcp-seen.json` in $FAKE_DIR. A call step whose
+//   `name` is `mcp__<server>__<tool>` and whose server is in the file really starts that server (the command and
+//   environment of the file), sends it `initialize`, `notifications/initialized` and `tools/call`, and takes the
+//   reply's text as the tool's output. A call with `"hidden": true` is made the same way but never announced, as a
+//   harness whose stream lacks MCP calls does; only the mock log shows it.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -96,6 +102,23 @@ const prompt = piMode
   ? fs.readFileSync(0, "utf8")
   : process.argv[process.argv.indexOf("--") + 1];
 const pluginDir = piMode ? flag("-e") : flag("--plugin-dir");
+const mcpFile = piMode ? null : flag("--mcp-config");
+const mcpText = mcpFile ? fs.readFileSync(mcpFile, "utf8") : null;
+const mcpServers = mcpText ? JSON.parse(mcpText).mcpServers : {};
+if (mcpText && process.env.FAKE_DIR) {
+  fs.writeFileSync(
+    path.join(process.env.FAKE_DIR, "mcp-seen.json"),
+    JSON.stringify({
+      argv: process.argv.slice(2),
+      configFile: mcpFile,
+      config: mcpText,
+      cwd: process.cwd(),
+      home: process.env.HOME,
+      files: fs.readdirSync(process.cwd(), { recursive: true }),
+      env: Object.keys(process.env),
+    }),
+  );
+}
 
 if (!piMode && prompt.startsWith("Grade one answer")) {
   const dir = path.join(process.env.FAKE_DIR ?? "", "judge");
@@ -322,11 +345,68 @@ function expand(value) {
 }
 
 /**
+ * Makes a call to a mock MCP server, as a harness would: starts the server the config names, runs the handshake and the call.
+ * @param name - The tool's name, `mcp__<server>__<tool>`.
+ * @param input - The call's arguments.
+ * @returns The tool's output text and whether it failed; null when the name is no tool of a configured server.
+ */
+function mockCall(name, input) {
+  const [, server, ...rest] = name.split("__");
+  const entry = name.startsWith("mcp__") ? mcpServers[server] : undefined;
+  if (!entry) return null;
+  const lines = [
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "fake-harness", version: "1" },
+      },
+    },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: rest.join("__"), arguments: input },
+    },
+  ].map((message) => `${JSON.stringify(message)}\n`);
+  const ran = spawnSync(entry.command, entry.args, {
+    input: lines.join(""),
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ...entry.env },
+  });
+  const reply = ran.stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .find((message) => message.id === 2);
+  if (!reply || reply.error) {
+    return { content: reply?.error.message ?? ran.stderr, isError: true };
+  }
+  return {
+    content: reply.result.content.map((block) => block.text).join(""),
+    isError: reply.result.isError === true,
+  };
+}
+
+/**
  * Does what a scripted call asks for in the workspace.
  * @param call - The call step's fields: its input, what it executes or writes, and `isError` for a result that fails without running anything.
  * @returns What the tool reports: its output text, and whether it failed.
  */
-const perform = ({ input, output = "", exec, write, isError = false }) => {
+const perform = ({
+  name = "",
+  input,
+  output = "",
+  exec,
+  write,
+  isError = false,
+}) => {
+  const mocked = mockCall(name, input);
+  if (mocked) return mocked;
   if (write) {
     // $PLUGIN_DIR stands for the --plugin-dir this run was given, so a script can write into the plugin.
     const target = write.path.replaceAll("$PLUGIN_DIR", pluginDir ?? "");
@@ -427,6 +507,8 @@ function play(steps, turn) {
     if ("text" in one) {
       assistant([{ type: "text", text: expand(one.text) }], parent, one.usage);
       final = expand(one.text);
+    } else if ("call" in one && one.call.hidden) {
+      perform({ ...one.call, input: expand(one.call.input) });
     } else if ("call" in one) {
       const { block, settle } = prepare(one.call);
       assistant([block], parent);
@@ -641,6 +723,12 @@ const init = {
   skills: fs.existsSync(path.join(process.env.FAKE_DIR ?? "", "hide-skills"))
     ? []
     : installed,
+  ...(mcpFile && {
+    mcp_servers: Object.keys(mcpServers).map((name) => ({
+      name,
+      status: "connected",
+    })),
+  }),
   ...(behavior.reportAgents && { agents: pluginAgents() }),
   ...played?.found.init,
   ...played?.found.inits?.[turnNo],

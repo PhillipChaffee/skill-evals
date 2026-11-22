@@ -146,6 +146,7 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
         ...(e.kind === "subagent"
           ? { dispatch: e.dispatch ?? { ...NO_DISPATCH } }
           : {}),
+        ...(e.source === undefined ? {} : { source: e.source }),
         ...(e.turn === null ? {} : { turn: e.turn }),
         ...(durationMs === undefined ? {} : { durationMs }),
       };

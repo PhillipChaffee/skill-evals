@@ -46,12 +46,43 @@ function installed() {
   return { project, files: tarball.files.map((file) => file.path), run };
 }
 
+/**
+ * Runs the mock MCP server through the link that npm makes for its `bin` entry, and makes one call.
+ * @param project - The project the tarball was installed into.
+ */
+function expectMockServer(project: string): void {
+  const tool = path.join(project, "mock/tracker");
+  fs.mkdirSync(tool, { recursive: true });
+  fs.writeFileSync(
+    path.join(tool, "get.json"),
+    JSON.stringify({
+      description: "d",
+      inputSchema: {},
+      responses: [{ text: "ok {{id}}" }],
+    }),
+  );
+  const call = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "get", arguments: { id: "7" } },
+  });
+  const mock = spawnSync(
+    path.join(project, "node_modules/.bin/skill-evals-mcp-mock"),
+    ["tracker", tool],
+    { input: `${call}\n`, encoding: "utf8" },
+  );
+  expect(mock.status, mock.stderr).toBe(0);
+  expect(mock.stdout).toContain('"text":"ok 7"');
+}
+
 test(
   "the packed tarball holds compiled code only, and it lists, scores, and imports from another directory",
   () => {
     const { project, files, run } = installed();
     expect(files).toContain("dist/bin.js");
     expect(files).toContain("dist/index.d.ts");
+    expect(files).toContain("dist/mcp/mock-server.js");
     expect(files).toContain("schema/case.schema.json");
     expect(files).toContain("schema/config.schema.json");
     // The examples ship, and some hold TypeScript files that are the material of a case, so `.ts` is unshipped
@@ -64,6 +95,8 @@ test(
     const list = run(bin, "list");
     expect(list.status, list.stderr).toBe(0);
     expect(list.stdout).toMatch(/pi.*claude-code.*cursor.*opencode.*codex/s);
+
+    expectMockServer(project);
 
     const caseDir = path.join(project, "evals/cases/hello");
     fs.mkdirSync(caseDir, { recursive: true });

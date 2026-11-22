@@ -1,0 +1,23 @@
+{
+  "description": "Search messages by words.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": ["query"]
+  },
+  "responses": [
+    {
+      "when": {
+        "query": "502|[Cc]heckout|[Dd]eploy"
+      },
+      "text": "#checkout-oncall 14:02 maya: rolled back deploy 8812, the 502s were gone within a minute"
+    },
+    {
+      "text": "no message matches {{query}}"
+    }
+  ]
+}

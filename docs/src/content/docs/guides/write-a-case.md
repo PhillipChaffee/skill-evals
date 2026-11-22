@@ -438,6 +438,62 @@ A `tool_not_called` check with `inputMatches` reads the whole input of a call. T
 
 The full case is in `examples/cases/setup-git`.
 
+## Mock MCP servers
+
+A case can give the agent MCP servers that you wrote the answers for, so that a run reads the same issue, page or message every time and calls nothing real. Put one directory for each server under the case's `mcp/`, and one file for each tool in it:
+
+```text
+my-case/
+  case.json
+  prompt.md
+  mcp/
+    tracker/
+      get_issue.json
+      add_comment.json
+```
+
+A tool file is strict: an unknown key is an error.
+
+| Key           | Holds                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `description` | What `tools/list` says the tool does. The agent reads it.                                                                                                                            |
+| `inputSchema` | The JSON Schema of the tool's arguments.                                                                                                                                             |
+| `responses`   | A non-empty list. Each has `text`, an optional `isError`, and an optional `when`: argument names with a regular expression each. The first response whose `when` fits the call wins. |
+
+`text` may hold `{{argument}}`, which the call's arguments fill. A call with no matching response gets an error result, `no response matches`; a placeholder whose argument is missing gets an error result that names it. Server and tool names match `^[a-z][a-z0-9_-]*$`, and a server name has no `__`. A `when` pattern is checked when the case loads and has no flags, so write `[Cc]heckout` for a match that ignores case. This tool returns an error for one planted id:
+
+```jsonc
+{
+  "description": "Read one issue by its id.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "id": { "type": "string" } },
+  },
+  "responses": [
+    { "when": { "id": "^SHOP-7$" }, "text": "{{id}}: Cart empties on login." },
+    {
+      "when": { "id": "^SHOP-9999$" },
+      "text": "no such issue: {{id}}",
+      "isError": true,
+    },
+    { "text": "{{id}}: no record." },
+  ],
+}
+```
+
+Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in every harness. A check with kind `other` and no `name` still matches an MCP call, as it did before the kind existed; one with a `name` does not.
+
+```json
+{
+  "type": "tool_called",
+  "kind": "mcp",
+  "name": "^tracker\\.get_issue$",
+  "inputMatches": "SHOP-7"
+}
+```
+
+A case with an `mcp/` directory needs the capability `mcp`, so it is not applicable to a harness that cannot register servers ([Capabilities](../concepts/capabilities.md)). The servers run from a copy outside the workspace and the home, so the agent cannot see the case's files. What they answered is kept as `<label><rep>.mock-log.jsonl` beside the transcript. Under `--isolated`, the mock servers are part of the subject; any other MCP server a harness reports still makes the run invalid. [The design note](https://github.com/PhillipChaffee/skill-evals/blob/main/docs/design/mcp-mocks.md) has the details and what was read from the CLI. The full case is `examples/cases/mcp-mocks`.
+
 ## Commands after the run
 
 A `command` check runs a shell command in the workspace after the agent exits, and scores it. Use it for what a pattern cannot say: the project's own tests, a check the agent never saw, a `git` query, or a mutation check.

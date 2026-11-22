@@ -1,4 +1,5 @@
 import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
+import { mcpToolOf } from "../mcp/names.js";
 import type { EventInput } from "../transcript.js";
 import {
   callPart,
@@ -101,6 +102,20 @@ function dispatchOf(input: unknown): Dispatch {
     model: text("model"),
     effort: text("effort"),
   };
+}
+
+/**
+ * Gives an MCP tool call its neutral kind and name.
+ * @param part - The part of a tool call.
+ * @param native - The tool's own name.
+ * @returns The part as it is, unless the name is `mcp__<server>__<tool>`: then its kind is `mcp` and its name is
+ *   `<server>.<tool>`.
+ */
+function mcpPart(part: EventInput, native: string): EventInput {
+  const split = mcpToolOf(native);
+  return split
+    ? { ...part, kind: "mcp", name: `${split.server}.${split.tool}` }
+    : part;
 }
 
 /**
@@ -212,10 +227,9 @@ export function transcriptParts(
     return blocks.flatMap((block): EventInput[] => {
       if (block.type === "tool_use") {
         const { id: callId, name = "", input } = block;
-        const part = callPart(
-          kinds,
-          { name, input, callId },
-          { turn: current, agent },
+        const part = mcpPart(
+          callPart(kinds, { name, input, callId }, { turn: current, agent }),
+          name,
         );
         if (callId !== undefined) callAgents.set(callId, agent);
         if (part.kind === "subagent" && callId !== undefined) {

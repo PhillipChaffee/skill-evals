@@ -97,6 +97,7 @@ function inputFor(run: SessionInput, place: Place): RunInput {
     model: run.model,
     maxTurns: run.maxTurns,
     isolated: run.isolated,
+    mcpDir: place.dirs.mcp,
   };
 }
 

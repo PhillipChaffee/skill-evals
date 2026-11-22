@@ -17,7 +17,8 @@ const caseHashes = new WeakMap<Case, string>();
 export function caseHash(caseDef: Case): string {
   const known = caseHashes.get(caseDef);
   if (known !== undefined) return known;
-  const { dir, workspaceDir, graderDir, fixtureDir, homeDir, ...loaded } =
+  // `mcp` holds a path, so it stays out of the loaded case; its directory is hashed by content below, as `dir` is.
+  const { dir, workspaceDir, graderDir, fixtureDir, homeDir, mcp, ...loaded } =
     caseDef;
   // A case with one prompt has no `turns` key, so its hash is what it was before turns existed.
   const { turns, ...rest } = loaded;
@@ -28,6 +29,7 @@ export function caseHash(caseDef: Case): string {
     fixtureDir,
     homeDir,
     ...loaded.fixtureDirs,
+    mcp?.dir,
   ];
   const hash = sha256(
     canonical({

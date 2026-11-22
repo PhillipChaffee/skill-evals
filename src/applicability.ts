@@ -176,6 +176,8 @@ export function applicabilityUnder(
       ...caseDef.requires,
       ...turnNeeds(caseDef),
       ...seeded.needs,
+      // A case with mock servers needs a harness that registers them.
+      ...(caseDef.mcp ? (["mcp"] as const) : []),
     ]),
   );
   for (const need of seeded.blocked) missing.add(need);

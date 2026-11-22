@@ -1,0 +1,9 @@
+{
+  "description": "Add a comment to an issue. This changes the tracker.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "id": { "type": "string" }, "text": { "type": "string" } },
+    "required": ["id", "text"]
+  },
+  "responses": [{ "text": "comment added to {{id}}" }]
+}

@@ -3,6 +3,7 @@ import { fixtureOf, fixturesOf, homeOf } from "./case-dirs.js";
 import type { FieldDef } from "./checks/fields.js";
 import { seedsOf } from "./history-files.js";
 import type { Found } from "./discover.js";
+import { loadMcp } from "./mcp/mocks.js";
 import type { SetupStep } from "./setup-steps.js";
 
 // The keys of a case file that say what a run starts with besides `workspace/`.
@@ -23,6 +24,17 @@ export const LAYER_KEYS: Record<string, FieldDef> = {
       "Directories, relative to the case's directory and inside the cases directory, copied into the workspace in order before the case's own `workspace/`. Keep shared ones under a directory that starts with `_`.",
   },
 };
+
+/**
+ * Loads the case's mock MCP servers, if it has an `mcp/` directory.
+ * @param dir - The case's directory.
+ * @param file - The case file, for an error message.
+ * @returns `{ mcp }`, or nothing for a case without servers, so that its keys and hashes stay what they were.
+ */
+function mcpOf(dir: string, file: string) {
+  const mcp = loadMcp(dir, file);
+  return mcp === null ? {} : { mcp };
+}
 
 /**
  * Reads the keys and folders that decide what a run starts with besides `workspace/`.
@@ -48,5 +60,6 @@ export function layersOf(
     fixtureDir: fixtureOf(dir, file),
     homeDir: homeOf({ dir, file, root }, read("home") as string | undefined),
     ...seedsOf(dir),
+    ...mcpOf(dir, file),
   };
 }

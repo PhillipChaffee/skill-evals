@@ -484,6 +484,7 @@
                   "skill",
                   "subagent",
                   "question",
+                  "mcp",
                   "other"
                 ]
               },
@@ -1583,6 +1584,7 @@
             "skill",
             "subagent",
             "question",
+            "mcp",
             "other"
           ]
         },
@@ -1723,6 +1725,7 @@
             "skill",
             "subagent",
             "question",
+            "mcp",
             "other"
           ]
         },
@@ -1846,6 +1849,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },
@@ -1944,6 +1948,7 @@
                   "skill",
                   "subagent",
                   "question",
+                  "mcp",
                   "other"
                 ]
               },
@@ -2249,6 +2254,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },
@@ -2350,6 +2356,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },
@@ -2454,6 +2461,7 @@
                   "skill",
                   "subagent",
                   "question",
+                  "mcp",
                   "other"
                 ]
               },
@@ -2621,6 +2629,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -2721,6 +2730,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -2822,6 +2832,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -2997,6 +3008,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -3097,6 +3109,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -3198,6 +3211,7 @@
                         "skill",
                         "subagent",
                         "question",
+                        "mcp",
                         "other"
                       ]
                     },
@@ -3346,6 +3360,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },
@@ -3493,6 +3508,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },
@@ -3646,6 +3662,7 @@
                 "skill",
                 "subagent",
                 "question",
+                "mcp",
                 "other"
               ]
             },

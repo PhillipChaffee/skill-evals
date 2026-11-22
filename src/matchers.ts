@@ -147,6 +147,20 @@ export const tester = (
 };
 
 /**
+ * Tells whether a call's kind fits a matcher's.
+ * @param matcher - What the call must be.
+ * @param call - A tool call of the run.
+ * @returns True when the matcher names no kind or the call's own. For compatibility with 0.0.1, which had no `mcp`
+ *   kind, a matcher of kind `other` with no `name` also fits an `mcp` call; one with a `name` does not.
+ */
+const kindFits = (matcher: ToolMatcher, call: ToolCall): boolean =>
+  matcher.kind === undefined ||
+  call.kind === matcher.kind ||
+  (matcher.kind === "other" &&
+    matcher.name === undefined &&
+    call.kind === "mcp");
+
+/**
  * Compiles a matcher once, for a check that tests many calls.
  * @param matcher - What a call must be.
  * @returns A test of one call: true when every key the matcher sets fits. The kind is equal, and the patterns,
@@ -167,7 +181,7 @@ function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
     fitsBy(by, call.agent) &&
     (agent === undefined ||
       (call.kind === "subagent" && ruleOf(call, agent) !== null)) &&
-    (matcher.kind === undefined || call.kind === matcher.kind) &&
+    kindFits(matcher, call) &&
     name(call.name) &&
     input(inputJson(call)) &&
     (inputLinesMax === undefined || longest(call) <= inputLinesMax) &&

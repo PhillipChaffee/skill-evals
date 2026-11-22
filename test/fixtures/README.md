@@ -34,6 +34,12 @@ A call step with `"denied": true` is listed in the result's `permission_denials`
 
 `slow-harness.mjs` also takes `SLOW_TURNS` (write that many assistant events, one per turn, each in its own chunk, and then hang) and `SLOW_PID_FILE` (the child's process id), which `src/limits.test.ts` uses to stop a run in the middle and to look for the child afterwards.
 
+## MCP in `fake-harness.mjs`
+
+Given `--mcp-config <file>` (which the Claude Code adapter passes for a case with an `mcp/` directory), the fake reads the file's `mcpServers` and lists their names as `mcp_servers` of its init event. It writes what it could see to `mcp-seen.json` in the sandbox's fake directory: its arguments, the config file's path and text, its working directory, its `HOME`, the files in its working directory and the names (never the values) of its environment variables. `src/mcp-isolation.test.ts` reads that record to prove that the mock directory is outside the workspace and the home, that the cases path appears nowhere the agent can look, and that `MOCK_LOG` is in the servers' environment only.
+
+A call step whose `name` is `mcp__<server>__<tool>`, for a server in the config, really starts that server with the command, arguments and environment the config gives, sends it `initialize`, `notifications/initialized` and `tools/call` over its standard input, and uses the reply's text as the tool's output and the reply's `isError` as the result's. So `src/mcp-run.test.ts` and the target case `external-sources-through-mocks` run the real mock server. A call step with `"hidden": true` makes the call but states nothing of it in the stream, as a harness whose stream lacks MCP calls does; only the mock log shows it. Nothing here was captured from a real Claude Code: the stream shape of an MCP call (`tool_use` named `mcp__<server>__<tool>`) is read from the binary's strings, and Task 29 confirms it.
+
 ## Streams written inside tests
 
 `src/adapters-edges.test.ts` also builds short streams by hand for the edges that no fixture has: an error result, a result that is a list of blocks, a tool with no output yet, a result with no call. Each is written from the event shape that the adapter already reads (`claude-code`, `codex`, `opencode` and `pi`) or from the CLI's documentation (`cursor`). They prove how a parser handles that shape. A capability is declared only for the captured fixtures above.

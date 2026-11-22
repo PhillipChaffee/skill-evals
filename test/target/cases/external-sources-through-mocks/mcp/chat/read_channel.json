@@ -1,0 +1,24 @@
+{
+  "description": "Read the recent messages of a channel.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string"
+      }
+    },
+    "required": ["channel"]
+  },
+  "responses": [
+    {
+      "when": {
+        "channel": "^#checkout-oncall$"
+      },
+      "text": "13:52 maya: 502s on checkout, paging the platform team\n14:02 maya: rolled back deploy 8812, the 502s were gone within a minute\n14:05 maya: the gateway certificate was valid the whole time; it was the deploy, not the certificate"
+    },
+    {
+      "text": "no such channel: {{channel}}",
+      "isError": true
+    }
+  ]
+}

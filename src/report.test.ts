@@ -9,6 +9,10 @@ import type { XmlElement } from "./testing/xml.js";
 import type { JsonReport } from "./report/json.js";
 import type { Summary } from "./summary.js";
 
+// A capability that no harness of the suite declares: Claude Code has no way to ask for a compaction.
+const COMPACT = "compact";
+const NEEDS = "needs-compact";
+
 const RESULTS = "results";
 const NEVER = { type: "output_contains", text: "never said" };
 const CRASH_ONCE = [{ onStart: [1], step: { crash: "segfault" } }];
@@ -23,9 +27,9 @@ function plantKinds(box: Sandbox): void {
   scriptedCase(box, "fine");
   scriptedCase(box, "weak", { checks: [NEVER], more: { minScore: 0.9 } });
   scriptedCase(box, "broken", { before: CRASH_ONCE });
-  box.write("suite/needs-mcp/prompt.md", "do needs-mcp\n");
-  box.write("suite/needs-mcp/case.json", {
-    requires: ["mcp"],
+  box.write("suite/needs-compact/prompt.md", `do ${NEEDS}\n`);
+  box.write("suite/needs-compact/case.json", {
+    requires: [COMPACT],
     checks: [NEVER],
   });
 }
@@ -67,9 +71,9 @@ test("junit marks a not-applicable case skipped", async () => {
   expect(kind("fine")).toEqual(["system-out"]);
   expect(kind("weak")).toEqual(["failure", "system-out"]);
   expect(kind("broken")).toEqual(["error"]);
-  expect(kind("needs-mcp")).toEqual(["skipped"]);
-  const skipped = testNamed(root, "needs-mcp")?.children[0];
-  expect(skipped?.attributes["message"]).toContain("mcp");
+  expect(kind(NEEDS)).toEqual(["skipped"]);
+  const skipped = testNamed(root, NEEDS)?.children[0];
+  expect(skipped?.attributes["message"]).toContain(COMPACT);
   expect(testNamed(root, "weak")?.children[0]?.attributes["message"]).toContain(
     "0.9",
   );
@@ -125,7 +129,7 @@ test("summary.json matches the report's suite score", async () => {
     ["broken", "invalid"],
     ["fine", "pass"],
     ["weak", "below"],
-    ["needs-mcp", "not-applicable"],
+    [NEEDS, "not-applicable"],
   ]);
   expect(report.cases[0]).toMatchObject({
     score: null,

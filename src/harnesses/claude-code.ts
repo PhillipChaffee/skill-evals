@@ -25,6 +25,7 @@ import {
   samePath,
   stringArg,
 } from "./shared.js";
+import { MCP_CONFIG, writeMcpConfig } from "./claude-code-mcp.js";
 import { stripClaudeCode } from "./claude-code-strip.js";
 import { looksRateLimited } from "./rate-limit.js";
 import { placeRules } from "./rules.js";
@@ -183,6 +184,11 @@ const claudeCode: Harness = {
     // keeps. The project's `.claude/rules` is read only under the `project` source, which `--isolated` turns off. The
     // stream reports no loaded rule, so `reportedLoaded` is always null for this adapter.
     "rules",
+    // Confirmed from `claude --help` (2.1.330) and the binary's strings, not from a real run: `--mcp-config <configs...>`
+    // "Load MCP servers from JSON files or strings", whose file is `{ "mcpServers": { <name>: { command, args, env } } }`,
+    // and a tool of a server is named `mcp__<server>__<tool>`, which the parser maps to the kind `mcp`
+    // (`docs/design/mcp-mocks.md`). Task 29 confirms it with a real model.
+    "mcp",
     // Not declared: `userInvoke`. `claude --help` says "Skills still resolve via /skill-name" (`--bare`), but whether a
     // `/skill args` prompt in a `-p` process loads the skill is unconfirmed without a real model; Task 29 confirms it.
     // Not declared: `historyNative` and `sessionStore`. `claude-code-history.ts` writes a session as the binary's strings
@@ -196,7 +202,16 @@ const claudeCode: Harness = {
   reportsCost: true,
   isRateLimit: looksRateLimited,
 
-  invocation({ subject, home, prompt, model, maxTurns, isolated, session }) {
+  invocation({
+    subject,
+    home,
+    prompt,
+    model,
+    maxTurns,
+    isolated,
+    session,
+    mcpDir,
+  }) {
     const configDir = path.join(home, ".claude");
     const placed = placeSkills(subject, path.join(configDir, "skills"));
     return {
@@ -214,12 +229,16 @@ const claudeCode: Harness = {
         ...opt("--model", model),
         ...opt("--max-turns", maxTurns),
         ...opt("--resume", session),
+        // `--mcp-config` takes a list, so it comes before another flag and never last before `--`.
+        ...(mcpDir ? ["--mcp-config", path.join(mcpDir, MCP_CONFIG)] : []),
         "--",
         prompt,
       ],
       env: { CLAUDE_CONFIG_DIR: configDir, ...(isolated && ISOLATION.env) },
     };
   },
+
+  registerMcp: writeMcpConfig,
 
   rulesTargets,
   installRules: (files, input) => placeRules(files, rulesTargets(files), input),

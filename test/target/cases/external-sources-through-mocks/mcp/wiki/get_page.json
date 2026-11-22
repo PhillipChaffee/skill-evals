@@ -1,0 +1,24 @@
+{
+  "description": "Read one wiki page by its title.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      }
+    },
+    "required": ["title"]
+  },
+  "responses": [
+    {
+      "when": {
+        "title": "[Cc]heckout [Rr]unbook"
+      },
+      "text": "Checkout runbook. On a burst of 502 errors: first check the expiry date of the payment gateway certificate, then check what was deployed in the last hour. Deploys go out on Tuesdays at 13:30."
+    },
+    {
+      "text": "no page titled {{title}}",
+      "isError": true
+    }
+  ]
+}

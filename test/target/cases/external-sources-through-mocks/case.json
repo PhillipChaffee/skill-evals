@@ -1,0 +1,98 @@
+{
+  "description": "Three mock MCP servers, one investigator subagent for each, all in one turn. Each server is called by its own investigator only, nothing is written anywhere, and the planted contradiction between the tracker and the chat is in the answer with both places named.",
+  "tags": ["mcp", "agents", "target"],
+  "checks": [
+    {
+      "type": "tool_called",
+      "kind": "subagent",
+      "min": 3,
+      "max": 3,
+      "sameTurn": true
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^tracker\\.",
+      "by": {
+        "agent": "tracker-investigator"
+      },
+      "min": 1
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^wiki\\.",
+      "by": {
+        "agent": "wiki-investigator"
+      },
+      "min": 1
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^chat\\.",
+      "by": {
+        "agent": "chat-investigator"
+      },
+      "min": 1
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "^(?!tracker\\.)",
+      "by": {
+        "agent": "tracker-investigator"
+      }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "^(?!wiki\\.)",
+      "by": {
+        "agent": "wiki-investigator"
+      }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "^(?!chat\\.)",
+      "by": {
+        "agent": "chat-investigator"
+      }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "by": "main"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "\\.(add_|update_|post_|create_|delete_)"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "write"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "(?=.*expired.{0,40}certificate|.*certificate.{0,40}expired)(?=.*roll(ed|ing)?[ -]?back)",
+      "flags": "is"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "(?=.*CHK-412)(?=.*#checkout-oncall)",
+      "flags": "s"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "contradict|disagree|conflict|inconsisten|at odds",
+      "flags": "i"
+    }
+  ],
+  "timeoutSeconds": 300
+}

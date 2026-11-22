@@ -63,7 +63,7 @@ function stillLoaded(stripped: Stripped, reported: Loaded[]): string[] {
  */
 export function startupRecord(
   run: { harness: Harness; isolated?: boolean | undefined },
-  ran: Pick<SessionResult, "home" | "placed" | "userTurns"> & {
+  ran: Pick<SessionResult, "home" | "placed" | "userTurns" | "mcpServers"> & {
     parsed: { loaded: Loaded };
   },
   copy: Copy | null,
@@ -80,8 +80,17 @@ export function startupRecord(
       ? REPORTED_LOADED[copy.loaded.kind](copy.loaded, each)
       : null,
   );
+  // The mock servers are part of the subject. Any other server the harness reports is still foreign.
+  const mocks = new Set(ran.mcpServers);
   const foreign = reported.flatMap((each) =>
-    foreignOf(run.harness, each, subject),
+    foreignOf(
+      run.harness,
+      {
+        ...each,
+        mcpServers: each.mcpServers?.filter((name) => !mocks.has(name)) ?? null,
+      },
+      subject,
+    ),
   );
   const unexpected = [...foreign, ...(run.harness.strays?.(ran) ?? [])];
   const strippedLoaded = copy ? stillLoaded(copy.stripped, reported) : [];

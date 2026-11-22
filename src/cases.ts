@@ -11,6 +11,7 @@ import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
 import type { History, PriorSession } from "./history-types.js";
+import type { McpSource } from "./mcp/types.js";
 import { allChecks } from "./case-checks.js";
 import { CASE_KEYS } from "./case-keys.js";
 import { readPreconditions } from "./case-preconditions.js";
@@ -97,6 +98,8 @@ export interface Case {
   fixtureDir: string | null;
   /** The directory that `home` names, copied into the run's throwaway home, or null. */
   homeDir: string | null;
+  /** The case's mock MCP servers (`mcp/<server>/<tool>.json`); absent when it has none. A case with them needs `mcp`. */
+  mcp?: McpSource | undefined;
   /**
    * The conversation that already happened, from the case's `history.json`; absent when the case has none. It reaches the
    * agent in front of turn 1 (`preamble`) or as the harness's own session (`native`), and no check reads it.

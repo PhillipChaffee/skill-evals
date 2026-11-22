@@ -90,6 +90,7 @@ const FEATURE_EXAMPLES = [
   "by-agent",
   "history",
   "judge-transcript",
+  "mcp-mocks",
   "preconditions",
   "requires",
   "routing",

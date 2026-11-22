@@ -1,0 +1,20 @@
+{
+  "description": "Read one issue by its id.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "id": { "type": "string" } },
+    "required": ["id"]
+  },
+  "responses": [
+    {
+      "when": { "id": "^SHOP-7$" },
+      "text": "SHOP-7: Cart empties on login. Status: open."
+    },
+    {
+      "when": { "id": "^SHOP-9999$" },
+      "text": "no such issue: {{id}}",
+      "isError": true
+    },
+    { "text": "{{id}}: no record." }
+  ]
+}

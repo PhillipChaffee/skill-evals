@@ -2,10 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Capability } from "../capabilities.js";
 import type { HistoryAdapter } from "../history-types.js";
+import type { McpRegistration, McpServerEntry } from "../mcp/types.js";
 import type { Subject } from "../subject.js";
 import type { Stripped, SubjectOptions } from "../subject-options.js";
 import type { HookEvent } from "./hook.js";
 import type { Loaded } from "./loaded.js";
+import type { ToolKind } from "./tool-kinds.js";
 import type { RulesFile, RulesTarget } from "./rules.js";
 import type { Invoke, TurnInput, TurnState } from "./turn-input.js";
 
@@ -16,26 +18,8 @@ export type { Loaded } from "./loaded.js";
 export { NOT_REPORTED } from "./loaded.js";
 export type { RulesFile, RulesTarget } from "./rules.js";
 
-// Every tool kind with what it means. The docs list the kinds from this table.
-export const TOOL_KIND_MEANINGS = {
-  shell: "Ran a command.",
-  read: "Read a file.",
-  write: "Created or replaced a file.",
-  edit: "Changed part of a file, or deleted one.",
-  search: "Searched or listed files.",
-  web: "Fetched a page or searched the web.",
-  skill: "Called the harness's skill tool.",
-  subagent: "Started another agent.",
-  question:
-    "Asked the user a question, as Claude Code's `AskUserQuestion` does.",
-  other: "Any tool the harness's adapter has no kind for, such as an MCP tool.",
-} as const;
-
-/** What a tool does, the same word in every harness. */
-export type ToolKind = keyof typeof TOOL_KIND_MEANINGS;
-
-// The table's keys are exactly the kinds, so the cast only names them.
-export const TOOL_KINDS = Object.keys(TOOL_KIND_MEANINGS) as ToolKind[];
+export type { ToolKind } from "./tool-kinds.js";
+export { TOOL_KINDS, TOOL_KIND_MEANINGS } from "./tool-kinds.js";
 
 /** One tool call of the agent. */
 export interface ToolCall {
@@ -55,6 +39,8 @@ export interface ToolCall {
   agent?: AgentRef;
   /** What the dispatch asked for, on a `subagent` call; null in each field the harness's stream does not show. */
   dispatch?: Dispatch;
+  /** `mock-log` for a call that only the mock MCP servers' log shows; its agent is then of type `unknown`. Absent otherwise. */
+  source?: "mock-log";
 }
 
 /** What a dispatch call chose for the agent it starts, as the adapter reads it from the call's input. */
@@ -108,6 +94,10 @@ export interface TranscriptEvent {
   durationMs?: number;
   /** On a `hook`: the hook that ran. A hook event is never a tool call, so no tool check counts it. */
   hook?: HookEvent;
+  /** When the event happened, as an ISO 8601 time, where the stream states it. No adapter reads one today; the events of the mock log have one. */
+  at?: string;
+  /** `mock-log` for an event that the runner took from the mock MCP servers' log, not from the harness's stream. Absent otherwise. */
+  source?: "mock-log";
 }
 
 /** Token counts; input counts every prompt token, cached ones included. */
@@ -191,6 +181,8 @@ export interface RunInput {
   maxTurns?: number | undefined;
   /** Start with nothing loaded but the subject. Only an adapter with the `isolated` capability is given true. */
   isolated?: boolean | undefined;
+  /** The run's mock MCP directory, where `registerMcp` wrote the adapter's config; absent for a case with no `mcp/`. */
+  mcpDir?: string | undefined;
 }
 
 /** The variables that log in to Anthropic's API, to Bedrock and to Vertex. Names are exact, never a prefix. */
@@ -264,6 +256,16 @@ export interface Harness extends HistoryAdapter {
    * @returns Skill name to the directory of its copy, with none for a missing one. The run adds them to `placed`.
    */
   placedAfterSetup?: (input: RunInput) => Record<string, string>;
+  /**
+   * Tells the harness about the mock MCP servers of a case, for an adapter with the `mcp` capability, which declares it
+   * only once the registration mechanism is confirmed from the CLI. Called once per run, before the harness starts. It
+   * writes what the harness reads into `dir`, and `invocation` then adds the flag that names it when it is given
+   * `mcpDir`.
+   * @param servers - The servers, each with the command that starts it and the environment only that server gets.
+   * @param input - The run's mock directory, which is outside the workspace and the home, and the run's home and workspace.
+   * @throws {Error} When the config cannot be written; the run is then invalid.
+   */
+  registerMcp?: (servers: McpServerEntry[], input: McpRegistration) => void;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
   /**

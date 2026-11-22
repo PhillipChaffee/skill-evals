@@ -9,7 +9,8 @@
     "url": "git+https://github.com/PhillipChaffee/skill-evals.git"
   },
   "bin": {
-    "skill-evals": "dist/bin.js"
+    "skill-evals": "dist/bin.js",
+    "skill-evals-mcp-mock": "dist/mcp/mock-server.js"
   },
   "exports": {
     ".": {

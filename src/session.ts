@@ -13,7 +13,11 @@ import {
 import type { Dirs, SessionInput, SessionResult } from "./session-attempt.js";
 import type { Seeded } from "./history-plant.js";
 import { UNSEEDED, plantHistory } from "./history-plant.js";
+import type { RulesInstalled } from "./rules-install.js";
 import { installRulesFor } from "./rules-install.js";
+import type { McpStarted } from "./mcp/stage.js";
+import { startMcp, withMockLog } from "./mcp/stage.js";
+import type { Snapshot } from "./snapshot.js";
 import { snapshot } from "./snapshot.js";
 import { runTurns } from "./turns.js";
 import type { PreparedRun } from "./workspace.js";
@@ -111,6 +115,55 @@ async function single(
   };
 }
 
+/** What `resultOf` makes a session result from. */
+interface Made {
+  seeded: Seeded;
+  done: Done;
+  /** The run's parsed stream, with the mock log merged in where the stream lacks its calls. */
+  parsed: SessionResult["parsed"];
+  mcpLog: string | null;
+  dirs: Dirs;
+  seed: Snapshot;
+  prepared: PreparedRun | null;
+  graderDir: string | null;
+  rules: RulesInstalled | null;
+}
+
+/**
+ * Gathers what a finished session produced.
+ * @param run - The session's input.
+ * @param made - The parts the session made.
+ * @returns The result, which `session` hands to its callback while the directories still exist.
+ */
+function resultOf(run: SessionInput, made: Made): SessionResult {
+  const { done, dirs, prepared } = made;
+  return {
+    seeded: made.seeded.history,
+    stdout: done.stdout,
+    parsed: made.parsed,
+    error: done.end.error,
+    durationMs: done.durationMs,
+    stoppedBy: done.end.stoppedBy,
+    turns: done.turns,
+    firstOutputMs: done.firstOutputMs,
+    ending: done.ending,
+    userTurns: done.userTurns,
+    turnChanges: done.turnChanges,
+    workspace: dirs.workspace,
+    seed: made.seed,
+    placedChanges: done.placedChanges,
+    home: dirs.home,
+    homeSeed: done.homeSeed,
+    placed: done.placed,
+    seedDir: prepared?.seedDir ?? null,
+    remoteDir: prepared?.remoteDir ?? null,
+    graderDir: made.graderDir,
+    rulesInstalled: run.rules ? (made.rules?.installed ?? []) : null,
+    mcpServers: run.mcp?.servers ?? [],
+    mcpLog: made.mcpLog,
+  };
+}
+
 /**
  * Runs one prompt, or the turns of a case, in one harness, in a fresh home and workspace that are removed afterwards.
  * @param run - The harness, the prompt or turns, and what to load.
@@ -125,6 +178,7 @@ export async function session<T>(
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
   let prepared: PreparedRun | null = null;
+  let mcp: McpStarted | null = null;
   try {
     prepared = await prepareOf(run, {
       workspace: workspace.dir,
@@ -132,46 +186,36 @@ export async function session<T>(
     });
     const seed = prepared?.seed ?? snapshot(workspace.dir);
     copyAuthFiles(harness.authFiles, home.dir);
-    const dirs = { home: home.dir, workspace: workspace.dir };
-    // The order is: setup steps, login files, history and sessions, then the harness. A failed step means it never starts.
+    // The order is: setup steps, login files, mock servers, history and sessions, then the harness. A failed step means it never starts.
     const setupFailure = prepared?.failure ?? null;
+    const place = { home: home.dir, workspace: workspace.dir };
+    mcp =
+      setupFailure === null && run.mcp
+        ? startMcp(harness, run.mcp, place)
+        : null;
+    const dirs = { ...place, ...(mcp && { mcp: mcp.staged.dir }) };
     const seeded = setupFailure === null ? plantHistory(run, dirs) : UNSEEDED;
     // The rules go in once, before the first process, so that every turn of the case reads them.
     const rules =
       setupFailure === null && seeded.failure === null && run.rules
         ? installRulesFor(harness, run.rules, dirs)
         : null;
-    const failure = setupFailure ?? seeded.failure ?? rules?.failure ?? null;
+    const failure =
+      setupFailure ?? seeded.failure ?? rules?.failure ?? mcp?.failure ?? null;
     const done = run.turns
       ? await runTurns(run, { dirs, seed, failure, seeded })
       : await single(run, { dirs, failure, seeded });
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
     const graderDir = prepared?.copies?.copyGrader() ?? null;
-    const { stoppedBy, error, parsed } = done.end;
-    return await use({
-      seeded: seeded.history,
-      stdout: done.stdout,
-      parsed,
-      error,
-      durationMs: done.durationMs,
-      stoppedBy,
-      turns: done.turns,
-      firstOutputMs: done.firstOutputMs,
-      ending: done.ending,
-      userTurns: done.userTurns,
-      turnChanges: done.turnChanges,
-      workspace: workspace.dir,
-      seed,
-      placedChanges: done.placedChanges,
-      home: home.dir,
-      homeSeed: done.homeSeed,
-      placed: done.placed,
-      seedDir: prepared?.seedDir ?? null,
-      remoteDir: prepared?.remoteDir ?? null,
-      graderDir,
-      rulesInstalled: run.rules ? (rules?.installed ?? []) : null,
-    });
+    const { parsed, mcpLog } = withMockLog(harness, done.end.parsed, mcp);
+    return await use(
+      resultOf(run, {
+        ...{ seeded, done, parsed, mcpLog, dirs, seed },
+        ...{ prepared, graderDir, rules },
+      }),
+    );
   } finally {
+    mcp?.staged.dispose();
     prepared?.dispose();
     home.dispose();
     workspace.dispose();

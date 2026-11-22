@@ -4,13 +4,18 @@ import { play } from "./testing/runs.js";
 import { readResults, sandbox, tableRow } from "./testing/sandbox.js";
 
 const CLAUDE_CODE = "claude-code";
-const NEEDS_MCP = "needs-mcp";
+const NEEDS_COMPACT = "needs-compact";
 const SUBJECT_FLAGS = ["score", "--subject", "none", "--reps", "1"];
 const MISSING_BIN = "bin:definitely-missing";
-const MCP = "mcp";
+// A capability that no harness of the suite declares, such as `compact`: Claude Code has no way to ask for a compaction.
+const UNDECLARED = "compact";
 const PROMPT_SEEN = { type: "output_contains", text: "prompt" };
 const NEVER_SEEN = { type: "output_contains", text: "no such text" };
-const SKIPPABLE = { ...NEVER_SEEN, requires: [MCP], ifUnsupported: "skip" };
+const SKIPPABLE = {
+  ...NEVER_SEEN,
+  requires: [UNDECLARED],
+  ifUnsupported: "skip",
+};
 const BAR = 0.9;
 
 /**
@@ -46,16 +51,18 @@ async function scored(
 test("a case that requires a missing capability has no run and no score", async () => {
   const { ran, results } = await scored({
     plain: { checks: [PROMPT_SEEN, NEVER_SEEN] },
-    [NEEDS_MCP]: { requires: [MCP], checks: [PROMPT_SEEN] },
+    [NEEDS_COMPACT]: { requires: [UNDECLARED], checks: [PROMPT_SEEN] },
   });
   expect(ran.status, ran.stderr).toBe(0);
   expect(results?.records.map((record) => record.caseId)).toEqual(["plain"]);
   expect(results?.notApplicable).toHaveLength(1);
-  expect(results?.notApplicable[0]?.missing).toEqual([MCP]);
-  expect(results?.notApplicable[0]?.caseId).toBe(NEEDS_MCP);
+  expect(results?.notApplicable[0]?.missing).toEqual([UNDECLARED]);
+  expect(results?.notApplicable[0]?.caseId).toBe(NEEDS_COMPACT);
   expect(results?.suites[0]?.suite["subject"]).toBe(0.5);
   expect(results?.suites[0]?.cases.map((c) => c.id)).toEqual(["plain"]);
-  expect(ran.stdout).toMatch(/## Not applicable[\s\S]*needs-mcp[\s\S]*mcp/);
+  expect(ran.stdout).toMatch(
+    /## Not applicable[\s\S]*needs-compact[\s\S]*compact/,
+  );
 });
 
 test("an unknown capability name is a load error that lists the known names", async () => {
@@ -75,7 +82,7 @@ test("an unknown capability name is a load error that lists the known names", as
   });
   expect(badBin.ran.stderr).toMatch(/unknown capability "bin:"/);
   const notList = await scored({
-    odd: { requires: MCP, checks: [PROMPT_SEEN] },
+    odd: { requires: UNDECLARED, checks: [PROMPT_SEEN] },
   });
   expect(notList.ran.stderr).toMatch(/"requires" must be a list/);
 });
@@ -112,7 +119,7 @@ test("ifUnsupported skip drops one check, re-normalizes, and is reported", async
       harness: CLAUDE_CODE,
       caseId: "two",
       checks: ['output_contains "no such text"'],
-      missing: [MCP],
+      missing: [UNDECLARED],
     },
   ]);
   expect(results?.notApplicable.map((entry) => entry.caseId)).toEqual([
@@ -164,7 +171,11 @@ test("harnesses without a note is a load error, and the note is the reason elsew
 test("the suite line shows the applicable count, and a bar of a not applicable case does not apply", async () => {
   const { ran, results } = await scored({
     plain: { checks: [PROMPT_SEEN] },
-    [NEEDS_MCP]: { requires: [MCP], minScore: BAR, checks: [NEVER_SEEN] },
+    [NEEDS_COMPACT]: {
+      requires: [UNDECLARED],
+      minScore: BAR,
+      checks: [NEVER_SEEN],
+    },
   });
   expect(ran.stdout).toMatch(
     /Suite score: 1\.00 \(1 of 2 cases, 1 of 1 runs\)/,
@@ -176,7 +187,7 @@ test("the suite line shows the applicable count, and a bar of a not applicable c
 
 test("no case applying to any chosen harness is a usage error", async () => {
   const { ran } = await scored({
-    [NEEDS_MCP]: { requires: [MCP], checks: [PROMPT_SEEN] },
+    [NEEDS_COMPACT]: { requires: [UNDECLARED], checks: [PROMPT_SEEN] },
   });
   expect(ran.status).toBe(2);
   expect(ran.stderr).toMatch(/no case applies to claude-code/);

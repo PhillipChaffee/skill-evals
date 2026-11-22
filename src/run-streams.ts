@@ -39,6 +39,9 @@ export function writeStreams(
   fs.mkdirSync(path.dirname(stem), { recursive: true });
   fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
   fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
+  // What the mock MCP servers logged is kept beside the transcript, as the servers wrote it.
+  if (ran.mcpLog !== null)
+    fs.writeFileSync(`${stem}.mock-log.jsonl`, ran.mcpLog);
   const absolute = path.resolve(writeTranscript(stem, ran.parsed.transcript));
   // The seeded history is a file of its own, so that the transcript holds the agent's events only.
   const history = writeHistory(stem, ran.seeded);

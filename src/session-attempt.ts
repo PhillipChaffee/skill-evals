@@ -21,6 +21,7 @@ import type { Ending } from "./retry.js";
 import type { OnTimeout, StoppedBy } from "./session-end.js";
 import type { TurnRecord } from "./turn-outcome.js";
 import type { Turn } from "./turn-spec.js";
+import type { McpSource } from "./mcp/types.js";
 import type { Layers } from "./workspace.js";
 import { turnWatch } from "./turn-watch.js";
 import { copyHome } from "./workspace.js";
@@ -31,6 +32,8 @@ export interface Dirs {
   home: string;
   /** The workspace the agent works in. */
   workspace: string;
+  /** The run's mock MCP directory, outside both of the above; absent for a case with no `mcp/`. */
+  mcp?: string | undefined;
 }
 
 /** One prompt for one harness. */
@@ -68,6 +71,8 @@ export interface SessionInput {
   env?: Record<string, string> | undefined;
   /** The subject's rule files and instruction file in the run's copy; null or absent when the subject names none. */
   rules?: RulesFile[] | null | undefined;
+  /** The case's mock MCP servers; absent for a case with no `mcp/`. */
+  mcp?: McpSource | undefined;
   /** Take the seed copy of the workspace even when the case has no `command` check, so that the run can be archived. */
   keepSeed?: boolean | undefined;
 }
@@ -115,6 +120,10 @@ export interface SessionResult {
   graderDir: string | null;
   /** Where the adapter put the subject's rules; null when the subject names none, empty when the harness installs none. */
   rulesInstalled: string[] | null;
+  /** The names of the mock MCP servers the run registered; empty for a case with none. */
+  mcpServers: string[];
+  /** What the mock servers logged, as the log file holds it (one JSON object per line); null for a case with no `mcp/`. */
+  mcpLog: string | null;
 }
 
 const SHOWN_SETUP_WORDS = 2;
@@ -404,5 +413,6 @@ export const inputOf = (
     model: run.model,
     maxTurns: run.maxTurns,
     isolated: run.isolated,
+    mcpDir: where.dirs.mcp,
   };
 };

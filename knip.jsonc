@@ -7,7 +7,12 @@
   // Deviation from the full-lint template: src/bin.ts is added. It is the
   // executable that package.json's "bin" ships as dist/bin.js, a second way
   // into the package that nothing in src/ imports.
-  "entry": ["src/index.ts", "src/bin.ts", "src/**/*.test.ts"],
+  "entry": [
+    "src/index.ts",
+    "src/bin.ts",
+    "src/mcp/mock-server.ts",
+    "src/**/*.test.ts",
+  ],
   // project covers exactly the shipped tree: a never-imported source file
   // must appear in the report, so src/ is never excluded from its own
   // report (the vitest coverage.include lesson).

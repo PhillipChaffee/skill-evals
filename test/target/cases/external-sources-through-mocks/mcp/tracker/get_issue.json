@@ -1,0 +1,30 @@
+{
+  "description": "Read one issue by its id.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": ["id"]
+  },
+  "responses": [
+    {
+      "when": {
+        "id": "^CHK-412$"
+      },
+      "text": "CHK-412: Checkout returns 502 since Tuesday 13:40. Status: resolved. Root cause: the TLS certificate of the payment gateway expired. Fixed: certificate renewed at 14:05."
+    },
+    {
+      "when": {
+        "id": "^CHK-9999$"
+      },
+      "text": "no such issue: {{id}}",
+      "isError": true
+    },
+    {
+      "text": "{{id}}: no record of this id."
+    }
+  ]
+}

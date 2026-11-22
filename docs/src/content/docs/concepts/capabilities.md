@@ -105,7 +105,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `compact`       | no   | no            | no       | no         | no      |
 | `clear`         | no   | yes           | no       | no         | no      |
 | `resume`        | no   | yes           | no       | no         | no      |
-| `mcp`           | no   | no            | no       | no         | no      |
+| `mcp`           | no   | yes           | no       | no         | no      |
 | `skillListing`  | no   | yes           | no       | no         | no      |
 | `loadedReport`  | no   | yes           | no       | no         | no      |
 | `isolated`      | no   | yes           | no       | no         | no      |

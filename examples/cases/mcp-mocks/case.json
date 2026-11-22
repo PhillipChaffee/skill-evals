@@ -1,0 +1,20 @@
+{
+  "description": "The agent reads one issue through a mock MCP server and makes no call that changes the tracker. The server's files are in mcp/tracker/.",
+  "tags": ["mcp"],
+  "checks": [
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^tracker\\.get_issue$",
+      "inputMatches": "SHOP-7",
+      "min": 1
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "^tracker\\.add_comment$"
+    },
+    { "type": "output_contains", "text": "Cart empties on login" }
+  ],
+  "timeoutSeconds": 300
+}

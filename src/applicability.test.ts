@@ -10,7 +10,8 @@ import type { Harness } from "./harnesses/shared.js";
 import { UsageError } from "./scope.js";
 import { sandbox } from "./testing/sandbox.js";
 
-const MCP = "mcp";
+// A capability that no harness of the suite declares, such as `compact`: Claude Code has no way to ask for a compaction.
+const UNDECLARED = "compact";
 
 const harness = (capabilities: Harness["capabilities"]): Harness => ({
   ...(HARNESSES[0] as Harness),
@@ -52,13 +53,13 @@ test("applicability combines the case, the checks and their types, and the host"
   expect(
     applicability(
       have,
-      caseOf({ requires: ["subagents", MCP, "bin:x"] }),
+      caseOf({ requires: ["subagents", UNDECLARED, "bin:x"] }),
       host,
     ),
   ).toEqual({
     applicable: false,
-    missing: [MCP, "bin:x"],
-    reason: "needs mcp, bin:x",
+    missing: [UNDECLARED, "bin:x"],
+    reason: "needs compact, bin:x",
   });
   const spec = CHECKS["output_contains"];
   const before = spec?.needs;
@@ -153,6 +154,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "clear",
         "hooks",
         "rules",
+        "mcp",
       ],
     ],
     cursor: ["unverified", ["subagents", "history"]],

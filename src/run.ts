@@ -366,6 +366,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         onTimeout: caseDef.onTimeout,
         isolated: plan.isolated,
         rules: copy?.rules ?? null,
+        mcp: caseDef.mcp,
         historyMode: plan.historyMode,
         timeoutSeconds,
         layers: caseDef,
