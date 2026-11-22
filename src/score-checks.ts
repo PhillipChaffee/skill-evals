@@ -13,6 +13,7 @@ import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 import { apiAsker } from "./judge-api.js";
+import { viewFor } from "./turn-outcome.js";
 
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
 // does not start without a decision model.
@@ -30,12 +31,14 @@ const NOT_RUN = {
  * Scores a check by its rule. A rule that throws, such as a user's regular expression that overflows the stack, scores
  * its check 0 and leaves the run valid.
  * @param check - A check that a rule scores.
- * @param outcome - What the run left behind.
- * @returns The rule's verdict, or 0 with the message that the rule threw.
+ * @param outcome - What the run left behind. A check of a turn reads that turn's slice of it.
+ * @returns The rule's verdict, or 0 with the message that the rule threw, or 0 with the reason a turn did not run.
  */
 async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
+  const view = viewFor(check, outcome);
+  if (typeof view === "string") return { score: 0, reason: view };
   try {
-    return await checkScore(check, outcome);
+    return await checkScore(check, view);
   } catch (error) {
     return {
       score: 0,

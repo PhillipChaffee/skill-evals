@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { allChecks } from "./case-checks.js";
 import type { Case } from "./cases.js";
 import type { CommandCopies } from "./command.js";
 import { commandEnv, copiesForCommands } from "./command.js";
@@ -21,6 +22,7 @@ export type Layers = Pick<
   | "graderDir"
   | "env"
   | "checks"
+  | "turns"
 >;
 
 /** A workspace that is ready for the agent, or the reason it is not. */
@@ -143,7 +145,7 @@ export async function prepareRun(
     const wantsCopies =
       failure === null &&
       (options.keepSeed === true ||
-        caseDef.checks.some((one) => one.type === "command"));
+        allChecks(caseDef).some((one) => one.type === "command"));
     copies = wantsCopies
       ? copiesForCommands(dirs.workspace, caseDef.graderDir)
       : null;

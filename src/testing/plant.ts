@@ -137,6 +137,8 @@ export interface FakeScript {
   noInit?: boolean;
   /** A skill that an account syncs into the config directory during the run, as `synced/org/<name>`. */
   syncSkill?: string;
+  /** Leaves the session id out of the stream, as a harness that states none does. */
+  noSessionId?: true;
   /** The `total_cost_usd` of the result event of each run; without it the harness states no cost. */
   costUsd?: number;
   /** The steps of each turn; turn n answers the n-th prompt of a session. */

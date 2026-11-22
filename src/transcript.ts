@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import type {
+  LifecycleEvent,
   ToolCall,
   ToolKind,
   TranscriptEvent,
@@ -265,3 +266,14 @@ export const textPart = (
   text: string,
   extra: Partial<EventInput> = {},
 ): EventInput => ({ role: "assistant", type: "text", text, ...extra });
+
+/**
+ * States a lifecycle event of the session, such as a compaction.
+ * @param name - The event: `compact`, `clear` or `resume`.
+ * @returns The event, to give to `numbered`. It is a system event with `type: "lifecycle"` and the event's name in `name`.
+ */
+export const lifecyclePart = (name: LifecycleEvent): EventInput => ({
+  role: "system",
+  type: "lifecycle",
+  name,
+});

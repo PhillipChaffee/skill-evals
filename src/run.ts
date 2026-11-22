@@ -3,18 +3,18 @@ import path from "node:path";
 import { commandContext } from "./command.js";
 import type { Check } from "./checks/index.js";
 import { isDecision, isJudged } from "./checks/index.js";
-import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
+import type { Harness } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
 import type { Spend } from "./gate.js";
 import { spendOf } from "./gate.js";
+import type { RunRecord } from "./run-plan.js";
 import type { RetryKind } from "./retry.js";
 import { retryKind } from "./retry.js";
-import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
+import type { RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { failedRecord } from "./run-failed.js";
-import type { LimitFields } from "./run-limits.js";
 import { limitFields } from "./run-limits.js";
 import { messageOf } from "./scope.js";
 import { weightedMean } from "./score.js";
@@ -22,77 +22,18 @@ import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
 import { scoreChecks } from "./score-checks.js";
 import { startupRecord } from "./startup.js";
-import type { ChangedFiles } from "./snapshot.js";
 import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
-import type { WorkspaceArchive } from "./run-archive.js";
 import { keptArchive, stageKept } from "./run-archive.js";
 import { inputHash } from "./input-hash.js";
+import { flattened } from "./case-checks.js";
+import { slicesOf } from "./turn-outcome.js";
 import { failedCalls, writeTranscript } from "./transcript.js";
 
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
-
-/** Everything kept about one run. */
-export interface RunRecord extends Usage, LimitFields {
-  harness: string;
-  /** The subject's label. */
-  subject: string;
-  caseId: string;
-  rep: number;
-  ok: boolean;
-  error: string | null;
-  finalText: string;
-  toolCalls: ToolCall[];
-  /** The run's tokens by agent id (`main`, or the id of the dispatch call), summed from the usage of each assistant message; null where the stream does not state usage per message. `tokens` is unchanged. Absent from earlier records. */
-  agentTokens?: Record<string, Tokens> | null;
-  skillsLoaded: string[];
-  /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
-  skillEvents: SkillEvent[];
-  /** The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records. */
-  transcriptFile?: string | null;
-  /** The sha256 of what the agent saw: the prompt, files, setup, harness, model, `maxTurns` and env names; not the checks. Absent from earlier records. */
-  inputHash?: string;
-  /** The archive of the run's workspace, seed, remotes and home (`--keep-workspaces`); null when none was kept. Absent from earlier records. */
-  workspaceArchive?: WorkspaceArchive | null;
-  /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
-  subjectLoaded: boolean | null;
-  /** What the harness reported as loaded at startup; a kind it does not report is null. */
-  loaded: Loaded;
-  /** Whether the run was started with `--isolated`. */
-  isolated: boolean;
-  /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
-  unexpected: string[];
-  /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */
-  reportMissing: boolean;
-  /** Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. */
-  judgeProblem: string | null;
-  /** Whether the run changed anything in its copy of the subject. Always false for "none". */
-  subjectMutated: boolean;
-  /** What the run created, modified and deleted in its copy of the subject; null for "none". */
-  subjectChanges: ChangedFiles | null;
-  /** What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started. */
-  changedFiles: ChangedFiles;
-  checks: CheckResult[];
-  /** The run score, null when the run is invalid. */
-  score: number | null;
-  /** What the judged checks cost, kept apart from the run's own numbers; null when no judge ran. */
-  judge: (Usage & { calls: number; cacheHits?: number }) | null;
-  /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
-  decision: (Usage & { calls: number }) | null;
-  /**
-   * The error, the cost (null when none was reported) and the duration of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
-   * before the harness produced any agent event. This record is the last attempt; its `attempt` in `results.jsonl` is the number
-   * of the attempt. Absent when the run was made once.
-   */
-  attempts?: { error: string; costUsd: number | null; durationMs: number }[];
-  /**
-   * True when the command reached its `--max-cost` or `--max-duration` while this run was in flight, so its judged and
-   * decision checks were not asked. Such a run is invalid, and `--resume` makes it again in full. Absent otherwise.
-   */
-  skippedGraders?: true;
-}
+export type { RunRecord } from "./run-plan.js";
 
 /**
  * Reads the two switches that change how a run is made and scored.
@@ -294,6 +235,19 @@ export function assemble(
 }
 
 /**
+ * Takes what a session knows of the turns of its case.
+ * @param ran - What the session produced.
+ * @returns Each turn's record and workspace changes; null for a case with one prompt.
+ */
+const turnsOf = (
+  ran: SessionResult,
+): Required<Pick<RunRecord, "userTurns" | "turnChanges">> | null =>
+  ran.userTurns && {
+    userTurns: ran.userTurns,
+    turnChanges: ran.turnChanges ?? [],
+  };
+
+/**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
  * @param ran - What the session produced; its workspace still exists.
@@ -312,6 +266,7 @@ async function record(
   const loaded = skillsLoaded(events);
   const transcript = writeStreams(plan, ran);
   const files = fileState(ran);
+  const turned = turnsOf(ran);
   const base = {
     harness: harness.id,
     subject: subject.label,
@@ -325,6 +280,7 @@ async function record(
     skillEvents: events,
     transcriptFile: transcript.relative,
     inputHash: inputHash(caseDef, { harness: harness.id, model: plan.model }),
+    ...turned,
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
@@ -337,9 +293,10 @@ async function record(
   };
   const staged = stageKept(plan, ran);
   const scored = await scoreChecks(
-    guardedBy(plan, parsed.costUsd),
+    { ...guardedBy(plan, parsed.costUsd), caseDef: flattened(caseDef) },
     {
       ...parsed,
+      ...(turned && { turns: slicesOf({ parsed, events, ...turned }) }),
       skillEvents: events,
       legacySkillLoads: plan.lenient ?? false,
       ...files,
@@ -375,7 +332,7 @@ export interface Attempted {
  */
 export async function runAttempt(plan: RunPlan): Promise<Attempted> {
   const { harness, bin, subject, caseDef } = plan;
-  const { prompt, maxTurns, timeoutSeconds } = caseDef;
+  const { prompt, turns, maxTurns, timeoutSeconds } = caseDef;
   const copy = copyOf(subject);
   try {
     return await session(
@@ -385,6 +342,8 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         // To a harness, no skills and the judge's "nothing loaded" are the same thing.
         subject: copy?.loaded ?? null,
         prompt,
+        turns,
+        totalTimeoutSeconds: caseDef.totalTimeoutSeconds,
         model: caseDef.model ?? plan.model,
         env: caseDef.env,
         maxTurns,

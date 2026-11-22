@@ -5,6 +5,12 @@ import type { DecisionService } from "./decision.js";
 import type { StopReason } from "./gate.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
 import type { JudgeApi } from "./judge-api.js";
+import type { ToolCall, Loaded } from "./harnesses/shared.js";
+import type { SkillEvent } from "./skill-events.js";
+import type { LimitFields } from "./run-limits.js";
+import type { WorkspaceArchive } from "./run-archive.js";
+import type { ChangedFiles } from "./snapshot.js";
+import type { TurnRecord } from "./turn-outcome.js";
 import type { Subject } from "./subject.js";
 
 /** What a session cost. A number the harness does not report is null. */
@@ -101,3 +107,67 @@ export const withheld = (
     ? [plan.judgeApi.keyVar]
     : []),
 ];
+
+/** Everything kept about one run. */
+export interface RunRecord extends Usage, LimitFields {
+  harness: string;
+  /** The subject's label. */
+  subject: string;
+  caseId: string;
+  rep: number;
+  ok: boolean;
+  error: string | null;
+  finalText: string;
+  toolCalls: ToolCall[];
+  /** The run's tokens by agent id (`main`, or the id of the dispatch call), summed from the usage of each assistant message; null where the stream does not state usage per message. `tokens` is unchanged. Absent from earlier records. */
+  agentTokens?: Record<string, Tokens> | null;
+  skillsLoaded: string[];
+  /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
+  skillEvents: SkillEvent[];
+  /** The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records. */
+  transcriptFile?: string | null;
+  /** The sha256 of what the agent saw: the prompt, files, setup, harness, model, `maxTurns` and env names; not the checks. Absent from earlier records. */
+  inputHash?: string;
+  /** Each turn of a case with `turns`, in order, with what it said and whether it was sent. Absent for a single prompt. */
+  userTurns?: TurnRecord[];
+  /** What each turn created, modified and deleted in the workspace, from a hash taken after it (no files are copied); the order of `userTurns`. Absent for a single prompt. */
+  turnChanges?: ChangedFiles[];
+  /** The archive of the run's workspace, seed, remotes and home (`--keep-workspaces`); null when none was kept. Absent from earlier records. */
+  workspaceArchive?: WorkspaceArchive | null;
+  /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
+  subjectLoaded: boolean | null;
+  /** What the harness reported as loaded at startup; a kind it does not report is null. */
+  loaded: Loaded;
+  /** Whether the run was started with `--isolated`. */
+  isolated: boolean;
+  /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
+  unexpected: string[];
+  /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */
+  reportMissing: boolean;
+  /** Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. */
+  judgeProblem: string | null;
+  /** Whether the run changed anything in its copy of the subject. Always false for "none". */
+  subjectMutated: boolean;
+  /** What the run created, modified and deleted in its copy of the subject; null for "none". */
+  subjectChanges: ChangedFiles | null;
+  /** What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started. */
+  changedFiles: ChangedFiles;
+  checks: CheckResult[];
+  /** The run score, null when the run is invalid. */
+  score: number | null;
+  /** What the judged checks cost, kept apart from the run's own numbers; null when no judge ran. */
+  judge: (Usage & { calls: number; cacheHits?: number }) | null;
+  /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
+  decision: (Usage & { calls: number }) | null;
+  /**
+   * The error, the cost (null when none was reported) and the duration of each earlier attempt, when `--retries` made the run again: a harness crash, a rate limit, or a timeout
+   * before the harness produced any agent event. This record is the last attempt; its `attempt` in `results.jsonl` is the number
+   * of the attempt. Absent when the run was made once.
+   */
+  attempts?: { error: string; costUsd: number | null; durationMs: number }[];
+  /**
+   * True when the command reached its `--max-cost` or `--max-duration` while this run was in flight, so its judged and
+   * decision checks were not asked. Such a run is invalid, and `--resume` makes it again in full. Absent otherwise.
+   */
+  skippedGraders?: true;
+}

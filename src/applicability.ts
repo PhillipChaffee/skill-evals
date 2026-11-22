@@ -1,6 +1,7 @@
 import type { Capability, Need } from "./capabilities.js";
 import { findOnPath } from "./capabilities.js";
 import type { Case } from "./cases.js";
+import { allChecks, dropChecks, turnNeeds } from "./case-checks.js";
 import type { Check } from "./checks/index.js";
 import { CHECKS, describeCheck } from "./checks/index.js";
 import type { Harness } from "./harnesses/shared.js";
@@ -43,7 +44,8 @@ function checkNeeds(check: Check): Need[] {
 export const askedBy = (cases: Case[]): Need[] =>
   cases.flatMap((caseDef) => [
     ...caseDef.requires,
-    ...caseDef.checks.flatMap(checkNeeds),
+    ...turnNeeds(caseDef),
+    ...allChecks(caseDef).flatMap(checkNeeds),
   ]);
 
 /**
@@ -110,10 +112,13 @@ export function applicability(
       reason: caseDef.note ?? "the case names other harnesses",
     };
   }
-  const missing = new Set<Need>(lacking(harness, host, caseDef.requires));
+  const missing = new Set<Need>(
+    lacking(harness, host, [...caseDef.requires, ...turnNeeds(caseDef)]),
+  );
   const skipped: number[] = [];
   const skippedMissing = new Set<Need>();
-  caseDef.checks.forEach((check, index) => {
+  const checks = allChecks(caseDef);
+  checks.forEach((check, index) => {
     const absent = lacking(harness, host, checkNeeds(check));
     if (absent.length === 0) return;
     if (check.ifUnsupported === "skip") {
@@ -123,7 +128,7 @@ export function applicability(
       for (const need of absent) missing.add(need);
     }
   });
-  if (missing.size === 0 && skipped.length === caseDef.checks.length) {
+  if (missing.size === 0 && skipped.length === checks.length) {
     for (const need of skippedMissing) missing.add(need);
   }
   if (missing.size > 0) {
@@ -179,7 +184,7 @@ function partition(harnesses: Harness[], cases: Case[], host: Host): Partition {
         continue;
       }
       if (verdict.skipped.length > 0) {
-        const dropped = caseDef.checks.filter((_, index) =>
+        const dropped = allChecks(caseDef).filter((_, index) =>
           verdict.skipped.includes(index),
         );
         result.skippedChecks.push({
@@ -195,12 +200,7 @@ function partition(harnesses: Harness[], cases: Case[], host: Host): Partition {
           ],
         });
       }
-      ran.push({
-        ...caseDef,
-        checks: caseDef.checks.filter(
-          (_, index) => !verdict.skipped.includes(index),
-        ),
-      });
+      ran.push(dropChecks(caseDef, verdict.skipped));
     }
     result.ran[harness.id] = ran;
   }

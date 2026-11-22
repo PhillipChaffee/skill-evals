@@ -17,6 +17,11 @@ export const LIMIT_KEYS: Record<string, FieldDef> = {
     type: "int",
     meaning: "The seconds a run may take. Default: 600.",
   },
+  totalTimeoutSeconds: {
+    type: "int",
+    meaning:
+      "The seconds the whole run of a case with `turns` may take. `timeoutSeconds` applies to each turn. Default: `timeoutSeconds` times the number of turns.",
+  },
   onTimeout: {
     type: "enum",
     values: ["invalid", "score"],
@@ -29,7 +34,8 @@ export const LIMIT_KEYS: Record<string, FieldDef> = {
  * Reads the harnesses that a case is limited to, and what its timeout means.
  * @param read - Reads a key of the case file.
  * @param file - The case file, for the messages.
- * @returns The harness ids and the note, both absent for a case that is for every harness, and `onTimeout`.
+ * @returns The harness ids and the note, both absent for a case that is for every harness, `onTimeout`, and the
+ *   case's `totalTimeoutSeconds` when it sets one.
  * @throws {UsageError} When a harness id is unknown, or `harnesses` has no `note`.
  */
 export function limitsOf(read: Read, file: string) {
@@ -50,5 +56,6 @@ export function limitsOf(read: Read, file: string) {
     }
   }
   const onTimeout = (read("onTimeout") as OnTimeout | undefined) ?? "invalid";
-  return { harnesses, note, onTimeout };
+  const totalTimeoutSeconds = read("totalTimeoutSeconds") as number | undefined;
+  return { harnesses, note, onTimeout, totalTimeoutSeconds };
 }

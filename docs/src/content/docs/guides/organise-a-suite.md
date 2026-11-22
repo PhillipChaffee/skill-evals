@@ -24,7 +24,7 @@ These rules decide what is a case:
 - A directory that starts with `_` is skipped, with everything under it. Use it for drafts and shared notes. A 0.0.1 case directory whose name starts with `_` stops being a case.
 - Nothing under a case directory is searched. A `prompt.md` inside `workspace/` is a workspace file, never a case.
 - A directory name that is part of a case id may not hold `@` or `,`. That is a load error. Dots and hyphens are fine: `core/trig.rsch.research.01` is a legal id.
-- A directory with a `case.json` and no `prompt.md` is a load error that says there is no prompt source.
+- A directory with a `case.json` and no `prompt.md` and no `turns` is a load error that says there is no prompt source. A case with both is a load error too: see [Multi-turn cases](multi-turn.md).
 
 The results go in `<out>/<harness>/<case id>/`, so a nested id makes nested directories.
 
@@ -134,10 +134,10 @@ A skill should answer to what a person means, not to one wording. A variant puts
 Each variant runs as its own case, with the id `<case id>@<variant id>`, such as `routing/commit-help@hurry`. A case with variants never runs bare.
 
 - A variant has an `id`: lowercase letters, digits and hyphens, unique within the case.
-- A variant has exactly one of `prompt` and `promptAppend`. `prompt` is the whole prompt. `promptAppend` is added to the case's `prompt.md`, after a blank line, so the case needs a `prompt.md`. A case whose variants all have a `prompt` needs none, and then an empty `prompt.md` is fine; only `promptAppend` needs a `prompt.md` with text. A `prompt` or `promptAppend` of only whitespace is a load error.
+- A variant has exactly one of `prompt`, `promptAppend` and `turns`. `turns` is the variant's own list of [turns](multi-turn.md), in place of the case's. `prompt` is the whole prompt. `promptAppend` is added to the case's `prompt.md`, after a blank line, so the case needs a `prompt.md`. A case whose variants all have a `prompt` needs none, and then an empty `prompt.md` is fine; only `promptAppend` needs a `prompt.md` with text. A `prompt` or `promptAppend` of only whitespace is a load error.
 - A variant's `tags` are added to the case's tags for that variant, and `--tag`, `--tag-all` and `--not-tag` see the merged tags.
 - A `--case` or `--not-case` glob matches a variant by its full id or by the case's id, so `--case routing/commit-help` selects every variant and `--case "**@hurry"` selects one kind. A glob with a wildcard and no `@`, such as `to*lite`, can also match a variant's full id, so the command reads every case that declares `variants` and whose path starts with the glob's text before its first wildcard. A glob that starts with a wildcard, such as `*lite`, therefore reads every case that declares variants, and a fault in one of them is an error.
-- Keys of a variant other than `id`, `prompt`, `promptAppend`, `heldout` and `tags` are load errors, unless they start with `x-`.
+- Keys of a variant other than `id`, `prompt`, `promptAppend`, `turns`, `heldout` and `tags` are load errors, unless they start with `x-`.
 
 The same rule about words applies as for any prompt: keep `eval`, `test`, `judge`, `benchmark` and the others from [Write a case](write-a-case.md) out of a variant's prompt.
 

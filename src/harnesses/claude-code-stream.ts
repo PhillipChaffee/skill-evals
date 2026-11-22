@@ -1,6 +1,11 @@
 import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
 import type { EventInput } from "../transcript.js";
-import { callPart, resultPart, textPart } from "../transcript.js";
+import {
+  callPart,
+  lifecyclePart,
+  resultPart,
+  textPart,
+} from "../transcript.js";
 import type {
   AgentRef,
   Dispatch,
@@ -33,6 +38,8 @@ interface MessageUsage {
 /** The events of the stream that carry a message. */
 export interface MessageEvent {
   type: string;
+  /** On a `system` event: what kind; `compact_boundary` is the end of a compaction. */
+  subtype?: string;
   session_id?: string;
   /** The id of the dispatching call, on an event that a subagent produced; null on the main thread's. */
   parent_tool_use_id?: string | null;
@@ -156,6 +163,10 @@ export function transcriptParts(
     const blocks = Array.isArray(one.message?.content)
       ? one.message.content
       : [];
+    // Claude Code writes `compact_boundary` where a compaction ended.
+    if (one.type === "system" && one.subtype === "compact_boundary") {
+      return [lifecyclePart("compact")];
+    }
     if (one.type === "user") {
       return blocks
         .filter((block) => block.type === "tool_result")

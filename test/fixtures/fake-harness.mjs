@@ -18,6 +18,13 @@
 //   with no result event, as a harness that dies does. A step `{ "hang": true }` never returns, so only a kill ends it.
 // - A script's `costUsd` is the `total_cost_usd` of its result event; without it the result states no cost.
 // - A script's `initOmit` names init fields to leave out, and `noInit` leaves the init event out.
+// - A turn of a multi-turn case is another process of the same run (the same config directory): once a script has matched,
+//   the later processes of that run play the same script, whatever their prompt says. Turn n answers the n-th prompt.
+// - `--resume <id>` is how the Claude Code adapter continues a session. The fake reports `session_id` in its init and
+//   result events: the id it was resumed with, else `fake-session-<pid>`. In a script's text, `$RESUMED` is that
+//   `--resume` value ("" when absent). A script's `noSessionId` leaves the id out, as a harness that states none does.
+// - A prompt of `/compact` is a compaction: it writes a `compact_boundary` system event and no assistant turn, and it does
+//   not use up a script turn.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -31,11 +38,15 @@ const flag = (name) =>
     ? process.argv[process.argv.indexOf(name) + 1]
     : null;
 const emit = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
+const resumed = flag("--resume");
+// The id of this session: the one it was resumed with, or a new one. A script can leave it out.
+let sessionId = resumed ?? `fake-session-${process.pid}`;
 const finish = (result, costUsd) =>
   emit({
     type: "result",
     subtype: "success",
     is_error: false,
+    ...(sessionId && { session_id: sessionId }),
     result,
     total_cost_usd: costUsd,
     usage: {
@@ -99,14 +110,64 @@ if (!piMode && prompt.startsWith("Grade one answer")) {
   process.exit(0);
 }
 
+if (!piMode && prompt === "/compact") {
+  emit({
+    type: "system",
+    subtype: "init",
+    plugins: [],
+    skills: [],
+    session_id: sessionId,
+  });
+  emit({ type: "system", subtype: "compact_boundary", session_id: sessionId });
+  finish("", undefined);
+  process.exit(0);
+}
+
 /**
- * Finds the first script, by file name, that fits this run.
+ * Finds the first script, by file name, that fits this run. A run that has played a script before, in an earlier
+ * process, plays it again.
  * @returns The script and its file's name, or null when none fits.
  */
 function matchingScript() {
   const dir =
     process.env.FAKE_DIR && path.join(process.env.FAKE_DIR, "scripts");
   if (!dir || !fs.existsSync(dir)) return null;
+  const config =
+    process.env.CLAUDE_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR;
+  const marker = config && path.join(config, ".fake-script");
+  const chosen =
+    marker && fs.existsSync(marker) ? fs.readFileSync(marker, "utf8") : null;
+  const found = chosen ? loadScript(dir, chosen) : firstScript(dir);
+  if (found && marker && !chosen) {
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, found.file);
+  }
+  return found;
+}
+
+/**
+ * Reads one script file.
+ * @param dir - The scripts directory.
+ * @param file - The script's file name.
+ * @returns The script and its file's name.
+ */
+function loadScript(dir, file) {
+  try {
+    return {
+      found: JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")),
+      file,
+    };
+  } catch (error) {
+    throw new Error(`fake script ${file}: ${error.message}`, { cause: error });
+  }
+}
+
+/**
+ * Finds the first script, by file name, that fits this run's prompt.
+ * @param dir - The scripts directory.
+ * @returns The script and its file's name, or null when none fits.
+ */
+function firstScript(dir) {
   for (const file of fs.readdirSync(dir).sort()) {
     let found;
     try {
@@ -172,7 +233,8 @@ function expand(value) {
       process.env.CLAUDE_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR ?? "";
     return value
       .replaceAll("$PLUGIN_DIR", pluginDir ?? "")
-      .replaceAll("$CONFIG_DIR", config);
+      .replaceAll("$CONFIG_DIR", config)
+      .replaceAll("$RESUMED", resumed ?? "");
   }
   if (Array.isArray(value)) return value.map(expand);
   if (value && typeof value === "object") {
@@ -279,8 +341,8 @@ function play(steps, turn) {
       return;
     }
     if ("text" in one) {
-      assistant([{ type: "text", text: one.text }], parent, one.usage);
-      final = one.text;
+      assistant([{ type: "text", text: expand(one.text) }], parent, one.usage);
+      final = expand(one.text);
     } else if ("call" in one) {
       const { block, settle } = prepare(one.call);
       assistant([block], parent);
@@ -329,7 +391,7 @@ function play(steps, turn) {
     } else if ("limit" in one) {
       limited = true;
     } else {
-      final = one.final;
+      final = expand(one.final);
     }
   };
   let limited = false;
@@ -340,6 +402,7 @@ function play(steps, turn) {
       type: "result",
       subtype: "error_during_execution",
       is_error: true,
+      ...(sessionId && { session_id: sessionId }),
       result: error.message,
     });
     return false;
@@ -353,6 +416,7 @@ function play(steps, turn) {
     type: "result",
     subtype: "error_max_turns",
     is_error: true,
+    ...(sessionId && { session_id: sessionId }),
     usage: { input_tokens: 100, output_tokens: 50 },
   });
   return true;
@@ -413,6 +477,7 @@ function playPi(steps) {
 }
 
 const played = matchingScript();
+if (played?.found.noSessionId) sessionId = null;
 let startNo = null;
 /**
  * Numbers this start of the matching script, once.
@@ -441,6 +506,7 @@ const installed = fs.existsSync(skillsDir)
 const init = {
   type: "system",
   subtype: "init",
+  ...(sessionId && { session_id: sessionId }),
   plugins: pluginDir
     ? [{ name: "plugin", path: behavior.ghost ? "/nowhere/else" : pluginDir }]
     : [],

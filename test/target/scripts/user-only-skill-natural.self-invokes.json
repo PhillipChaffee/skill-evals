@@ -1,0 +1,8 @@
+{
+  "turns": [
+    [
+      { "call": { "name": "Skill", "input": { "skill": "release-notes" } } },
+      { "final": "Notes for 2.1: fixed the timeout fallback." }
+    ]
+  ]
+}

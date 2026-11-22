@@ -1,3 +1,4 @@
+import { allChecks } from "../case-checks.js";
 import fs from "node:fs";
 import { HARNESSES, findBin } from "../harnesses/index.js";
 import type { Project } from "../project.js";
@@ -28,7 +29,7 @@ export function list(given: Options, project: Project): number {
     ? [
         ...chosen.map(
           (caseDef) =>
-            `- ${caseDef.id}: ${String(caseDef.checks.length)} checks`,
+            `- ${caseDef.id}: ${String(allChecks(caseDef).length)} checks`,
         ),
         "",
         `${String(chosen.length)} cases selected`,

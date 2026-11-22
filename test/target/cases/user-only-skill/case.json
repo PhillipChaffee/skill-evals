@@ -1,0 +1,16 @@
+{
+  "description": "A skill that only the user may start, started by the user through the harness's own syntax: the notes follow the skill, and the model did not start it through its own skill tool.",
+  "tags": ["user-invoke", "routing", "target"],
+  "targets": ["release-notes"],
+  "turns": [{ "invoke": { "skill": "release-notes", "args": "v2.1" } }],
+  "checks": [
+    { "type": "output_matches", "pattern": "^## Release notes" },
+    { "type": "output_contains", "text": "2.1" },
+    {
+      "type": "skill_not_loaded",
+      "skill": "release-notes",
+      "via": "skill_tool"
+    }
+  ],
+  "timeoutSeconds": 300
+}

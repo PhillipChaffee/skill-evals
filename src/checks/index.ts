@@ -1,21 +1,15 @@
 import type { Capability, Need } from "../capabilities.js";
-import type { CommandContext } from "../command.js";
-import type {
-  Loaded,
-  ToolCall,
-  ToolKind,
-  TranscriptEvent,
-} from "../harnesses/shared.js";
+import type { ToolKind } from "../harnesses/shared.js";
 import type { By } from "../agents.js";
-import type { SkillEvent, SkillVia } from "../skill-events.js";
+import type { SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
-import type { ChangedFiles, Snapshot } from "../snapshot.js";
 import { UsageError } from "../scope.js";
 import { COMMAND_CHECKS } from "./command.js";
 import { DISPATCH_CHECKS } from "./dispatch.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
+import type { Outcome } from "./rules.js";
 import { FIELDS, REGEX_FIELDS, readField } from "./fields.js";
 import {
   describeCalls,
@@ -95,14 +89,18 @@ interface CheckFields {
   requires?: Need[];
   /** What a harness that lacks a need does: drop this check, or exclude the whole case. Default: the whole case. */
   ifUnsupported?: "skip" | "not-applicable";
+  /** The turn, counted from 1, whose slice the check looks at; set by loading a case's `turns`, never written in a case file. */
+  turn?: number;
   /** Keys that start with `x-` belong to the case author. Loading keeps them, and nothing reads them. */
   [extension: `x-${string}`]: unknown;
 }
 /** The name of a field a check may carry. */
 export type Field = Exclude<
   keyof CheckFields,
-  `x-${string}` | "requires" | "ifUnsupported"
+  `x-${string}` | "requires" | "ifUnsupported" | "turn"
 >;
+
+export type { Outcome, TurnSlice } from "./rules.js";
 
 /** A check that a rule scores from what the run left behind. */
 export type RuledCheck = CheckFields & { type: RuledType; weight: number };
@@ -129,40 +127,6 @@ export type DecisionCheck = CheckFields & {
 };
 /** One thing a case expects of a run. */
 export type Check = RuledCheck | JudgedCheck | DecisionCheck;
-
-/** What a deterministic check can observe. */
-export interface Outcome {
-  finalText: string;
-  toolCalls: ToolCall[];
-  /** The run's events: the assistant's text, each call and each result, in order. */
-  transcript: TranscriptEvent[];
-  /** Every call that gave the agent a skill or a file of one, with its mechanism and position. */
-  skillEvents: SkillEvent[];
-  /** What the harness said it loaded at startup; `skills` is null for a harness that lists none. */
-  loaded: Loaded;
-  /** True under `--lenient`: a `skill_loaded` or `skill_not_loaded` without `via` or `resolved` keeps the 0.0.1 rule. */
-  legacySkillLoads?: boolean;
-  workspace: string;
-  /** The workspace as it was before the harness started: the hash of each file. */
-  seed: Snapshot;
-  /** What the run created, modified and deleted in the workspace, compared with `seed`. */
-  changed: ChangedFiles;
-  /** The directories of the workspace that could not be listed, before the run or after it. */
-  unlisted: string[];
-  /** The run's throwaway home, for a check with `root: "home"`. */
-  home: string;
-  /** The home just before the harness's prompt ran: auth files and placed skills are in it, so they never read as the agent's. */
-  homeSeed: Snapshot;
-  /** What the run created, modified and deleted in the home, compared with `homeSeed`. */
-  homeChanged: ChangedFiles;
-  /** The directories of the home that could not be listed, before the run or after it. */
-  homeUnlisted: string[];
-  /** The per-run copy of the subject the harness loaded, and the paths of it that the run changed. `observed` is false
-   * when the copy the agent saw could not be watched, which no check may read as "unchanged". */
-  subject: { dir: string | null; mutated: string[]; observed?: boolean };
-  /** Where a `command` check runs and what it may read. */
-  command: CommandContext;
-}
 
 /** What a rule says of one run: a score from 0 to 1, and optionally why. */
 export interface Verdict {
@@ -384,6 +348,7 @@ export function describeCheck(check: Check): string {
     ? [check.expect ?? Object.keys(check.options ?? {}).join("/")]
     : [];
   return [
+    ...(check.turn === undefined ? [] : [`turn ${String(check.turn)}`]),
     check.type,
     check.skill,
     check.path,

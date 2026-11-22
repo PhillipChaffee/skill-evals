@@ -1,5 +1,6 @@
 import { CASE_KEYS } from "../cases.js";
 import { describeDefault } from "../checks/defaults.js";
+import type { FieldDef } from "../checks/fields.js";
 import { FIELDS } from "../checks/fields.js";
 import type { Spec } from "../checks/index.js";
 import { CHECKS } from "../checks/index.js";
@@ -8,6 +9,7 @@ import { HARNESSES, overrideVar } from "../harnesses/index.js";
 import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
 import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
+import { TURN_KEYS } from "../turn-spec.js";
 import { VARIANT_KEYS } from "../variants.js";
 import type { Flag, FlagSpec } from "../flags.js";
 import { EXAMPLE_CONFIG } from "./example-config.js";
@@ -55,6 +57,21 @@ const fieldRows = (): string[][] =>
     ],
   );
 
+/**
+ * Makes the table of a table of keys.
+ * @param keys - The keys of a case file, a variant or a turn, each with its type and meaning.
+ * @returns A Markdown table with one row for each key.
+ */
+const keyTable = (keys: Record<string, FieldDef>): string =>
+  table(
+    ["Key", "Type", "Holds"],
+    Object.entries(keys).map(([key, { type, meaning }]) => [
+      code(key),
+      code(type),
+      meaning,
+    ]),
+  );
+
 const checksPage = (): ReferencePage => ({
   file: "reference/checks.md",
   markdown: `${header(
@@ -87,27 +104,19 @@ ${table(["Field", "Type", "Default", "Holds"], fieldRows())}
 
 The keys of a ${code("case.json")}. Any other key is a load error, except a key that starts with ${code("x-")} and ${code("$schema")}, a string that points an editor at [the schema](config.md#json-schemas).
 
-${table(
-  ["Key", "Type", "Holds"],
-  Object.entries(CASE_KEYS).map(([key, { type, meaning }]) => [
-    code(key),
-    code(type),
-    meaning,
-  ]),
-)}
+${keyTable(CASE_KEYS)}
 
 ## Variant keys
 
-The keys of an object in the ${code("variants")} list. A variant needs ${code("id")} and exactly one of ${code("prompt")} and ${code("promptAppend")}. Any other key is a load error, except a key that starts with ${code("x-")}. See [Organise a suite](../guides/organise-a-suite.md#variants).
+The keys of an object in the ${code("variants")} list. A variant needs ${code("id")} and exactly one of ${code("prompt")}, ${code("promptAppend")} and ${code("turns")}. Any other key is a load error, except a key that starts with ${code("x-")}. See [Organise a suite](../guides/organise-a-suite.md#variants).
 
-${table(
-  ["Key", "Type", "Holds"],
-  Object.entries(VARIANT_KEYS).map(([key, { type, meaning }]) => [
-    code(key),
-    code(type),
-    meaning,
-  ]),
-)}
+${keyTable(VARIANT_KEYS)}
+
+## Turn keys
+
+The keys of an object in the ${code("turns")} list of a case or of a variant. A turn needs exactly one of ${code("prompt")}, ${code("invoke")} and ${code("event")}; the first turn may not be an ${code("event")}. Any other key is a load error, except a key that starts with ${code("x-")}. See [Multi-turn cases](../guides/multi-turn.md).
+
+${keyTable(TURN_KEYS)}
 
 ## Tool kinds
 

@@ -159,7 +159,7 @@ function failure(
 }
 
 test("a variant needs exactly one prompt source, a valid unique id and known keys", () => {
-  const one = `${BAD_FILE} variants[0]: a variant needs exactly one of "prompt" and "promptAppend"`;
+  const one = `${BAD_FILE} variants[0]: a variant needs exactly one of "prompt", "promptAppend" and "turns"`;
   expect(failure([{ id: "a" }])).toBe(one);
   expect(failure([{ id: "a", prompt: "x", promptAppend: "y" }])).toBe(one);
   expect(failure([{ id: "A b", prompt: "x" }])).toBe(
@@ -172,7 +172,7 @@ test("a variant needs exactly one prompt source, a valid unique id and known key
     ]),
   ).toBe(`${BAD_FILE} variants[1]: duplicate variant id "a"`);
   expect(failure([{ id: "a", prompt: "x", color: 1 }])).toBe(
-    `${BAD_FILE} variants[0]: unknown key "color" for a variant; allowed: id, prompt, promptAppend, heldout, tags`,
+    `${BAD_FILE} variants[0]: unknown key "color" for a variant; allowed: id, prompt, promptAppend, turns, heldout, tags`,
   );
   expect(failure([])).toBe(`${BAD_FILE}: "variants" must not be empty`);
   expect(failure("no")).toBe(
@@ -197,7 +197,7 @@ test("promptAppend needs a prompt.md with text; a variant that sets prompt does 
   expect(failure([{ id: "a", prompt: "y" }], "")).toBe("");
   expect(failure(undefined, "")).toBe("case bad: prompt.md is empty");
   expect(failure(undefined, null)).toBe(
-    "case bad: no prompt source; add a prompt.md",
+    'case bad: no prompt source; add a prompt.md, or list "turns"',
   );
 });
 

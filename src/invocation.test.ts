@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, onTestFinished, test } from "vitest";
 import { HARNESSES, selectHarnesses } from "./harnesses/index.js";
+import { firstTurn } from "./harnesses/shared.js";
 import type {
   Invocation,
   LoadedSubject,
@@ -86,8 +87,9 @@ function invoke(
     prompt: "say hello",
     ...more,
   };
+  const full = { ...input, ...firstTurn(input.prompt) };
   const harness = HARNESSES.find((candidate) => candidate.id === id);
-  return { home, args: [], env: {}, ...harness?.invocation(input) };
+  return { home, args: [], env: {}, ...harness?.invocation(full) };
 }
 
 /**

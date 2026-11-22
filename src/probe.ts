@@ -44,6 +44,7 @@ const probe = (subject: Subject): Case => ({
   prompt: subject.skills[0]
     ? `Use the ${subject.skills[0]} skill on this sentence: "The cache is cold."`
     : "Reply with the single word: pong",
+  turns: null,
   checks: [],
   requires: [],
   weight: 1,

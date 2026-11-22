@@ -1,3 +1,4 @@
+import { allChecks } from "../case-checks.js";
 import type { CaseDelta, HarnessDelta } from "../comparison.js";
 import {
   FAILING_CEILING,
@@ -221,7 +222,7 @@ export function flakeRows(evaluation: Evaluation): FlakeRow[] {
             record.subject === label &&
             invalidReason(record) === null,
         );
-        return caseDef.checks.map((check, index) => ({
+        return allChecks(caseDef).map((check, index) => ({
           harness,
           subject: label,
           caseId: caseDef.id,

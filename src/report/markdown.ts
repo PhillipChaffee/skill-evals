@@ -1,3 +1,4 @@
+import { allChecks } from "../case-checks.js";
 import type { Case } from "../cases.js";
 import type { HarnessDelta } from "../comparison.js";
 import { describeCheck, isJudged } from "../checks/index.js";
@@ -60,7 +61,7 @@ function caseRow(caseDef: Case, section: Section): string {
     ),
   }));
   const scored = suite.cases.find((one) => one.id === caseDef.id);
-  const checks = caseDef.checks.map((check, index) => {
+  const checks = allChecks(caseDef).map((check, index) => {
     const rates = valid.map(
       ({ label, runs }) =>
         tag(label) +
@@ -71,7 +72,7 @@ function caseRow(caseDef: Case, section: Section): string {
     );
     return `\`${describeCheck(check)}\` ${rates.join(", ")}`;
   });
-  const flakes = caseDef.checks.map((_check, index) =>
+  const flakes = allChecks(caseDef).map((_check, index) =>
     valid
       .map(
         ({ label, runs }) =>

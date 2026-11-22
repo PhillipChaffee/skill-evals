@@ -86,8 +86,8 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | Capability      | `pi` | `claude-code` | `cursor` | `opencode` | `codex` |
 | --------------- | ---- | ------------- | -------- | ---------- | ------- |
 | `subagents`     | no   | yes           | yes      | yes        | yes     |
-| `multiTurn`     | no   | no            | no       | no         | no      |
-| `userInvoke`    | no   | no            | no       | no         | no      |
+| `multiTurn`     | no   | yes           | no       | no         | no      |
+| `userInvoke`    | no   | yes           | no       | no         | no      |
 | `toolOutputs`   | yes  | yes           | no       | yes        | yes     |
 | `assistantText` | yes  | yes           | no       | yes        | yes     |
 | `turnGrouping`  | yes  | yes           | no       | yes        | no      |
@@ -101,8 +101,8 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `toolDurations` | no   | no            | no       | yes        | no      |
 | `sessionStore`  | no   | no            | no       | no         | no      |
 | `compact`       | no   | no            | no       | no         | no      |
-| `clear`         | no   | no            | no       | no         | no      |
-| `resume`        | no   | no            | no       | no         | no      |
+| `clear`         | no   | yes           | no       | no         | no      |
+| `resume`        | no   | yes           | no       | no         | no      |
 | `mcp`           | no   | no            | no       | no         | no      |
 | `skillListing`  | no   | yes           | no       | no         | no      |
 | `loadedReport`  | no   | yes           | no       | no         | no      |

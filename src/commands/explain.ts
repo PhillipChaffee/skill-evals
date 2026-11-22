@@ -83,6 +83,13 @@ function resolved(one: Case, casesDir: string): object {
     },
     requiredCapabilities: [...new Set(askedBy([one]))],
     checks: one.checks.map((check) => withDefaults(check, CHECKS[check.type])),
+    turns:
+      one.turns?.map((turn) => ({
+        ...turn,
+        checks: turn.checks.map((check) =>
+          withDefaults(check, CHECKS[check.type]),
+        ),
+      })) ?? null,
   };
 }
 

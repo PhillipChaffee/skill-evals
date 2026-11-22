@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Unpacked } from "./archive.js";
 import { unpackArchive } from "./archive.js";
+import { allChecks } from "./case-checks.js";
 import type { Case } from "./cases.js";
 import type { Outcome } from "./checks/index.js";
 import { commandContext } from "./command.js";
@@ -14,6 +15,7 @@ import { scoreChecks } from "./score-checks.js";
 import { UsageError, messageOf, tempDir } from "./scope.js";
 import { allChanged, snapshot } from "./snapshot.js";
 import type { TranscriptEvent } from "./harnesses/shared.js";
+import { storedSlices } from "./turn-outcome.js";
 
 export { NO_ARCHIVE };
 
@@ -144,6 +146,7 @@ function outcomeOf(
         homeUnlisted: [],
       };
   return {
+    ...storedSlices(record, parts.transcript.events),
     finalText: record.finalText,
     toolCalls: record.toolCalls,
     transcript: parts.transcript.events,
@@ -211,7 +214,7 @@ export async function rescore(
     : null;
   const files =
     archive !== null && fs.existsSync(archive) ? unpacked(archive) : null;
-  const split = splitChecks(record.checks, caseDef.checks, files !== null);
+  const split = splitChecks(record.checks, allChecks(caseDef), files !== null);
   const grader = files ? graderCopy(caseDef) : null;
   try {
     const outcome = outcomeOf(

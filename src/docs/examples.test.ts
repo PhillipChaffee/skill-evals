@@ -6,6 +6,7 @@ import { CHECKS } from "../checks/index.js";
 import { sandbox } from "../testing/sandbox.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
+const HELLO = "Say hello.\n";
 const sources = [
   path.join(root, "README.md"),
   ...fs
@@ -48,7 +49,15 @@ test.each(cases)(
     const caseFile = isCheck(example)
       ? { checks: [example.value] }
       : example.value;
-    box.write("cases/documented/prompt.md", "Say hello.\n");
+    // A case with turns names its prompt files, and has no `prompt.md`.
+    const turns = Array.isArray(caseFile["turns"])
+      ? (caseFile["turns"] as { prompt?: string }[])
+      : [];
+    const files =
+      turns.length === 0
+        ? ["prompt.md"]
+        : turns.flatMap(({ prompt }) => prompt ?? []);
+    for (const file of files) box.write(`cases/documented/${file}`, HELLO);
     box.write("cases/documented/case.json", caseFile);
     const [loaded] = loadCases(path.join(box.root, "cases"));
     expect(loaded?.checks.length).toBeGreaterThan(0);
@@ -67,7 +76,7 @@ test.each(configs)(
 
 test("an example the tool would reject fails the same validation", () => {
   const box = sandbox();
-  box.write("cases/documented/prompt.md", "Say hello.\n");
+  box.write("cases/documented/prompt.md", HELLO);
   box.write("cases/documented/case.json", {
     checks: [{ type: "skill_loaded" }],
   });
@@ -85,6 +94,7 @@ const FEATURE_EXAMPLES = [
   "setup-git",
   "setup-home",
   "shared-fixture",
+  "turns",
   "variants",
 ];
 const examplesDir = path.join(root, "examples/cases");

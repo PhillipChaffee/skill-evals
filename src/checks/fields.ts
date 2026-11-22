@@ -10,7 +10,15 @@ import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
 import { readSteps } from "../setup-steps.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
-import { UsageError, isObject, messageOf } from "../scope.js";
+import { isObject, messageOf } from "../scope.js";
+import {
+  failure,
+  nonEmptyObjects,
+  objects,
+  ranged,
+  text,
+  whole,
+} from "./field-read.js";
 import type { FieldDefault } from "./field-default.js";
 
 export { WEIGHT } from "./field-default.js";
@@ -34,6 +42,7 @@ export type FieldType =
   | "tags"
   | "slug"
   | "variants"
+  | "turns"
   | "answers"
   | "rubric"
   | "harnesses"
@@ -138,63 +147,11 @@ export const REGEX_FIELDS = Object.entries(FIELDS)
   .filter(([, def]) => def.type === "regex")
   .map(([name]) => name);
 
-/**
- * Reads a value that must be a non-empty string.
- * @param value - The parsed value.
- * @param at - Where it is, and what it is.
- * @param at.name - The key.
- * @returns The string.
- * @throws {UsageError} When the value is not a non-empty string.
- */
-function text(value: unknown, at: FieldAt & { name: string }): string {
-  if (typeof value !== "string" || value === "") {
-    throw new UsageError(
-      `${at.where}: ${at.owner} needs a string "${at.name}"`,
-    );
-  }
-  return value;
-}
-
 /** A tag or a variant id: lowercase letters, digits and hyphens, and it does not start with a hyphen. */
 export const SLUG_PATTERN = "^[a-z0-9][a-z0-9-]*$";
 const TAG = new RegExp(SLUG_PATTERN);
 const SLUG_RULE =
   "lowercase letters, digits and hyphens, starting with a letter or digit";
-
-const failure = (at: FieldAt, problem: string): UsageError =>
-  new UsageError(`${at.where}: ${problem}`);
-
-// A parser for a number from `low` to 1.
-const ranged =
-  (low: number): FieldParser =>
-  (value, at) => {
-    if (!(typeof value === "number" && value >= low && value <= 1)) {
-      throw failure(at, `${at.name} must be a number from ${String(low)} to 1`);
-    }
-    return value;
-  };
-
-// A parser for a whole number from `low` up; `wording` is what the error says it must be.
-const whole =
-  (low: number, wording: string): FieldParser =>
-  (value, at) => {
-    if (!(
-      typeof value === "number" &&
-      Number.isInteger(value) &&
-      value >= low
-    )) {
-      throw failure(at, `${at.name} must be ${wording}`);
-    }
-    return value;
-  };
-
-// A parser for a list of objects.
-const objects: FieldParser = (value, at) => {
-  if (!Array.isArray(value) || !value.every(isObject)) {
-    throw failure(at, `"${at.name}" must be a list of objects`);
-  }
-  return value;
-};
 
 // The parser of each field type. A type whose real parser lives in another module starts with a plain one, and that
 // module replaces it with registerParser. This module imports no module that uses it, so no cycle can form.
@@ -294,12 +251,8 @@ const PARSERS: Record<FieldType, FieldParser> = {
   ...JUDGE_PARSERS,
   answers: (value, at) => PARSERS.object(value, at),
   harnesses: (value, at) => PARSERS.texts(value, at),
-  variants: (value, at) => {
-    if (Array.isArray(value) && value.length === 0) {
-      throw failure(at, `"${at.name}" must not be empty`);
-    }
-    return objects(value, at);
-  },
+  variants: nonEmptyObjects,
+  turns: nonEmptyObjects,
   envvars: (value, at) => {
     if (!isObject(value)) {
       throw failure(at, `"${at.name}" must be an object of variable values`);

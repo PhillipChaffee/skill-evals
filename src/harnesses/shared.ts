@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Capability } from "../capabilities.js";
 import type { Subject } from "../subject.js";
+import type { Invoke, TurnInput } from "./turn-input.js";
+
+export type { Invoke, LifecycleEvent } from "./turn-input.js";
+export { firstTurn } from "./turn-input.js";
 
 // Every tool kind with what it means. The docs list the kinds from this table.
 export const TOOL_KIND_MEANINGS = {
@@ -34,6 +38,8 @@ export interface ToolCall {
   turn?: number;
   /** How long the call took, from its tool result, where the stream says. Only an adapter with the `toolDurations` capability sets it. */
   durationMs?: number;
+  /** The user turn the call belongs to, counted from 1, in a case with `turns`. Absent for a single prompt. */
+  userTurn?: number;
   /** The agent that made the call (depth 0 is the main agent, id `main`). Absent in a 0.0.1 record, which means the main agent. */
   agent?: AgentRef;
   /** What the dispatch asked for, on a `subagent` call; null in each field the harness's stream does not show. */
@@ -65,7 +71,7 @@ export interface TranscriptEvent {
   index: number;
   /** The assistant turn, counted from 1; null where the harness has no grouping. */
   turn: number | null;
-  /** Which user message this answers, from 0; -1 for seeded history. */
+  /** Which user turn this answers: from 1 in a case with `turns`, 0 for a single prompt, -1 for seeded history. */
   userTurn: number;
   role: "user" | "assistant" | "tool" | "system";
   agent: AgentRef;
@@ -184,7 +190,18 @@ export interface RunInput {
   /** The run's throwaway HOME, with the XDG directories at their defaults under it. */
   home: string;
   workspace: string;
+  /**
+   * The text to send: the prompt, or, for an `invoke` turn, the user's syntax from `Harness.userInvocation`; empty for
+   * an `event` turn.
+   */
   prompt: string;
+  /** Which turn this is, for an adapter that needs more than `prompt`. */
+  turn: TurnInput;
+  /**
+   * The previous turn's `Parsed.sessionId`, which the adapter continues by its own means; null for the first turn of
+   * the run and for the first turn after a `clear`. Only an adapter with the `multiTurn` capability is given one.
+   */
+  session: string | null;
   model?: string | undefined;
   maxTurns?: number | undefined;
   /** Start with nothing loaded but the subject. Only an adapter with the `isolated` capability is given true. */
@@ -222,6 +239,13 @@ export interface Harness {
   /** How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified). */
   status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
+  /**
+   * The text that a user types to invoke a skill: the harness's own syntax, such as `/skill args`. Present exactly for
+   * an adapter with the `userInvoke` capability, which declares it only once the syntax is confirmed from the CLI.
+   * @param invoke - The skill, and the arguments the user gives it.
+   * @returns The prompt to send.
+   */
+  userInvocation?: (invoke: Invoke) => string;
   /**
    * Whether the adapter reads a cost from the stream. False for a harness whose stream states none: `--max-cost`
    * cannot count its runs, so the command refuses it.
@@ -483,6 +507,8 @@ const NOT_SKILL_CONTENT = new Set([".git", "node_modules"]);
 
 /**
  * Copies each skill of a skills subject to `<dir>/<name>/`, so the path the agent sees is inside the throwaway home.
+ * A copy that is already there is kept: a later turn of a run asks the adapter again, and must not undo what the agent
+ * changed in the copy.
  * @param subject - What the run loads. Nothing is copied for a plugin or for null.
  * @param dir - Where the harness discovers the skills of its user.
  * @returns The copies: skill name to the directory of its copy. The adapter reports them as `placed`.
@@ -495,11 +521,13 @@ export function placeSkills(
   return Object.fromEntries(
     Object.entries(subject.skillDirs).map(([name, source]) => {
       const target = path.join(dir, name);
-      fs.cpSync(source, target, {
-        recursive: true,
-        dereference: true,
-        filter: (file) => !NOT_SKILL_CONTENT.has(path.basename(file)),
-      });
+      if (!fs.existsSync(target)) {
+        fs.cpSync(source, target, {
+          recursive: true,
+          dereference: true,
+          filter: (file) => !NOT_SKILL_CONTENT.has(path.basename(file)),
+        });
+      }
       return [name, target];
     }),
   );

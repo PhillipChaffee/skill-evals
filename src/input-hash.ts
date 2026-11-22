@@ -1,5 +1,6 @@
 import type { Case } from "./cases.js";
 import { canonical, hashTree, sha256 } from "./tree-hash.js";
+import { stepOf } from "./turn-spec.js";
 
 const hashes = new WeakMap<Case, string>();
 
@@ -33,8 +34,9 @@ function seenFiles(caseDef: Case): string {
  * @param run.harness - The id of the harness under test.
  * @param run.model - The model of the run: the case's own `model`, else the command's.
  * @returns The sha256 over the prompt, the content of `workspace/`, the shared fixtures, the case's `fixture/` and
- *   `home/`, the setup steps, the harness, the model, `maxTurns` and the names of the case's `env`. The checks, the
- *   rubrics and `grader/` are not in it.
+ *   `home/`, the setup steps, the harness, the model, `maxTurns` and the names of the case's `env`; for a case with
+ *   `turns`, also each turn's text, invocation or event, so that a changed turn prompt file changes it. The checks,
+ *   the rubrics and `grader/` are not in it.
  */
 export function inputHash(
   caseDef: Case,
@@ -43,6 +45,10 @@ export function inputHash(
   return sha256(
     canonical({
       prompt: caseDef.prompt,
+      // Only a case with turns has the key, so that the hash of a single prompt stays what it was.
+      ...(caseDef.turns && {
+        turns: caseDef.turns.map(stepOf),
+      }),
       files: seenFiles(caseDef),
       setup: caseDef.setup,
       harness: run.harness,

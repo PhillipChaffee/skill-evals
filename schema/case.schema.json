@@ -34,6 +34,12 @@
       "type": "integer",
       "minimum": 1
     },
+    "totalTimeoutSeconds": {
+      "title": "totalTimeoutSeconds",
+      "description": "The seconds the whole run of a case with `turns` may take. `timeoutSeconds` applies to each turn. Default: `timeoutSeconds` times the number of turns.",
+      "type": "integer",
+      "minimum": 1
+    },
     "onTimeout": {
       "title": "onTimeout",
       "description": "What a run that hits `timeoutSeconds` is. \"invalid\" makes it an invalid run, as it always was. \"score\" scores it on what it left, with `stoppedBy: \"timeout\"`, for a case where stalling is the behaviour under test. Default: \"invalid\".",
@@ -189,6 +195,13 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     },
+    "turns": {
+      "title": "turns",
+      "description": "A non-empty list of turns, in place of `prompt.md`: each is a user message (`prompt`, a file of the case), a user invocation of a skill (`invoke`) or a lifecycle event (`event`), with optional `checks` that look at that turn only. One harness process runs each turn, and each continues the session of the one before. A case has `prompt.md` or `turns`, not both. See the turn keys below.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/turn" }
+    },
     "checks": {
       "title": "checks",
       "description": "A non-empty list of checks.",
@@ -278,9 +291,99 @@
           "description": "Tags added to the case's tags for this variant.",
           "type": "array",
           "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+        },
+        "turns": {
+          "title": "turns",
+          "description": "The whole list of turns of the variant, in place of the case's `turns` or `prompt.md`; see the turn keys. Give exactly one of `prompt`, `promptAppend` and `turns`.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/turn" }
         }
       },
-      "oneOf": [{ "required": ["prompt"] }, { "required": ["promptAppend"] }],
+      "oneOf": [
+        { "required": ["prompt"] },
+        { "required": ["promptAppend"] },
+        { "required": ["turns"] }
+      ],
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "turn": {
+      "title": "turn",
+      "description": "One step of a case with turns: a user message, a user invocation of a skill, or a lifecycle event.",
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "title": "prompt",
+          "description": "A message from the user: a file of the case's directory, such as `turn-2.md`, whose text is sent. It stays inside the case and outside `grader/`. Give exactly one of `prompt`, `invoke` and `event`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "invoke": {
+          "title": "invoke",
+          "description": "A user invocation of a skill: `{ \"skill\": \"<name>\", \"args\": \"<text>\" }`, sent in the harness's own user syntax (`/skill args` in Claude Code). A harness that has no confirmed syntax lacks `userInvoke`, and the case is not applicable there.",
+          "type": "object",
+          "required": ["skill"],
+          "properties": {
+            "skill": { "type": "string", "minLength": 1 },
+            "args": { "type": "string", "minLength": 1 }
+          },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false
+        },
+        "event": {
+          "title": "event",
+          "description": "A lifecycle event between messages: `compact`, `clear` or `resume`. It needs the harness capability of the same name. It may not be the first turn.",
+          "type": "string",
+          "enum": ["compact", "clear", "resume"]
+        },
+        "checks": {
+          "title": "checks",
+          "description": "A non-empty list of checks that look at this turn only: its slice of the transcript, its tool calls and its final text, and, for `file_changed`, `file_unchanged` and `files_changed_only`, the paths this turn changed. Every other file check and every `command` check sees the final workspace. A `judge` or `decision` check belongs at case level.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/check-skill_loaded" },
+              { "$ref": "#/$defs/check-skill_not_loaded" },
+              { "$ref": "#/$defs/check-skill_available" },
+              { "$ref": "#/$defs/check-skill_not_available" },
+              { "$ref": "#/$defs/check-skill_file_read" },
+              { "$ref": "#/$defs/check-output_matches" },
+              { "$ref": "#/$defs/check-output_lacks" },
+              { "$ref": "#/$defs/check-output_contains" },
+              { "$ref": "#/$defs/check-output_not_contains" },
+              { "$ref": "#/$defs/check-file_exists" },
+              { "$ref": "#/$defs/check-file_matches" },
+              { "$ref": "#/$defs/check-file_lacks" },
+              { "$ref": "#/$defs/check-file_lines" },
+              { "$ref": "#/$defs/check-file_absent" },
+              { "$ref": "#/$defs/check-file_unchanged" },
+              { "$ref": "#/$defs/check-file_changed" },
+              { "$ref": "#/$defs/check-files_changed_only" },
+              { "$ref": "#/$defs/check-file_count" },
+              { "$ref": "#/$defs/check-dir_exists" },
+              { "$ref": "#/$defs/check-tool_called" },
+              { "$ref": "#/$defs/check-tool_not_called" },
+              { "$ref": "#/$defs/check-first_tool" },
+              { "$ref": "#/$defs/check-agent_dispatched" },
+              { "$ref": "#/$defs/check-tool_order" },
+              { "$ref": "#/$defs/check-transcript_matches" },
+              { "$ref": "#/$defs/check-transcript_lacks" },
+              { "$ref": "#/$defs/check-tool_output_matches" },
+              { "$ref": "#/$defs/check-tool_output_lacks" },
+              { "$ref": "#/$defs/check-tool_output_size" },
+              { "$ref": "#/$defs/check-subject_unchanged" },
+              { "$ref": "#/$defs/check-command" }
+            ]
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["prompt"] },
+        { "required": ["invoke"] },
+        { "required": ["event"] }
+      ],
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },

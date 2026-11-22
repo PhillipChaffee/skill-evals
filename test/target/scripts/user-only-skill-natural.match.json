@@ -1,0 +1,10 @@
+{
+  "turns": [
+    [
+      { "call": { "name": "Read", "input": { "file_path": "CHANGES.md" } } },
+      {
+        "final": "Notes for 2.1:\n\n- Fixed the timeout fallback of loadConfig.\n- Added the --quiet flag.\n- Removed the old legacy mode."
+      }
+    ]
+  ]
+}

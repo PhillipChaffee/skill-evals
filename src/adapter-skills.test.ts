@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, onTestFinished, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
+import { firstTurn } from "./harnesses/shared.js";
 import { skillEvents, skillsLoaded } from "./skill-events.js";
 import { fixture } from "./testing/sandbox.js";
 import { parseText } from "./testing/streams.js";
@@ -63,6 +64,7 @@ function skillsLoadedBy(id: string, name: string): string[] {
         home,
         workspace: base,
         prompt: "",
+        ...firstTurn(""),
       }) ?? {};
   }
   return skillsLoaded(
@@ -122,7 +124,13 @@ test("codex finds the skills of its installed plugin in its cache after setup, a
     skills: [],
     skillDirs: {},
   };
-  const input = { subject, home, workspace: base, prompt: "" };
+  const input = {
+    subject,
+    home,
+    workspace: base,
+    prompt: "",
+    ...firstTurn(""),
+  };
   const hook = harnessOf("codex").placedAfterSetup;
   expect(hook?.(input)).toEqual({});
   const cache = path.join(home, ".codex/plugins/cache/mk/pl");

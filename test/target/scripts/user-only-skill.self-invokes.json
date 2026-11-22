@@ -1,0 +1,10 @@
+{
+  "turns": [
+    [
+      { "call": { "name": "Skill", "input": { "skill": "release-notes" } } },
+      {
+        "final": "## Release notes\n\n- 2.1: fixed the timeout fallback of loadConfig."
+      }
+    ]
+  ]
+}

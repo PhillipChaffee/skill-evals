@@ -36,7 +36,12 @@ function changesIn(
   check: RuledCheck,
   outcome: Outcome,
 ): { changes: Change[]; tree: Tree } {
-  const tree = treeOf(check, outcome);
+  const whole = treeOf(check, outcome);
+  // A check of one turn reads what that turn changed; loading keeps `root: "home"` out of such a check.
+  const tree =
+    outcome.turn && whole.name === "workspace"
+      ? { ...whole, changed: outcome.turn.changed }
+      : whole;
   const inside = (path: string): boolean =>
     tree.unlisted.some((dir) => path.startsWith(`${dir}/`));
   // A directory that cannot be listed shows as a changed entry and as deleted files. Neither is a change.

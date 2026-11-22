@@ -1,21 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Need } from "./capabilities.js";
-import type { FieldDef, Mode } from "./checks/fields.js";
+import type { Mode } from "./checks/fields.js";
 import { extensionsOf } from "./checks/extensions.js";
-import { WEIGHT, readField } from "./checks/fields.js";
+import { readField } from "./checks/fields.js";
 import type { Check } from "./checks/index.js";
 import { readCheck } from "./checks/index.js";
 import type { Found } from "./discover.js";
 import { declaresVariants, discover } from "./discover.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { graderOf, workspaceOf } from "./case-dirs.js";
-import { LAYER_KEYS, layersOf } from "./case-layers.js";
-import { LIMIT_KEYS, limitsOf } from "./case-limits.js";
+import { CASE_KEYS } from "./case-keys.js";
+import { layersOf } from "./case-layers.js";
+import { limitsOf } from "./case-limits.js";
 import type { OnTimeout } from "./session-end.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
 import type { SetupStep } from "./setup-steps.js";
+import type { Turn } from "./turn-spec.js";
+import { readTurns, taskOf } from "./turn-spec.js";
 import { readVariants } from "./variants.js";
 import type { Resolved } from "./variants.js";
 
@@ -29,13 +32,18 @@ export interface Case {
   variant: string | null;
   /** True for a variant that runs only with `--heldout`. */
   heldout: boolean;
+  /** What the user says: `prompt.md`, or for a case with `turns` the turns written as one text (see `taskOf`). */
   prompt: string;
+  /** The user's turns, in order; null for a case with one prompt. */
+  turns: Turn[] | null;
   checks: Check[];
   weight: number;
   minScore?: number | undefined;
   /** The most main-thread turns the agent may take; the runner stops the run as the next one begins. Absent: no limit. */
   maxTurns?: number | undefined;
   timeoutSeconds: number;
+  /** The seconds the whole run of a case with `turns` may take. Absent: `timeoutSeconds` times the number of turns. */
+  totalTimeoutSeconds?: number | undefined;
   /** What a run that hits `timeoutSeconds` is: invalid (the default), or scored on what it left. */
   onTimeout?: OnTimeout | undefined;
   /** What a harness must be able to do for the case to apply, besides what its checks imply. */
@@ -87,87 +95,7 @@ export interface Case {
   dir?: string | undefined;
 }
 
-// The top-level keys of a case file. Any other key is a load error, unless it starts with `x-`.
-export const CASE_KEYS: Record<string, FieldDef> = {
-  checks: { type: "object", meaning: "A non-empty list of checks." },
-  weight: {
-    ...WEIGHT,
-    meaning: "How much the case counts in its suite. Default: 1.",
-  },
-  minScore: {
-    type: "unit",
-    meaning: "The lowest score the case may get and still pass.",
-  },
-  ...LIMIT_KEYS,
-  requires: {
-    type: "needs",
-    meaning:
-      'A list of capabilities the case needs, such as `"mcp"`, or `"bin:<name>"` for an executable on the host\'s `PATH`. A harness that lacks one reports the case as not applicable.',
-  },
-  harnesses: {
-    type: "harnesses",
-    meaning:
-      "The harness ids the case is for. Any other harness reports it as not applicable. Needs `note`. A last resort: prefer `requires`.",
-  },
-  note: {
-    type: "text",
-    meaning: "Why the case is limited to `harnesses`. The report shows it.",
-  },
-  tags: {
-    type: "tags",
-    meaning:
-      "Labels for selecting cases with `--tag`, `--tag-all` and `--not-tag`. Each is lowercase letters, digits and hyphens.",
-  },
-  description: { type: "text", meaning: "What the case shows, in a sentence." },
-  targets: {
-    type: "texts",
-    meaning:
-      "The names of the skills the case is about. The report counts the cases of each in its coverage table.",
-  },
-  kind: {
-    type: "text",
-    meaning: "The kind of case, such as `trigger` or `negative`.",
-  },
-  expected: {
-    type: "text",
-    meaning:
-      "What a good run does, in a sentence. It is for readers; no check reads it.",
-  },
-  guard: {
-    type: "bool",
-    meaning:
-      "True for a case that must keep passing. The report lists it in its own table. Its score counts in the suite score like any other. Default: false.",
-  },
-  reps: {
-    type: "int",
-    meaning: "Runs for each subject in this case, in place of `--reps`.",
-  },
-  model: {
-    type: "text",
-    meaning: "The model of the agent in this case, in place of `--model`.",
-  },
-  judgeModel: {
-    type: "text",
-    meaning:
-      "The model that scores the judged checks of this case, in place of `--judge-model`.",
-  },
-  env: {
-    type: "envvars",
-    meaning:
-      "Variables the agent's process gets, with the values given here. A name starts with `CASE_`, or is `TZ`, `LANG` or `LC_ALL`.",
-  },
-  minDelta: {
-    type: "signed",
-    meaning:
-      "The least score difference, B minus A, that the case must show. A number from -1 to 1; a negative number lets B score lower by at most that much.",
-  },
-  ...LAYER_KEYS,
-  variants: {
-    type: "variants",
-    meaning:
-      "A non-empty list of variants: the same case put differently, such as a paraphrase or a pressure. Each runs as `<case id>@<variant id>`, and the case never runs bare. See the variant keys below.",
-  },
-};
+export { CASE_KEYS } from "./case-keys.js";
 
 const DEFAULT_TIMEOUT_SECONDS = 600;
 
@@ -218,7 +146,7 @@ function readFiles(found: Found) {
 /** What every variant of a case shares, and the case's own id. */
 type Shared = Omit<
   Case,
-  "id" | "base" | "variant" | "heldout" | "prompt" | "extensions"
+  "id" | "base" | "variant" | "heldout" | "prompt" | "turns" | "extensions"
 >;
 
 /**
@@ -227,19 +155,26 @@ type Shared = Omit<
  * @param whole.id - The case's path.
  * @param whole.extensions - The keys of the case file that start with `x-`.
  * @param whole.shared - Everything but the prompt, the id and what a variant decides.
+ * @param whole.turns - The case's own turns, or null; set when there are no variants.
  * @param variants - The variants with their whole prompts, or undefined for a case that has none.
  * @param prompt - What `prompt.md` holds; set when there are no variants.
  * @returns One case, or one case for each variant.
  */
 function expand(
-  whole: { id: string; extensions: Record<string, unknown>; shared: Shared },
+  whole: {
+    id: string;
+    extensions: Record<string, unknown>;
+    shared: Shared;
+    turns: Turn[] | null;
+  },
   variants: Resolved[] | undefined,
   prompt: string | null,
 ): Case[] {
-  const { id, extensions, shared } = whole;
+  const { id, extensions, shared, turns } = whole;
   if (variants === undefined) {
     const bare = { id, base: id, variant: null, heldout: false };
-    return [{ ...shared, ...bare, prompt: prompt ?? "", extensions }];
+    const task = turns ? taskOf(turns) : (prompt ?? "");
+    return [{ ...shared, ...bare, prompt: task, turns, extensions }];
   }
   return variants.map((variant) => ({
     ...shared,
@@ -248,9 +183,39 @@ function expand(
     variant: variant.id,
     heldout: variant.heldout,
     prompt: variant.prompt,
+    turns: variant.turns ?? null,
     tags: [...new Set([...shared.tags, ...variant.tags])],
     extensions: { ...extensions, ...variant.extensions },
   }));
+}
+
+/**
+ * Checks that a case has one source for what the user says.
+ * @param id - The case's id, for the messages.
+ * @param found - What the case has: the text of `prompt.md` (null when there is none), and whether it has `turns` and `variants`.
+ * @param found.prompt - What `prompt.md` holds, or null.
+ * @param found.hasTurns - Whether the case file has `turns`.
+ * @param found.hasVariants - Whether the case file has `variants`.
+ * @throws {UsageError} When `prompt.md` and `turns` are both set; and, for a case without variants, when `prompt.md` is
+ *   empty or missing and there are no turns. With variants, `prompt.md` matters only to a variant that appends to it.
+ */
+function requirePromptSource(
+  id: string,
+  found: { prompt: string | null; hasTurns: boolean; hasVariants: boolean },
+): void {
+  const { prompt, hasTurns, hasVariants } = found;
+  if (hasTurns && prompt !== null) {
+    throw new UsageError(
+      `case ${id}: prompt.md and "turns" are both set; a case has one prompt source`,
+    );
+  }
+  if (hasVariants || hasTurns) return;
+  if (prompt === "") throw new UsageError(`case ${id}: prompt.md is empty`);
+  if (prompt === null) {
+    throw new UsageError(
+      `case ${id}: no prompt source; add a prompt.md, or list "turns"`,
+    );
+  }
 }
 
 /**
@@ -265,13 +230,12 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
   const { id, dir } = found;
   const file = path.join(dir, "case.json");
   const { prompt, raw } = readFiles(found);
-  // Without variants, prompt.md is the prompt. With them, it matters only to a variant that appends to it.
-  if (raw?.["variants"] === undefined) {
-    if (prompt === "") throw new UsageError(`case ${id}: prompt.md is empty`);
-    if (prompt === null) {
-      throw new UsageError(`case ${id}: no prompt source; add a prompt.md`);
-    }
-  }
+  const hasTurns = raw?.["turns"] !== undefined;
+  requirePromptSource(id, {
+    prompt,
+    hasTurns,
+    hasVariants: raw?.["variants"] !== undefined,
+  });
   const checks = raw?.["checks"];
   if (!Array.isArray(checks) || checks.length === 0) {
     throw new UsageError(`${file}: "checks" must be a non-empty array`);
@@ -307,9 +271,16 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
     ...layersOf(found, read, root),
   };
   const variants = read("variants") as Record<string, unknown>[] | undefined;
+  const turns = hasTurns
+    ? readTurns(read("turns") as Record<string, unknown>[], {
+        file,
+        dir,
+        mode,
+      })
+    : null;
   return expand(
-    { id, extensions, shared },
-    variants && readVariants(variants, prompt, { file, mode }),
+    { id, extensions, shared, turns },
+    variants && readVariants(variants, prompt, { file, dir, mode }),
     prompt,
   );
 }

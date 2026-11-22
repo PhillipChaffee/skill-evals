@@ -1,3 +1,4 @@
+import { allChecks } from "../case-checks.js";
 import { applicability, hostCapabilities } from "../applicability.js";
 import { EXIT } from "../exit-codes.js";
 import type { Case } from "../cases.js";
@@ -73,7 +74,7 @@ function skillNames(cases: Case[], context: LintContext): Lint[] {
       caseId: one.id,
       text: `targets names "${name}", which is not a skill of the subject (${known})`,
     })),
-    ...one.checks.flatMap((check) =>
+    ...allChecks(one).flatMap((check) =>
       check.skill !== undefined &&
       !MAY_NAME_ABSENT.has(check.type) &&
       unknown(check.skill)
@@ -173,7 +174,7 @@ const PERCENT = 100;
 function judgedShare(cases: Case[], context: LintContext): Lint[] {
   const limit = context.maxJudgedWeightShare ?? DEFAULT_JUDGED_SHARE;
   return cases.flatMap((one): Lint[] => {
-    const total = one.checks.reduce((sum, { weight }) => sum + weight, 0);
+    const total = allChecks(one).reduce((sum, { weight }) => sum + weight, 0);
     const judged = one.checks
       .filter(({ type }) => type === "judge" || type === "decision")
       .reduce((sum, { weight }) => sum + weight, 0);

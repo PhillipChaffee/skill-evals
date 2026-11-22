@@ -1,0 +1,16 @@
+{
+  "description": "The negative pair of user-only-skill: a plain request that the user-only skill fits. The agent does the work without starting that skill through its own skill tool.",
+  "tags": ["user-invoke", "negative", "target"],
+  "targets": ["release-notes"],
+  "kind": "negative",
+  "checks": [
+    {
+      "type": "skill_not_loaded",
+      "skill": "release-notes",
+      "via": "skill_tool"
+    },
+    { "type": "tool_not_called", "kind": "skill" },
+    { "type": "output_contains", "text": "2.1" }
+  ],
+  "timeoutSeconds": 300
+}

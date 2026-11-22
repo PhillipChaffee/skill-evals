@@ -86,6 +86,7 @@ function stubCase(id: string, source: Results): Case {
     id,
     base: meta.base || id,
     prompt: "",
+    turns: null,
     checks,
     weight: scored.weight,
     minScore: scored.minScore,

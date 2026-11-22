@@ -110,12 +110,25 @@ const claudeCode: Harness = {
     "isolated",
     "toolOutputs",
     "assistantText",
+    // Confirmed from `claude --help` (2.1.330): `-r, --resume [value]` "Resume a conversation by session ID or name"
+    // continues a session in a new `-p` process, and a `-p` process without it starts a new conversation.
+    "multiTurn",
+    "resume",
+    "clear",
+    // Confirmed from the same help text: "Skills still resolve via /skill-name" (`--bare`) and
+    // `--disable-slash-commands` "Disable all skills and commands", so `/<skill> <args>` is the user's syntax.
+    "userInvoke",
+    // Not declared: `compact`. `claude --help` shows only `--autocompact` (the automatic window), no way to ask for a
+    // compaction in a `-p` process. The stream's `compact_boundary` event is parsed, so a harness that reports one shows it.
   ]),
   status: "real-model",
   reportsCost: true,
   isRateLimit: looksRateLimited,
 
-  invocation({ subject, home, prompt, model, maxTurns, isolated }) {
+  userInvocation: ({ skill, args }) =>
+    args === undefined || args === "" ? `/${skill}` : `/${skill} ${args}`,
+
+  invocation({ subject, home, prompt, model, maxTurns, isolated, session }) {
     const configDir = path.join(home, ".claude");
     const placed = placeSkills(subject, path.join(configDir, "skills"));
     return {
@@ -131,6 +144,7 @@ const claudeCode: Harness = {
         "bypassPermissions",
         ...opt("--model", model),
         ...opt("--max-turns", maxTurns),
+        ...opt("--resume", session),
         "--",
         prompt,
       ],

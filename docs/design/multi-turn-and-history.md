@@ -13,9 +13,11 @@ A case may list `turns`. Each turn is one of:
 
 `prompt.md` alone is one turn. `prompt.md` together with `turns` is a load error.
 
-Each turn is one harness process. The adapter continues the session by its own means and declares `multiTurn` only when it can.
+Each turn is one harness process. The adapter continues the session by its own means and declares `multiTurn` only when it can. `RunInput.session` is the previous turn's `Parsed.sessionId`; a turn that states none ends the run as invalid (`turn N gave no session id to continue`).
 
-Case-level checks see the whole session. A turn's own checks see that turn's slice of the transcript. File checks on a turn use that turn's changed paths, from a hash snapshot taken after each turn. No files are copied for this.
+An `invoke` turn reaches the adapter as the text of `Harness.userInvocation`. An `event` turn is carried out by the runner for `resume` (recorded only) and `clear` (the session id is dropped), and by a harness process for `compact`; each is an event of kind `lifecycle` in the transcript, with the event's name.
+
+Case-level checks see the whole session. A turn's own checks see that turn's slice of the transcript, its tool calls and its final text. `file_changed`, `file_unchanged` and `files_changed_only` on a turn use that turn's changed paths, from a hash snapshot taken after each turn (`RunRecord.turnChanges`). No files are copied for this. Every other file check and every `command` check on a turn sees the final workspace. A turn's checks may not be `judge` or `decision` checks, or file-change checks on the home. A turn that was not sent because the run was stopped scores its checks 0 with a reason.
 
 Tokens and cost are summed across turns. `timeoutSeconds` applies to each turn. The overall cap is `timeoutSeconds` times the number of turns, unless `totalTimeoutSeconds` is set.
 
@@ -56,6 +58,20 @@ Conditional replies exist because several cases pass when the agent stops and as
 - **A workspace copy after each turn.** No case needs it. A hash manifest answers "turn 1 changed nothing under `src/`" at a fraction of the cost.
 - **Treating a turn-limit hit as invalid.** Running out of turns is agent behaviour.
 - **Treating a final message that ends with a question mark as asking the user.** It would misfire on rhetorical questions. Only the harness's question tool counts.
+
+## Confirmed from the CLIs (Task 24a)
+
+Each adapter declares a continuation, user syntax or lifecycle capability only when the CLI's own `--help` confirms the mechanism. Only Claude Code was installed when this was written (`claude --version` 2.1.330, `/opt/claude-code/bin/claude --help`, which spends no model).
+
+| Capability   | Claude Code                                                                                                                                                                                                                                                                           | Evidence from `claude --help`                                                                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `multiTurn`  | Declared. `--resume <session id>`, with the id of the turn before.                                                                                                                                                                                                                    | `-r, --resume [value]  Resume a conversation by session ID or name`; `--no-session-persistence  Don't save sessions to disk; they can't be resumed (only works with --print)`, so a `-p` session is saved and can be resumed. |
+| `resume`     | Declared. The event is carried out by the runner: every later turn already resumes the session in a new process, and the event records that in the transcript.                                                                                                                        | The same flag.                                                                                                                                                                                                                |
+| `clear`      | Declared. The runner forgets the session id, and the next process starts without `--resume`, so it is a new conversation in the same workspace.                                                                                                                                       | `-c, --continue  Continue the most recent conversation in the current directory` and `-r` are how a conversation continues; a `-p` process given neither starts a new one.                                                    |
+| `userInvoke` | Declared. `/<skill> <args>` is the user's syntax.                                                                                                                                                                                                                                     | `--bare ... Skills still resolve via /skill-name`, and `--disable-slash-commands  Disable all skills and commands`. Whether a `/skill` prompt in a `-p` process loads the skill was not run: that would spend a model.        |
+| `compact`    | Not declared. The help shows `--autocompact <auto\|tokens>`, the automatic window only. `/compact` in a `-p` process is not confirmed. The stream's `compact_boundary` system event (the binary writes it) is parsed as a `lifecycle` event, so a harness that does compact shows it. | None.                                                                                                                                                                                                                         |
+
+For Task 29 (the other adapters): none of `pi`, `opencode`, `codex` or `cursor-agent` is installed in this environment, so none declares `multiTurn`, `userInvoke`, `compact`, `clear` or `resume`. Each needs its own `--help` read for the continuation flag, its user syntax for a skill, and a compaction command, before it declares them.
 
 ## What it costs
 
