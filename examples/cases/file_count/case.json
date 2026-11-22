@@ -1,0 +1,11 @@
+{
+  "description": "The number of files that a path matches is in range.",
+  "checks": [
+    {
+      "type": "file_count",
+      "path": "notes/*.md",
+      "min": 2,
+      "max": 2
+    }
+  ]
+}

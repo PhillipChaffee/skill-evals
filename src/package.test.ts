@@ -54,7 +54,10 @@ test(
     expect(files).toContain("dist/index.d.ts");
     expect(files).toContain("schema/case.schema.json");
     expect(files).toContain("schema/config.schema.json");
-    const unshipped = /^src\/|\.test\.|testing|^dist\/docs\/|\.ts$(?<!\.d\.ts)/;
+    // The examples ship, and some hold TypeScript files that are the material of a case, so `.ts` is unshipped
+    // everywhere but under `examples/`: this change is deliberate.
+    const unshipped =
+      /^src\/|\.test\.|testing|^dist\/docs\/|^(?!examples\/).*\.ts$(?<!\.d\.ts)/;
     expect(files.filter((file) => unshipped.test(file))).toEqual([]);
 
     const bin = path.join(project, "node_modules/.bin/skill-evals");
@@ -96,3 +99,32 @@ test(
   },
   TIMEOUT_MS,
 );
+
+test("the tarball holds the examples, the schemas and the docs", () => {
+  // `--ignore-scripts` skips the build that `prepack` runs: only the file list of the tarball is read.
+  const listing = npm(
+    packageDir,
+    "pack",
+    "--dry-run",
+    "--json",
+    "--ignore-scripts",
+  );
+  const [tarball] = JSON.parse(listing) as [{ files: { path: string }[] }];
+  const files = tarball.files.map((file) => file.path);
+  for (const wanted of [
+    "examples/cases/hello/case.json",
+    "examples/graders/text-metrics.mjs",
+    "schema/case.schema.json",
+    "docs/src/content/docs/reference/checks.md",
+  ]) {
+    expect(files).toContain(wanted);
+  }
+  expect(files.some((file) => file.startsWith("docs/design/"))).toBe(true);
+  expect(
+    files.filter(
+      (file) =>
+        file.startsWith("docs/") &&
+        !/^docs\/(design|src\/content\/docs)\//.test(file),
+    ),
+  ).toEqual([]);
+});

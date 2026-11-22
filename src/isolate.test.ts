@@ -130,7 +130,7 @@ test("a git program that cannot start is a usage error that names it", () => {
 
 test("the documented example case loads", () => {
   const examples = path.resolve(import.meta.dirname, "../examples/cases");
-  const [loaded] = loadCases(examples, "subject-unchanged");
+  const [loaded] = loadCases(examples, "subject_unchanged");
   expect(loaded?.checks.map((check) => check.type)).toEqual([
     "subject_unchanged",
     "output_contains",

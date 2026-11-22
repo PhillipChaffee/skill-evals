@@ -13,8 +13,11 @@ import type { CommandDoc, Options } from "./usage.js";
 import { commandUsage, commandsTaking, usageText } from "./usage.js";
 import { calibrate } from "./commands/calibrate.js";
 import { diff } from "./commands/diff.js";
+import { explain } from "./commands/explain.js";
+import { init } from "./commands/init.js";
 import { list } from "./commands/list.js";
 import { rejudge } from "./commands/rejudge.js";
+import { show } from "./commands/show.js";
 import { plan } from "./commands/plan.js";
 import { suite } from "./commands/suite.js";
 import { validate } from "./commands/validate.js";
@@ -144,6 +147,27 @@ export const COMMANDS: Record<string, Command> = {
     handler: diff,
     positionals: ["a", "b"],
     flags: ["strict"],
+  },
+  init: {
+    description:
+      "Write prompt.md and case.json for a new case from a template of the given kind, under the cases directory. The id may be a path, such as routing/commit-guard. It refuses an id that no case could have and a directory that exists. Every template loads and passes validate; replace its placeholders before the first run.",
+    handler: init,
+    positionals: ["id"],
+    flags: ["kind", "cases"],
+  },
+  explain: {
+    description:
+      "Print one case as a run reads it, as JSON in Markdown: the prompt, the layers of files in order, the setup steps, every check with its defaults written out, the capabilities it needs, and whether each installed harness can run it. A case with variants lists them. It starts no harness: what is installed comes from a lookup on PATH.",
+    handler: explain,
+    positionals: ["id"],
+    flags: ["cases", "lenient"],
+  },
+  show: {
+    description:
+      "Print what one run did: one line for each transcript event, with its agent, kind, name and input or output cut at 200 characters, and then each check with its score and reason. A tool call is numbered as the checks number it (`call #0`), so a reason that quotes a call can be found. It reads the output directory of an earlier command, takes no lock, and changes nothing.",
+    handler: show,
+    positionals: ["out dir", "case"],
+    flags: ["subject", "rep"],
   },
   list: {
     description:

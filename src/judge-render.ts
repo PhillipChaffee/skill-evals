@@ -7,7 +7,7 @@ import type { Attachment } from "./judge-api.js";
 import { forRecord } from "./transcript.js";
 
 /** The default size of a transcript rendering, in characters. */
-const TRANSCRIPT_CHARS = 60_000;
+export const TRANSCRIPT_CHARS = 60_000;
 /** The size each tool output is cut to when a rendering does not fit. */
 const OUTPUT_CHARS = 400;
 /** The size each file is cut to. */

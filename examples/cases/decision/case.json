@@ -1,0 +1,14 @@
+{
+  "description": "A decision model answers a question about the run.",
+  "checks": [
+    {
+      "type": "decision",
+      "question": "Does the answer say that a test that never failed may test nothing?",
+      "expect": "yes"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "\\w"
+    }
+  ]
+}

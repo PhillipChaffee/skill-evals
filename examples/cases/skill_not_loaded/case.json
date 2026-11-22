@@ -1,0 +1,10 @@
+{
+  "description": "The skill stays unloaded for a request that is not its job.",
+  "targets": ["bug-fix"],
+  "checks": [
+    {
+      "type": "skill_not_loaded",
+      "skill": "bug-fix"
+    }
+  ]
+}

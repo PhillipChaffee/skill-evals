@@ -1,0 +1,9 @@
+{
+  "description": "The final answer holds a text.",
+  "checks": [
+    {
+      "type": "output_contains",
+      "text": "done"
+    }
+  ]
+}

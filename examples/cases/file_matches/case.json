@@ -1,0 +1,10 @@
+{
+  "description": "A file holds three lines.",
+  "checks": [
+    {
+      "type": "file_matches",
+      "path": "haiku.txt",
+      "pattern": "^.+\\n.+\\n.+\\n?$"
+    }
+  ]
+}

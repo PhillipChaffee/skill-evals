@@ -86,6 +86,7 @@ export default defineConfig({
           items: [
             "guides/write-a-case",
             "guides/organise-a-suite",
+            "guides/prose-checks",
             "guides/judged-checks",
             "guides/decision-checks",
             "guides/read-the-report",

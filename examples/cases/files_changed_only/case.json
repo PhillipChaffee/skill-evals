@@ -1,0 +1,9 @@
+{
+  "description": "The agent changed only the files it was asked to.",
+  "checks": [
+    {
+      "type": "files_changed_only",
+      "allow": ["src/cli.js"]
+    }
+  ]
+}

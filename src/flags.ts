@@ -30,8 +30,9 @@ export const FLAGS = {
   subject: {
     value: "subject",
     description:
-      "The subject to score, to probe, or to check the skill names of.",
+      "The subject to score, to probe, or to check the skill names of. For show, the label of a subject in the results.",
     default: PROJECT,
+    defaultIn: { show: "the first subject of the results" },
   },
   harness: {
     value: "ids|all",
@@ -249,6 +250,19 @@ export const FLAGS = {
     description:
       "After a run's checks, archive its workspace, the seed it started from, its remote directory and its throwaway home as <run>.workspace.tar in the output directory, with the system tar. The harness's login files are left out of the home, and the grader's copy is never in it. results.json records each archive as workspaceArchive. rejudge reads the archive to score the checks that need files again. Needs tar on PATH.",
     default: "off: no archive",
+  },
+  kind: {
+    value: "kind",
+    description:
+      "The kind of case init writes: trigger, negative, behaviour, pressure, agent, outcome or prose.",
+    default: "none: init needs it",
+  },
+  rep: {
+    read: readDecimal,
+    value: "n",
+    description:
+      "Which rep of the case show prints, counted from 1. A positive integer.",
+    default: "1",
   },
   out: {
     as: "outDir",

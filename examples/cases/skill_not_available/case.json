@@ -1,0 +1,10 @@
+{
+  "description": "The harness does not list a skill the subject does not hold.",
+  "requires": ["skillListing"],
+  "checks": [
+    {
+      "type": "skill_not_available",
+      "skill": "no-such-skill"
+    }
+  ]
+}

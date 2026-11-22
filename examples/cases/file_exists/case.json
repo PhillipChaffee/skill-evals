@@ -1,0 +1,10 @@
+{
+  "description": "The agent created a file.",
+  "checks": [
+    {
+      "type": "file_exists",
+      "path": "haiku.txt",
+      "created": true
+    }
+  ]
+}

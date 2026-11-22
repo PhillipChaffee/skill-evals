@@ -40,7 +40,7 @@ function checkNeeds(check: Check): Need[] {
  * @param cases - Every loaded case.
  * @returns The needs of the cases and of their checks, with repeats.
  */
-const askedBy = (cases: Case[]): Need[] =>
+export const askedBy = (cases: Case[]): Need[] =>
   cases.flatMap((caseDef) => [
     ...caseDef.requires,
     ...caseDef.checks.flatMap(checkNeeds),

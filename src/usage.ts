@@ -15,6 +15,8 @@ export type Options = Omit<
     targets?: boolean;
     dryRun?: boolean;
     strict?: boolean;
+    kind?: string;
+    rep?: number;
   };
 
 /** What the help text and the docs say about a command. */

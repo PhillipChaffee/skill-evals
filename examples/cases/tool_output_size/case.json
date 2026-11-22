@@ -1,0 +1,9 @@
+{
+  "description": "No tool result is large.",
+  "checks": [
+    {
+      "type": "tool_output_size",
+      "maxBytes": 20000
+    }
+  ]
+}

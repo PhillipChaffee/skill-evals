@@ -1,0 +1,10 @@
+{
+  "description": "No file under src holds a TODO.",
+  "checks": [
+    {
+      "type": "file_lacks",
+      "path": "src/**/*.ts",
+      "pattern": "TODO"
+    }
+  ]
+}

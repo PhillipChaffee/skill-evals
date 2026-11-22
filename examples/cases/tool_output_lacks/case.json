@@ -1,0 +1,15 @@
+{
+  "description": "A tool's own output lacks a pattern.",
+  "checks": [
+    {
+      "type": "tool_output_lacks",
+      "tool": {
+        "kind": "shell",
+        "inputMatches": "npm test"
+      },
+      "pattern": "\\bfail",
+      "flags": "i",
+      "which": "last"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "description": "The agent made no call that fits.",
+  "checks": [
+    {
+      "type": "tool_not_called",
+      "kind": "shell",
+      "inputMatches": "git push"
+    }
+  ]
+}

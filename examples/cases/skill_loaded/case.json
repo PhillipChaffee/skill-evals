@@ -1,0 +1,10 @@
+{
+  "description": "The skill is loaded for a request that is its job.",
+  "targets": ["bug-fix"],
+  "checks": [
+    {
+      "type": "skill_loaded",
+      "skill": "bug-fix"
+    }
+  ]
+}

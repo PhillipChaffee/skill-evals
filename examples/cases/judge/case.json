@@ -1,0 +1,14 @@
+{
+  "description": "A model scores the answer against a rubric.",
+  "checks": [
+    {
+      "type": "judge",
+      "rubric": "The answer says that a test that has never failed may not test anything.",
+      "scale": "binary"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "\\w"
+    }
+  ]
+}

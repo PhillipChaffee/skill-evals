@@ -1,0 +1,9 @@
+{
+  "description": "A directory exists.",
+  "checks": [
+    {
+      "type": "dir_exists",
+      "path": "docs"
+    }
+  ]
+}

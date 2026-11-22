@@ -1,0 +1,10 @@
+{
+  "description": "The final answer matches a pattern.",
+  "checks": [
+    {
+      "type": "output_matches",
+      "pattern": "^done\\.?$",
+      "flags": "i"
+    }
+  ]
+}

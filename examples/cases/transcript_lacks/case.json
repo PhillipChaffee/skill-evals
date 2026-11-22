@@ -1,0 +1,11 @@
+{
+  "description": "The agent said nothing that matches.",
+  "requires": ["assistantText"],
+  "checks": [
+    {
+      "type": "transcript_lacks",
+      "pattern": "as an AI",
+      "where": "assistant_text"
+    }
+  ]
+}

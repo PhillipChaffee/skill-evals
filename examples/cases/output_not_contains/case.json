@@ -1,0 +1,9 @@
+{
+  "description": "The final answer does not hold a text.",
+  "checks": [
+    {
+      "type": "output_not_contains",
+      "text": "as an AI"
+    }
+  ]
+}

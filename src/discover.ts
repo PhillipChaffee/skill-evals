@@ -27,6 +27,13 @@ export const isCaseDir = (dir: string): boolean =>
 export const isSkippedName = (name: string): boolean => name.startsWith("_");
 
 /**
+ * Tells whether a directory name holds a character that case ids and selections give a meaning to.
+ * @param name - The directory's name.
+ * @returns True for a name that holds `@` (a variant) or `,` (a list of selectors).
+ */
+export const hasReservedChar = (name: string): boolean => /[@,]/.test(name);
+
+/**
  * Finds the case directories under a directory, at any depth. A directory is a case when it holds `prompt.md` or
  * `case.json`. Nothing under a case is searched, and a directory whose name starts with `_` is skipped with all it holds.
  * @param dir - The directory to search.
@@ -61,7 +68,7 @@ export function discover(
     const names = [...prefix, entry.name];
     if (!isCaseDir(where)) return discover(where, names, onError);
     const id = names.join("/");
-    if (names.some((name) => /[@,]/.test(name))) {
+    if (names.some(hasReservedChar)) {
       const message = `case ${id}: a directory name may not hold "@" or ","`;
       if (!onError) throw new UsageError(message);
       onError(id, message);

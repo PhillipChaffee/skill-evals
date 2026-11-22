@@ -83,6 +83,24 @@ A key that starts with `x-` is yours. Loading keeps it, nothing reads it, and `r
 
 The package ships `schema/case.schema.json`. Add `"$schema": "../../../node_modules/skill-evals/schema/case.schema.json"` (a path relative to the case file) as the first key of a `case.json`, and an editor that reads JSON Schema offers the keys and check types and flags a wrong one as you type. The tool allows the `$schema` key, as a string only, and ignores it. See [the config reference](../reference/config.md#json-schemas) for the config file.
 
+## Start a case, read it, and see what a run did
+
+`skill-evals init <id> --kind trigger|negative|behaviour|pressure|agent|outcome|prose` writes `prompt.md` and `case.json` for a new case under `--cases` (default `evals/cases`). The id is the case's path, such as `routing/commit-guard`, and it follows the rules of every case id: no `@` or `,`, and no part that starts with `_`. `init` refuses an id inside another case and a directory that exists, and it never overwrites. Each template loads and passes `validate`, with placeholders (`your-skill`, the prompt) that you replace.
+
+`skill-evals explain <id>` prints a case as a run reads it, as JSON in Markdown: the prompt of each variant, the layers of files in the order a run lays them down, the setup steps, every check with its defaults written out (`min: 1` of a `tool_called`, `timeoutSeconds: 600` of the case), the capabilities the case needs, and whether each installed harness can run it. It finds the harnesses on `PATH` and starts none.
+
+`skill-evals show <out dir> <case> [--subject <label>] [--rep <n>]` prints what one run did: one line for each transcript event, with its agent, kind, name and input or output cut at 200 characters (the line says so where it cuts), and then each check with its score and reason. A check that quotes calls (`#0 t2 main shell Bash ...`) names them by the number that the transcript line gives as `call #0`. The subject defaults to the first label of the results, and the rep to 1. A missing transcript file is a line saying so, and the checks still print. `show` only reads, and takes no lock.
+
+## The authoring loop
+
+Write a check against one real run, and do not spend a suite on it.
+
+1. `skill-evals score --case <id> --reps 1 --keep-workspaces --out out` runs the case once and keeps the files of the run.
+2. `skill-evals show out <id>` shows what the agent did and why each check scored as it did.
+3. Change the check, then `skill-evals rejudge out --case <id>`. It scores the stored run again without starting the agent. See [Re-judge stored runs](rejudge-and-diff.md).
+
+Repeat steps 2 and 3 until the check says what you mean, then run the case with its full number of reps.
+
 ## Check a suite before you run it
 
 `skill-evals validate` loads every case and reports every problem at once, without starting a harness or spending anything. A case that does not load (an unknown key, a regular expression that does not compile, an unsafe path, a bad tag or variant id) is a problem, and the command exits 2. A warning does not change the exit code: a `targets` name or a check's `skill` that is not a skill of the subject (a `skill_not_loaded` check may name an absent skill), and each case that an installed harness would report as not applicable, with what it lacks.
@@ -199,7 +217,7 @@ A `sequence` is a list of matchers that must match calls in that order, with oth
 }
 ```
 
-Without `by`, every one of these sees all the calls of the run, those of a subagent included. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
+Without `by`, every one of these sees all the calls of the run, those of a subagent included. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool_order` and `examples/cases/first_tool`.
 
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
 
@@ -265,7 +283,7 @@ A dispatch starts the agent in one of two ways, and the reason of the result say
 }
 ```
 
-`agent_dispatched` has no `sameTurn`. For that, and for order, use the matcher key `dispatches: "<agent>"`, which fits a `subagent` call by the same rule (type with prefix dropped, or the inlined-definition fallback for a generic dispatch). It works in every matcher (`tool_called` with `min`, `max` and `sameTurn`, `tool_order`, `first_tool`, `ignoring`, `scope`) and as a check field of `tool_called` and `tool_not_called`: `{ "type": "tool_called", "dispatches": "researcher", "min": 2, "sameTurn": true }`. It needs `subagents`. It needs the `subagents` capability. `examples/cases/agent-dispatched` is a whole case. Where the stream reports usage on each assistant message (Claude Code), a run record's `agentTokens` holds the tokens of each agent, keyed by `main` or the id of its dispatch call; it is null elsewhere.
+`agent_dispatched` has no `sameTurn`. For that, and for order, use the matcher key `dispatches: "<agent>"`, which fits a `subagent` call by the same rule (type with prefix dropped, or the inlined-definition fallback for a generic dispatch). It works in every matcher (`tool_called` with `min`, `max` and `sameTurn`, `tool_order`, `first_tool`, `ignoring`, `scope`) and as a check field of `tool_called` and `tool_not_called`: `{ "type": "tool_called", "dispatches": "researcher", "min": 2, "sameTurn": true }`. It needs `subagents`. It needs the `subagents` capability. `examples/cases/agent_dispatched` is a whole case. Where the stream reports usage on each assistant message (Claude Code), a run record's `agentTokens` holds the tokens of each agent, keyed by `main` or the id of its dispatch call; it is null elsewhere.
 
 ## What the agent said and what its tools returned
 
@@ -300,7 +318,7 @@ Four checks read the [transcript](../concepts/transcript.md) of the run. They ne
 
 A call that fits `tool` but has no result event is not a match for `tool_output_matches`; with `which` set to the one that is chosen, the check scores 0 with `call #<i> has no output`. `tool_output_lacks` fails closed: a chosen call with no output cannot be shown to lack the pattern. No call that fits `tool` scores 0 for both. `tool_output_size` takes `maxBytes` and an optional `tool`, and scores 0 when any output is larger; a call with no result is ignored.
 
-Patterns run on the first 1,000,000 characters of each event's text, input or output, and are compiled once for the check, so the `g` and `y` flags behave. A failing reason quotes the events it is about, one line each: `#<index> <type> <first 120 characters>`. The full cases are in `examples/cases/transcript-matches` and `examples/cases/tool-output-matches`.
+Patterns run on the first 1,000,000 characters of each event's text, input or output, and are compiled once for the check, so the `g` and `y` flags behave. A failing reason quotes the events it is about, one line each: `#<index> <type> <first 120 characters>`. The full cases are in `examples/cases/transcript_matches` and `examples/cases/tool_output_matches`.
 
 ## How a skill load is detected
 

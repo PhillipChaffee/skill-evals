@@ -19,7 +19,10 @@
   },
   "files": [
     "dist",
+    "examples",
     "schema",
+    "docs/design",
+    "docs/src/content/docs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

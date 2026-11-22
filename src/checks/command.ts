@@ -6,7 +6,7 @@ import type { Outcome, Rule, Spec, Verdict, With } from "./index.js";
 import { regex } from "./rules.js";
 
 const KEPT_BYTES = 2000;
-const DEFAULT_TIMEOUT_SECONDS = 120;
+export const DEFAULT_TIMEOUT_SECONDS = 120;
 const SHOWN_LINE_LENGTH = 80;
 const SHOWN_PATHS = 10;
 const UTF8_CONTINUATION = 0b1000_0000;

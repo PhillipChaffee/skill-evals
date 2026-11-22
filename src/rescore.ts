@@ -36,7 +36,7 @@ const GRADER_PREFIX = "copy-";
  * @returns The absolute path.
  * @throws {UsageError} When the path leads out of the output directory.
  */
-function within(outDir: string, relative: string): string {
+export function within(outDir: string, relative: string): string {
   const root = path.resolve(outDir);
   const found = path.resolve(root, relative);
   const inside = path.relative(root, found);

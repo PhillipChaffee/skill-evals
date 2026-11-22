@@ -1,0 +1,11 @@
+{
+  "description": "A file has a bounded number of lines.",
+  "checks": [
+    {
+      "type": "file_lines",
+      "path": "summary.md",
+      "min": 1,
+      "max": 5
+    }
+  ]
+}

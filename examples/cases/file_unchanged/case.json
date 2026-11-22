@@ -1,0 +1,9 @@
+{
+  "description": "A file the agent had no reason to touch is as it was.",
+  "checks": [
+    {
+      "type": "file_unchanged",
+      "path": "vendor/lib.js"
+    }
+  ]
+}

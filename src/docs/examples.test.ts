@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { loadCases } from "../cases.js";
+import { CHECKS } from "../checks/index.js";
 import { sandbox } from "../testing/sandbox.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -73,4 +74,43 @@ test("an example the tool would reject fails the same validation", () => {
   expect(() => loadCases(path.join(box.root, "cases"))).toThrow(
     /skill_loaded needs a string "skill"/,
   );
+});
+
+// A case that shows a feature and not one check type: it may have any name. A new one is added here on purpose.
+const FEATURE_EXAMPLES = [
+  "by-agent",
+  "file-state",
+  "judge-transcript",
+  "requires",
+  "routing",
+  "setup-git",
+  "setup-home",
+  "shared-fixture",
+  "variants",
+];
+const examplesDir = path.join(root, "examples/cases");
+
+test("one example per check type", async () => {
+  // A later task that adds a check type to CHECKS must add examples/cases/<check type>/ with it: this test fails until
+  // it does, and fails again when a check type is removed and its example is not.
+  const directories = fs
+    .readdirSync(examplesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
+    .map((entry) => entry.name)
+    .filter((name) => name !== "hello" && !FEATURE_EXAMPLES.includes(name))
+    .sort();
+  expect(directories).toEqual(Object.keys(CHECKS).sort());
+  for (const type of Object.keys(CHECKS)) {
+    const loaded = loadCases(examplesDir, type);
+    expect(
+      loaded.some(({ checks }) => checks.some((check) => check.type === type)),
+      `${type} is not used by its own example`,
+    ).toBe(true);
+  }
+  const box = sandbox();
+  const validated = await box.cli([
+    ...["validate", "--cases", examplesDir, "--subject", "none"],
+  ]);
+  expect(validated.stdout).toMatch(/, 0 problems, /);
+  expect(validated.status, validated.stdout).toBe(0);
 });

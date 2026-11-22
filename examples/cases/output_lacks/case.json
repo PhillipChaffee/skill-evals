@@ -1,0 +1,10 @@
+{
+  "description": "The final answer lacks a pattern.",
+  "checks": [
+    {
+      "type": "output_lacks",
+      "pattern": "\\bdelve\\b",
+      "flags": "i"
+    }
+  ]
+}

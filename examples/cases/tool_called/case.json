@@ -1,0 +1,11 @@
+{
+  "description": "The agent ran a command.",
+  "checks": [
+    {
+      "type": "tool_called",
+      "kind": "shell",
+      "inputMatches": "npm test",
+      "min": 1
+    }
+  ]
+}

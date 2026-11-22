@@ -1,0 +1,9 @@
+{
+  "description": "A file was modified.",
+  "checks": [
+    {
+      "type": "file_changed",
+      "path": "src/parse.js"
+    }
+  ]
+}

@@ -105,7 +105,7 @@ test("a check that needs tool outputs or assistant text is not applicable where 
 test("the example's rm -rf check passes when the edit is the last call", () => {
   const [example] = loadCases(
     path.resolve(import.meta.dirname, "../examples/cases"),
-    "transcript-matches",
+    "transcript_matches",
   );
   const check = example?.checks.find((one) => one.type === "transcript_lacks");
   const run = played(

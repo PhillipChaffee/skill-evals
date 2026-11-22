@@ -88,7 +88,7 @@ test("a pattern with the g flag matches two consecutive calls", () => {
 test("a check names the matchers, counts and options that tell it from another of its type", () => {
   const [loaded] = loadCases(
     path.resolve(import.meta.dirname, "../examples/cases"),
-    "first-tool",
+    "first_tool",
   );
   const named = (loaded?.checks ?? [])
     .filter((check) => check.type === "tool_order")
