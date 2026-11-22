@@ -7,6 +7,7 @@ import type {
   Verdict,
 } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
+import { mockLogVerdict } from "./checks/mock-log.js";
 import { removeLogin } from "./command.js";
 import type { Via } from "./score-models.js";
 import { decideAll, judgedResult } from "./score-models.js";
@@ -48,6 +49,17 @@ async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
       reason: `the check could not be scored: ${messageOf(error)}`,
     };
   }
+}
+
+/**
+ * Scores a check by its rule, unless the run holds calls that only the mock log showed and the check needs the agent,
+ * the order or the turn of one: such a call has none of them, so the check is not scored.
+ * @param check - A check that a rule scores.
+ * @param outcome - What the run left behind.
+ * @returns The mock log's verdict where it applies, else the rule's.
+ */
+async function ruledOrLog(check: RuledCheck, outcome: Outcome) {
+  return mockLogVerdict(check, outcome) ?? (await ruled(check, outcome));
 }
 
 /**
@@ -283,7 +295,7 @@ export async function scoreChecks(
       scored.skipped ||= result === undefined && early !== null;
       slots[index] = { ...check, ...left };
     } else if (!isJudged(check)) {
-      slots[index] = { ...check, ...(await ruled(check, outcome)) };
+      slots[index] = { ...check, ...(await ruledOrLog(check, outcome)) };
     } else {
       slots[index] = await judgedSlot(
         { plan, ask, via, task, outcome, judgeable, because },

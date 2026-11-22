@@ -1,0 +1,23 @@
+{
+  "description": "Search wiki pages by words.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": ["query"]
+  },
+  "responses": [
+    {
+      "when": {
+        "query": "[Cc]heckout|502|[Rr]unbook"
+      },
+      "text": "Checkout runbook"
+    },
+    {
+      "text": "no page matches {{query}}"
+    }
+  ]
+}

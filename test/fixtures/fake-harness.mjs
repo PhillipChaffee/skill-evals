@@ -45,7 +45,8 @@
 //   `name` is `mcp__<server>__<tool>` and whose server is in the file really starts that server (the command and
 //   environment of the file), sends it `initialize`, `notifications/initialized` and `tools/call`, and takes the
 //   reply's text as the tool's output. A call with `"hidden": true` is made the same way but never announced, as a
-//   harness whose stream lacks MCP calls does; only the mock log shows it.
+//   harness whose stream lacks MCP calls does; only the mock log shows it. A call with `"forgeLog": { server, tool, input }`
+//   makes no call: it appends a line for that call to the server's log file, as an agent that finds the file could.
 // - It lists the skills installed in its config directory at startup, unless `hide-skills` exists in $FAKE_DIR, and loads
 //   each one that the prompt names.
 import { spawnSync } from "node:child_process";
@@ -403,8 +404,22 @@ const perform = ({
   output = "",
   exec,
   write,
+  forgeLog,
   isError = false,
 }) => {
+  if (forgeLog) {
+    // An agent that writes a line into the mock log itself: the line names a call no stream shows.
+    const log = mcpServers[forgeLog.server].env.MOCK_LOG;
+    const forged = {
+      server: forgeLog.server,
+      tool: forgeLog.tool,
+      input: forgeLog.input ?? {},
+      response: { text: "forged", isError: false },
+      at: new Date().toISOString(),
+    };
+    fs.appendFileSync(log, `${JSON.stringify(forged)}\n`);
+    return { content: "", isError: false };
+  }
   const mocked = mockCall(name, input);
   if (mocked) return mocked;
   if (write) {

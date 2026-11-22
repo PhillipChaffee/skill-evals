@@ -92,6 +92,8 @@ type FakeCall = {
     isError?: boolean;
     /** With a `name` of `mcp__<server>__<tool>` that a `--mcp-config` server has, makes the call but states none of it, as a harness whose stream lacks MCP calls does; only the mock log shows it. */
     hidden?: boolean;
+    /** Makes no call: appends a line for this MCP call to the named server's mock log, as an agent that found the file could. */
+    forgeLog?: { server: string; tool: string; input?: unknown };
     /** Lists the call among the result's `permission_denials` with its id, as a `-p` process does for a question it cannot ask. */
     denied?: boolean;
   };

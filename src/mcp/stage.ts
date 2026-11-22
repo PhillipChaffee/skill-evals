@@ -6,7 +6,7 @@ import { mergeMockLog } from "./merge.js";
 import type { McpCall, McpServerEntry, McpSource } from "./types.js";
 
 /** The name of the log file inside a run's mock directory. */
-const LOG_NAME = "mock.log";
+const LOG_NAME = "calls.log";
 
 /** A run's mock servers, copied out of the case. */
 export interface StagedMcp {
@@ -21,16 +21,21 @@ export interface StagedMcp {
 }
 
 /**
- * Names the command that starts a mock server: this package's `mock-server` file, which is `.ts` when the sources run
- * and `.js` in the compiled package. The script is the same file as the `skill-evals-mcp-mock` binary.
+ * Copies the mock server's script into the run's directory under a neutral name, so that the command the agent can read
+ * names neither this package nor its sources. The script imports nothing of the package at run time.
+ * @param dir - The run's mock directory.
  * @returns The executable and its leading arguments; the server's name and directory follow.
  */
-function mockCommand(): { command: string; args: string[] } {
-  const ext = path.extname(import.meta.filename);
-  return {
-    command: process.execPath,
-    args: [path.join(import.meta.dirname, `mock-server${ext}`)],
-  };
+function stageCommand(dir: string): { command: string; args: string[] } {
+  // `.mts` and `.mjs` are always ES modules, wherever the copy lies.
+  const ext = path.extname(import.meta.filename) === ".ts" ? ".mts" : ".mjs";
+  const script = path.join(dir, `server${ext}`);
+  const original = path.extname(import.meta.filename);
+  fs.copyFileSync(
+    path.join(import.meta.dirname, `mock-server${original}`),
+    script,
+  );
+  return { command: process.execPath, args: [script] };
 }
 
 /**
@@ -40,9 +45,9 @@ function mockCommand(): { command: string; args: string[] } {
  * @returns The staged servers.
  */
 export function stageMcp(source: McpSource): StagedMcp {
-  const temp = tempDir("mcp-");
+  const temp = tempDir("svc-");
   const log = path.join(temp.dir, LOG_NAME);
-  const { command, args } = mockCommand();
+  const { command, args } = stageCommand(temp.dir);
   const servers = source.servers.map((name): McpServerEntry => {
     const copy = path.join(temp.dir, "servers", name);
     fs.cpSync(path.join(source.dir, name), copy, { recursive: true });
@@ -128,24 +133,83 @@ export function startMcp(
 }
 
 /**
- * Reads the mock log after the run and adds what the stream lacks.
- * @param harness - The adapter; only one with the `mcp` capability has the log merged into its transcript.
+ * Counts calls by `<server>.<tool>`.
+ * @param names - One name for each call.
+ * @returns Name to the number of calls.
+ */
+function tally(names: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * Compares the calls the stream shows with the calls the mock servers logged.
+ * @param parsed - What the adapter read from the stream.
+ * @param calls - What the mock servers logged.
+ * @param servers - The names of the registered mock servers; the stream's calls to any other server are not compared.
+ * @returns One line for each `<server>.<tool>` whose count differs, or one `the mock log and the stream disagree: ...`
+ *   line that lists them; empty when they agree. A line in the log that no call of the stream explains is a forged
+ *   one, or a call the stream lost; either way the run cannot be trusted.
+ */
+function disagreement(
+  parsed: Parsed,
+  calls: McpCall[],
+  servers: string[],
+): string[] {
+  const own = (name: string): boolean =>
+    servers.some((server) => name.startsWith(`${server}.`));
+  const seen = tally(
+    parsed.toolCalls.flatMap((call) =>
+      call.kind === "mcp" && own(call.name) ? [call.name] : [],
+    ),
+  );
+  const logged = tally(calls.map((call) => `${call.server}.${call.tool}`));
+  const names = [...new Set([...seen.keys(), ...logged.keys()])].sort();
+  const differing = names
+    .filter((name) => (seen.get(name) ?? 0) !== (logged.get(name) ?? 0))
+    .map(
+      (name) =>
+        `${name}: the stream shows ${String(seen.get(name) ?? 0)}, the log ${String(logged.get(name) ?? 0)}`,
+    );
+  return differing.length === 0
+    ? []
+    : [`the mock log and the stream disagree: ${differing.join("; ")}`];
+}
+
+/** What reading the mock log after a run came to. */
+export interface MockLogRead {
+  /** What the adapter read, with the logged calls merged in for an adapter whose stream cannot show them. */
+  parsed: Parsed;
+  /** The log's text; null for a case with no servers. */
+  mcpLog: string | null;
+  /** Why the run cannot be trusted, which makes it invalid; empty when the log and the stream agree. */
+  mcpProblems: string[];
+}
+
+/**
+ * Reads the mock log after the run. For an adapter whose stream shows MCP calls the log is only a cross-check: the
+ * stream is never changed, and a log that does not match it, with extra, missing or forged lines, is a problem. For an
+ * adapter whose `mcpCalls` is `log` the logged calls are merged into the transcript.
+ * @param harness - The adapter.
  * @param parsed - What the adapter read from the stream.
  * @param started - The run's mock servers; null for a case with none.
- * @returns The log's text, null for a case with no servers, and `parsed` with the logged calls merged in when the
- *   stream shows none of them (`mergeMockLog`).
+ * @returns The log's text, the stream (merged or not), and the problems.
  */
 export function withMockLog(
-  harness: Pick<Harness, "capabilities">,
+  harness: Pick<Harness, "capabilities" | "mcpCalls">,
   parsed: Parsed,
   started: McpStarted | null,
-): { parsed: Parsed; mcpLog: string | null } {
-  if (started === null) return { parsed, mcpLog: null };
+): MockLogRead {
+  if (started === null) return { parsed, mcpLog: null, mcpProblems: [] };
   const mcpLog = readLogText(started.staged.log);
-  return {
-    mcpLog,
-    parsed: harness.capabilities.has("mcp")
-      ? mergeMockLog(parsed, parseLog(mcpLog))
-      : parsed,
-  };
+  const calls = parseLog(mcpLog);
+  if (!harness.capabilities.has("mcp")) {
+    return { parsed, mcpLog, mcpProblems: [] };
+  }
+  if (harness.mcpCalls === "log") {
+    return { parsed: mergeMockLog(parsed, calls), mcpLog, mcpProblems: [] };
+  }
+  const servers = started.staged.servers.map((server) => server.name);
+  return { parsed, mcpLog, mcpProblems: disagreement(parsed, calls, servers) };
 }

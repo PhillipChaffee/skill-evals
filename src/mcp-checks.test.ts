@@ -168,3 +168,35 @@ test("kind other without a name matches mcp calls as in 0.0.1, and with a name i
   };
   expect(check(named)).toBe(0);
 });
+
+test("a name pattern fits the native name of an mcp call as well as the mapped one", () => {
+  const call: ToolCall = {
+    ...mcpCall(GET_ISSUE, "main"),
+    native: "mcp__tracker__get_issue",
+  };
+  const run = (given: Given) =>
+    scored(given, bareOutcome({ toolCalls: [call] })).score;
+  // A 0.0.1 check that named the native name keeps counting the call, with or without a kind.
+  expect(
+    run({ type: "tool_not_called", name: "mcp__tracker__get_issue" }),
+  ).toBe(0);
+  expect(
+    run({ type: "tool_not_called", kind: "other", name: "^mcp__tracker" }),
+  ).toBe(0);
+  expect(
+    run({ type: "tool_not_called", kind: "mcp", name: "^mcp__tracker" }),
+  ).toBe(0);
+  expect(run({ type: "tool_not_called", name: "^tracker\\." })).toBe(0);
+  expect(run({ type: "tool_not_called", name: "^mcp__wiki" })).toBe(1);
+  // A name that fits only the mapped name was never a 0.0.1 name: it does not make `other` match.
+  expect(
+    run({ type: "tool_not_called", kind: "other", name: "^tracker\\." }),
+  ).toBe(1);
+  // A pattern that rules a name out has to rule out both forms.
+  const keepsTo: Given = {
+    type: "tool_not_called",
+    kind: "mcp",
+    name: "^(?!(?:tracker\\.|mcp__tracker__))",
+  };
+  expect(run(keepsTo)).toBe(1);
+});

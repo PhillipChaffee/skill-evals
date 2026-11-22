@@ -12,6 +12,8 @@ Each run starts the harness in a new, empty home directory and a new workspace. 
 
 The harness also gets only an allowlist of your environment variables, so a secret in your shell, such as a cloud key or a token, is not in its environment unless you name it in `env` in the config file. That keeps your own configuration out of the measurement. It does not confine the agent: the harness runs as you, with full permissions, so a prompt can still make it read or change anything you can.
 
+A case with mock MCP servers adds processes of its own: Claude Code starts a copy of the mock server for each server of the case, from a temporary directory outside the workspace and the home, and the agent can read that directory like any other file it can reach. The servers answer from the case's files and call nothing real, and a run that reports any other MCP server is invalid. A logged-in headless Claude Code would otherwise sync your claude.ai connectors, so a mock case sets `ENABLE_CLAUDEAI_MCP_SERVERS=false` for it. An agent that writes into the servers' log cannot change a score: the log must agree with the stream, or the run is invalid.
+
 ## Code that runs on your machine
 
 A `command` check runs the shell command a case file gives it, after the agent exits. It runs as you, without a sandbox, in the run's workspace, and it can read and change anything you can. Read a case's `run` and its `grader/` folder before you run a suite you did not write, as you would read a script you were about to run.

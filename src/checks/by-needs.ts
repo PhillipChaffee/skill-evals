@@ -11,7 +11,7 @@ const TEXT_CHECKS = ["transcript_matches", "transcript_lacks"];
  * @returns The matchers of `matches`, `before`, `after`, `ignoring`, `sequence` and `tool`, and of the `before` or
  *   `after` of a `scope` object.
  */
-function matchersOf(check: Check): ToolMatcher[] {
+export function matchersOf(check: Check): ToolMatcher[] {
   const { scope } = check;
   const inScope =
     scope !== undefined && typeof scope === "object"

@@ -21,28 +21,18 @@ const SERVER = "tracker";
 const PI = "pi";
 const TOOL_FILE = "cases/c/mcp/tracker/get.json";
 
-test("a stream without MCP calls gets them from the mock log, marked mock-log, with an agent that is unknown", async () => {
+test("a call that only the mock log shows makes the run invalid, and the stream is not changed", async () => {
   const box = sandbox();
-  const checks = [
-    { type: "tool_called", kind: "mcp", name: "^tracker\\.get_issue$", min: 1 },
-    { type: "tool_called", kind: "mcp", min: 1, by: "main" },
-    { type: "tool_called", kind: "mcp", min: 1, by: { agent: "unknown" } },
-    {
-      type: "tool_output_matches",
-      tool: { kind: "mcp" },
-      pattern: "Cart empties",
-    },
-  ];
-  const cases = plantLookup(box, [HIDDEN_ISSUE], { checks });
+  const cases = plantLookup(box, [HIDDEN_ISSUE]);
   const ran = await scoreSubject(box, { subject: NONE, cases });
-  expect(ran.status, ran.stderr).toBe(0);
+  expect(ran.status).toBe(EXIT.invalid);
   const [record] = ran.records;
-  const calls = record?.toolCalls ?? [];
-  expect(calls.map((c) => [c.kind, c.name, c.source, c.agent?.type])).toEqual([
-    ["mcp", "tracker.get_issue", "mock-log", "unknown"],
+  expect(record?.score).toBeNull();
+  expect(record?.mcpProblems).toEqual([
+    "the mock log and the stream disagree: tracker.get_issue: the stream shows 0, the log 1",
   ]);
-  // The log cannot say who made the call: the main thread did not, as far as a check can know.
-  expect(record?.checks.map((check) => check.score)).toEqual([1, 0, 1, 1]);
+  // The stream's own calls are what a check sees: the logged call was not merged in.
+  expect(record?.toolCalls).toEqual([]);
 });
 
 test("under --isolated the registered mock servers are not unexpected, and any other MCP server still is", async () => {
@@ -82,6 +72,11 @@ test("the staged servers are a copy, and removing them leaves the case alone", (
   const { box, source } = planted();
   const staged = stageMcp(source);
   const [server] = staged.servers;
+  // The command names a neutral copy of the script, not this package.
+  expect(path.basename(server?.args[0] ?? "")).toMatch(/^server\.m(ts|js)$/);
+  expect(server?.args[0]).not.toContain("skill-evals");
+  expect(path.basename(staged.dir)).toMatch(/^svc-/);
+  expect(path.basename(staged.log)).toBe("calls.log");
   expect(server?.args.at(-2)).toBe(SERVER);
   expect(server?.args.at(-1)).toBe(path.join(staged.dir, "servers/tracker"));
   expect(server?.env).toEqual({ MOCK_LOG: staged.log });
@@ -114,12 +109,12 @@ test("a harness that cannot register MCP servers makes the run unable to start, 
   if (!claude) throw new Error("no claude-code");
   const registered = startMcp(claude, source, dirs);
   expect(registered.failure).toBeNull();
-  const config = path.join(registered.staged.dir, "mcp-config.json");
+  const config = path.join(registered.staged.dir, "servers.json");
   expect(fs.readFileSync(config, "utf8")).toContain('"type": "stdio"');
   registered.staged.dispose();
 });
 
-test("a harness without mcp has no mock log merged into its run, and the staged log is read as it is", () => {
+test("a harness without mcp reads the log and changes nothing, one that shows MCP calls in its stream cross-checks it, and one that cannot merges it", () => {
   const { source, dirs } = planted();
   const started = startMcp(
     { id: PI, registerMcp: () => undefined },
@@ -135,20 +130,28 @@ test("a harness without mcp has no mock log merged into its run, and the staged 
   });
   fs.writeFileSync(started.staged.log, `${log}\n`);
   const parsed = parseText("claude-code", "");
-  const without = withMockLog({ capabilities: new Set() }, parsed, started);
+  const none = { capabilities: new Set<never>() };
+  const without = withMockLog(none, parsed, started);
   expect(without.parsed).toBe(parsed);
-  expect(without.mcpLog).toBe(`${log}\n`);
-  const claude = withMockLog(
-    { capabilities: new Set(["mcp"]) },
-    parsed,
-    started,
-  );
-  expect(claude.parsed.toolCalls.map((call) => call.source)).toEqual([
+  expect(without).toMatchObject({ mcpLog: `${log}\n`, mcpProblems: [] });
+  // The stream shows MCP calls: the log is a cross-check, and its extra line is a problem.
+  const stream = { capabilities: new Set(["mcp" as const]) };
+  const checked = withMockLog(stream, parsed, started);
+  expect(checked.parsed).toBe(parsed);
+  expect(checked.mcpProblems).toEqual([
+    "the mock log and the stream disagree: tracker.get: the stream shows 0, the log 1",
+  ]);
+  // The stream cannot show them: the log is merged, and nothing disagrees.
+  const hidden = { ...stream, mcpCalls: "log" as const };
+  const merged = withMockLog(hidden, parsed, started);
+  expect(merged.parsed.toolCalls.map((call) => call.source)).toEqual([
     "mock-log",
   ]);
-  expect(withMockLog({ capabilities: new Set() }, parsed, null)).toEqual({
+  expect(merged.mcpProblems).toEqual([]);
+  expect(withMockLog(none, parsed, null)).toEqual({
     parsed,
     mcpLog: null,
+    mcpProblems: [],
   });
   started.staged.dispose();
   expect(inside(started.staged.dir, started.staged.dir)).toBe(true);

@@ -114,7 +114,12 @@ function dispatchOf(input: unknown): Dispatch {
 function mcpPart(part: EventInput, native: string): EventInput {
   const split = mcpToolOf(native);
   return split
-    ? { ...part, kind: "mcp", name: `${split.server}.${split.tool}` }
+    ? {
+        ...part,
+        kind: "mcp",
+        name: `${split.server}.${split.tool}`,
+        native,
+      }
     : part;
 }
 

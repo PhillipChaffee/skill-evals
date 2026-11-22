@@ -251,3 +251,34 @@ test("main needs a server name and a directory, and serves what it is given", as
   expect(await served).toBe(0);
   expect(String(output.read())).toContain('"result":{}');
 });
+
+test("a notification is never run, a null id is invalid, and only a call's own arguments fill a placeholder", async () => {
+  const box = sandbox();
+  const dir = plantServer(box);
+  const log = path.join(box.root, "n.log");
+  const replies = await piped(dir, log).send(
+    // A tools/call with no id is a notification: it gets no reply and is not run, so the log has no line for it.
+    {
+      jsonrpc: JSONRPC,
+      method: TOOLS_CALL,
+      params: { name: GET_ISSUE, arguments: { id: ID_SHOP_7 } },
+    },
+    { jsonrpc: JSONRPC, id: null, method: "ping" },
+    request(1, INITIALIZE, { protocolVersion: "2025-11-25" }),
+  );
+  expect(fs.existsSync(log)).toBe(false);
+  expect(replies[0]?.["error"]).toMatchObject({ code: -32600 });
+  // The server names itself by its bare name.
+  expect(replies[1]?.["result"]).toMatchObject({
+    serverInfo: { name: "tracker" },
+  });
+  const tool = readServer("tracker", dir).tools[GET_ISSUE];
+  if (!tool) throw new Error("no tool");
+  const inherited = { ...tool, responses: [{ text: "{{toString}}" }] };
+  expect(respond(inherited, {}).text).toBe('missing argument "toString"');
+  const byName = {
+    ...tool,
+    responses: [{ when: { constructor: "." }, text: "t" }],
+  };
+  expect(respond(byName, {}).text).toBe("no response matches");
+});

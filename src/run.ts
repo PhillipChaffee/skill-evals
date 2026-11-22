@@ -95,6 +95,7 @@ export function invalidReason(
     | "isolated"
     | "reportMissing"
     | "unexpected"
+    | "mcpProblems"
     | "strippedLoaded"
     | "judgeProblem"
     | "checks"
@@ -102,6 +103,7 @@ export function invalidReason(
   >,
 ): string | null {
   if (record.error) return `run failed: ${record.error}`;
+  if (record.mcpProblems?.length) return record.mcpProblems.join("; ");
   if (record.subjectLoaded === false) {
     return "the harness did not load the subject: it is not among the plugins and skills it reported";
   }

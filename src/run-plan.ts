@@ -161,6 +161,8 @@ export interface RunRecord extends Usage, LimitFields {
   strippedLoaded?: string[];
   /** The names of what the harness reported that does not come from the subject, whether or not `isolated` is set. */
   unexpected: string[];
+  /** Why the run's mock MCP servers cannot be trusted: a server that did not connect or was not reported, an MCP server that is neither a mock nor the subject's, a mock log that disagrees with the stream. The run is invalid. Absent when there is nothing wrong. */
+  mcpProblems?: string[];
   /** True when the harness should report its plugins and skills (`loadedReport`) and left one out. */
   reportMissing: boolean;
   /** Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. */

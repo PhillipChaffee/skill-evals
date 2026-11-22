@@ -1,0 +1,23 @@
+{
+  "description": "Search issues by words.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": ["query"]
+  },
+  "responses": [
+    {
+      "when": {
+        "query": "[Cc]heckout|502"
+      },
+      "text": "CHK-412: Checkout returns 502 since Tuesday 13:40 (resolved)"
+    },
+    {
+      "text": "no issue matches {{query}}"
+    }
+  ]
+}

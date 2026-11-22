@@ -1,0 +1,18 @@
+{
+  "description": "Search messages by words.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": ["query"]
+  },
+  "responses": [
+    {
+      "text": "authentication failed",
+      "isError": true
+    }
+  ]
+}

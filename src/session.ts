@@ -15,7 +15,7 @@ import type { Seeded } from "./history-plant.js";
 import { UNSEEDED, plantHistory } from "./history-plant.js";
 import type { RulesInstalled } from "./rules-install.js";
 import { installRulesFor } from "./rules-install.js";
-import type { McpStarted } from "./mcp/stage.js";
+import type { McpStarted, MockLogRead } from "./mcp/stage.js";
 import { startMcp, withMockLog } from "./mcp/stage.js";
 import type { Snapshot } from "./snapshot.js";
 import { snapshot } from "./snapshot.js";
@@ -119,9 +119,8 @@ async function single(
 interface Made {
   seeded: Seeded;
   done: Done;
-  /** The run's parsed stream, with the mock log merged in where the stream lacks its calls. */
-  parsed: SessionResult["parsed"];
-  mcpLog: string | null;
+  /** The run's stream, and what the mock log said of it. */
+  read: MockLogRead;
   dirs: Dirs;
   seed: Snapshot;
   prepared: PreparedRun | null;
@@ -140,7 +139,7 @@ function resultOf(run: SessionInput, made: Made): SessionResult {
   return {
     seeded: made.seeded.history,
     stdout: done.stdout,
-    parsed: made.parsed,
+    parsed: made.read.parsed,
     error: done.end.error,
     durationMs: done.durationMs,
     stoppedBy: done.end.stoppedBy,
@@ -160,7 +159,8 @@ function resultOf(run: SessionInput, made: Made): SessionResult {
     graderDir: made.graderDir,
     rulesInstalled: run.rules ? (made.rules?.installed ?? []) : null,
     mcpServers: run.mcp?.servers ?? [],
-    mcpLog: made.mcpLog,
+    mcpLog: made.read.mcpLog,
+    mcpProblems: made.read.mcpProblems,
   };
 }
 
@@ -207,10 +207,10 @@ export async function session<T>(
       : await single(run, { dirs, failure, seeded });
     // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
     const graderDir = prepared?.copies?.copyGrader() ?? null;
-    const { parsed, mcpLog } = withMockLog(harness, done.end.parsed, mcp);
+    const read = withMockLog(harness, done.end.parsed, mcp);
     return await use(
       resultOf(run, {
-        ...{ seeded, done, parsed, mcpLog, dirs, seed },
+        ...{ seeded, done, read, dirs, seed },
         ...{ prepared, graderDir, rules },
       }),
     );

@@ -41,6 +41,8 @@ export interface ToolCall {
   dispatch?: Dispatch;
   /** `mock-log` for a call that only the mock MCP servers' log shows; its agent is then of type `unknown`. Absent otherwise. */
   source?: "mock-log";
+  /** On an `mcp` call: the harness's own tool name, such as `mcp__tracker__get_issue`, which `name` maps to `<server>.<tool>`. A `name` pattern matches either. */
+  native?: string;
 }
 
 /** What a dispatch call chose for the agent it starts, as the adapter reads it from the call's input. */
@@ -96,6 +98,8 @@ export interface TranscriptEvent {
   hook?: HookEvent;
   /** When the event happened, as an ISO 8601 time, where the stream states it. No adapter reads one today; the events of the mock log have one. */
   at?: string;
+  /** On an `mcp` `tool_call` or its result: the harness's own tool name, as `ToolCall.native` has it. */
+  native?: string;
   /** `mock-log` for an event that the runner took from the mock MCP servers' log, not from the harness's stream. Absent otherwise. */
   source?: "mock-log";
 }
@@ -121,6 +125,11 @@ export interface Parsed {
   costUsd: number | null;
   /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */
   loaded: Loaded;
+  /**
+   * The state each MCP server reported at startup, by name (`connected`, `failed`, ...), for a harness that states one.
+   * Null or absent: it states none.
+   */
+  mcpStatus?: Record<string, string> | null;
   error: string | null;
   /**
    * True when the harness itself says the agent asked the user and stopped for the answer, which an adapter reads from
@@ -266,6 +275,12 @@ export interface Harness extends HistoryAdapter {
    * @throws {Error} When the config cannot be written; the run is then invalid.
    */
   registerMcp?: (servers: McpServerEntry[], input: McpRegistration) => void;
+  /**
+   * Where the calls to a run's mock MCP servers are seen, for an adapter with the `mcp` capability. `stream` (the
+   * default): the stream shows them, so the mock log is only a cross-check and a run whose log and stream disagree is
+   * invalid. `log`: the stream cannot show them, so the runner merges the mock log into the transcript.
+   */
+  mcpCalls?: "stream" | "log";
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
   /**

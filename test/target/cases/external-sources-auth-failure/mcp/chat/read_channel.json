@@ -1,0 +1,18 @@
+{
+  "description": "Read the recent messages of a channel.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string"
+      }
+    },
+    "required": ["channel"]
+  },
+  "responses": [
+    {
+      "text": "authentication failed",
+      "isError": true
+    }
+  ]
+}

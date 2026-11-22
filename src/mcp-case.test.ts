@@ -9,6 +9,10 @@ import { mergeMockLog } from "./mcp/merge.js";
 import { parseLog, readLogText } from "./mcp/stage.js";
 import type { McpCall } from "./mcp/types.js";
 import { caseHash } from "./run-key.js";
+import { mockLogVerdict } from "./checks/mock-log.js";
+import type { Outcome } from "./checks/index.js";
+import type { Given } from "./testing/outcome.js";
+import { bareOutcome, scored } from "./testing/outcome.js";
 import { sandbox } from "./testing/sandbox.js";
 import { lines, parseText } from "./testing/streams.js";
 
@@ -176,3 +180,70 @@ test("the mock log is read whole lines at a time, in time order", () => {
   ]);
   expect(readLogText(path.join(box.root, "none.log"))).toBe("");
 });
+
+test("a call that only the mock log showed has no agent that a main or subagent check can count", () => {
+  const parsed = parseText(
+    CLAUDE,
+    lines({ type: "result", subtype: "success", result: "done" }),
+  );
+  const merged = mergeMockLog(parsed, [logged(TIME)]);
+  const outcome = bareOutcome({ toolCalls: merged.toolCalls });
+  const call = merged.toolCalls[0];
+  expect(call?.agent).toMatchObject({ type: "unknown", depth: -1 });
+  const checks: Given[] = [
+    { type: "tool_called", kind: "mcp", by: "subagent", min: 1 },
+    { type: "tool_called", kind: "mcp", by: "main", min: 1 },
+    { type: "tool_not_called", kind: "mcp", by: "main" },
+    {
+      type: "tool_not_called",
+      kind: "mcp",
+      by: { agent: "tracker-investigator" },
+    },
+  ];
+  for (const check of checks) {
+    // The rule itself cannot tell: the call fits neither `main` nor `subagent`.
+    expect(verdict(check, outcome)).toEqual({
+      score: 0,
+      reason: "mock-log calls have no known agent",
+    });
+  }
+  // The checks of the run's own scoring path give 0, never 1, for the two the review found scoring 1.
+  expect(scored(checks[0] as Given, outcome).score).toBe(0);
+  expect(scored(checks[2] as Given, outcome).score).toBe(1);
+  expect(verdict(checks[2] as Given, outcome)?.score).toBe(0);
+  // Only a `by` that names the unknown agent is answered by the rule.
+  const unknown: Given = {
+    type: "tool_called",
+    kind: "mcp",
+    by: { agent: "unknown" },
+    min: 1,
+  };
+  expect(verdict(unknown, outcome)).toBeUndefined();
+  expect(scored(unknown, outcome).score).toBe(1);
+  // An order, a first call and a turn cannot be determined: the check is unscored, which makes the run invalid.
+  for (const given of [
+    { type: "first_tool", kind: "mcp" },
+    { type: "tool_called", kind: "mcp", first: true },
+    { type: "tool_called", kind: "mcp", min: 1, sameTurn: true },
+    { type: "tool_order", before: { kind: "mcp" }, after: { kind: "read" } },
+  ] as Given[]) {
+    expect(verdict(given, outcome), given.type).toMatchObject({
+      score: null,
+    });
+  }
+  // A check with no `by`, and a run with no such call, are the rules' own.
+  const plain: Given = { type: "tool_called", kind: "mcp", min: 1 };
+  expect(verdict(plain, outcome)).toBeUndefined();
+  expect(verdict(checks[0] as Given, bareOutcome())).toBeUndefined();
+  const text: Given = { type: "transcript_matches", pattern: "x", by: "main" };
+  expect(verdict(text, outcome)).toBeUndefined();
+});
+
+/**
+ * Asks what the mock log's rule says of a check.
+ * @param given - The check, without its weight.
+ * @param outcome - What the run left behind.
+ * @returns The rule's verdict; undefined when it leaves the check to its own rule.
+ */
+const verdict = (given: Given, outcome: Pick<Outcome, "toolCalls">) =>
+  mockLogVerdict({ ...given, weight: 1 }, outcome);

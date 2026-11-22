@@ -1,0 +1,67 @@
+{
+  "description": "The chat server answers every call with an authentication failure. The two sources that work are investigated in one turn, chat is called at most once, and the answer says chat was unavailable instead of inventing what it holds.",
+  "tags": ["mcp", "agents", "target"],
+  "checks": [
+    {
+      "type": "tool_called",
+      "kind": "subagent",
+      "min": 2,
+      "max": 3,
+      "sameTurn": true
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^tracker\\.",
+      "by": {
+        "agent": "tracker-investigator"
+      },
+      "min": 1
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^wiki\\.",
+      "by": {
+        "agent": "wiki-investigator"
+      },
+      "min": 1
+    },
+    {
+      "type": "tool_called",
+      "kind": "mcp",
+      "name": "^chat\\.",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "by": "main"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "mcp",
+      "name": "\\.(add_|update_|post_|create_|delete_)"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "write"
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit"
+    },
+    {
+      "type": "output_matches",
+      "pattern": "(?:chat|#checkout-oncall)[^.]{0,200}(?:unavailable|could not|couldn't|unable|failed|authentication|not reachable|denied)",
+      "flags": "is"
+    },
+    {
+      "type": "output_lacks",
+      "pattern": "deploy 8812",
+      "flags": "i"
+    }
+  ],
+  "timeoutSeconds": 300
+}

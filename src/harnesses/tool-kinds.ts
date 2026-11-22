@@ -12,7 +12,7 @@ export const TOOL_KIND_MEANINGS = {
     "Asked the user a question, as Claude Code's `AskUserQuestion` does.",
   mcp: "Called a tool of an MCP server. The call's name is `<server>.<tool>`.",
   other:
-    "Any tool the harness's adapter has no kind for. A check of kind `other` with no `name` also matches `mcp` calls, as it did before the kind existed.",
+    "Any tool the harness's adapter has no kind for. A check of kind `other` with no `name` also matches `mcp` calls, as it did before the kind existed. It matches `mcp` because in 0.0.1 every MCP tool had kind `other`; it does not match `question`, which was already a kind of its own, so no `other` check ever counted it.",
 } as const;
 
 /** What a tool does, the same word in every harness. */

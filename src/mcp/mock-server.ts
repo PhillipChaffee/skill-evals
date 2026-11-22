@@ -26,6 +26,7 @@ const INVALID_REQUEST = -32600;
 const PARSE_ERROR = -32700;
 const SERVER_VERSION = "1.0.0";
 const USAGE = 2;
+const INVALID = "Invalid Request";
 const PLACEHOLDER = /\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g;
 
 /** What a mock server serves: its name and its tools by name. */
@@ -62,7 +63,11 @@ function fits(
 ): boolean {
   return Object.entries(when ?? {}).every(([name, pattern]) => {
     const value = args[name];
-    return value !== undefined && new RegExp(pattern).test(argumentText(value));
+    return (
+      Object.hasOwn(args, name) &&
+      value !== undefined &&
+      new RegExp(pattern).test(argumentText(value))
+    );
   });
 }
 
@@ -78,7 +83,9 @@ function fill(
 ): { text: string } | { missing: string[] } {
   const missing: string[] = [];
   const filled = text.replace(PLACEHOLDER, (_all, name: string) => {
-    if (args[name] !== undefined) return argumentText(args[name]);
+    if (Object.hasOwn(args, name) && args[name] !== undefined) {
+      return argumentText(args[name]);
+    }
     missing.push(name);
     return "";
   });
@@ -135,7 +142,7 @@ function initialize(spec: ServerSpec, params: unknown): Reply {
     protocolVersion: known ?? PROTOCOL_VERSIONS[0],
     capabilities: { tools: {} },
     serverInfo: {
-      name: `skill-evals-mock-${spec.name}`,
+      name: spec.name,
       version: SERVER_VERSION,
     },
   };
@@ -209,8 +216,10 @@ function answer(
       })),
     };
   } else if (method === "tools/call") {
+    // A call sent as a notification gets no reply, so it is not run: the log must hold what a client saw answered.
+    if (notification) return null;
     result = callTool(spec, params, record);
-    if (result === null && !notification) {
+    if (result === null) {
       return failure(id, INVALID_PARAMS, "unknown tool");
     }
   } else if (notification) {
@@ -245,13 +254,15 @@ export function handleLine(
     typeof message !== "object" ||
     Array.isArray(message)
   ) {
-    return failure(null, INVALID_REQUEST, "Invalid Request");
+    return failure(null, INVALID_REQUEST, INVALID);
   }
   const { id, method, params } = message as Record<string, unknown>;
+  // A request's id is a string or a number; null is not one.
+  if (id === null) return failure(null, INVALID_REQUEST, INVALID);
   // A message with no method is a response to a request of the server's, which it never makes.
   if (method === undefined) return null;
   if (typeof method !== "string") {
-    return failure(id ?? null, INVALID_REQUEST, "Invalid Request");
+    return failure(id ?? null, INVALID_REQUEST, INVALID);
   }
   return answer(spec, { id, method, params }, record);
 }

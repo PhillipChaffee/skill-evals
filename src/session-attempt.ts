@@ -124,6 +124,8 @@ export interface SessionResult {
   mcpServers: string[];
   /** What the mock servers logged, as the log file holds it (one JSON object per line); null for a case with no `mcp/`. */
   mcpLog: string | null;
+  /** Why the mock log cannot be trusted (it disagrees with the stream); empty when it can, and for a case with no servers. */
+  mcpProblems: string[];
 }
 
 const SHOWN_SETUP_WORDS = 2;

@@ -3,12 +3,15 @@ import { withIndexes } from "../harnesses/shared.js";
 import { callsOf, event } from "../transcript.js";
 import type { McpCall } from "./types.js";
 
-/** The agent of a call that only the mock log shows: which agent made it is unknown. */
+/**
+ * The agent of a call that only the mock log shows: which agent made it is unknown. Its depth is -1, so it is neither
+ * the main thread (depth 0) nor a subagent (depth above 0); only a `by` of `{ agent: "unknown" }` fits it.
+ */
 const UNKNOWN_AGENT: AgentRef = {
   id: "unknown",
   type: "unknown",
-  parent: "main",
-  depth: 1,
+  parent: null,
+  depth: -1,
 };
 
 /**
@@ -31,6 +34,7 @@ function eventsOf(
     at: call.at,
   };
   const name = `${call.server}.${call.tool}`;
+  const native = `mcp__${call.server}__${call.tool}`;
   return [
     event({
       ...shared,
@@ -38,6 +42,7 @@ function eventsOf(
       type: "tool_call",
       kind: "mcp",
       name,
+      native,
       input: call.input,
     }),
     event({
@@ -46,6 +51,7 @@ function eventsOf(
       type: "tool_result",
       kind: "mcp",
       name,
+      native,
       output: call.response.text,
       isError: call.response.isError,
     }),
@@ -74,8 +80,9 @@ function positionOf(events: TranscriptEvent[], at: string): number {
  * @param calls - The calls the mock servers logged, in time order.
  * @returns `parsed` itself when the log is empty or the stream already has MCP calls. Otherwise the transcript with each
  *   logged call as a `tool_call` and a `tool_result` marked `source: "mock-log"`, placed by time among the events that
- *   state one and last when none do, and the calls list rebuilt. Their agent is of type `unknown`: the log cannot say
- *   who made them, so a `by` that names a real agent, or `main`, never matches them.
+ *   state one and last when none do, and the calls list rebuilt. Their agent is of type `unknown` at depth -1: the log
+ *   cannot say who made them, so only a `by` of `{ agent: "unknown" }` fits them. Only an adapter whose `mcpCalls` is
+ *   `log` has its transcript merged; for any other the log is a cross-check.
  */
 export function mergeMockLog(parsed: Parsed, calls: McpCall[]): Parsed {
   if (

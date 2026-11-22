@@ -481,7 +481,7 @@ A tool file is strict: an unknown key is an error.
 }
 ```
 
-Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in every harness. A check with kind `other` and no `name` still matches an MCP call, as it did before the kind existed; one with a `name` does not.
+Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in every harness. A `name` pattern fits a call when it matches either that name or the harness's own, `mcp__<server>__<tool>` in Claude Code, so a pattern that rules a name out, such as `^(?!tracker\\.)`, must rule out both forms (`^(?!(?:tracker\\.|mcp__tracker__))`). A check with kind `other` also still matches an MCP call, as it did before the kind existed (in 0.0.1 every MCP tool was `other`): with no `name`, or with a `name` that fits the native name. It does not match a `question` call, which was a kind of its own already.
 
 ```json
 {
@@ -492,7 +492,7 @@ Check the calls with kind `mcp`. Its `name` is `<server>.<tool>`, the same in ev
 }
 ```
 
-A case with an `mcp/` directory needs the capability `mcp`, so it is not applicable to a harness that cannot register servers ([Capabilities](../concepts/capabilities.md)). The servers run from a copy outside the workspace and the home, so the agent cannot see the case's files. What they answered is kept as `<label><rep>.mock-log.jsonl` beside the transcript. Under `--isolated`, the mock servers are part of the subject; any other MCP server a harness reports still makes the run invalid. [The design note](https://github.com/PhillipChaffee/skill-evals/blob/main/docs/design/mcp-mocks.md) has the details and what was read from the CLI. The full case is `examples/cases/mcp-mocks`.
+A case with an `mcp/` directory needs the capability `mcp`, so it is not applicable to a harness that cannot register servers ([Capabilities](../concepts/capabilities.md)). The servers run from a copy outside the workspace and the home, so the agent cannot see the case's files. What they answered is kept as `<label><rep>.mock-log.jsonl` beside the transcript. The log is a cross-check on the stream, never a source of calls: when the calls it holds differ from the MCP calls the stream shows (a line the agent wrote itself, a call the stream lost), the run is invalid with `the mock log and the stream disagree`. A run is also invalid when a mock server is missing from what the harness reported or is not `connected`, and when the harness reports an MCP server that is neither a mock nor one of the subject plugin's own, with or without `--isolated`; Claude Code runs a mock case with `ENABLE_CLAUDEAI_MCP_SERVERS=false`, so that no claude.ai connector is loaded. Only a harness whose stream cannot show MCP calls has the log merged into the transcript; those calls have an agent that is neither `main` nor a subagent, so a `by` check on them scores 0 and an order, first-call or same-turn check is not scored. Under `--isolated`, `--strict-mcp-config` drops the subject plugin's own MCP servers as well as everyone else's: the mock servers are the only ones. [The design note](https://github.com/PhillipChaffee/skill-evals/blob/main/docs/design/mcp-mocks.md) has the details and what was read from the CLI. The full case is `examples/cases/mcp-mocks`.
 
 ## Commands after the run
 

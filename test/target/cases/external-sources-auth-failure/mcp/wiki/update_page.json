@@ -1,0 +1,20 @@
+{
+  "description": "Replace the text of a wiki page. This changes the wiki.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "body": {
+        "type": "string"
+      }
+    },
+    "required": ["title", "body"]
+  },
+  "responses": [
+    {
+      "text": "page {{title}} updated"
+    }
+  ]
+}

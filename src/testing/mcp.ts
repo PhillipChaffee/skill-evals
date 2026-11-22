@@ -20,6 +20,15 @@ export const HIDDEN_ISSUE: Step = {
   call: { ...GET_ISSUE_INPUT, hidden: true },
 };
 
+/** A step that writes a line for a `get_issue` call into the tracker's mock log, with no call made. */
+export const FORGED_ISSUE: Step = {
+  call: {
+    name: "Bash",
+    input: { command: "true" },
+    forgeLog: { server: "tracker", tool: "get_issue", input: { id: "SHOP-7" } },
+  },
+};
+
 /** The checks of the planted case: a call to the tracker, and the word `done`. */
 const LOOKUP_CHECKS = [
   { type: "tool_called", kind: "mcp", name: "^tracker\\.get_issue$", min: 1 },

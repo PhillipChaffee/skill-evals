@@ -15,7 +15,11 @@ import { UsageError } from "./scope.js";
  */
 export interface ToolMatcher {
   kind?: ToolKind;
-  /** A regular expression for the harness's own tool name. */
+  /**
+   * A regular expression for the tool's name. For an `mcp` call it fits when either the mapped name (`server.tool`) or
+   * the harness's own (`mcp__server__tool`) matches, so a 0.0.1 check that named the native name keeps working; a
+   * pattern that rules a name out, such as `^(?!tracker\.)`, must therefore rule out both forms.
+   */
   name?: string;
   /** A regular expression for the call's input, written as JSON. */
   inputMatches?: string;
@@ -150,15 +154,23 @@ export const tester = (
  * Tells whether a call's kind fits a matcher's.
  * @param matcher - What the call must be.
  * @param call - A tool call of the run.
- * @returns True when the matcher names no kind or the call's own. For compatibility with 0.0.1, which had no `mcp`
- *   kind, a matcher of kind `other` with no `name` also fits an `mcp` call; one with a `name` does not.
+ * @param nameFits - Tests a name against the matcher's `name` pattern.
+ * @returns True when the matcher names no kind or the call's own. For compatibility with 0.0.1, in which every MCP
+ *   tool had kind `other` and its native name, a matcher of kind `other` also fits an `mcp` call when it has no `name`,
+ *   or when its `name` fits the call's native name (`mcp__server__tool`); a `name` that fits only the mapped name does
+ *   not make it one, because no 0.0.1 check could have written that.
  */
-const kindFits = (matcher: ToolMatcher, call: ToolCall): boolean =>
+const kindFits = (
+  matcher: ToolMatcher,
+  call: ToolCall,
+  nameFits: (name: string) => boolean,
+): boolean =>
   matcher.kind === undefined ||
   call.kind === matcher.kind ||
   (matcher.kind === "other" &&
-    matcher.name === undefined &&
-    call.kind === "mcp");
+    call.kind === "mcp" &&
+    (matcher.name === undefined ||
+      (call.native !== undefined && nameFits(call.native))));
 
 /**
  * Compiles a matcher once, for a check that tests many calls.
@@ -181,8 +193,8 @@ function compileMatcher(matcher: ToolMatcher): (call: ToolCall) => boolean {
     fitsBy(by, call.agent) &&
     (agent === undefined ||
       (call.kind === "subagent" && ruleOf(call, agent) !== null)) &&
-    kindFits(matcher, call) &&
-    name(call.name) &&
+    kindFits(matcher, call, name) &&
+    (name(call.name) || (call.native !== undefined && name(call.native))) &&
     input(inputJson(call)) &&
     (inputLinesMax === undefined || longest(call) <= inputLinesMax) &&
     (inputLinesMin === undefined || longest(call) >= inputLinesMin) &&

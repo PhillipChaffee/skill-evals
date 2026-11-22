@@ -1,12 +1,14 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, test } from "vitest";
 import { loadCases } from "./cases.js";
-import { BLINDING, CASES, play, scores } from "./testing/target.js";
+import { BLINDING, CASES, TARGET, play, scores } from "./testing/target.js";
 
 const ID = "external-sources-through-mocks";
 // The checks, in order: three subagents in one turn; each server called by its investigator; each investigator keeps to
-// its own server; the main thread calls no MCP tool; no write-type MCP call; no write or edit; the answer holds both
-// claims, cites both places and names the contradiction.
-const ALL_PASS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+// its own server; the main thread calls no MCP tool; no write-type MCP call; no write or edit; the answer states the
+// contrast (tracker: expired, chat: valid), cites both places, names the contradiction, and does not deny it.
+const ALL_PASS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
 test("external sources: the prompt tells the agent nothing about being graded, and the case needs mcp", () => {
   const [found] = loadCases(CASES, ID);
@@ -30,16 +32,19 @@ test("external sources: three investigators in one turn, each on its own server,
 
 const VARIANTS = [
   // Wiki's investigator also reads the tracker: it breaks its own keep-to-one-server check.
-  ["shared-server", [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1]],
-  ["writes", [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1]],
-  ["sequential", [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
-  ["main-reads", [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1]],
+  ["shared-server", [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+  ["writes", [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1]],
+  ["sequential", [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+  ["main-reads", [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1]],
   // Two investigators: the count is two, and the wiki's investigator never ran, so its server was not called and it
   // cannot be shown to have kept to its own.
-  ["two-sources", [0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1]],
-  ["file-write", [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1]],
-  ["silent-contradiction", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0]],
-  ["one-cited", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1]],
+  ["two-sources", [0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+  ["file-write", [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1]],
+  ["silent-contradiction", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1]],
+  // Only the tracker's side is stated with its place, so the contrast and the second citation are missing.
+  ["one-cited", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1]],
+  // The right facts, with the disagreement denied: only the check that rules the denial out fails.
+  ["denial", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]],
 ] as const;
 
 test.each(VARIANTS)(
@@ -49,3 +54,71 @@ test.each(VARIANTS)(
     expect(scores(record)).toEqual(expected);
   },
 );
+
+test("the agent subject defines every agent the target scripts dispatch, and the investigators can only read", () => {
+  const dir = path.join(TARGET, "agent-subject");
+  const used = new Set(
+    fs
+      .readdirSync(path.join(TARGET, "scripts"))
+      .flatMap((file) =>
+        [
+          ...fs
+            .readFileSync(path.join(TARGET, "scripts", file), "utf8")
+            .matchAll(/"type": "([a-z-]+)",\n\s+"prompt"/g),
+        ].map((found) => found[1] ?? ""),
+      ),
+  );
+  used.delete("general-purpose");
+  expect([...used].length).toBeGreaterThan(3);
+  for (const type of used) {
+    const text = fs.readFileSync(
+      path.join(dir, "agents", `${type}.md`),
+      "utf8",
+    );
+    expect(text, type).toContain(`name: ${type}`);
+  }
+  for (const server of ["tracker", "wiki", "chat"]) {
+    const tools = fs
+      .readFileSync(
+        path.join(dir, "agents", `${server}-investigator.md`),
+        "utf8",
+      )
+      .match(/^tools: (.*)$/m)?.[1];
+    expect(tools, server).toMatch(
+      new RegExp(`^mcp__${server}__(get|read|search)`),
+    );
+    expect(tools).not.toMatch(/__(add|update|post|create|delete)_/);
+  }
+});
+
+const AUTH = "external-sources-auth-failure";
+// The checks: two or three subagents in one turn; the tracker and the wiki read by their investigators; chat called at
+// most once; no MCP call by the main thread; no write-type call, write or edit; chat said to be unavailable; no
+// invented chat content.
+const AUTH_VARIANTS = [
+  ["match", [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]],
+  ["retries", [1, 1, 1, 0, 1, 1, 1, 1, 1, 1]],
+  ["fabricates", [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]],
+  ["silent", [1, 1, 1, 1, 1, 1, 1, 1, 0, 1]],
+] as const;
+
+test("auth failure: the prompt tells the agent nothing about being graded, and chat only fails", () => {
+  const [found] = loadCases(CASES, AUTH);
+  expect(found?.prompt).not.toMatch(BLINDING);
+  expect(found?.mcp?.servers).toEqual(["chat", "tracker", "wiki"]);
+});
+
+test.each(AUTH_VARIANTS)(
+  "auth failure: %s fails exactly the checks it should",
+  async (name, expected) => {
+    const record = await play(`${AUTH}.${name}`);
+    expect(scores(record)).toEqual(expected);
+  },
+);
+
+test("auth failure: the chat server is called once, and the answer is scored 1", async () => {
+  const record = await play(`${AUTH}.match`);
+  expect(record.score).toBe(1);
+  const chat = record.toolCalls.filter((c) => c.name.startsWith("chat."));
+  expect(chat).toHaveLength(1);
+});

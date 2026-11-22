@@ -39,7 +39,7 @@
     {
       "type": "tool_not_called",
       "kind": "mcp",
-      "name": "^(?!tracker\\.)",
+      "name": "^(?!(?:tracker\\.|mcp__tracker__))",
       "by": {
         "agent": "tracker-investigator"
       }
@@ -47,7 +47,7 @@
     {
       "type": "tool_not_called",
       "kind": "mcp",
-      "name": "^(?!wiki\\.)",
+      "name": "^(?!(?:wiki\\.|mcp__wiki__))",
       "by": {
         "agent": "wiki-investigator"
       }
@@ -55,7 +55,7 @@
     {
       "type": "tool_not_called",
       "kind": "mcp",
-      "name": "^(?!chat\\.)",
+      "name": "^(?!(?:chat\\.|mcp__chat__))",
       "by": {
         "agent": "chat-investigator"
       }
@@ -80,7 +80,7 @@
     },
     {
       "type": "output_matches",
-      "pattern": "(?=.*expired.{0,40}certificate|.*certificate.{0,40}expired)(?=.*roll(ed|ing)?[ -]?back)",
+      "pattern": "(?=.*(?:tracker|CHK-412)[^.]{0,200}expired)(?=.*(?:chat|#checkout-oncall)[^.]{0,200}(?:valid|fine|not the certificate|roll(?:ed|ing)? back))",
       "flags": "is"
     },
     {
@@ -91,6 +91,11 @@
     {
       "type": "output_matches",
       "pattern": "contradict|disagree|conflict|inconsisten|at odds",
+      "flags": "i"
+    },
+    {
+      "type": "output_lacks",
+      "pattern": "(?:do(?:es)?\\s+not|don't|doesn't|aren't|isn't|never)\\s+(?:\\w+\\s+){0,2}(?:disagree|conflict|contradict)|\\bno\\s+(?:real\\s+)?(?:conflict|contradiction|disagreement|inconsisten)",
       "flags": "i"
     }
   ],

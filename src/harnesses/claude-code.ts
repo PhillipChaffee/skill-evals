@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { awaitedCalls } from "../question.js";
 import { callsOf, numbered } from "../transcript.js";
@@ -25,7 +24,13 @@ import {
   samePath,
   stringArg,
 } from "./shared.js";
-import { MCP_CONFIG, writeMcpConfig } from "./claude-code-mcp.js";
+import {
+  mcpArgs,
+  mcpEnv,
+  statusOfServers,
+  writeMcpConfig,
+} from "./claude-code-mcp.js";
+import { strayskills } from "./claude-code-strays.js";
 import { stripClaudeCode } from "./claude-code-strip.js";
 import { looksRateLimited } from "./rate-limit.js";
 import { placeRules } from "./rules.js";
@@ -56,7 +61,7 @@ type Event =
       plugins?: { name: string; path: string }[];
       skills?: string[];
       agents?: string[];
-      mcp_servers?: { name: string }[];
+      mcp_servers?: { name: string; status?: string }[];
     }
   | { type: "assistant" | "user" }
   | {
@@ -230,11 +235,17 @@ const claudeCode: Harness = {
         ...opt("--max-turns", maxTurns),
         ...opt("--resume", session),
         // `--mcp-config` takes a list, so it comes before another flag and never last before `--`.
-        ...(mcpDir ? ["--mcp-config", path.join(mcpDir, MCP_CONFIG)] : []),
+        ...mcpArgs(mcpDir),
         "--",
         prompt,
       ],
-      env: { CLAUDE_CONFIG_DIR: configDir, ...(isolated && ISOLATION.env) },
+      env: {
+        CLAUDE_CONFIG_DIR: configDir,
+        ...(isolated && ISOLATION.env),
+        // The binary names this variable as one way to turn off the loading of claude.ai connectors, which a logged-in
+        // headless run would otherwise sync; a mock case must reach no real service (`docs/design/mcp-mocks.md`).
+        ...mcpEnv(mcpDir),
+      },
     };
   },
 
@@ -298,6 +309,7 @@ const claudeCode: Harness = {
           ? init.mcp_servers.map((server) => server.name)
           : null,
       },
+      mcpStatus: statusOfServers(init?.mcp_servers),
       error: result ? failure : "no result event",
       unfinished: !result,
       hitMaxTurns,
@@ -342,43 +354,6 @@ function foreignOfClaude(
       .filter((name) => !serverIsOwn(name))
       .map((n) => `MCP server ${n}`),
   ];
-}
-
-const SKILL_FILE = /^skill\.md$/i;
-
-/**
- * Finds the skill directories under a root, without going into one that was placed.
- * @param root - A directory that may not exist.
- * @param placed - The directories the run placed, as resolved paths.
- * @returns The directories that hold a SKILL.md and are not placed.
- */
-function skillDirs(root: string, placed: Set<string>): string[] {
-  if (placed.has(path.resolve(root)) || !fs.existsSync(root)) return [];
-  const entries = fs.readdirSync(root, { withFileTypes: true });
-  if (entries.some((e) => e.isFile() && SKILL_FILE.test(e.name))) return [root];
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => skillDirs(path.join(root, entry.name), placed));
-}
-
-/**
- * Names the skills that an account synced into the run's config directory, which the init event lists as bare names.
- * @param run - The run's home, and the skill directories it placed.
- * @param run.home - The throwaway home.
- * @param run.placed - Skill name to the directory the adapter placed.
- * @returns `account skill <name>` for every skill directory under the skills and synced roots that is not placed.
- */
-function strayskills(run: {
-  home: string;
-  placed: Record<string, string> | undefined;
-}): string[] {
-  const config = path.join(run.home, ".claude");
-  const placed = new Set(
-    Object.values(run.placed ?? {}).map((d) => path.resolve(d)),
-  );
-  return ["skills", "synced"]
-    .flatMap((root) => skillDirs(path.join(config, root), placed))
-    .map((dir) => `account skill ${path.basename(dir)}`);
 }
 
 /**

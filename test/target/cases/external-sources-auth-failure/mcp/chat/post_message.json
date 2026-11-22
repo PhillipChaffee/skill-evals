@@ -1,0 +1,21 @@
+{
+  "description": "Post a message to a channel. This changes the chat.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "channel": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": ["channel", "text"]
+  },
+  "responses": [
+    {
+      "text": "authentication failed",
+      "isError": true
+    }
+  ]
+}

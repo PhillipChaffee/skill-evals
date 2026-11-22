@@ -1,5 +1,6 @@
 import type { Harness, Loaded, LoadedSubject } from "./harnesses/shared.js";
 import { foreignOf, reportMissing, samePath } from "./harnesses/shared.js";
+import { mcpProblems } from "./mcp/problems.js";
 import type { Stripped } from "./subject-options.js";
 import type { Copy } from "./run-copy.js";
 import type { SessionResult } from "./session.js";
@@ -27,6 +28,8 @@ export interface StartupRecord {
   reportMissing: boolean;
   /** The names of what does not come from the subject. */
   unexpected: string[];
+  /** Why a case's mock MCP servers cannot be trusted; the run is invalid. Absent when there is nothing wrong. */
+  mcpProblems?: string[];
   /** Agents and skills that the subject's options removed and the harness reported as loaded anyway. Absent when there are none. */
   strippedLoaded?: string[];
 }
@@ -63,8 +66,11 @@ function stillLoaded(stripped: Stripped, reported: Loaded[]): string[] {
  */
 export function startupRecord(
   run: { harness: Harness; isolated?: boolean | undefined },
-  ran: Pick<SessionResult, "home" | "placed" | "userTurns" | "mcpServers"> & {
-    parsed: { loaded: Loaded };
+  ran: Pick<
+    SessionResult,
+    "home" | "placed" | "userTurns" | "mcpServers" | "mcpProblems"
+  > & {
+    parsed: { loaded: Loaded; mcpStatus?: Record<string, string> | null };
   },
   copy: Copy | null,
 ): StartupRecord {
@@ -93,9 +99,19 @@ export function startupRecord(
     ),
   );
   const unexpected = [...foreign, ...(run.harness.strays?.(ran) ?? [])];
+  const problems = [
+    ...mcpProblems(run.harness, {
+      mocks: ran.mcpServers,
+      reported,
+      status: ran.parsed.mcpStatus,
+      subject,
+    }),
+    ...ran.mcpProblems,
+  ];
   const strippedLoaded = copy ? stillLoaded(copy.stripped, reported) : [];
   return {
     ...(strippedLoaded.length > 0 && { strippedLoaded }),
+    ...(problems.length > 0 && { mcpProblems: [...new Set(problems)] }),
     subjectLoaded: loads.includes(false)
       ? false
       : (loads.find(Boolean) ?? null),

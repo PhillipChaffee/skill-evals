@@ -3,7 +3,7 @@ import path from "node:path";
 import type { McpRegistration, McpServerEntry } from "../mcp/types.js";
 
 /** The file of the run's mock MCP directory that `--mcp-config` names. */
-export const MCP_CONFIG = "mcp-config.json";
+const MCP_CONFIG = "servers.json";
 const INDENT = 2;
 
 /**
@@ -27,3 +27,38 @@ export function writeMcpConfig(
     JSON.stringify({ mcpServers }, null, INDENT),
   );
 }
+
+/**
+ * Reads the state each MCP server reports in the init event.
+ * @param servers - The init event's `mcp_servers`; absent when the event has none.
+ * @returns Server name to its `status`, leaving out a server that states none; null when the event lists no servers.
+ */
+export function statusOfServers(
+  servers: { name: string; status?: string }[] | undefined,
+): Record<string, string> | null {
+  return servers
+    ? Object.fromEntries(
+        servers.flatMap(({ name, status }) =>
+          status === undefined ? [] : [[name, status]],
+        ),
+      )
+    : null;
+}
+
+/**
+ * Builds the flag that names a run's MCP config.
+ * @param mcpDir - The run's mock directory; absent for a case with no mock servers.
+ * @returns `--mcp-config <file>`, or nothing. The flag takes a list, so the caller puts it before another flag.
+ */
+export const mcpArgs = (mcpDir: string | undefined): string[] =>
+  mcpDir ? ["--mcp-config", path.join(mcpDir, MCP_CONFIG)] : [];
+
+/**
+ * Builds the environment of a run with mock MCP servers.
+ * @param mcpDir - The run's mock directory; absent for a case with no mock servers.
+ * @returns `ENABLE_CLAUDEAI_MCP_SERVERS=false`, which the binary names as a way to turn off the loading of claude.ai
+ *   connectors that a logged-in headless run would otherwise sync, so that a mock case reaches no real service; nothing
+ *   for a case with none.
+ */
+export const mcpEnv = (mcpDir: string | undefined): Record<string, string> =>
+  mcpDir ? { ENABLE_CLAUDEAI_MCP_SERVERS: "false" } : {};

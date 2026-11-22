@@ -147,6 +147,7 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
           ? { dispatch: e.dispatch ?? { ...NO_DISPATCH } }
           : {}),
         ...(e.source === undefined ? {} : { source: e.source }),
+        ...(e.native === undefined ? {} : { native: e.native }),
         ...(e.turn === null ? {} : { turn: e.turn }),
         ...(durationMs === undefined ? {} : { durationMs }),
       };
