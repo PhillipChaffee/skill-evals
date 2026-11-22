@@ -43,6 +43,10 @@ export function describeCalls(check: Check): string[] {
       ? [`ignoring ${ignoring.map(describeMatcher).join(", ")}`]
       : []),
     ...(check.anyOf ? [`anyOf ${check.anyOf.join(", ")}`] : []),
+    ...(check.agent === undefined ? [] : [`agent ${check.agent}`]),
+    ...(check.briefWindow === undefined
+      ? []
+      : [`briefWindow ${String(check.briefWindow)}`]),
     ...(check.min === undefined ? [] : [`min ${String(check.min)}`]),
     ...(check.max === undefined ? [] : [`max ${String(check.max)}`]),
     ...(check.sameTurn ? ["sameTurn"] : []),

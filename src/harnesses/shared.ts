@@ -36,7 +36,20 @@ export interface ToolCall {
   durationMs?: number;
   /** The agent that made the call (depth 0 is the main agent, id `main`). Absent in a 0.0.1 record, which means the main agent. */
   agent?: AgentRef;
+  /** What the dispatch asked for, on a `subagent` call; null in each field the harness's stream does not show. */
+  dispatch?: Dispatch;
 }
+
+/** What a dispatch call chose for the agent it starts, as the adapter reads it from the call's input. */
+export interface Dispatch {
+  /** The agent type as the dispatch wrote it, with any plugin prefix; null when it names none. */
+  type: string | null;
+  model: string | null;
+  effort: string | null;
+}
+
+/** What an adapter whose stream shows none of a dispatch's choices records. */
+export const NO_DISPATCH: Dispatch = { type: null, model: null, effort: null };
 
 /** Who produced an event. Depth 0 is the main agent, whose id is `main`. */
 export interface AgentRef {
@@ -62,6 +75,8 @@ export interface TranscriptEvent {
   kind?: ToolKind;
   name?: string;
   input?: unknown;
+  /** What the dispatch chose, on a `tool_call` of kind `subagent` whose adapter reads it. */
+  dispatch?: Dispatch;
   /** What the tool returned, on a `tool_result`, as decoded text. */
   output?: string;
   /** What the assistant said, on a `text`. */
@@ -118,6 +133,8 @@ export interface Parsed {
   /** The harness's own id of the session, for a stream that carries one; null otherwise. */
   sessionId: string | null;
   tokens: Tokens | null;
+  /** Tokens by agent id, summed from the usage of each assistant message; null where the stream states none. Absent: null. */
+  agentTokens?: Record<string, Tokens> | null;
   costUsd: number | null;
   /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */
   loaded: Loaded;

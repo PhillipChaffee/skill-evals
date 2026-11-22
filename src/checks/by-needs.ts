@@ -66,21 +66,27 @@ export function byNeeds(check: Check): Capability[] {
  * @param check - A check that says an agent did not do something.
  * @param outcome - What the run left behind.
  * @returns A score of 0 with `no agent of type <name> ran` when the check's `by` or its `tool` matcher's `by` names an
- *   agent of which no event, call or skill load of the run is, since a typo or an agent that was never dispatched
- *   cannot be shown not to have done anything; undefined otherwise. `"main"` and `"subagent"` keep their plain
+ *   agent of which no event, call or skill load of the run is, and no dispatch call names it, since a typo or an agent
+ *   that was never dispatched cannot be shown not to have done anything. A dispatched agent that produced no events
+ *   did run, so a claim that it did nothing can hold; a generic dispatch (`general-purpose`) counts only as that type; undefined otherwise. `"main"` and `"subagent"` keep their plain
  *   meaning.
  */
 export function unseenAgent(
   check: Check,
   outcome: Outcome,
 ): Verdict | undefined {
-  const seen = new Set(
-    [
+  const seen = new Set([
+    ...[
       ...outcome.transcript.map((one) => one.agent),
       ...outcome.toolCalls.map((one) => one.agent),
       ...outcome.skillEvents.map((one) => one.agent),
     ].map((agent) => agent?.type ?? "main"),
-  );
+    ...outcome.toolCalls.flatMap((call) =>
+      call.kind === "subagent" && call.dispatch?.type
+        ? [normalizeAgent(call.dispatch.type)]
+        : [],
+    ),
+  ]);
   for (const by of [check.by, check.tool?.by]) {
     if (typeof by !== "object") continue;
     const type = normalizeAgent(by.agent);

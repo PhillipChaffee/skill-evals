@@ -1,7 +1,7 @@
-import { MAIN_AGENT, normalizeAgent } from "../agents.js";
+import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
 import type { EventInput } from "../transcript.js";
 import { callPart, resultPart, textPart } from "../transcript.js";
-import type { AgentRef, ToolKind } from "./shared.js";
+import type { AgentRef, Dispatch, Tokens, ToolKind } from "./shared.js";
 import { joinText } from "./shared.js";
 
 /** A content block of an `assistant` or `user` event; which fields are set depends on its type. */
@@ -16,17 +16,26 @@ interface Block {
   is_error?: boolean;
 }
 
+/** The token counts of one assistant message. */
+interface MessageUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+}
+
 /** The events of the stream that carry a message. */
 export interface MessageEvent {
   type: string;
   session_id?: string;
   /** The id of the dispatching call, on an event that a subagent produced; null on the main thread's. */
   parent_tool_use_id?: string | null;
-  message?: { id?: string; content?: Block[] | string };
+  message?: {
+    id?: string;
+    content?: Block[] | string;
+    usage?: MessageUsage;
+  };
 }
-
-/** A dispatch that names no agent type starts this one. */
-const GENERIC_AGENT = "general-purpose";
 
 /**
  * Names the agent that a dispatch starts.
@@ -54,6 +63,33 @@ function agentOf(
     depth: dispatcher.depth + 1,
   };
 }
+
+/**
+ * Reads what a dispatch call chose for its agent.
+ * @param input - The call's input; its `subagent_type`, `model` and `effort` are read where they are non-empty text.
+ * @returns The dispatch, with null for each choice the input does not show.
+ */
+function dispatchOf(input: unknown): Dispatch {
+  const given = Object(input) as Record<string, unknown>;
+  const text = (key: string): string | null => {
+    const value = given[key];
+    return typeof value === "string" && value !== "" ? value : null;
+  };
+  return {
+    type: text("subagent_type"),
+    model: text("model"),
+    effort: text("effort"),
+  };
+}
+
+/**
+ * Adds the dispatch to the part of a dispatch call.
+ * @param part - The part of a tool call.
+ * @param input - The call's input.
+ * @returns The part, with `dispatch` when it is a `subagent` call.
+ */
+const withDispatch = (part: EventInput, input: unknown): EventInput =>
+  part.kind === "subagent" ? { ...part, dispatch: dispatchOf(input) } : part;
 
 /**
  * Finds the agent that an event belongs to.
@@ -147,11 +183,43 @@ export function transcriptParts(
         if (part.kind === "subagent" && callId !== undefined) {
           agents.set(callId, agentOf({ id: callId, input }, agent));
         }
-        return [part];
+        return [withDispatch(part, input)];
       }
       return block.type === "text" && block.text
         ? [textPart(block.text, { turn: current, agent })]
         : [];
     });
   });
+}
+
+/**
+ * Adds up the usage of each assistant message by the agent that produced it.
+ * @param events - The events of the stream, in order.
+ * @returns Agent id (`main`, or the id of the dispatch call) to its tokens, input counting cached tokens as the run's
+ *   total does. A message that the stream states in several events counts once, at its last statement. Null when no
+ *   assistant message carries usage.
+ */
+export function agentTokens(
+  events: MessageEvent[],
+): Record<string, Tokens> | null {
+  const stated = new Map<string, { agent: string; usage: MessageUsage }>();
+  events.forEach((one, position) => {
+    const usage = one.message?.usage;
+    if (one.type !== "assistant" || !usage) return;
+    stated.set(one.message?.id ?? `event ${String(position)}`, {
+      agent: one.parent_tool_use_id || MAIN_AGENT.id,
+      usage,
+    });
+  });
+  if (stated.size === 0) return null;
+  const totals: Record<string, Tokens> = {};
+  for (const { agent, usage } of stated.values()) {
+    const total = (totals[agent] ??= { input: 0, output: 0 });
+    total.input +=
+      (usage.input_tokens ?? 0) +
+      (usage.cache_read_input_tokens ?? 0) +
+      (usage.cache_creation_input_tokens ?? 0);
+    total.output += usage.output_tokens ?? 0;
+  }
+  return totals;
 }

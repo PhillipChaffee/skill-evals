@@ -42,6 +42,7 @@ export function failedRecord(plan: RunPlan, message: string): RunRecord {
     decision: null,
     durationMs: 0,
     tokens: null,
+    agentTokens: null,
     costUsd: null,
   };
 }

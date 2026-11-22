@@ -4,7 +4,7 @@ import type {
   ToolKind,
   TranscriptEvent,
 } from "./harnesses/shared.js";
-import { joinText, toolCall } from "./harnesses/shared.js";
+import { NO_DISPATCH, joinText, toolCall } from "./harnesses/shared.js";
 import { MAIN_AGENT } from "./agents.js";
 
 /** The default cut of `forRecord`: the most bytes of one `text` or `output`. */
@@ -125,7 +125,7 @@ export function resultsByCall(
 /**
  * Lists the tool calls of a transcript.
  * @param events - The run's events.
- * @returns One call for each `tool_call` event, in order, with the agent of its event. It has a `turn` only when its event has one, and a
+ * @returns One call for each `tool_call` event, in order, with the agent of its event, and the dispatch of a `subagent` call (nulls when its adapter read none). It has a `turn` only when its event has one, and a
  *   `durationMs` only when its result has one.
  */
 export function callsOf(events: TranscriptEvent[]): ToolCall[] {
@@ -139,6 +139,9 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
         kind: e.kind ?? "other",
         input: e.input,
         agent: e.agent,
+        ...(e.kind === "subagent"
+          ? { dispatch: e.dispatch ?? { ...NO_DISPATCH } }
+          : {}),
         ...(e.turn === null ? {} : { turn: e.turn }),
         ...(durationMs === undefined ? {} : { durationMs }),
       };

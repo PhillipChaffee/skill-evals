@@ -220,6 +220,34 @@ Every event of a Claude Code run belongs to the agent that produced it: an event
 
 `by` needs capabilities: any `by` on a matcher or a skill check needs `childCalls`, and `by` on `transcript_matches` or `transcript_lacks` needs `childText`. Claude Code declares both. A harness that lacks one cannot tell the main thread from a subagent, so `by: "main"` would silently mean every agent; the case is not applicable there instead. `examples/cases/by-agent` is a whole case. A role that has no agent type (a "collector" that the kit describes only in the dispatch's brief) cannot be named with `by`; match its dispatch with `tool_called { kind: "subagent", inputMatches }` and order it with `tool_order`.
 
+### Dispatches: `agent_dispatched`
+
+`agent_dispatched` counts the dispatches that start an agent. `agent` is its name; a plugin prefix is dropped on both sides, so `magic:researcher-mid:researcher-mid` is `researcher-mid`. `min` defaults to 1 (and to 0 when `max` is 0). `briefMatches` is a regular expression for the dispatch's brief, its `prompt` text and then its `description` text, with the check's `flags`. `modelMatches` is a regular expression for the model the dispatch chose; a dispatch that carries no model does not match it, and the reason says `the dispatch carries no model`. Each `subagent` call records `dispatch: { type, model, effort }`, read from its input by the adapter, with null for what the stream does not show. Claude Code shows `subagent_type`, `model` and `effort`; the other adapters show none of them.
+
+A dispatch starts the agent in one of two ways, and the reason of the result says which. `matched by type`: its type, normalized, is the `agent`. `matched by inlined definition`: a dispatch of no type, or of `general-purpose`, whose brief holds a line `name: <agent>` anywhere (a front-matter line of a definition pasted into the brief), or the agent name as a whole word in the first `briefWindow` characters of the brief (default 400). A name that is only part of a longer word or hyphenated name does not count. A dispatch with a type of its own is judged by that type alone, so a typo fails. `by: { "agent": "X" }` follows the same idea: an agent counts as having run when a dispatch names its type, even if it produced no events, so `{ "type": "tool_called", "by": { "agent": "planner" }, "max": 0 }` passes for a planner that was dispatched and did nothing, and still fails for a planner that was never dispatched. A generic dispatch counts only as `general-purpose`.
+
+```json
+{
+  "checks": [
+    {
+      "type": "agent_dispatched",
+      "agent": "researcher",
+      "min": 2,
+      "modelMatches": "haiku|sonnet"
+    },
+    { "type": "agent_dispatched", "agent": "synthesizer", "min": 1, "max": 1 },
+    {
+      "type": "agent_dispatched",
+      "agent": "reviewer",
+      "briefMatches": "src/api",
+      "flags": "i"
+    }
+  ]
+}
+```
+
+`agent_dispatched` has no `sameTurn`: to require that two dispatches were issued together, use `tool_called` with `kind: "subagent"`, `inputMatches` and `sameTurn`. It needs the `subagents` capability. `examples/cases/agent-dispatched` is a whole case. Where the stream reports usage on each assistant message (Claude Code), a run record's `agentTokens` holds the tokens of each agent, keyed by `main` or the id of its dispatch call; it is null elsewhere.
+
 ## What the agent said and what its tools returned
 
 Four checks read the [transcript](../concepts/transcript.md) of the run. They need a harness that carries the part they read: `assistantText` for the agent's text between tool calls, `toolOutputs` for what each tool returned. Elsewhere the case is not applicable.

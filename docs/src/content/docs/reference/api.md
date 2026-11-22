@@ -316,16 +316,17 @@ type LoadedSubject = Pick<Subject, "skills" | "skillDirs"> & {
 
 A harness's output stream in the one shape every harness shares. Null means the harness does not report the field.
 
-| Property     | Type                | Description                                                                                                       |
-| ------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `finalText`  | `string`            |                                                                                                                   |
-| `toolCalls`  | `ToolCall[]`        | Always `callsOf(transcript)`: an adapter never builds it.                                                         |
-| `transcript` | `TranscriptEvent[]` | Every text, tool call and tool result the stream shows, in order.                                                 |
-| `sessionId`  | `string \| null`    | The harness's own id of the session, for a stream that carries one; null otherwise.                               |
-| `tokens`     | `Tokens \| null`    |                                                                                                                   |
-| `costUsd`    | `number \| null`    |                                                                                                                   |
-| `loaded`     | `Loaded`            | What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. |
-| `error`      | `string \| null`    |                                                                                                                   |
+| Property       | Type                                          | Description                                                                                                           |
+| -------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `finalText`    | `string`                                      |                                                                                                                       |
+| `toolCalls`    | `ToolCall[]`                                  | Always `callsOf(transcript)`: an adapter never builds it.                                                             |
+| `transcript`   | `TranscriptEvent[]`                           | Every text, tool call and tool result the stream shows, in order.                                                     |
+| `sessionId`    | `string \| null`                              | The harness's own id of the session, for a stream that carries one; null otherwise.                                   |
+| `tokens`       | `Tokens \| null`                              |                                                                                                                       |
+| `agentTokens?` | `Record<string, Tokens> \| null \| undefined` | Tokens by agent id, summed from the usage of each assistant message; null where the stream states none. Absent: null. |
+| `costUsd`      | `number \| null`                              |                                                                                                                       |
+| `loaded`       | `Loaded`                                      | What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers.     |
+| `error`        | `string \| null`                              |                                                                                                                       |
 
 ### Tokens
 
@@ -349,6 +350,7 @@ One tool call of the agent.
 | `turn?`       | `number \| undefined`                                                                             | The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it.              |
 | `durationMs?` | `number \| undefined`                                                                             | How long the call took, from its tool result, where the stream says. Only an adapter with the `toolDurations` capability sets it. |
 | `agent?`      | `AgentRef \| undefined`                                                                           | The agent that made the call (depth 0 is the main agent, id `main`). Absent in a 0.0.1 record, which means the main agent.        |
+| `dispatch?`   | `Dispatch \| undefined`                                                                           | What the dispatch asked for, on a `subagent` call; null in each field the harness's stream does not show.                         |
 
 ### TranscriptEvent
 
@@ -366,6 +368,7 @@ One step of a run, in the one shape every harness shares.
 | `kind?`       | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other" \| undefined` |                                                                                                                                                       |
 | `name?`       | `string \| undefined`                                                                                          |                                                                                                                                                       |
 | `input?`      | `unknown`                                                                                                      |                                                                                                                                                       |
+| `dispatch?`   | `Dispatch \| undefined`                                                                                        | What the dispatch chose, on a `tool_call` of kind `subagent` whose adapter reads it.                                                                  |
 | `output?`     | `string \| undefined`                                                                                          | What the tool returned, on a `tool_result`, as decoded text.                                                                                          |
 | `text?`       | `string \| undefined`                                                                                          | What the assistant said, on a `text`.                                                                                                                 |
 | `bytes?`      | `number \| undefined`                                                                                          | The UTF-8 size of `text` or `output` as decoded, before any cut. Each invalid byte sequence was already replaced by one U+FFFD, which is three bytes. |
@@ -394,35 +397,36 @@ type CheckResult = Check & {
 
 Everything kept about one run.
 
-| Property          | Type                                   | Description                                                                                                                     |
-| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `harness`         | `string`                               |                                                                                                                                 |
-| `subject`         | `string`                               | The subject's label.                                                                                                            |
-| `caseId`          | `string`                               |                                                                                                                                 |
-| `rep`             | `number`                               |                                                                                                                                 |
-| `ok`              | `boolean`                              |                                                                                                                                 |
-| `error`           | `string \| null`                       |                                                                                                                                 |
-| `finalText`       | `string`                               |                                                                                                                                 |
-| `toolCalls`       | `ToolCall[]`                           |                                                                                                                                 |
-| `skillsLoaded`    | `string[]`                             |                                                                                                                                 |
-| `skillEvents`     | `SkillEvent[]`                         | Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads.          |
-| `transcriptFile?` | `string \| null \| undefined`          | The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records.            |
-| `subjectLoaded`   | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.  |
-| `loaded`          | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                              |
-| `isolated`        | `boolean`                              | Whether the run was started with `--isolated`.                                                                                  |
-| `unexpected`      | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                   |
-| `reportMissing`   | `boolean`                              | True when the harness should report its plugins and skills (`loadedReport`) and left one out.                                   |
-| `judgeProblem`    | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran. |
-| `subjectMutated`  | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                           |
-| `subjectChanges`  | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                         |
-| `changedFiles`    | `ChangedFiles`                         | What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started.           |
-| `checks`          | `CheckResult[]`                        |                                                                                                                                 |
-| `score`           | `number \| null`                       | The run score, null when the run is invalid.                                                                                    |
-| `judge`           | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                     |
-| `decision`        | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                       |
-| `durationMs`      | `number`                               |                                                                                                                                 |
-| `tokens`          | `Tokens \| null`                       |                                                                                                                                 |
-| `costUsd`         | `number \| null`                       |                                                                                                                                 |
+| Property          | Type                                   | Description                                                                                                                                                                                                                         |
+| ----------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`         | `string`                               |                                                                                                                                                                                                                                     |
+| `subject`         | `string`                               | The subject's label.                                                                                                                                                                                                                |
+| `caseId`          | `string`                               |                                                                                                                                                                                                                                     |
+| `rep`             | `number`                               |                                                                                                                                                                                                                                     |
+| `ok`              | `boolean`                              |                                                                                                                                                                                                                                     |
+| `error`           | `string \| null`                       |                                                                                                                                                                                                                                     |
+| `finalText`       | `string`                               |                                                                                                                                                                                                                                     |
+| `toolCalls`       | `ToolCall[]`                           |                                                                                                                                                                                                                                     |
+| `agentTokens`     | `Record<string, Tokens> \| null`       | The run's tokens by agent id (`main`, or the id of the dispatch call), summed from the usage of each assistant message; null where the stream does not state usage per message. `tokens` is unchanged. Absent from earlier records. |
+| `skillsLoaded`    | `string[]`                             |                                                                                                                                                                                                                                     |
+| `skillEvents`     | `SkillEvent[]`                         | Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads.                                                                                                              |
+| `transcriptFile?` | `string \| null \| undefined`          | The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records.                                                                                                                |
+| `subjectLoaded`   | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.                                                                                                      |
+| `loaded`          | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                                                                                                                                  |
+| `isolated`        | `boolean`                              | Whether the run was started with `--isolated`.                                                                                                                                                                                      |
+| `unexpected`      | `string[]`                             | The names of what the harness reported that does not come from the subject, whether or not `isolated` is set.                                                                                                                       |
+| `reportMissing`   | `boolean`                              | True when the harness should report its plugins and skills (`loadedReport`) and left one out.                                                                                                                                       |
+| `judgeProblem`    | `string \| null`                       | Why the judge session, which loads nothing, does not prove it loaded nothing; null when it does, or when no isolated judge ran.                                                                                                     |
+| `subjectMutated`  | `boolean`                              | Whether the run changed anything in its copy of the subject. Always false for "none".                                                                                                                                               |
+| `subjectChanges`  | `ChangedFiles \| null`                 | What the run created, modified and deleted in its copy of the subject; null for "none".                                                                                                                                             |
+| `changedFiles`    | `ChangedFiles`                         | What the run created, modified and deleted in its workspace, compared with the seed taken before the harness started.                                                                                                               |
+| `checks`          | `CheckResult[]`                        |                                                                                                                                                                                                                                     |
+| `score`           | `number \| null`                       | The run score, null when the run is invalid.                                                                                                                                                                                        |
+| `judge`           | `(Usage & { calls: number; }) \| null` | What the judged checks cost, kept apart from the run's own numbers; null when no judge ran.                                                                                                                                         |
+| `decision`        | `(Usage & { calls: number; }) \| null` | What the decision checks cost, kept apart in the same way; null when no request was sent.                                                                                                                                           |
+| `durationMs`      | `number`                               |                                                                                                                                                                                                                                     |
+| `tokens`          | `Tokens \| null`                       |                                                                                                                                                                                                                                     |
+| `costUsd`         | `number \| null`                       |                                                                                                                                                                                                                                     |
 
 ### CaseScore
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { callsOf, numbered } from "../transcript.js";
 import type { MessageEvent } from "./claude-code-stream.js";
-import { transcriptParts } from "./claude-code-stream.js";
+import { agentTokens, transcriptParts } from "./claude-code-stream.js";
 import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
 import {
   ANTHROPIC_ENV,
@@ -156,6 +156,7 @@ const claudeCode: Harness = {
             output: usage.output_tokens,
           }
         : null,
+      agentTokens: agentTokens(raw as MessageEvent[]),
       costUsd: result?.total_cost_usd ?? null,
       loaded: {
         paths: init?.plugins ? init.plugins.map((plugin) => plugin.path) : null,

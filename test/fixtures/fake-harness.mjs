@@ -190,10 +190,15 @@ function play(steps, turn) {
   let count = 0;
   let final = "";
   const id = (kind) => `${kind}_${turn}_${count++}`;
-  const assistant = (content, parent) =>
+  const assistant = (content, parent, usage) =>
     emit({
       type: "assistant",
-      message: { id: id("msg"), role: "assistant", content },
+      message: {
+        id: id("msg"),
+        role: "assistant",
+        content,
+        ...(usage && { usage }),
+      },
       parent_tool_use_id: parent,
     });
   const toolResult = (use, content, isError, parent) =>
@@ -226,7 +231,7 @@ function play(steps, turn) {
   };
   const step = (one, parent) => {
     if ("text" in one) {
-      assistant([{ type: "text", text: one.text }], parent);
+      assistant([{ type: "text", text: one.text }], parent, one.usage);
       final = one.text;
     } else if ("call" in one) {
       const { block, settle } = prepare(one.call);
@@ -247,10 +252,14 @@ function play(steps, turn) {
       );
       for (const { settle } of prepared) settle(parent);
     } else if ("agent" in one) {
-      const { type, prompt: task, steps: inner } = one.agent;
+      const { type, prompt: task, model, steps: inner } = one.agent;
       const { block, settle } = prepare({
         name: "Agent",
-        input: { subagent_type: type, prompt: task },
+        input: {
+          subagent_type: type,
+          prompt: task,
+          ...(model && { model }),
+        },
       });
       assistant([block], parent);
       for (const each of inner) step(each, block.id);

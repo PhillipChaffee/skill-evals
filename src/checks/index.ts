@@ -13,6 +13,7 @@ import { isUnitScore } from "../score.js";
 import type { ChangedFiles, Snapshot } from "../snapshot.js";
 import { UsageError } from "../scope.js";
 import { COMMAND_CHECKS } from "./command.js";
+import { DISPATCH_CHECKS } from "./dispatch.js";
 import { FILE_CHECKS } from "./files.js";
 import type { Mode } from "./fields.js";
 import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
@@ -59,6 +60,10 @@ interface CheckFields {
   minDurationMs?: number;
   maxDurationMs?: number;
   by?: By;
+  agent?: string;
+  briefMatches?: string;
+  briefWindow?: number;
+  modelMatches?: string;
   where?: Where;
   scope?: Scope;
   which?: "first" | "last" | "any";
@@ -204,6 +209,7 @@ const RULED = {
   ...OUTPUT_CHECKS,
   ...FILE_CHECKS,
   ...TOOL_CHECKS,
+  ...DISPATCH_CHECKS,
   ...ORDER_CHECKS,
   ...TRANSCRIPT_CHECKS,
   ...OBSERVED_CHECKS,

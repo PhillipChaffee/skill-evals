@@ -12,6 +12,9 @@ export const MAIN_AGENT: AgentRef = {
   depth: 0,
 };
 
+/** The type of a dispatch that names no agent type: the agent's definition, if any, is inlined in its brief. */
+export const GENERIC_AGENT = "general-purpose";
+
 /**
  * Drops the plugin prefix of an agent name, the way skill names lose theirs.
  * @param name - An agent as a dispatch names it: `name`, `plugin:name` or `plugin:name:name`.

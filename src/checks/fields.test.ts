@@ -203,6 +203,7 @@ test("the table types the fields that exist today, and the regex fields come fro
   expect(FIELDS["expect"]?.values).toEqual(["yes", "no"]);
   expect(REGEX_FIELDS).toEqual([
     ...["pattern", "name", "inputMatches"],
+    ...["briefMatches", "modelMatches"],
     ...["stdoutMatches", "stdoutLacks"],
   ]);
   expect(read("number", 1, WEIGHT)).toBe(1);

@@ -212,6 +212,7 @@
           { "$ref": "#/$defs/check-tool_called" },
           { "$ref": "#/$defs/check-tool_not_called" },
           { "$ref": "#/$defs/check-first_tool" },
+          { "$ref": "#/$defs/check-agent_dispatched" },
           { "$ref": "#/$defs/check-tool_order" },
           { "$ref": "#/$defs/check-transcript_matches" },
           { "$ref": "#/$defs/check-transcript_lacks" },
@@ -1057,13 +1058,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1312,13 +1313,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1482,13 +1483,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1828,6 +1829,82 @@
             ],
             "additionalProperties": false
           }
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-agent_dispatched": {
+      "title": "agent_dispatched",
+      "description": "The number of dispatches that start the agent is from `min` to `max`, and each one's brief fits `briefMatches` and its model fits `modelMatches`, where given. A dispatch starts the agent when its type, normalized, is the `agent` (`matched by type`). A dispatch of no type, or of `general-purpose`, starts it when its brief holds a line `name: <agent>` anywhere, or the agent name as a whole word in the first `briefWindow` (default 400) characters (`matched by inlined definition`); a dispatch with a type of its own is judged by the type alone. The brief is the dispatch's `prompt` text, then its `description`. A dispatch that carries no model does not match `modelMatches`, and the reason says so. `min` defaults to 1, and to 0 when `max` is 0. Needs a harness with `subagents`.",
+      "type": "object",
+      "required": ["type", "agent"],
+      "properties": {
+        "type": { "const": "agent_dispatched" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts. Default: 1.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "agent": {
+          "title": "agent",
+          "description": "The agent type a dispatch must name, with or without a plugin prefix (`magic:comment-sicko:comment-sicko` and `comment-sicko` are the same).",
+          "type": "string",
+          "minLength": 1
+        },
+        "min": {
+          "title": "min",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max": {
+          "title": "max",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "briefMatches": {
+          "title": "briefMatches",
+          "description": "A regular expression for the dispatch's brief: its `prompt` text, then its `description` text. A dispatch whose brief does not match does not count.",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "flags",
+          "description": "The flags of the check's regular expressions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "briefWindow": {
+          "title": "briefWindow",
+          "description": "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. A `name: <agent>` line counts anywhere in the brief. Default: 400.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "modelMatches": {
+          "title": "modelMatches",
+          "description": "A regular expression for the model a dispatch chose. A dispatch that carries no model does not match.",
+          "type": "string",
+          "minLength": 1
         },
         "requires": {
           "title": "requires",

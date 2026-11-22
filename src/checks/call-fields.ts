@@ -41,6 +41,26 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
     meaning:
       'Whose calls, skill loads or text count: `"main"` (the main thread), `"subagent"` (any subagent, at any depth), or `{ "agent": "<name>" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.',
   },
+  agent: {
+    type: "text",
+    meaning:
+      "The agent type a dispatch must name, with or without a plugin prefix (`magic:comment-sicko:comment-sicko` and `comment-sicko` are the same).",
+  },
+  briefMatches: {
+    type: "regex",
+    meaning:
+      "A regular expression for the dispatch's brief: its `prompt` text, then its `description` text. A dispatch whose brief does not match does not count.",
+  },
+  briefWindow: {
+    type: "int",
+    meaning:
+      "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. A `name: <agent>` line counts anywhere in the brief. Default: 400.",
+  },
+  modelMatches: {
+    type: "regex",
+    meaning:
+      "A regular expression for the model a dispatch chose. A dispatch that carries no model does not match.",
+  },
   anyOf: {
     type: "texts",
     meaning:
@@ -49,12 +69,12 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   min: {
     type: "count",
     meaning:
-      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called` and `file_count`; 0 for a `tool_called` whose `max` is 0.",
+      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
   },
   max: {
     type: "count",
     meaning:
-      "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+      "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
   },
   sameTurn: {
     type: "bool",

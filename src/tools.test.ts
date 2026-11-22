@@ -137,6 +137,7 @@ test("codex reads every kind of tool item, and no other item, as a tool call", (
       name: "collab_tool_call",
       kind: "subagent",
       input: { tool: "spawn", prompt: "go" },
+      dispatch: { type: null, model: null, effort: null },
     },
     { name: "web_search", kind: "web", input: { query: "q" } },
   ]);
