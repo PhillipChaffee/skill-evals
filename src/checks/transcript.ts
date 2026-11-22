@@ -1,17 +1,15 @@
 import type { Capability } from "../capabilities.js";
-import type { ToolCall, TranscriptEvent } from "../harnesses/shared.js";
-import type { ToolMatcher } from "../matchers.js";
-import { describeMatcher, hitsOf, quoteCalls, tester } from "../matchers.js";
-import { callsOf, resultsByCall } from "../transcript.js";
+import { tester } from "../matchers.js";
+import { resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { UsageError } from "../scope.js";
 import { PASS } from "./rules.js";
-import type { Piece } from "./transcript-slice.js";
-import { pieces, quoteEvent, quotePieces } from "./transcript-slice.js";
 import { SUBAGENT_CAVEAT } from "./transcript-fields.js";
+import type { Piece } from "./transcript-slice.js";
+import { pieces, quotePieces } from "./transcript-slice.js";
+import { outputLacks, outputMatches, outputSize } from "./transcript-output.js";
 import "./transcript-scope.js";
 
-const SHOWN_LINES = 5;
 const FIELDS_OF_TEXT = { optional: ["flags", "where", "scope"] };
 const CAP_NOTE =
   SUBAGENT_CAVEAT +
@@ -95,6 +93,25 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
 }
 
 /**
+ * Finds a call inside the window of a check whose result event is missing.
+ * @param check - A `transcript_lacks` check.
+ * @param outcome - What the run left behind.
+ * @returns The position, among the calls, of the first call of the window with no result; -1 for none.
+ */
+function silentCall(check: RuledCheck, outcome: Outcome): number {
+  const cut = pieces(outcome.transcript, check.scope ?? "any", "all");
+  if ("problem" in cut) return -1;
+  const results = resultsByCall(outcome.transcript);
+  let position = -1;
+  for (const one of outcome.transcript) {
+    if (one.type !== "tool_call") continue;
+    position += 1;
+    if (cut.window.includes(one) && !results.has(position)) return position;
+  }
+  return -1;
+}
+
+/**
  * Scores `transcript_lacks`.
  * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
  * @param outcome - What the run left behind.
@@ -113,177 +130,17 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   ) {
     return { score: 0, reason: `the run has no ${where} text to test` };
   }
+  const silent = where === "assistant_text" ? -1 : silentCall(check, outcome);
+  if (found.hits.length === 0 && silent >= 0) {
+    return {
+      score: 0,
+      reason: `call #${String(silent)} has no output, so it cannot be shown to lack the pattern`,
+    };
+  }
   if (found.hits.length === 0) return PASS;
   return {
     score: 0,
     reason: `${check.where ?? "assistant_text"} text matches ${written(check)} in ${String(found.hits.length)} of ${String(found.all.length)} tested events\n${quotePieces(found.hits)}`,
-  };
-}
-
-/** A call that fits the `tool` matcher, its place among the calls, and the result that answers it. */
-interface Run {
-  at: number;
-  call: ToolCall;
-  result: TranscriptEvent | undefined;
-}
-
-/**
- * Finds the calls that fit a matcher with their results.
- * @param events - The run's events.
- * @param tool - What a call must be; absent for every call.
- * @returns The calls in order, each with its position among the calls and its result, if the stream carried one.
- */
-function runsOf(
-  events: TranscriptEvent[],
-  tool: ToolMatcher | undefined,
-): Run[] {
-  const all = callsOf(events);
-  const results = resultsByCall(events);
-  const at = tool ? hitsOf(all, tool) : all.map((_, position) => position);
-  return at.map((position) => ({
-    at: position,
-    call: all[position] as ToolCall,
-    result: results.get(position),
-  }));
-}
-
-/**
- * Chooses the calls that a `which` counts.
- * @param runs - Every call that fits the matcher.
- * @param which - Default: "any".
- * @returns All of them, the first, or the last.
- */
-function chosen(runs: Run[], which: RuledCheck["which"]): Run[] {
-  if (which === "first") return runs.slice(0, 1);
-  return which === "last" ? runs.slice(-1) : runs;
-}
-
-const noCall = (outcome: Outcome, tool: ToolMatcher): Verdict => ({
-  score: 0,
-  reason: `no call matches ${describeMatcher(tool)}\n${quoteCalls(outcome.toolCalls, [])}`,
-});
-
-/** The calls a `tool_output_*` check looks at, and its compiled pattern. */
-interface Picked {
-  picked: Run[];
-  fits: (text: string) => boolean;
-}
-
-/**
- * Finds the calls a `tool_output_matches` or `tool_output_lacks` check looks at.
- * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
- * @param outcome - What the run left behind.
- * @returns The chosen calls with their compiled pattern, or the failing verdict when no call fits `tool`.
- */
-function pick(check: RuledCheck, outcome: Outcome): Picked | Verdict {
-  const tool = check.tool as ToolMatcher;
-  const runs = runsOf(outcome.transcript, tool);
-  if (runs.length === 0) return noCall(outcome, tool);
-  return {
-    picked: chosen(runs, check.which),
-    fits: tester(check.pattern, check.flags),
-  };
-}
-
-/**
- * Lists the chosen calls whose output matches.
- * @param found - The chosen calls and the pattern.
- * @param found.picked - The chosen calls.
- * @param found.fits - The compiled pattern.
- * @returns The calls with an output that the pattern matches, each with that output as a piece.
- */
-const hitsIn = ({ picked, fits }: Picked): (Run & { piece: Piece })[] =>
-  picked.flatMap((run) => {
-    const { result } = run;
-    return result?.output !== undefined && fits(result.output)
-      ? [{ ...run, piece: { event: result, text: result.output } }]
-      : [];
-  });
-
-/**
- * Scores `tool_output_matches`.
- * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
- * @param outcome - What the run left behind.
- * @returns 1 when the output of a chosen call matches. A call with no result does not match.
- */
-function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
-  const found = pick(check, outcome);
-  if ("score" in found) return found;
-  if (hitsIn(found).length > 0) return PASS;
-  const silent =
-    check.which === undefined || check.which === "any"
-      ? undefined
-      : found.picked.find(({ result }) => result?.output === undefined);
-  if (silent) {
-    return { score: 0, reason: `call #${String(silent.at)} has no output` };
-  }
-  const shown = found.picked.flatMap(({ result }) =>
-    result?.output === undefined
-      ? []
-      : [{ event: result, text: result.output }],
-  );
-  const which =
-    check.which === undefined || check.which === "any"
-      ? "any of the matching calls"
-      : `the ${check.which} matching call`;
-  return {
-    score: 0,
-    reason: `no output of ${which} matches ${written(check)}${shown.length === 0 ? ": none has an output" : `\n${quotePieces(shown)}`}`,
-  };
-}
-
-/**
- * Scores `tool_output_lacks`.
- * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
- * @param outcome - What the run left behind.
- * @returns 1 when no chosen call's output matches. A call with no result cannot be shown to lack the pattern, and
- *   no call that fits the matcher fails too.
- */
-function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
-  const found = pick(check, outcome);
-  if ("score" in found) return found;
-  const hit = hitsIn(found);
-  if (hit.length > 0) {
-    return {
-      score: 0,
-      reason: `an output of call #${String(hit[0]?.at)} matches ${written(check)}\n${quotePieces(hit.map(({ piece }) => piece))}`,
-    };
-  }
-  const silent = found.picked.find(
-    ({ result }) => result?.output === undefined,
-  );
-  if (!silent) return PASS;
-  return {
-    score: 0,
-    reason: `call #${String(silent.at)} has no output, so it cannot be shown to lack the pattern`,
-  };
-}
-
-/**
- * Scores `tool_output_size`.
- * @param check - The check, whose `maxBytes` and `tool` are read.
- * @param outcome - What the run left behind.
- * @returns 1 when no output is over `maxBytes`. A call with no result is ignored.
- */
-function outputSize(check: RuledCheck, outcome: Outcome): Verdict {
-  const max = check.maxBytes as number;
-  const results = check.tool
-    ? runsOf(outcome.transcript, check.tool).flatMap(
-        ({ result }) => result ?? [],
-      )
-    : outcome.transcript.filter((one) => one.type === "tool_result");
-  const size = (one: TranscriptEvent): number =>
-    one.bytes ?? Buffer.byteLength(one.output ?? "");
-  const over = results.filter(
-    (one) => one.output !== undefined && size(one) > max,
-  );
-  if (over.length === 0) return PASS;
-  const lines = over
-    .slice(0, SHOWN_LINES)
-    .map((one) => `${quoteEvent(one)} (${String(size(one))} bytes)`);
-  return {
-    score: 0,
-    reason: `${String(over.length)} ${over.length === 1 ? "output is" : "outputs are"} over ${String(max)} bytes\n${lines.join("\n")}`,
   };
 }
 
@@ -313,7 +170,7 @@ export const TRANSCRIPT_CHECKS = {
     validate: checkMessageWhere,
     needs: textNeeds,
     scores:
-      "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results, no calls) scores 0, since that usually means the capture is broken. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0.",
+      "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results or no calls, as `where` says) scores 0, since that usually means the capture is broken. With `tool_output` or `all`, a call in the window with no result also scores 0, as for `tool_output_lacks`. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0.",
     note: CAP_NOTE,
     rule: textLacks,
   },

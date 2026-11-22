@@ -22,7 +22,8 @@ export interface Piece {
 }
 
 /** What a scope and a `where` give: the texts, or why the check cannot be scored. */
-export type Sliced = { pieces: Piece[] } | { problem: string };
+export type Sliced =
+  { pieces: Piece[]; window: TranscriptEvent[] } | { problem: string };
 
 /** The most characters of one event that a pattern sees. */
 const TEXT_CAP = 1_000_000;
@@ -177,6 +178,7 @@ export function pieces(
   const cut = scoped(events, scope);
   if ("problem" in cut) return cut;
   return {
+    window: cut.events,
     pieces: cut.events.flatMap((event) => {
       const text = textOf(event, where);
       return text === undefined ? [] : [{ event, text }];

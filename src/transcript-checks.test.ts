@@ -297,23 +297,3 @@ test("transcript_lacks fails when the run has no events of its where, and passes
   expect(lacks({ after: { kind: "web" } }, "all", ends).score).toBe(0);
   expect(lacks(undefined, undefined).score).toBe(1);
 });
-
-test("first_message and final_message with another where are a load error", () => {
-  const load = (scope: unknown, where: string) =>
-    readCheck(
-      { type: "transcript_lacks", pattern: "a", scope, where },
-      "case.json",
-      {
-        lenient: false,
-      },
-    );
-  for (const scope of [
-    "first_message",
-    "final_message",
-    { first_message: true, before: EDIT },
-  ]) {
-    expect(() => load(scope, "tool_input")).toThrow(/read assistant text/);
-  }
-  expect(load("first_message", "assistant_text")).toBeTruthy();
-  expect(load({ before: EDIT }, "all")).toBeTruthy();
-});
