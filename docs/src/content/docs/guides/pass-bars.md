@@ -47,7 +47,7 @@ A case's `minDelta` is a key of its `case.json`:
 
 ## How many runs a verdict needs
 
-A case is judged only when each side has at least 5 valid runs (`MIN_RUNS_FOR_VERDICT`); below that its verdict is `too few runs`, with the run count of each side. The suite delta needs at least 2 valid runs on each side of every case it covers. A percentile interval under-covers at small n, so the report does not widen it; it declines to judge instead. Bars and exit codes ignore the run count: a bar is on the point delta.
+A case is judged only when each side has at least 5 valid runs (`MIN_RUNS_FOR_VERDICT`); below that its verdict is `too few runs`, with the run count of each side. The suite delta needs the same in every case it covers. A percentile interval under-covers at small n, so the report does not widen it; it declines to judge instead. Bars and exit codes ignore the run count: a bar is on the point delta.
 
 ## Measure the noise first
 

@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { expect, test } from "vitest";
-import { sandbox, tableRow } from "./testing/sandbox.js";
+import path from "node:path";
+import { plantCase } from "./testing/plant.js";
+import { readResults, sandbox, tableRow } from "./testing/sandbox.js";
 import {
   LOADS_BRO,
   WRITES_SUMMARY,
@@ -71,4 +73,30 @@ test("the report notes a noise file made at other reps, and one from another sui
   const quiet = await compared(box, { checks: WEIGHTED, flags: [NOISE, same] });
   expect(quiet.ran.stdout).not.toContain("This run uses");
   expect(quiet.ran.stdout).not.toContain("No case of this suite");
+});
+
+test("with two harnesses the noise file applies to the one it was calibrated on, and to no other", async () => {
+  const box = sandbox();
+  const file = noiseFile(box, { cases: { restate: 0.25 }, suite: 0.25 });
+  const cases = plantCase(box, [WRITES_SUMMARY]);
+  const out = path.join(box.root, "results");
+  const ran = await box.cli(
+    [
+      ...["run", "--a", "none", "--b", "none", "--reps", "5"],
+      ...["--cases", cases, "--out", out, "--noise", file],
+      ...["--harness", "claude-code,pi"],
+    ],
+    { SKILL_EVALS_BIN_PI: box.pi },
+  );
+  expect(ran.status, ran.stderr).toBe(0);
+  const [first, second] = readResults(out).comparison?.harnesses ?? [];
+  expect(first?.harness).toBe("claude-code");
+  expect(first?.cases[0]?.noise).toBe(0.25);
+  expect(first?.suite.noise).toBe(0.25);
+  expect(second?.harness).toBe("pi");
+  expect(second?.cases[0]?.noise).toBeNull();
+  expect(second?.suite.noise).toBeNull();
+  expect(ran.stdout).toContain("It is not applied to pi");
+  // Pi is not listed as missing a case: it is a harness the file does not cover.
+  expect(ran.stdout).not.toContain("judged by the interval alone: restate");
 });

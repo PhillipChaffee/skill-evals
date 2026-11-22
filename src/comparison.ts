@@ -20,8 +20,6 @@ export const NON_DISCRIMINATING_FLOOR = 0.9;
 
 /** A case needs this many valid runs on each side before its delta is judged: below it the verdict is "too few runs". */
 export const MIN_RUNS_FOR_VERDICT = 5;
-/** The suite delta needs this many valid runs on each side of every case it covers. */
-export const MIN_RUNS_FOR_SUITE = 2;
 
 /** What a case shows about whether the subject matters to it. */
 export type Discrimination =
@@ -266,7 +264,7 @@ function harnessDelta(input: CompareInput, harness: string): HarnessDelta {
     harness,
     cases,
     suite: {
-      ...judged(suite, suiteBound, (fewest ?? 0) >= MIN_RUNS_FOR_SUITE),
+      ...judged(suite, suiteBound, (fewest ?? 0) >= MIN_RUNS_FOR_VERDICT),
       cases: strata.length,
       fewest,
     },

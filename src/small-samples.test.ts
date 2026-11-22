@@ -30,15 +30,15 @@ test("a case with fewer than 5 valid runs on a side is too few runs, and shows n
   );
 });
 
-test("the suite needs 2 valid runs on each side of every case, and says how few it has", async () => {
+test("the suite needs 5 valid runs on each side of every case, like a case does, and says how few it has", async () => {
   const box = sandbox();
-  const two = await compared(box, { checks: WEIGHTED, reps: 2 });
-  expect(two.ran.stdout).toContain(
-    "Suite delta: helped (+0.20, 95% +0.20..+0.20) over 1 case",
+  const four = await compared(box, { checks: WEIGHTED, reps: 4 });
+  expect(four.ran.stdout).toContain(
+    "Suite delta: too few runs (fewest on a side: n=4) over 1 case",
   );
-  const one = await compared(box, { checks: WEIGHTED, reps: 1 });
-  expect(one.ran.stdout).toContain(
-    "Suite delta: too few runs (fewest on a side: n=1) over 1 case",
+  const five = await compared(box, { checks: WEIGHTED, reps: 5 });
+  expect(five.ran.stdout).toContain(
+    "Suite delta: helped (+0.20, 95% +0.20..+0.20) over 1 case",
   );
 });
 

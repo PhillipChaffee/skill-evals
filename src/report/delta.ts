@@ -1,7 +1,6 @@
 import type { CaseDelta, HarnessDelta } from "../comparison.js";
 import {
   FAILING_CEILING,
-  MIN_RUNS_FOR_SUITE,
   MIN_RUNS_FOR_VERDICT,
   NON_DISCRIMINATING_FLOOR,
 } from "../comparison.js";
@@ -146,7 +145,7 @@ export function footnote(evaluation: Evaluation): string | null {
     evaluation.subjects[1]?.kind === "none"
       ? " Verdicts are B minus A; with B none, hurt means A scored higher."
       : "";
-  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A case needs at least ${String(MIN_RUNS_FOR_VERDICT)} valid runs on each side (MIN_RUNS_FOR_VERDICT) and the suite at least ${String(MIN_RUNS_FOR_SUITE)} in every case it covers; below that the verdict is "too few runs". Percentile intervals under-cover at small n, so an interval from few runs is narrower than its 95% says. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound.${orientation} ${noiseNote(evaluation)}`;
+  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A case needs at least ${String(MIN_RUNS_FOR_VERDICT)} valid runs on each side (MIN_RUNS_FOR_VERDICT) and the suite the same in every case it covers; below that the verdict is "too few runs". Percentile intervals under-cover at small n, so an interval from few runs is narrower than its 95% says. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound.${orientation} ${noiseNote(evaluation)}`;
 }
 
 /** One case of the discrimination table. */

@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { compare } from "./comparison.js";
 import { formatDelta, formatInterval, verdictText } from "./delta-format.js";
 import { noiseOf } from "./noise.js";
-import { flakeRate } from "./report/delta.js";
+import { flakeRate, flakeText } from "./report/delta.js";
 import type { RunRecord } from "./run.js";
 import { scriptedCase } from "./testing/budget.js";
 import { sandbox } from "./testing/sandbox.js";
@@ -220,28 +220,63 @@ test("the html report shows the verdicts, the footnote and a suite row", async (
   expect(html).toContain("2000 resamples, seed 1");
 });
 
-test("identical inputs and seed give byte-identical reports at --jobs 4 too", async () => {
-  const once = async () => {
-    const box = sandbox();
-    const { ran, out } = await compared(box, {
-      checks: [{ type: "skill_loaded", skill: "bro" }],
-      flags: ["--jobs", "4", "--seed", "9", "--report", "md,json"],
-    });
+test("a serial run and its resumption at --jobs 4 give the same intervals from scores that vary", async () => {
+  // The fake's score follows its start counter, which is racy in parallel; so the scores are made serially and the
+  // parallel command reuses them. The bootstrap reads the runs in order, so an ordering bug under --jobs would move
+  // the intervals.
+  const box = sandbox();
+  // Three checks of different weights flip on different starts, so the run scores take many values.
+  const writes = (starts: number[], file: string) => ({
+    onStart: starts,
+    step: {
+      call: {
+        name: "Write",
+        input: {},
+        write: { path: `out/${file}.txt`, content: "x" },
+      },
+    },
+  });
+  scriptedCase(box, "solo", {
+    before: [
+      writes([1, 4, 6, 7, 9], "one"),
+      writes([2, 3, 8, 10, 11], "two"),
+      writes([1, 5, 6, 11, 12], "three"),
+    ],
+    checks: [
+      { type: "file_exists", path: "out/one.txt" },
+      { type: "file_exists", path: "out/two.txt", weight: 2 },
+      { type: "file_exists", path: "out/three.txt", weight: 4 },
+    ],
+  });
+  const out = path.join(box.root, "results");
+  const args = [
+    ...["run", "--a", "none", "--b", "none", "--seed", "9", "--reps", "6"],
+    ...["--cases", path.join(box.root, "suite"), "--report", "json"],
+  ];
+  const summary = (): string => {
     const report = readJson(out, "report.json") as {
       cases: unknown;
       method: unknown;
     };
-    const verdicts = ran.stdout
-      .split("\n")
-      .filter((line) => /^(\| restate |Suite delta|> Verdicts)/.test(line))
-      .map((line) =>
-        line.replace(/ \| [\d.]+ s \/.*$/, "").replace(/Noise file.*/, ""),
-      );
-    return JSON.stringify({
-      cases: report.cases,
-      method: report.method,
-      verdicts,
-    });
+    return JSON.stringify({ cases: report.cases, method: report.method });
   };
-  expect(await once()).toBe(await once());
+  await box.cli([...args, "--out", out]);
+  const serial = summary();
+  const resumed = await box.cli([...args, "--resume", out, "--jobs", "4"]);
+  expect(resumed.status, resumed.stderr).toBe(0);
+  expect(resumed.stderr).toContain("(reused)");
+  expect(summary()).toBe(serial);
+  const { cases } = JSON.parse(serial) as {
+    cases: { low: number; high: number }[];
+  };
+  expect(cases.some((one) => one.low < one.high)).toBe(true);
+});
+
+test("a flake rate is a whole percentage, and says what it is over when runs are unscored", () => {
+  expect(flakeText(null)).toBe("n/a");
+  expect(flakeText(null, { valid: 0, planned: 3 })).toBe("n/a");
+  expect(flakeText(0)).toBe("0%");
+  expect(flakeText(1 / 3)).toBe("33%");
+  expect(flakeText(0.5, { valid: 4, planned: 4 })).toBe("50%");
+  expect(flakeText(0.5, { valid: 2, planned: 4 })).toBe("50% (of 2)");
 });
