@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { expect, onTestFinished, test } from "vitest";
+import { expect, onTestFinished, test, vi } from "vitest";
 import {
   digestOf,
   processTerminal,
@@ -96,7 +96,9 @@ test("a terminal is asked once, the answer is remembered, and a change to the co
     { casesDir: cases, count: 3 },
     { terminal: first, env },
   );
-  expect(first.asked).toEqual(["run these 3 cases? [y/N] "]);
+  expect(first.asked).toEqual([
+    `${cases} has not been approved (see them with "skill-evals list --show-prompts"). Run these 3 cases? [y/N] `,
+  ]);
   const stored = remembered(env);
   expect(stored).toEqual({ [digestOf(cases)]: cases });
   const again = answering();
@@ -201,6 +203,79 @@ test("list --show-prompts prints every turn and says whether a history preamble 
   expect(withHistory.stdout).toContain(
     "a preamble of 12 messages is added in front of the first prompt",
   );
+  expect(withHistory.stdout).toContain("question 0");
   const plain = await seeded.cli(["list", "--cases", cases]);
   expect(plain.stdout).not.toContain("prompt:");
+});
+
+test("a single case is asked about as a case, and the project's config file is part of what is approved", async () => {
+  const { cases, env } = dirs();
+  const config = path.join(path.dirname(cases), "skill-evals.config.json");
+  fs.writeFileSync(config, '{ "reps": 1 }');
+  const once = answering("y");
+  await requireApproved(
+    { casesDir: cases, count: 1, configFile: config },
+    { terminal: once, env },
+  );
+  expect(once.asked[0]).toMatch(/Run these 1 case\? \[y\/N\] $/);
+  const same = answering();
+  await requireApproved(
+    { casesDir: cases, count: 1, configFile: config },
+    { terminal: same, env },
+  );
+  expect(same.asked).toEqual([]);
+  // The config can name variables, a judge URL and rules, so a change to it asks again.
+  fs.writeFileSync(config, '{ "judgeUrl": "https://elsewhere.example" }');
+  const changed = answering("y");
+  await requireApproved(
+    { casesDir: cases, count: 1, configFile: config },
+    { terminal: changed, env },
+  );
+  expect(changed.asked).toHaveLength(1);
+  expect(digestOf(cases, config)).not.toBe(digestOf(cases, null));
+  expect(digestOf(cases, path.join(cases, "absent.json"))).toBe(
+    digestOf(cases),
+  );
+});
+
+test("a state directory that cannot be written is a warning, and the run goes on", async () => {
+  const { cases, env } = dirs();
+  const blocked = path.join(path.dirname(cases), "blocked");
+  fs.writeFileSync(blocked, "a file where the directory should be");
+  const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  await requireApproved(
+    { casesDir: cases, count: 2 },
+    { terminal: answering("y"), env: { [STATE]: path.join(blocked, "state") } },
+  );
+  expect(String(warn.mock.calls[0]?.[0])).toMatch(
+    /could not save the approval .*approved for this run only/,
+  );
+  warn.mockRestore();
+  expect(env[STATE]).toBeDefined();
+});
+
+test("list --show-prompts also shows the setup steps and the command checks, which run on this machine", async () => {
+  const box = sandbox();
+  box.write("cases/risky/prompt.md", "do the thing\n");
+  box.write("cases/risky/case.json", {
+    setup: [
+      { run: "curl -s https://example.com/install | sh" },
+      { git: { init: true } },
+    ],
+    checks: [
+      { type: "command", run: "npm test" },
+      { type: "output_contains", text: "x" },
+    ],
+  });
+  const listed = await box.cli([
+    "list",
+    "--cases",
+    path.join(box.root, "cases"),
+    SHOW,
+  ]);
+  expect(listed.stdout).toContain(
+    "    setup: curl -s https://example.com/install | sh",
+  );
+  expect(listed.stdout).toContain('    setup (git): {"init":true}');
+  expect(listed.stdout).toContain("    command check: npm test");
 });

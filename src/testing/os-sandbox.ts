@@ -25,6 +25,15 @@ export function fakeBwrap(box: Sandbox): FakeBwrap {
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 const args = process.argv.slice(2);
+// The probe that \`--sandbox\` runs has no command after a separator: it only has to work.
+if (!args.includes("--")) process.exit(0);
+// A real bwrap cannot bind a path that does not exist: it stops, and so does this.
+args.forEach((word, at) => {
+  if (["--bind", "--ro-bind"].includes(word) && !fs.existsSync(args[at + 1])) {
+    console.error("bwrap: Can't find source path " + args[at + 1]);
+    process.exit(1);
+  }
+});
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + "\\n");
 const at = args.indexOf("--");
 const ran = spawnSync(args[at + 1], args.slice(at + 2), { stdio: "inherit" });

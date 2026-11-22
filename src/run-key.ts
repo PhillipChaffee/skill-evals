@@ -118,6 +118,8 @@ export function runKey(plan: RunPlan): string {
       // Only a subject with options has the key. `rules=on` and `rules=off` leave the export as it is, so the options
       // text is what tells the two runs apart.
       ...(plan.subject.options !== "" && { options: plan.subject.options }),
+      // Only a run under `--sandbox` has the key: its agent saw a different machine.
+      ...(plan.sandbox && { sandbox: plan.sandbox.backend }),
       model: plan.model ?? null,
       // Only a case with a history has the key, so that the key of any other run stays what it was.
       ...(plan.caseDef.history && {

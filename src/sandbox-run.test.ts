@@ -4,6 +4,7 @@ import { fakeBwrap } from "./testing/os-sandbox.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 import { scoreSubject } from "./testing/runs.js";
 import { SUMMARY, startsOf } from "./testing/suite.js";
+import { GET_ISSUE, plantLookup } from "./testing/mcp.js";
 import { loadCases } from "./cases.js";
 import { inputHash } from "./input-hash.js";
 
@@ -100,7 +101,18 @@ test.skipIf(!ON_LINUX)(
           ? [path.basename(args?.[at + 1] ?? "").split("-")[0]]
           : [],
       );
-      expect(binds).toEqual(["proj", "home", "tmp"]);
+      // The workspace, the throwaway home, the run's temp directory and the fixture remotes; nothing else is writable.
+      expect(binds).toEqual(["proj", "home", "tmp", "store"]);
+      // Order: / read-only first, every mask, then /dev, and only then the writable binds.
+      const first = (word: string): number => (args ?? []).indexOf(word);
+      const last = (word: string): number => (args ?? []).lastIndexOf(word);
+      expect(
+        (args ?? []).slice(first("--ro-bind"), first("--ro-bind") + 3),
+      ).toEqual(["--ro-bind", "/", "/"]);
+      expect(first("--ro-bind")).toBeLessThan(first("--tmpfs"));
+      expect(last("--tmpfs")).toBeLessThan(first("--dev"));
+      expect(first("--dev")).toBeLessThan(first("--bind"));
+      expect(args).toContain("/tmp");
     }
     expect(shut?.join(" ")).toContain("do shut");
   },
@@ -139,3 +151,58 @@ test("network counts in the input hash only when the case sets it", () => {
     inputHash({ ...shut, network: undefined }, run),
   );
 });
+
+test.skipIf(!ON_LINUX)(
+  "under --sandbox the mock log is bound writable after the read-only directory around it",
+  async () => {
+    const box = sandbox();
+    const bwrap = fakeBwrap(box);
+    const ran = await scoreSubject(box, {
+      subject: NONE,
+      cases: plantLookup(box, [GET_ISSUE]),
+      flags: ["--sandbox"],
+    });
+    expect(ran.records[0]?.score).toBe(1);
+    const [args = []] = bwrap.starts();
+    const logAt = args.findIndex((word) => word.endsWith("/calls.log"));
+    const dir = path.dirname(args[logAt] ?? "");
+    const dirAt = args.findIndex(
+      (word, at) => word === dir && args[at - 1] === "--ro-bind",
+    );
+    expect(args[logAt - 1]).toBe("--bind");
+    expect(dirAt).toBeGreaterThan(0);
+    expect(logAt).toBeGreaterThan(dirAt);
+    expect(path.basename(dir)).toMatch(/^svc-/);
+  },
+);
+
+test.skipIf(!ON_LINUX)(
+  "a run made without the sandbox is not reused by --resume --sandbox",
+  async () => {
+    const box = sandbox();
+    const bwrap = fakeBwrap(box);
+    const cases = plantWith(box, { open: {} });
+    const out = path.join(box.root, "results");
+    const plain = await scoreSubject(box, { subject: NONE, cases, out });
+    expect(plain.status).toBe(0);
+    expect(bwrap.starts()).toHaveLength(0);
+    const sandboxed = await scoreSubject(box, {
+      subject: NONE,
+      cases,
+      out,
+      flags: ["--sandbox", "--resume", out],
+    });
+    expect(sandboxed.status).toBe(0);
+    // The agent ran again, inside the sandbox, and the same sandbox is reused by the next resume.
+    expect(startsOf(box)).toBe(2);
+    expect(bwrap.starts()).toHaveLength(1);
+    const again = await scoreSubject(box, {
+      subject: NONE,
+      cases,
+      out,
+      flags: ["--sandbox", "--resume", out],
+    });
+    expect(again.status).toBe(0);
+    expect(startsOf(box)).toBe(2);
+  },
+);

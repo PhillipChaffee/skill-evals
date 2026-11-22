@@ -62,7 +62,7 @@ test("a git push to a non-local remote is recorded", () => {
   ).toHaveLength(1);
   expect(found("FOO=1 git push origin", dir)).toHaveLength(1);
   expect(found("git --no-pager push origin", dir)).toHaveLength(1);
-  expect(found("cd x && git add . && git push origin", dir)).toHaveLength(1);
+  expect(found("cd . && git add . && git push origin", dir)).toHaveLength(1);
   expect(found("sh -c 'git push origin main'", dir)).toHaveLength(1);
 });
 
@@ -152,4 +152,99 @@ test("only shell calls with a command are read, and each reason names its call",
     "npm publish (call #12)",
     "a git push to the non-local remote https://example.com/x.git (call #12)",
   ]);
+});
+
+test("a leading cd moves the repository that the push is looked up in", () => {
+  const dir = repository();
+  expect(found("cd sub && git push origin", dir)).toEqual([]);
+  expect(found("cd sub; cd .. && git push origin", dir)).toHaveLength(1);
+  expect(found(`cd ${dir}/sub && git push origin`, "/elsewhere")).toEqual([]);
+  expect(found("cd && git push origin", dir)).toHaveLength(1);
+});
+
+test("a push with no remote goes where the branch's pushRemote, then remote.pushDefault, then origin says", () => {
+  const dir = repository();
+  const git = gitRepo(path.join(dir, "sub"));
+  git("remote", "add", "origin", "https://example.com/o.git");
+  git("remote", "add", "mine", "../mine.git");
+  git("remote", "add", "other", "ssh://example.com/p.git");
+  expect(found("git push", path.join(dir, "sub"))).toHaveLength(1);
+  git("config", "remote.pushDefault", "mine");
+  expect(found("git push", path.join(dir, "sub"))).toEqual([]);
+  const branch = git("symbolic-ref", "--short", "HEAD");
+  git("config", `branch.${branch}.pushRemote`, "other");
+  expect(found("git push", path.join(dir, "sub"))).toHaveLength(1);
+  // A refspec is not a remote: HEAD:main goes where the default goes.
+  git("config", "--unset", `branch.${branch}.pushRemote`);
+  expect(found("git push HEAD:main", path.join(dir, "sub"))).toEqual([]);
+  expect(
+    found("git push origin HEAD:main", path.join(dir, "sub")),
+  ).toHaveLength(1);
+  expect(found("git push +main:main", path.join(dir, "sub"))).toEqual([]);
+});
+
+test("wrappers and the values of options do not hide a push or a publish", () => {
+  const dir = repository();
+  for (const command of [
+    "env -i FOO=1 git push origin",
+    "env -u X git push origin",
+    "env -- git push origin",
+    "timeout 30 git push origin",
+    "timeout -s KILL 30 git push origin",
+    "timeout --signal=KILL 30 git push origin",
+    "command git push origin",
+    "nice -n 5 git push origin",
+    "nice -5 git push origin",
+    "sudo -u root git push origin",
+    "sudo git push origin",
+    "npx npm publish",
+    "npx -p tool npm publish",
+    "FOO=1 timeout 5 sudo env X=1 npm publish",
+  ]) {
+    expect(found(command, dir), command).toHaveLength(1);
+  }
+  for (const command of [
+    "npm --prefix pkg publish",
+    "npm --registry http://localhost:4873 publish",
+    "gh -R owner/repo release create v1",
+    "cargo --manifest-path a/Cargo.toml publish",
+    "uv publish",
+    "poetry publish",
+    "docker push example/image",
+    "docker image push example/image",
+    "gem push thing.gem",
+  ]) {
+    expect(found(command), command).toHaveLength(1);
+  }
+  expect(found("docker build .")).toEqual([]);
+  expect(found("timeout 5")).toEqual([]);
+  expect(found("sudo")).toEqual([]);
+});
+
+test("a git push that only looks is not recorded", () => {
+  const dir = repository();
+  for (const command of [
+    "git push --dry-run origin",
+    "git push -n origin",
+    "git push -nf origin",
+    "git push origin --dry-run",
+  ]) {
+    expect(found(command, dir), command).toEqual([]);
+  }
+  expect(found("git push -f origin", dir)).toHaveLength(1);
+  expect(found("git push --no-verify origin", dir)).toHaveLength(1);
+});
+
+test("a reason never holds the user or password of a URL", () => {
+  const [reason] = found(
+    "git push https://user:s3cret@github.com/x/y.git main",
+  );
+  expect(reason).toBe(
+    "a git push to the non-local remote https://github.com/x/y.git (call #0)",
+  );
+  const [named] = found("git push --repo=https://tok@example.com/x.git");
+  expect(named).not.toContain("tok");
+  expect(found("git push git@github.com:x/y.git")[0]).toContain(
+    "git@github.com:x/y.git",
+  );
 });

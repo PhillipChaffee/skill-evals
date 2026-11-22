@@ -34,17 +34,38 @@ export function stateDir(
 }
 
 /**
+ * Reads a file's text.
+ * @param file - A path.
+ * @returns The text; null when there is no such file.
+ */
+function textOf(file: string): string | null {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Hashes a cases directory as the approval knows it.
  * @param casesDir - The directory.
- * @returns The sha256 of its real path and its content, so that moving it or changing a file makes it a new directory.
+ * @param configFile - The project's config file, whose `env`, `judgeUrl` and `rules` change what a run does; absent: none.
+ * @returns The sha256 of the directory's real path and content and the config file's content, so that moving it or
+ *   changing a file makes it a new directory.
  */
-export const digestOf = (casesDir: string): string =>
-  sha256(
+export const digestOf = (
+  casesDir: string,
+  configFile?: string | null,
+): string => {
+  const config = configFile ? textOf(configFile) : null;
+  return sha256(
     canonical({
       path: fs.realpathSync(casesDir),
       content: hashTree(casesDir),
+      config: config === null ? null : sha256(config),
     }),
   );
+};
 
 /**
  * Reads the approvals.
@@ -92,6 +113,7 @@ export function processTerminal(
  * @param what - The cases directory and how many of its cases are about to run.
  * @param what.casesDir - The directory.
  * @param what.count - The number of selected cases.
+ * @param what.configFile - The project's config file, which is part of what is approved.
  * @param how - How to ask.
  * @param how.yes - `--yes`: run without asking, and without remembering.
  * @param how.terminal - Where the question goes. Default: the process's streams.
@@ -99,7 +121,7 @@ export function processTerminal(
  * @throws {UsageError} When the directory is new or changed and there is no terminal and no `--yes`, or the answer is no.
  */
 export async function requireApproved(
-  what: { casesDir: string; count: number },
+  what: { casesDir: string; count: number; configFile?: string | null },
   how: {
     yes?: boolean | undefined;
     terminal?: Terminal | undefined;
@@ -108,7 +130,7 @@ export async function requireApproved(
 ): Promise<void> {
   if (how.yes) return;
   const file = path.join(stateDir(how.env), APPROVED_FILE);
-  const digest = digestOf(what.casesDir);
+  const digest = digestOf(what.casesDir, what.configFile);
   if (Object.hasOwn(approvals(file), digest)) return;
   const terminal = how.terminal ?? processTerminal();
   if (!terminal.interactive) {
@@ -116,13 +138,20 @@ export async function requireApproved(
       `${what.casesDir} has not been approved: its prompts run unattended with full permissions. Read them with "skill-evals list --show-prompts", then run again with --yes`,
     );
   }
+  const cases = `${String(what.count)} ${what.count === 1 ? "case" : "cases"}`;
   const answer = await terminal.ask(
-    `run these ${String(what.count)} cases? [y/N] `,
+    `${what.casesDir} has not been approved (see them with "skill-evals list --show-prompts"). Run these ${cases}? [y/N] `,
   );
   if (!YES.test(answer)) throw new UsageError("not approved; nothing was run");
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(
-    file,
-    `${JSON.stringify({ ...approvals(file), [digest]: fs.realpathSync(what.casesDir) }, null, INDENT)}\n`,
-  );
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      `${JSON.stringify({ ...approvals(file), [digest]: fs.realpathSync(what.casesDir) }, null, INDENT)}\n`,
+    );
+  } catch (error) {
+    console.error(
+      `skill-evals: warning: could not save the approval in ${file}: ${error instanceof Error ? error.message : String(error)}; approved for this run only`,
+    );
+  }
 }

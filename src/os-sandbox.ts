@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { findOnPath } from "./capabilities.js";
 import { UsageError } from "./scope.js";
 
@@ -12,9 +13,15 @@ export type Network = (typeof NETWORKS)[number];
 export interface Policy {
   /** The directories the process may write to. Everything else is read-only. */
   writable: string[];
-  /** The directories that stay read-only even when they are inside a writable one. */
+  /** The directories that stay read-only even when they are inside a writable one. Bound after the writable ones. */
   readable: string[];
   network: Network;
+  /** Only for `bwrap`: directories hidden behind an empty tmpfs, after `/` is bound read-only. */
+  masked?: string[] | undefined;
+  /** Only for `bwrap`: paths bound back read-only into a masked directory, for what the harness needs to start. */
+  exposed?: string[] | undefined;
+  /** Files that are writable although the directory around them is read-only: bound after `readable`. */
+  appendable?: string[] | undefined;
 }
 
 /** What this machine can enforce, worked out once when a command starts. */
@@ -30,6 +37,14 @@ export interface Confinement {
   network: Network;
   /** The run's own temp directory, which the process gets as `TMPDIR`; set by the session. */
   tmp?: string | undefined;
+  /** Directories to hide; see `Policy.masked`. */
+  masked?: string[] | undefined;
+  /** Paths to bind back read-only; see `Policy.exposed`. */
+  exposed?: string[] | undefined;
+  /** Writable directories besides the workspace, the home and `tmp`, such as the run's fixture remotes; the session adds them. */
+  writable?: string[] | undefined;
+  /** Writable files inside a read-only directory, such as the mock log; the session adds them. */
+  appendable?: string[] | undefined;
 }
 
 const BWRAP: Backend = "bwrap";
@@ -58,28 +73,50 @@ export function sandboxBackend(
 /**
  * Works out what this machine's sandbox can enforce.
  * @param env - Where `PATH` is read from.
+ * @param platform - The operating system. Default: this one.
  * @returns The backend and the network modes it enforces, or null without a backend.
  */
 export function sandboxCapability(
   env: Record<string, string | undefined> = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): SandboxCapability | null {
-  const backend = sandboxBackend(env);
+  const backend = sandboxBackend(env, platform);
   return backend === null ? null : { backend, network: ["off", "open"] };
 }
 
+const PROBES: Record<Backend, string[]> = {
+  bwrap: ["--ro-bind", "/", "/", "--unshare-all", "true"],
+  "sandbox-exec": ["-p", "(version 1)(allow default)", "true"],
+};
+const PROBE_MS = 10_000;
+
 /**
- * Computes the sandbox capability for `--sandbox`.
+ * Computes the sandbox capability for `--sandbox`, and starts the backend once to see that it works.
  * @param env - Where `PATH` is read from.
+ * @param platform - The operating system. Default: this one.
  * @returns The capability.
- * @throws {UsageError} When no backend is installed, so that a run is never made without the sandbox it asked for.
+ * @throws {UsageError} When no backend is installed, or the backend cannot start a process here (bwrap needs user
+ *   namespaces), so that a run is never made without the sandbox it asked for.
  */
 export function requireSandbox(
   env: Record<string, string | undefined> = process.env,
+  platform: NodeJS.Platform = process.platform,
 ): SandboxCapability {
-  const found = sandboxCapability(env);
+  const found = sandboxCapability(env, platform);
   if (found === null) {
     throw new UsageError(
       "no sandbox backend found (looked for bwrap, sandbox-exec)",
+    );
+  }
+  try {
+    execFileSync(
+      findOnPath(found.backend, env) ?? found.backend,
+      PROBES[found.backend],
+      { stdio: "ignore", timeout: PROBE_MS, env },
+    );
+  } catch (error) {
+    throw new UsageError(
+      `the sandbox backend ${found.backend} is installed but cannot start a process here: ${(error as Error).message}`,
     );
   }
   return found;
@@ -102,12 +139,16 @@ const quoted = (file: string): string =>
 function profile(policy: Policy): string {
   const writes = policy.writable.map((file) => `(subpath ${quoted(file)})`);
   const kept = policy.readable.map((file) => `(subpath ${quoted(file)})`);
+  const logs = (policy.appendable ?? []).map(
+    (file) => `(literal ${quoted(file)})`,
+  );
   return [
     "(version 1)",
     "(allow default)",
     "(deny file-write*)",
-    `(allow file-write* (literal "/dev/null") (literal "/dev/tty") (regex #"^/dev/(tty|pty)[a-z0-9]*$") ${writes.join(" ")})`,
+    `(allow file-write* (literal "/dev/null") (literal "/dev/tty") (literal "/dev/ptmx") (regex #"^/dev/(tty|pty)[a-z0-9]*$") ${writes.join(" ")})`,
     ...(kept.length > 0 ? [`(deny file-write* ${kept.join(" ")})`] : []),
+    ...(logs.length > 0 ? [`(allow file-write* ${logs.join(" ")})`] : []),
     ...(policy.network === "open" ? [] : ["(deny network*)"]),
   ].join("\n");
 }
@@ -117,9 +158,10 @@ function profile(policy: Policy): string {
  * @param backend - The sandbox tool.
  * @param command - The executable and its arguments.
  * @param policy - What the process may do. `provider-only` is refused: no backend can enforce a host allowlist.
- * @returns The vector to spawn. For `bwrap` it unshares every namespace (and shares the network unless it is off), binds
- *   `/` read-only, gives the process a fresh `/dev` and `/proc`, and binds each writable path. For `sandbox-exec` it is
- *   a profile with the same writable set.
+ * @returns The vector to spawn. For `bwrap`, in this order: every namespace unshared (the network shared unless it is
+ *   off), `/` bound read-only, a tmpfs over each masked directory, the exposed paths bound back read-only, a fresh `/dev`
+ *   and `/proc`, the writable paths, the read-only ones, and last the files that are writable inside them. For
+ *   `sandbox-exec` it is a profile with the same writable set, which hides nothing.
  * @throws {Error} For `provider-only`.
  */
 export function wrap(
@@ -138,15 +180,13 @@ export function wrap(
     "--die-with-parent",
     "--unshare-all",
     ...(policy.network === "open" ? ["--share-net"] : []),
-    "--ro-bind",
-    "/",
-    "/",
-    "--dev",
-    "/dev",
-    "--proc",
-    "/proc",
+    ...["--ro-bind", "/", "/"],
+    ...(policy.masked ?? []).flatMap((dir) => ["--tmpfs", dir]),
+    ...(policy.exposed ?? []).flatMap((file) => ["--ro-bind", file, file]),
+    ...["--dev", "/dev", "--proc", "/proc"],
     ...policy.writable.flatMap((file) => ["--bind", file, file]),
     ...policy.readable.flatMap((file) => ["--ro-bind", file, file]),
+    ...(policy.appendable ?? []).flatMap((file) => ["--bind", file, file]),
     "--",
     ...command,
   ];
@@ -172,13 +212,22 @@ export function confine(
 ): { bin: string; args: string[]; env: Record<string, string> } {
   if (sandbox === undefined) return { ...command, env: {} };
   const tmp = sandbox.tmp === undefined ? [] : [sandbox.tmp];
+  const { masked, exposed, appendable } = sandbox;
   const [bin = "", ...args] = wrap(
     sandbox.backend,
     [command.bin, ...command.args],
     {
-      writable: [dirs.workspace, dirs.home, ...tmp],
+      writable: [
+        dirs.workspace,
+        dirs.home,
+        ...tmp,
+        ...(sandbox.writable ?? []),
+      ],
       readable: dirs.mcp === undefined ? [] : [dirs.mcp],
       network: sandbox.network,
+      masked,
+      exposed,
+      appendable,
     },
   );
   return {

@@ -219,11 +219,15 @@ export interface Harness extends HistoryAdapter {
   /** Login files to copy into the throwaway home, relative to the user's home. */
   authFiles: string[];
   /**
-   * The paths under the operator's real home that hold the harness's own state, which a run must never change; the
-   * `no_writes_outside_workspace` check hashes them before and after. Absent: the adapter names none.
-   * @returns Paths relative to the home, such as `.claude`.
+   * What the harness keeps of its own on the operator's machine, which a run must never change; the
+   * `no_writes_outside_workspace` check hashes it before and after. Absent: the adapter names none. Name what a person
+   * edits to change the harness's behaviour, not what the harness writes as it works: a live session writes the latter
+   * every turn.
+   * @param env - The operator's environment, for a variable that moves the harness's directory.
+   * @returns The paths, each relative to the home or absolute. For a JSON file, `json` lists the key paths to hash, with `*`
+   *   for any one key (`projects.*.mcpServers`), because the rest of the file changes while a session runs.
    */
-  canaries?: () => string[];
+  canaries?: (env: NodeJS.ProcessEnv) => { path: string; json?: string[] }[];
   /** Variables of the user's environment that carry the harness's login or choose its provider; they reach it by name. */
   authEnv: string[];
   /** What the adapter can observe or do, each proven by a parser test on a stream. A case that needs more is not applicable. */

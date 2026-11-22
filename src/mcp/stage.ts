@@ -73,6 +73,8 @@ function stageCommand(dir: string): { command: string; args: string[] } {
 export function stageMcp(source: McpSource): StagedMcp {
   const temp = tempDir("svc-");
   const log = path.join(temp.dir, LOG_NAME);
+  // Made now, so that a sandbox can bind this one file writable inside the read-only directory.
+  fs.writeFileSync(log, "");
   const { command, args } = stageCommand(temp.dir);
   const servers = source.servers.map((name): McpServerEntry => {
     const copy = path.join(temp.dir, "servers", name);

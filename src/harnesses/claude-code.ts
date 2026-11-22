@@ -30,6 +30,7 @@ import {
   statusOfServers,
   writeMcpConfig,
 } from "./claude-code-mcp.js";
+import { claudeCanaries } from "./claude-code-canaries.js";
 import { strayskills } from "./claude-code-strays.js";
 import { stripClaudeCode } from "./claude-code-strip.js";
 import { looksRateLimited } from "./rate-limit.js";
@@ -160,8 +161,7 @@ const claudeCode: Harness = {
   // Claude Code's Skill tool takes `skill`, as `plugin:skill` for a plugin's skill.
   skillOf: (call) => stringArg(call, ["skill"]),
   authFiles: [".claude/.credentials.json"],
-  // Its settings, history and login in the operator's real home; a run works in a throwaway one.
-  canaries: () => [".claude", ".claude.json"],
+  canaries: claudeCanaries,
   authEnv: ANTHROPIC_ENV,
   capabilities: new Set([
     "subagents",

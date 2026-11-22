@@ -307,4 +307,5 @@ export const basePlan = (
   limits: context.limits,
   sandbox: context.sandbox,
   projectRoot: context.projectRoot,
+  casesDir: context.options.cases,
 });

@@ -34,7 +34,7 @@ export const LIMIT_KEYS: Record<string, FieldDef> = {
     type: "enum",
     values: NETWORKS,
     meaning:
-      'What the agent may reach over the network. "open" is no restriction. "off" and "provider-only" need `--sandbox`: without it the case is not applicable, and it never runs open. "off" gives the agent no network. "provider-only" would allow the model provider and nothing else, which no sandbox backend can enforce today, so under `--sandbox` the case is not applicable with the reason "the sandbox cannot enforce provider-only". Default: "open".',
+      'What the agent may reach over the network. "open" is no restriction. "off" and "provider-only" need `--sandbox`: without it the case is not applicable, and it never runs open. "off" gives the agent no network, the model provider included, so it is for a harness that talks to a local model. "provider-only" would allow the model provider and nothing else, which no sandbox backend can enforce today, so under `--sandbox` the case is not applicable with the reason "the sandbox cannot enforce provider-only". Default: "open".',
   },
 };
 

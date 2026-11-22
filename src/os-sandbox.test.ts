@@ -18,6 +18,10 @@ const WORK = "/tmp/proj-1";
 const HOME = "/tmp/home-1";
 const TMP = "/tmp/tmp-1";
 const MCP = "/tmp/mcp-1";
+const UNSHARE = "--unshare-all";
+const STORE = "/tmp/store-1";
+const LOCAL_BIN = "/root/.local/bin";
+const SUBJECT = "/tmp/subject-1";
 const EXEC: Backend = "sandbox-exec";
 
 /**
@@ -45,7 +49,7 @@ test("wrap builds the expected bwrap vector", () => {
   expect(wrap("bwrap", ["claude", "-p", "hi"], policy)).toEqual([
     "bwrap",
     "--die-with-parent",
-    "--unshare-all",
+    UNSHARE,
     "--share-net",
     "--ro-bind",
     "/",
@@ -62,7 +66,7 @@ test("wrap builds the expected bwrap vector", () => {
   ]);
   const off = wrap("bwrap", ["true"], { ...policy, network: "off" });
   expect(off).not.toContain("--share-net");
-  expect(off).toContain("--unshare-all");
+  expect(off).toContain(UNSHARE);
   const kept = wrap("bwrap", ["true"], { ...policy, readable: [MCP] });
   expect(kept.join(" ")).toContain("--ro-bind /tmp/mcp-1 /tmp/mcp-1 --");
 });
@@ -165,4 +169,99 @@ test("a real bwrap lets the workspace be written and nothing else", (context) =>
   expect(
     run(`(echo out > /etc/skill-evals-smoke) 2>/dev/null || echo denied`),
   ).toBe("denied\n");
+});
+
+test("wrap orders the bwrap vector: / read-only, masks, what is bound back, /dev and /proc, writable, read-only, then the files that are writable", () => {
+  const vector = wrap("bwrap", ["claude"], {
+    writable: [WORK, HOME, TMP, STORE],
+    readable: [MCP],
+    appendable: [`${MCP}/calls.log`],
+    masked: ["/root", "/tmp", "/run"],
+    exposed: [LOCAL_BIN, SUBJECT],
+    network: "off",
+  });
+  expect(vector).toEqual([
+    ...["bwrap", "--die-with-parent", UNSHARE],
+    ...["--ro-bind", "/", "/"],
+    ...["--tmpfs", "/root", "--tmpfs", "/tmp", "--tmpfs", "/run"],
+    ...["--ro-bind", LOCAL_BIN, LOCAL_BIN],
+    ...["--ro-bind", SUBJECT, SUBJECT],
+    ...["--dev", "/dev", "--proc", "/proc"],
+    ...["--bind", WORK, WORK, "--bind", HOME, HOME, "--bind", TMP, TMP],
+    ...["--bind", STORE, STORE],
+    ...["--ro-bind", MCP, MCP],
+    // The log goes in after the read-only directory around it, or the directory would cover it.
+    ...["--bind", `${MCP}/calls.log`, `${MCP}/calls.log`],
+    ...["--", "claude"],
+  ]);
+});
+
+test("the sandbox-exec profile lets the mock log be written after it denies the directory, and allows /dev/ptmx", () => {
+  const profile =
+    wrap(EXEC, ["true"], {
+      writable: [WORK],
+      readable: [MCP],
+      appendable: [`${MCP}/calls.log`],
+      network: "open",
+    })[2] ?? "";
+  expect(profile).toContain('(literal "/dev/ptmx")');
+  const denied = profile.indexOf(`(deny file-write* (subpath "${MCP}"))`);
+  const allowed = profile.indexOf(
+    `(allow file-write* (literal "${MCP}/calls.log"))`,
+  );
+  expect(denied).toBeGreaterThan(0);
+  expect(allowed).toBeGreaterThan(denied);
+});
+
+test("confine hands the masks, the bound-back paths, the writable directories and the log to the vector", () => {
+  const inside = confine(
+    {
+      backend: "bwrap",
+      network: "open",
+      tmp: TMP,
+      masked: ["/tmp"],
+      exposed: [SUBJECT],
+      writable: [STORE],
+      appendable: [`${MCP}/calls.log`],
+    },
+    { bin: "claude", args: [] },
+    { workspace: WORK, home: HOME, mcp: MCP },
+  );
+  const at = (word: string): number => inside.args.indexOf(word);
+  expect(inside.args.slice(at("--tmpfs"), at("--tmpfs") + 2)).toEqual([
+    "--tmpfs",
+    "/tmp",
+  ]);
+  expect(at("--tmpfs")).toBeLessThan(at("--dev"));
+  expect(at("--dev")).toBeLessThan(at("--bind"));
+  expect(inside.args).toContain(STORE);
+  expect(inside.args.slice(-5, -2)).toEqual([
+    "--bind",
+    `${MCP}/calls.log`,
+    `${MCP}/calls.log`,
+  ]);
+});
+
+test("--sandbox starts the backend once, and a backend that cannot start is a usage error", () => {
+  const dir = pathWith();
+  fs.writeFileSync(
+    path.join(dir, "bwrap"),
+    "#!/bin/sh\necho 'no user namespaces' >&2\nexit 1\n",
+    { mode: 0o755 },
+  );
+  expect(() => requireSandbox({ PATH: dir }, "linux")).toThrow(
+    /bwrap is installed but cannot start a process here/,
+  );
+  const works = pathWith("bwrap");
+  expect(requireSandbox({ PATH: works }, "linux").backend).toBe("bwrap");
+  const probe = pathWith();
+  fs.writeFileSync(
+    path.join(probe, "bwrap"),
+    `#!/bin/sh\necho "$@" > ${probe}/args\n`,
+    { mode: 0o755 },
+  );
+  requireSandbox({ PATH: probe }, "linux");
+  expect(fs.readFileSync(path.join(probe, "args"), "utf8").trim()).toBe(
+    "--ro-bind / / --unshare-all true",
+  );
 });

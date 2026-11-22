@@ -48,6 +48,8 @@ export interface PlanBase {
   limits: Limits;
   /** What the machine's sandbox can enforce; null or absent without `--sandbox`. */
   sandbox?: SandboxCapability | null | undefined;
+  /** The cases directory, which the sandbox hides from the agent. */
+  casesDir?: string | undefined;
   /** The project root, for the `no_writes_outside_workspace` check; absent: the check watches no project. */
   projectRoot?: string | undefined;
 }
@@ -124,6 +126,7 @@ export const runsOf = (plan: PlanBase): Planned[] =>
       judgeApi: plan.judgeApi ?? undefined,
       sandbox: plan.sandbox ?? undefined,
       projectRoot: plan.projectRoot,
+      casesDir: plan.casesDir,
     };
     return { subject, run, key: runKey(run) };
   });

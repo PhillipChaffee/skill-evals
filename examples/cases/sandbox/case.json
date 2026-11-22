@@ -1,5 +1,5 @@
 {
-  "network": "off",
+  "network": "open",
   "checks": [
     { "type": "no_writes_outside_workspace" },
     { "type": "output_contains", "text": "done" }

@@ -360,7 +360,7 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
         withhold: withheld(plan),
         pass: plan.pass,
         keepSeed: plan.keepWorkspaces,
-        ...confinementOf(plan),
+        ...confinementOf(plan, copy?.loaded.dir),
       },
       async (ran) => {
         const made = await record(plan, ran, copy);

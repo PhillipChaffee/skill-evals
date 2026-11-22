@@ -84,6 +84,29 @@ export function snapshot(
 }
 
 /**
+ * Hashes the named files under a directory, and nothing else.
+ * @param dir - The directory.
+ * @param files - Relative posix paths. One that is absent is left out; one that is not a file or a link, or cannot be
+ *   read, is hashed as "unreadable".
+ * @returns The hash of each file that is there, by relative path.
+ */
+export function snapshotFiles(dir: string, files: string[]): Snapshot {
+  const taken: Snapshot = new Map();
+  for (const relative of files) {
+    const file = `${dir}/${relative}`;
+    try {
+      const entry = fs.lstatSync(file);
+      if (entry.isSymbolicLink())
+        taken.set(relative, sha256(fs.readlinkSync(file)));
+      else taken.set(relative, entry.isFile() ? hashFile(file) : UNREADABLE);
+    } catch {
+      // Absent, or not readable: the next snapshot shows the difference.
+    }
+  }
+  return taken;
+}
+
+/**
  * Compares two snapshots of one directory.
  * @param before - The earlier snapshot.
  * @param after - The later one.

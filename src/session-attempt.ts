@@ -10,7 +10,7 @@ import type {
 } from "./harnesses/shared.js";
 import { NOT_REPORTED, withIndexes } from "./harnesses/shared.js";
 import type { RulesFile } from "./harnesses/rules.js";
-import type { CanarySpec } from "./canaries.js";
+import type { CanaryReport, CanarySpec } from "./canaries.js";
 import type { Seeded } from "./history-plant.js";
 import { withPreamble } from "./history.js";
 import type { History, HistoryMode } from "./history-types.js";
@@ -132,7 +132,7 @@ export interface SessionResult {
   /** What the mock servers logged, as the log file holds it (one JSON object per line); null for a case with no `mcp/`. */
   mcpLog: string | null;
   /** What changed in the canaries while the harness ran, each path with how it differs; null when none were watched. */
-  canaryChanges: string[] | null;
+  canaryChanges: CanaryReport | null;
   /** Why the mock log cannot be trusted (it disagrees with the stream); empty when it can, and for a case with no servers. */
   mcpProblems: string[];
 }

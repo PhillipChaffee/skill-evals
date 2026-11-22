@@ -12,7 +12,10 @@
     "MD033": false,
     // shell scripts legitimately use tab indentation; tabs inside fenced
     // shell blocks are the script's own style, not doc sloppiness
-    "MD010": { "code_blocks": false }
+    "MD010": { "code_blocks": false },
+    // agent and skill files carry their title as name: in frontmatter
+    "MD041": { "front_matter_title": "^\\s*(title|name)\\s*[:=]" }
   },
+  "ignores": ["node_modules/**", ".superpowers/**", "dist/**", "coverage/**"],
   "globs": ["**/*.md"]
 }

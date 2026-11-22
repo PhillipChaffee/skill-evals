@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { CanaryReport } from "./canaries.js";
 import { watchCanaries } from "./canaries.js";
 import { tempDir } from "./scope.js";
 import type { RunEnd } from "./session-end.js";
@@ -127,7 +128,7 @@ interface Made {
   prepared: PreparedRun | null;
   graderDir: string | null;
   rules: RulesInstalled | null;
-  canaryChanges: string[] | null;
+  canaryChanges: CanaryReport | null;
 }
 
 /**
@@ -168,6 +169,37 @@ function resultOf(run: SessionInput, made: Made): SessionResult {
 }
 
 /**
+ * Gives a sandboxed session the directories that only it knows: its own temp directory, the run's fixture remotes, and
+ * the mock log, which are writable although the directories around them are not.
+ * @param input - The session's input.
+ * @param made - What the session made.
+ * @param made.tmp - The run's temp directory.
+ * @param made.remote - The run's directory of bare remotes.
+ * @param made.log - The mock servers' log file.
+ * @returns The input, with the sandbox filled in; the input itself when there is no sandbox.
+ */
+function confined(
+  input: SessionInput,
+  made: {
+    tmp: string | undefined;
+    remote: string | undefined;
+    log: string | undefined;
+  },
+): SessionInput {
+  const { sandbox } = input;
+  if (!sandbox) return input;
+  return {
+    ...input,
+    sandbox: {
+      ...sandbox,
+      tmp: made.tmp,
+      writable: made.remote ? [made.remote] : [],
+      appendable: made.log ? [made.log] : [],
+    },
+  };
+}
+
+/**
  * Runs one prompt, or the turns of a case, in one harness, in a fresh home and workspace that are removed afterwards.
  * @param input - The harness, the prompt or turns, and what to load.
  * @param use - Reads the result while the workspace still exists.
@@ -182,14 +214,10 @@ export async function session<T>(
   const workspace = tempDir("proj-");
   // Under the sandbox the harness gets a temp directory of its own, the only one it may write to besides the two above.
   const tmp = input.sandbox ? tempDir("tmp-") : null;
-  const run: SessionInput =
-    input.sandbox && tmp
-      ? { ...input, sandbox: { ...input.sandbox, tmp: tmp.dir } }
-      : input;
   let prepared: PreparedRun | null = null;
   let mcp: McpStarted | null = null;
   try {
-    prepared = await prepareOf(run, {
+    prepared = await prepareOf(input, {
       workspace: workspace.dir,
       home: home.dir,
     });
@@ -199,10 +227,15 @@ export async function session<T>(
     const setupFailure = prepared?.failure ?? null;
     const place = { home: home.dir, workspace: workspace.dir };
     mcp =
-      setupFailure === null && run.mcp
-        ? startMcp(harness, run.mcp, place)
+      setupFailure === null && input.mcp
+        ? startMcp(harness, input.mcp, place)
         : null;
     const dirs = { ...place, ...(mcp && { mcp: mcp.staged.dir }) };
+    const run = confined(input, {
+      tmp: tmp?.dir,
+      remote: prepared?.remoteDir,
+      log: mcp?.staged.log,
+    });
     const seeded = setupFailure === null ? plantHistory(run, dirs) : UNSEEDED;
     // The rules go in once, before the first process, so that every turn of the case reads them.
     const rules =

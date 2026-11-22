@@ -1,6 +1,7 @@
 import type { Case } from "./cases.js";
 import type { Check, Verdict } from "./checks/index.js";
 import type { Cache } from "./cache.js";
+import type { CanaryReport } from "./canaries.js";
 import type { DecisionService } from "./decision.js";
 import type { StopReason } from "./gate.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
@@ -79,6 +80,8 @@ export interface RunPlan {
   judgeApi?: JudgeApi | undefined;
   /** Set under `--sandbox`: the harness process runs in the sandbox, with the case's `network`. */
   sandbox?: SandboxCapability | undefined;
+  /** The cases directory, which the sandbox hides from the agent. */
+  casesDir?: string | undefined;
   /** The project root, which `no_writes_outside_workspace` watches before and after the run. */
   projectRoot?: string | undefined;
   /** What the judge answered before, in this output directory; none for no cache. */
@@ -182,7 +185,7 @@ export interface RunRecord extends Usage, LimitFields {
    * What changed in the canaries (the operator's home dotfiles and the project root) while the harness ran, each path with
    * how it differs, for a case with a `no_writes_outside_workspace` check. Absent for a case without one.
    */
-  canaryChanges?: string[];
+  canaryChanges?: CanaryReport;
   checks: CheckResult[];
   /**
    * The case's `preconditions` with their scores. A precondition that scores 0 makes the run invalid; none counts in
