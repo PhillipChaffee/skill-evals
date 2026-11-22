@@ -1,10 +1,9 @@
 import type { Outcome, RuledCheck, Verdict } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import { removeLogin } from "./command.js";
-import { decide } from "./decision.js";
-import { judge } from "./judge.js";
+import { decideAll, judgedResult } from "./score-models.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
-import { withheld } from "./run-plan.js";
+import { bare, withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 
@@ -101,11 +100,10 @@ export async function scoreChecks(
   const decisions = asked.filter(isDecision);
   const decided =
     judgeable && plan.decision && decisions.length
-      ? await decide(plan.decision.model, {
-          task,
-          answer: outcome.finalText,
-          checks: decisions,
-        })
+      ? await decideAll(
+          { model: plan.decision.model, task, outcome },
+          decisions,
+        )
       : null;
   const slots: (CheckResult | undefined)[] = asked.map(() => undefined);
   const replies: Usage[] = [];
@@ -114,21 +112,17 @@ export async function scoreChecks(
   for (const [index, check] of asked.entries()) {
     if (check.type === "command") continue;
     if (isDecision(check)) {
-      const result = decided?.results[decisions.indexOf(check)];
+      const result = decided?.results.get(check);
       slots[index] = { ...check, ...(result ?? NOT_DECIDED) };
     } else if (!isJudged(check)) {
       slots[index] = { ...check, ...(await ruled(check, outcome)) };
     } else if (!judgeable) {
       const reason = "not judged, because the run is invalid";
-      slots[index] = { ...check, score: null, reason };
+      slots[index] = { ...bare(check), score: null, reason };
     } else {
-      const verdict = await judge(ask, {
-        task,
-        answer: outcome.finalText,
-        rubric: check.rubric,
-      });
-      replies.push(...verdict.replies);
-      slots[index] = { ...check, score: verdict.score, reason: verdict.reason };
+      const judged = await judgedResult(ask, { task, outcome }, check);
+      replies.push(...judged.replies);
+      slots[index] = judged.result;
     }
   }
   await runCommands(plan, { outcome, judgeable }, slots);

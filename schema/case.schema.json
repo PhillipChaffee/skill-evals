@@ -3586,7 +3586,7 @@
     },
     "check-judge": {
       "title": "judge",
-      "description": "Not 0 or 1. A model scores the final answer against the rubric.",
+      "description": "A model scores what it sees against the rubric: a pass or fail with `scale` binary, else not 0 or 1. It sees the final answer unless `sees` says more. With `votes` it is asked more than once.",
       "type": "object",
       "required": ["type", "rubric"],
       "properties": {
@@ -3601,9 +3601,51 @@
         },
         "rubric": {
           "title": "rubric",
-          "description": "Plain text that says what a good answer does.",
+          "description": "What a good answer does: plain text, or an object `{ pass, fail }` of two texts that say what passes and what fails.",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "object",
+              "properties": {
+                "pass": { "type": "string", "minLength": 1 },
+                "fail": { "type": "string", "minLength": 1 }
+              },
+              "required": ["pass", "fail"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "scale": {
+          "title": "scale",
+          "description": "How the judge scores: \"binary\" (a pass is 1, a fail is 0) or \"0-1\" (a number from 0 to 1). Default: \"0-1\".",
           "type": "string",
-          "minLength": 1
+          "enum": ["binary", "0-1"]
+        },
+        "votes": {
+          "title": "votes",
+          "description": "An odd number of judge calls for one check. Binary scores the majority, 0-1 the median. Default: 1.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "sees": {
+          "title": "sees",
+          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names). Default: `[\"final\"]`, which is what 0.0.1 sent.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["final", "transcript", "files"] }
+        },
+        "files": {
+          "title": "files",
+          "description": "A non-empty list of paths or globs, relative to the workspace, whose files the model sees when `sees` includes \"files\". Each file is cut to 20,000 characters, a binary file or an image is named and not shown, and a glob that matches nothing is stated in the prompt.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "maxChars": {
+          "title": "maxChars",
+          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`. Default: 60,000.",
+          "type": "integer",
+          "minimum": 1
         },
         "requires": {
           "title": "requires",
@@ -3621,12 +3663,13 @@
           "enum": ["skip", "not-applicable"]
         }
       },
+      "dependentRequired": { "files": ["sees"], "maxChars": ["sees"] },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },
     "check-decision": {
       "title": "decision",
-      "description": "Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value. It takes exactly one of `expect` and `options`.",
+      "description": "Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value. Experimental: it has not been run against the hosted endpoint. It takes exactly one of `expect` and `options`.",
       "type": "object",
       "required": ["type", "question"],
       "properties": {
@@ -3662,6 +3705,26 @@
             "maximum": 1
           }
         },
+        "sees": {
+          "title": "sees",
+          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names). Default: `[\"final\"]`, which is what 0.0.1 sent.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["final", "transcript", "files"] }
+        },
+        "files": {
+          "title": "files",
+          "description": "A non-empty list of paths or globs, relative to the workspace, whose files the model sees when `sees` includes \"files\". Each file is cut to 20,000 characters, a binary file or an image is named and not shown, and a glob that matches nothing is stated in the prompt.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "maxChars": {
+          "title": "maxChars",
+          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`. Default: 60,000.",
+          "type": "integer",
+          "minimum": 1
+        },
         "requires": {
           "title": "requires",
           "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
@@ -3678,6 +3741,7 @@
           "enum": ["skip", "not-applicable"]
         }
       },
+      "dependentRequired": { "files": ["sees"], "maxChars": ["sees"] },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
     }

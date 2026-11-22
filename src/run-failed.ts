@@ -1,5 +1,6 @@
 import type { RunRecord } from "./run.js";
 import type { RunPlan } from "./run-plan.js";
+import { bare } from "./run-plan.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
 
 /**
@@ -33,7 +34,7 @@ export function failedRecord(plan: RunPlan, message: string): RunRecord {
     subjectChanges: null,
     changedFiles: none,
     checks: caseDef.checks.map((check) => ({
-      ...check,
+      ...bare(check),
       score: null,
       reason: "not scored, because the run is invalid",
     })),

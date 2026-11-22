@@ -11,17 +11,35 @@ export interface Usage {
   costUsd: number | null;
 }
 
+// A check's `votes` is how many judge calls to make; its result's `votes` is what they gave.
+type WithoutVotes<T> = T extends unknown ? Omit<T, "votes"> : never;
+
 /** A check with what it gave one run. */
-export type CheckResult = Check & {
+export type CheckResult = WithoutVotes<Check> & {
   /** Null when a judged check, a decision check or a command check got no usable answer. */
   score: number | null;
   /** The judge's reason, or why there is no score. */
   reason?: string;
+  /** For a judge check with `votes` above 1: what each vote gave. A vote with no usable answer has a null score. */
+  votes?: { score: number | null; reason: string }[];
   /** For a decision check, the probability the model gave each allowed answer. */
   probabilities?: Record<string, number>;
   /** For a command check: what the command did, each stream cut to its last 2,000 bytes. */
   command?: Verdict["command"];
 };
+
+/**
+ * Makes a check ready to carry a result: a judge check's `votes` is how many calls to make, and its result's is what
+ * they gave, so the count is dropped.
+ * @param check - Any check of a case.
+ * @returns The check, without `votes`.
+ */
+export function bare(check: Check): WithoutVotes<Check> {
+  if (check.type !== "judge") return check;
+  const rest = { ...check };
+  delete rest.votes;
+  return rest;
+}
 
 /** The harness and model that score judged checks. */
 export interface Judge {

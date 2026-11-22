@@ -1,7 +1,7 @@
 import { describeBy } from "../agents.js";
 import { describeMatcher } from "../matchers.js";
 import type { EndMatcher } from "../matchers.js";
-import type { Check } from "./index.js";
+import type { Check, JudgedCheck } from "./index.js";
 
 // A matcher of `before` or `after`, with the end of the matching calls that counts.
 const end = (name: string, matcher: EndMatcher): string =>
@@ -89,5 +89,23 @@ export function describeFiles(check: Check): string[] {
     ...(check.created ? ["created"] : []),
     ...(check.allow ? [`allow ${check.allow.join(", ")}`] : []),
     ...(check.ignore ? [`ignore ${check.ignore.join(", ")}`] : []),
+  ];
+}
+
+/**
+ * Names what a judge or decision check is shown and how it scores, beyond its type and rubric.
+ * @param check - Any check of a case.
+ * @returns The words for its scale, votes, `sees` other than the default, and `files`; none for a check without them.
+ */
+export function describeSeen(check: Check): string[] {
+  const { sees, files } = check;
+  const shown = sees?.join("+");
+  const { scale, votes } = check.type === "judge" ? check : ({} as JudgedCheck);
+  return [
+    ...(typeof check.rubric === "object" ? ["pass/fail rubric"] : []),
+    ...(scale === undefined ? [] : [`scale ${scale}`]),
+    ...(votes === undefined ? [] : [`votes ${String(votes)}`]),
+    ...(shown === undefined || shown === "final" ? [] : [`sees ${shown}`]),
+    ...(files ? [`files ${files.join(", ")}`] : []),
   ];
 }

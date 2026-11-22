@@ -59,6 +59,13 @@
       "description": "The lowest suite score that passes. The command exits 1 when the suite score of the subject (B for run) is lower.",
       "type": "number"
     },
+    "maxJudgedWeightShare": {
+      "title": "maxJudgedWeightShare",
+      "description": "The share of a case's total check weight, from 0 to 1, that `judge` and `decision` checks may carry before `validate` warns. Default: 0.5.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "lenient": {
       "title": "lenient",
       "description": "Drop a key that a case file does not take, and warn, instead of failing. Keys that start with x- are always kept.",

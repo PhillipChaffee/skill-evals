@@ -1,5 +1,6 @@
 import type { DecisionCheck } from "./checks/index.js";
 import type { Tokens } from "./harnesses/shared.js";
+import type { Seen } from "./judge-render.js";
 import { messageOf } from "./scope.js";
 
 const ATTEMPTS = 2;
@@ -55,14 +56,14 @@ export interface DecisionService {
 }
 
 /** What one request to the decision model cost. */
-interface DecisionCall {
+export interface DecisionCall {
   durationMs: number;
   tokens: Tokens | null;
   costUsd: number | null;
 }
 
 /** What a decision check gets from one run. */
-interface DecisionResult {
+export interface DecisionResult {
   /** Null when the model gave no usable probabilities. */
   score: number | null;
   /** The probability of each allowed answer, as the model returned it. */
@@ -86,10 +87,21 @@ const answerValues = (check: DecisionCheck): Record<string, number> =>
  * Writes what the decision model reads.
  * @param task - The prompt the agent got.
  * @param answer - The agent's final message.
- * @returns The two parts, delimited, and nothing that says where the answer came from.
+ * @param seen - What else it sees; absent for the final answer only, which is what 0.0.1 sent.
+ * @returns The parts, delimited, and nothing that says where the answer came from.
  */
-const decisionState = (task: string, answer: string): string =>
-  ["<task>", task, "</task>", "", "<answer>", answer, "</answer>"].join("\n");
+function decisionState(task: string, answer: string, seen?: Seen): string {
+  const part = (tag: string, text: string | undefined): string[] =>
+    text === undefined ? [] : ["", `<${tag}>`, text, `</${tag}>`];
+  return [
+    "<task>",
+    task,
+    "</task>",
+    ...part("answer", seen?.final === false ? undefined : answer),
+    ...part("transcript", seen?.transcript),
+    ...part("files", seen?.files),
+  ].join("\n");
+}
 
 /**
  * Scores one decision check from the probabilities of its answers.
@@ -169,16 +181,22 @@ async function attempt(
  * @param run.task - The prompt the agent got.
  * @param run.answer - The agent's final message.
  * @param run.checks - The decision checks of the case; each becomes one question of the request.
+ * @param run.seen - What the model sees besides the task; absent for the final answer only.
  * @returns One result for each check, in order, and what every request cost. After two unusable answers no check
  *   has a score: one question without usable probabilities fails the whole request.
  */
 export async function decide(
   model: DecisionModel,
-  run: { task: string; answer: string; checks: DecisionCheck[] },
+  run: {
+    task: string;
+    answer: string;
+    checks: DecisionCheck[];
+    seen?: Seen;
+  },
 ): Promise<{ results: DecisionResult[]; calls: DecisionCall[] }> {
   const names = run.checks.map((_, index) => `q${String(index + 1)}`);
   const request = {
-    state: decisionState(run.task, run.answer),
+    state: decisionState(run.task, run.answer, run.seen),
     questions: Object.fromEntries(
       run.checks.map(
         ({ question, options }, index): [string, DecisionQuestion] => [

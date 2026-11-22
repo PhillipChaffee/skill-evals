@@ -1,0 +1,21 @@
+{
+  "description": "A binary judge grades what the agent did, from the transcript and the summary file, with three votes.",
+  "tags": ["judge"],
+  "checks": [
+    { "type": "file_exists", "path": "docs/summary.md", "weight": 2 },
+    { "type": "tool_not_called", "kind": "edit", "inputMatches": "\\.test\\." },
+    {
+      "type": "judge",
+      "rubric": {
+        "pass": "The transcript shows the tests run before the fix and again after it, the edit is to the code and not to a test, and docs/summary.md says what was changed.",
+        "fail": "The tests were not run again after the fix, a test was edited to make it pass, or the summary does not describe the change."
+      },
+      "scale": "binary",
+      "votes": 3,
+      "sees": ["final", "transcript", "files"],
+      "files": ["docs/summary.md"],
+      "maxChars": 40000
+    }
+  ],
+  "timeoutSeconds": 300
+}

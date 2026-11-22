@@ -33,6 +33,8 @@ export interface LintContext {
   project: Project;
   /** The absolute path of the cases directory. */
   casesDir: string;
+  /** The share of a case's weight that judge and decision checks may carry before a warning. Default: 0.5. */
+  maxJudgedWeightShare?: number;
 }
 
 /** A check of the loaded cases. */
@@ -139,10 +141,46 @@ function vacuousUnchanged(cases: Case[]): Lint[] {
   });
 }
 
+const DEFAULT_JUDGED_SHARE = 0.5;
+const PERCENT = 100;
+
+/**
+ * Warns about cases that a model scores for most of their weight.
+ * @param cases - The loaded cases.
+ * @param context - The limit, `maxJudgedWeightShare`.
+ * @returns One warning for each case whose judge and decision checks carry more than the limit of its total check weight.
+ */
+function judgedShare(cases: Case[], context: LintContext): Lint[] {
+  const limit = context.maxJudgedWeightShare ?? DEFAULT_JUDGED_SHARE;
+  return cases.flatMap((one): Lint[] => {
+    const total = one.checks.reduce((sum, { weight }) => sum + weight, 0);
+    const judged = one.checks
+      .filter(({ type }) => type === "judge" || type === "decision")
+      .reduce((sum, { weight }) => sum + weight, 0);
+    const share = judged / total;
+    const percent = (value: number): string =>
+      `${String(Math.round(value * PERCENT))}%`;
+    return share > limit
+      ? [
+          {
+            level: "warning",
+            caseId: one.id,
+            text: `judge and decision checks carry ${percent(share)} of the case's weight, above the limit of ${percent(limit)} (maxJudgedWeightShare)`,
+          },
+        ]
+      : [];
+  });
+}
+
 /**
  * Every lint, in the order its lines are written. A later task adds a lint by appending a function here.
  */
-export const LINTS: LintRule[] = [skillNames, notApplicable, vacuousUnchanged];
+export const LINTS: LintRule[] = [
+  skillNames,
+  notApplicable,
+  vacuousUnchanged,
+  judgedShare,
+];
 
 const line = ({ level, caseId, text }: Lint): string =>
   `${level} ${caseId}: ${text}`;
@@ -181,7 +219,15 @@ export function validate(given: Options, project: Project): number {
   }
   try {
     const harnesses = installedOf();
-    const context: LintContext = { subject, harnesses, project, casesDir };
+    const context: LintContext = {
+      subject,
+      harnesses,
+      project,
+      casesDir,
+      ...(options.maxJudgedWeightShare === undefined
+        ? {}
+        : { maxJudgedWeightShare: options.maxJudgedWeightShare }),
+    };
     for (const lint of LINTS) found.push(...lint(cases, context));
   } finally {
     subject?.dispose();

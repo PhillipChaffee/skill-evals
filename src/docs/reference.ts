@@ -171,6 +171,7 @@ export const EXAMPLE_CONFIG: Record<
   decisionUrl: "<base-url>",
   decisionTimeout: 60,
   minScore: 0.8,
+  maxJudgedWeightShare: 0.5,
   lenient: false,
   isolated: false,
   env: ["AWS_ENDPOINT_URL"],
@@ -190,6 +191,7 @@ const flagsOf = (key: string): Flag[] =>
 
 // Keys that no flag sets.
 const CONFIG_ONLY: Record<string, string> = {
+  maxJudgedWeightShare: `The share of a case's total check weight, from 0 to 1, that ${code("judge")} and ${code("decision")} checks may carry before ${code("validate")} warns. Default: 0.5.`,
   env: `Names of environment variables the harness gets besides the allowlist. ${ENV_NAME_RULE} Anything else is an error.`,
   subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,
 };

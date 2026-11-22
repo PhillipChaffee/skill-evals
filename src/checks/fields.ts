@@ -4,6 +4,7 @@ import { CALL_FIELDS, parseBy, parseVias } from "./call-fields.js";
 import { COMMAND_FIELDS } from "./command-fields.js";
 import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
+import { JUDGE_FIELDS, JUDGE_PARSERS } from "./judge-fields.js";
 import { TRANSCRIPT_FIELDS } from "./transcript-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
@@ -31,6 +32,7 @@ export type FieldType =
   | "slug"
   | "variants"
   | "answers"
+  | "rubric"
   | "harnesses"
   | "envvars"
   | "needs"
@@ -108,10 +110,7 @@ export const FIELDS: Record<string, FieldDef> = {
   ...TRANSCRIPT_FIELDS,
   ...FILE_FIELDS,
   ...COMMAND_FIELDS,
-  rubric: {
-    type: "text",
-    meaning: "Plain text that says what a good answer does.",
-  },
+  ...JUDGE_FIELDS,
   question: { type: "text", meaning: "A question about the final answer." },
   expect: {
     type: "enum",
@@ -293,6 +292,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     }
     return value;
   },
+  ...JUDGE_PARSERS,
   answers: (value, at) => PARSERS.object(value, at),
   harnesses: (value, at) => PARSERS.texts(value, at),
   variants: (value, at) => {

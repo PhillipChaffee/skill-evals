@@ -70,6 +70,17 @@ const BY_TYPE: Partial<Record<FieldDef["type"], Schema>> = {
   slug: { type: "string", pattern: SLUG_PATTERN },
   tags: { type: "array", items: { type: "string", pattern: SLUG_PATTERN } },
   texts: { type: "array", minItems: 1, items: PLAIN_TEXT },
+  rubric: {
+    anyOf: [
+      PLAIN_TEXT,
+      {
+        type: "object",
+        properties: { pass: PLAIN_TEXT, fail: PLAIN_TEXT },
+        required: ["pass", "fail"],
+        additionalProperties: false,
+      },
+    ],
+  },
   needs: { type: "array", items: { type: "string", pattern: NEED_PATTERN } },
   steps: STEPS_SCHEMA,
   envvars: {
@@ -124,6 +135,33 @@ function scopeSchema(): Schema {
   };
 }
 
+/** The types whose schema is built from the field's own definition, not taken from `BY_TYPE`. */
+const BUILT: Partial<Record<FieldDef["type"], (def: FieldDef) => Schema>> = {
+  enum: (def) => ({ type: "string", enum: def.values }),
+  vias: (def) => ({
+    anyOf: [
+      { type: "string", enum: def.values },
+      {
+        type: "array",
+        minItems: 1,
+        items: { type: "string", enum: def.values },
+      },
+    ],
+  }),
+  scope: () => scopeSchema(),
+  matcher: (def) => matcherSchema(def.extras),
+  matchers: (def) => ({
+    type: "array",
+    minItems: 1,
+    items: matcherSchema(def.extras),
+  }),
+  // A list of words, when the field names the words it allows.
+  texts: (def) =>
+    def.values
+      ? { type: "array", minItems: 1, items: { enum: def.values } }
+      : (BY_TYPE.texts ?? {}),
+};
+
 /**
  * Makes the schema of one field.
  * @param name - The field's key.
@@ -131,27 +169,7 @@ function scopeSchema(): Schema {
  * @returns The type's schema, with the key as its title and the table's sentence as its description.
  */
 function valueSchema(name: string, def: FieldDef): Schema {
-  const base: Schema =
-    def.type === "enum"
-      ? { type: "string", enum: def.values }
-      : def.type === "vias"
-        ? {
-            anyOf: [
-              { type: "string", enum: def.values },
-              {
-                type: "array",
-                minItems: 1,
-                items: { type: "string", enum: def.values },
-              },
-            ],
-          }
-        : def.type === "scope"
-          ? scopeSchema()
-          : def.type === "matcher"
-            ? matcherSchema(def.extras)
-            : def.type === "matchers"
-              ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
-              : (BY_TYPE[def.type] ?? {});
+  const base = BUILT[def.type]?.(def) ?? BY_TYPE[def.type] ?? {};
   return { title: name, description: def.meaning, ...base };
 }
 
@@ -310,6 +328,7 @@ export function configSchema(): Schema {
             title: key,
             description: configMeaning(key),
             ...byType[type],
+            ...(key === "maxJudgedWeightShare" && { minimum: 0, maximum: 1 }),
             ...(key === "env" && {
               items: { type: "string", pattern: ENV_NAME_PATTERN },
             }),

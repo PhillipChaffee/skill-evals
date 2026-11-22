@@ -6,6 +6,7 @@ import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
+import { judgeModelOf } from "./judge-warning.js";
 import type { Located } from "./harnesses/index.js";
 import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
 import type { Config } from "./project.js";
@@ -351,8 +352,8 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
     ? selectHarnesses(options.judgeHarness).chosen
     : [];
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
-  const judgeModel = options.judgeModel ?? model;
   const cases = casesOf(options);
+  const judgeModel = judgeModelOf(options, cases);
   const decision = decisionFor(cases, options);
   const parts = partitionApplicable(selection.chosen, cases);
   const subjects: Subject[] = [];

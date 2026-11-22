@@ -381,11 +381,13 @@ One step of a run, in the one shape every harness shares.
 A check with what it gave one run.
 
 ```ts
-type CheckResult = Check & {
+type CheckResult = WithoutVotes<Check> & {
   /** Null when a judged check, a decision check or a command check got no usable answer. */
   score: number | null;
   /** The judge's reason, or why there is no score. */
   reason?: string;
+  /** For a judge check with `votes` above 1: what each vote gave. A vote with no usable answer has a null score. */
+  votes?: { score: number | null; reason: string }[];
   /** For a decision check, the probability the model gave each allowed answer. */
   probabilities?: Record<string, number>;
   /** For a command check: what the command did, each stream cut to its last 2,000 bytes. */

@@ -20,9 +20,12 @@ import { FIELDS, REGEX_FIELDS, WEIGHT, readField } from "./fields.js";
 import {
   describeCalls,
   describeFiles,
+  describeSeen,
   describeTranscript,
 } from "./describe.js";
 import { extensionsOf } from "./extensions.js";
+import type { Rubric, Scale, Sees } from "./judge-fields.js";
+import { MODEL_CHECKS } from "./model-checks.js";
 import { OBSERVED_CHECKS } from "./observed.js";
 import { OUTPUT_CHECKS } from "./output.js";
 import { ORDER_CHECKS } from "./order.js";
@@ -81,7 +84,10 @@ interface CheckFields {
   stdoutLacks?: string;
   timeoutSeconds?: number;
   scoreFrom?: "exit" | "stdout";
-  rubric?: string;
+  rubric?: Rubric;
+  sees?: Sees[];
+  files?: string[];
+  maxChars?: number;
   question?: string;
   expect?: "yes" | "no";
   /** What the harness must be able to do for the check to apply, besides what its type implies. */
@@ -103,7 +109,11 @@ export type RuledCheck = CheckFields & { type: RuledType; weight: number };
 export type JudgedCheck = CheckFields & {
   type: "judge";
   weight: number;
-  rubric: string;
+  rubric: Rubric;
+  /** How the judge scores; "0-1" when absent. */
+  scale?: Scale;
+  /** How many judge calls; 1 when absent. */
+  votes?: number;
 };
 /**
  * A check that a decision model scores: it returns a probability for each allowed answer, and the score is the
@@ -221,17 +231,7 @@ type RuledType = keyof typeof RULED;
 // Every check type. A type with no rule is scored by a model instead (see judge.ts and decision.ts).
 export const CHECKS: Record<string, Spec> = {
   ...RULED,
-  judge: {
-    fields: ["rubric"],
-    scores: "Not 0 or 1. A model scores the final answer against the rubric.",
-  },
-  decision: {
-    fields: ["question"],
-    optional: ["expect", "options"],
-    scores:
-      "Not 0 or 1. A decision model gives each allowed answer a probability, and the score is the expected value.",
-    note: "It takes exactly one of `expect` and `options`.",
-  },
+  ...MODEL_CHECKS,
 };
 
 /**
@@ -364,7 +364,9 @@ const ELLIPSIS = "...";
  *   its options, and a weight other than 1 is shown.
  */
 export function describeCheck(check: Check): string {
-  const quoted = [check.text, check.run, check.rubric, check.question]
+  const rubric =
+    typeof check.rubric === "object" ? check.rubric.pass : check.rubric;
+  const quoted = [check.text, check.run, rubric, check.question]
     .filter((text) => text !== undefined)
     .map((text) =>
       JSON.stringify(
@@ -392,6 +394,7 @@ export function describeCheck(check: Check): string {
     ...patterns,
     ...describeCalls(check),
     ...describeTranscript(check),
+    ...describeSeen(check),
     ...weight,
   ]
     .filter(Boolean)

@@ -47,6 +47,7 @@ export const CONFIG_KEYS: Record<
   decisionUrl: "string",
   decisionTimeout: "number",
   minScore: "number",
+  maxJudgedWeightShare: "number",
   lenient: "boolean",
   isolated: "boolean",
   env: "string[]",
@@ -65,6 +66,8 @@ export interface Config {
   decisionUrl?: string;
   decisionTimeout?: number;
   minScore?: number;
+  /** The share of a case's weight that judge and decision checks may carry before `validate` warns. Default: 0.5. */
+  maxJudgedWeightShare?: number;
   lenient?: boolean;
   /** Start every run with nothing loaded but the subject, and invalidate a run that loaded anything else. */
   isolated?: boolean;
@@ -86,6 +89,12 @@ function checkValue(file: string, key: string, value: unknown): void {
   if (type !== "string[]") {
     if (typeof value !== type) {
       throw new UsageError(`${file}: "${key}" must be a ${type}`);
+    }
+    if (
+      key === "maxJudgedWeightShare" &&
+      !((value as number) >= 0 && (value as number) <= 1)
+    ) {
+      throw new UsageError(`${file}: "${key}" must be a number from 0 to 1`);
     }
     return;
   }
