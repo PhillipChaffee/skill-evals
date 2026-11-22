@@ -100,6 +100,7 @@ export default defineConfig({
             "concepts/subjects",
             "concepts/one-run",
             "concepts/capabilities",
+            "concepts/transcript",
           ],
         },
         {

@@ -7,6 +7,7 @@ export { evaluate } from "./evaluate.js";
 export type { Evaluation, EvaluateOptions, Results } from "./evaluate.js";
 export { HARNESSES } from "./harnesses/index.js";
 export type {
+  AgentRef,
   Harness,
   Isolation,
   Loaded,
@@ -14,6 +15,7 @@ export type {
   Parsed,
   Tokens,
   ToolCall,
+  TranscriptEvent,
 } from "./harnesses/shared.js";
 export type { CheckResult, RunRecord } from "./run.js";
 export type { CaseScore, CommonSet, SuiteScore } from "./score.js";

@@ -1,4 +1,13 @@
 import path from "node:path";
+import type { EventInput } from "../transcript.js";
+import {
+  callPart,
+  callsOf,
+  joinText,
+  numbered,
+  resultPart,
+  textPart,
+} from "../transcript.js";
 import type { Harness, ToolKind } from "./shared.js";
 import {
   NOT_REPORTED,
@@ -10,7 +19,6 @@ import {
   pluginDir,
   sumTokens,
   stringArg,
-  toolCall,
 } from "./shared.js";
 
 const KINDS: Record<string, ToolKind> = {
@@ -41,8 +49,44 @@ interface Message {
 
 /** The events of `pi --mode json` that the adapter reads. */
 type Event =
+  | { type: "session"; id?: string }
   | { type: "turn_end"; message?: Message }
-  | { type: "tool_execution_start"; toolName: string; args: unknown };
+  | {
+      type: "tool_execution_start";
+      toolCallId?: string;
+      toolName: string;
+      args: unknown;
+    }
+  | {
+      type: "tool_execution_end";
+      toolCallId?: string;
+      isError?: boolean;
+      result?: { content?: unknown };
+    };
+
+/**
+ * Reads the transcript parts of a stream.
+ * @param events - The events of the stream, in order.
+ * @returns A call for each `tool_execution_start`, a result for each `tool_execution_end`, and the text of each
+ *   assistant `turn_end`, which comes after the calls of its own turn because Pi states it at the turn's end.
+ */
+function transcriptParts(events: Event[]): EventInput[] {
+  return events.flatMap((e): EventInput[] => {
+    if (e.type === "tool_execution_start") {
+      const { toolName: name, args: input, toolCallId: callId } = e;
+      return [callPart(KINDS, { name, input, callId })];
+    }
+    if (e.type === "tool_execution_end") {
+      const output = joinText(e.result?.content);
+      return [
+        resultPart(e.toolCallId, output, { isError: e.isError === true }),
+      ];
+    }
+    if (e.type !== "turn_end" || e.message?.role !== "assistant") return [];
+    const text = joinText(e.message.content);
+    return text ? [textPart(text)] : [];
+  });
+}
 
 const pi: Harness = {
   id: "pi",
@@ -51,7 +95,7 @@ const pi: Harness = {
   pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
-  capabilities: new Set([]),
+  capabilities: new Set(["toolOutputs", "assistantText"]),
   status: "scripted",
   isolationGap:
     "It is always started with discovery switched off (`-ne -ns -np`), whatever the flag says, and that stays its default. It reports nothing it loaded, so it cannot run `--isolated` until an adapter can prove what it loaded.",
@@ -85,6 +129,7 @@ const pi: Harness = {
     const turns = events
       .filter((e) => e.type === "turn_end")
       .flatMap((e) => (e.message?.role === "assistant" ? [e.message] : []));
+    const transcript = numbered(transcriptParts(events));
     const last = turns.at(-1);
     const usages = turns.flatMap((message) => message.usage ?? []);
     const failure =
@@ -96,9 +141,9 @@ const pi: Harness = {
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join(""),
-      toolCalls: events
-        .filter((e) => e.type === "tool_execution_start")
-        .map((e) => toolCall(KINDS, e.toolName, e.args)),
+      toolCalls: callsOf(transcript),
+      transcript,
+      sessionId: events.find((e) => e.type === "session")?.id ?? null,
       tokens: sumTokens(
         usages.map((u) => ({
           input: u.input + u.cacheRead + u.cacheWrite,

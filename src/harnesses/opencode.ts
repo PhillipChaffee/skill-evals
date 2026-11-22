@@ -1,5 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { EventInput } from "../transcript.js";
+import {
+  callPart,
+  callsOf,
+  numbered,
+  resultPart,
+  textPart,
+} from "../transcript.js";
 import type { Harness, ToolKind } from "./shared.js";
 import {
   NOT_REPORTED,
@@ -11,7 +19,6 @@ import {
   pluginDir,
   sumTokens,
   stringArg,
-  toolCall,
 } from "./shared.js";
 
 const KINDS: Record<string, ToolKind> = {
@@ -29,6 +36,44 @@ const KINDS: Record<string, ToolKind> = {
   task: "subagent",
 };
 
+/** The part of a `tool_use` event, which the stream writes once the tool has run. */
+interface ToolPart {
+  tool: string;
+  callID?: string;
+  state?: {
+    status?: string;
+    input?: unknown;
+    output?: string;
+    error?: string;
+    time?: { start: number; end: number };
+  };
+}
+
+/**
+ * Reads the transcript parts of a stream.
+ * @param events - The events of the stream, in order.
+ * @returns Text parts, and for each `tool_use` a call and, when the state holds an output or an error, its result with
+ *   the tool's duration from its start and end times.
+ */
+function transcriptParts(events: Event[]): EventInput[] {
+  return events.flatMap((e): EventInput[] => {
+    if (e.type === "text") return e.part.text ? [textPart(e.part.text)] : [];
+    if (e.type !== "tool_use") return [];
+    const { tool, callID: callId, state } = e.part;
+    const call = callPart(KINDS, { name: tool, input: state?.input, callId });
+    const output = state?.output ?? state?.error;
+    if (output === undefined) return [call];
+    const { time } = state ?? {};
+    return [
+      call,
+      resultPart(callId, output, {
+        isError: state?.status === "error",
+        ...(time ? { durationMs: time.end - time.start } : {}),
+      }),
+    ];
+  });
+}
+
 /** The events of `opencode run --format json` that the adapter reads. */
 type Event =
   | { type: "step_start" }
@@ -44,7 +89,7 @@ type Event =
       };
     }
   | { type: "text"; part: { text: string } }
-  | { type: "tool_use"; part: { tool: string; state?: { input?: unknown } } }
+  | { type: "tool_use"; part: ToolPart }
   | { type: "error"; error?: { name?: string; data?: { message?: string } } };
 
 const opencode: Harness = {
@@ -56,7 +101,12 @@ const opencode: Harness = {
   skillOf: (call) => stringArg(call, ["name"]),
   authFiles: [".local/share/opencode/auth.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
-  capabilities: new Set(["subagents"]),
+  capabilities: new Set([
+    "subagents",
+    "toolOutputs",
+    "assistantText",
+    "toolDurations",
+  ]),
   status: "scripted",
 
   invocation({ subject, home, workspace, prompt, model }) {
@@ -94,15 +144,16 @@ const opencode: Harness = {
       .map((e) => e.part);
     const failure = events.find((e) => e.type === "error")?.error;
     const unfinished = steps.length ? null : "no step_finish event";
+    const transcript = numbered(transcriptParts(events));
     return {
       finalText: events
         .slice(events.map((e) => e.type).lastIndexOf("step_start") + 1)
         .filter((e) => e.type === "text")
         .map((e) => e.part.text)
         .join(""),
-      toolCalls: events
-        .filter((e) => e.type === "tool_use")
-        .map((e) => toolCall(KINDS, e.part.tool, e.part.state?.input)),
+      toolCalls: callsOf(transcript),
+      transcript,
+      sessionId: null,
       tokens: sumTokens(
         steps.map(({ tokens }) => ({
           input: tokens.input + tokens.cache.read + tokens.cache.write,

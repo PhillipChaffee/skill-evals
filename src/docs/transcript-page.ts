@@ -1,0 +1,97 @@
+import { HARNESSES } from "../harnesses/index.js";
+import type { ReferencePage } from "./markdown.js";
+import { FENCE, code, header, table } from "./markdown.js";
+
+// The capabilities that decide what a harness puts in its transcript, with the part of the transcript each one fills.
+const FILLED = {
+  assistantText: "Assistant text between tool calls",
+  toolOutputs: "Tool outputs",
+  turnGrouping: "Assistant turn on each event",
+  toolDurations: "Tool duration",
+} as const;
+
+/**
+ * Writes the per-harness table: what each adapter puts in the transcript.
+ * @returns A Markdown table. A tool call is always captured; every other row is a capability the adapter declares.
+ */
+const captured = (): string =>
+  table(
+    ["Captured", ...HARNESSES.map((harness) => code(harness.id))],
+    [
+      ["Tool calls with their input", ...HARNESSES.map(() => "yes")],
+      ...Object.entries(FILLED).map(([name, label]) => [
+        label,
+        ...HARNESSES.map((harness) =>
+          (harness.capabilities as ReadonlySet<string>).has(name)
+            ? "yes"
+            : "no",
+        ),
+      ]),
+    ],
+  );
+
+/**
+ * Writes the page about the transcript.
+ * @returns The page, with its table written from what each adapter declares.
+ */
+export const transcriptPage = (): ReferencePage => ({
+  file: "concepts/transcript.md",
+  markdown: `${header(
+    {
+      title: "The transcript",
+      description:
+        "The one list of events that every harness adapter writes for a run, and what each harness puts in it.",
+    },
+    "src/transcript.ts and src/harnesses/",
+  )}
+
+Every adapter turns the stream of its harness into one ordered list of events. An event is the assistant's text, a tool call, or a tool result. Checks and graders read that list, and nothing else reads the raw stream. A check never needs to know which CLI wrote the events.
+
+The tool calls in a run record are always taken from the transcript, so the two cannot disagree.
+
+## Where it is written
+
+The whole transcript is written to ${code("<label><rep>.transcript.json")}, next to the stream file, before any check runs. The file is pretty JSON and is never cut. The run record in ${code("results.json")} has ${code("transcriptFile")}: the path of that file, relative to the output directory. A run that could not be scored has ${code("null")}.
+
+A ${code("command")} check gets the absolute path of the file in ${code("SKILL_EVALS_TRANSCRIPT")}.
+
+${FENCE}json
+{
+  "checks": [
+    {
+      "type": "command",
+      "run": "grep -q 'npm test' \\"$SKILL_EVALS_TRANSCRIPT\\"",
+      "timeoutSeconds": 30
+    }
+  ]
+}
+${FENCE}
+
+## The events
+
+Each event has ${code("index")}, ${code("turn")} (null where the harness does not group calls), ${code("userTurn")}, ${code("role")}, ${code("agent")}, ${code("type")} and these fields where they apply:
+
+- ${code("callId")} joins a tool call to its tool result.
+- ${code("kind")}, ${code("name")} and ${code("input")} describe the call. A tool result takes the name and kind of its call.
+- ${code("output")} is what the tool returned. ${code("isError")} is true when the harness marked the call as failed.
+- ${code("text")} is what the assistant said.
+- ${code("bytes")} is the size in UTF-8 of the ${code("text")} or ${code("output")} as decoded, before any cut.
+- ${code("durationMs")} is how long a tool call took, where the stream says.
+
+Every event is attributed to the main agent for now: ${code('{ "id": "main", "type": "main", "parent": null, "depth": 0 }')}. A run record keeps ${code("toolCalls")} with their inputs and never their outputs.
+
+## What each harness puts in it
+
+${captured()}
+
+An adapter declares a capability only when a parser test proves it on a fixture stream. ${code("test/fixtures/README.md")} says which fixtures were captured from a real CLI and which were written from the CLI's documentation. A check that needs a part that its harness lacks makes its case not applicable there. See [Capabilities](capabilities.md).
+
+A skill-tool call whose tool result was an error is not resolved, on a harness that has ${code("toolOutputs")}. Elsewhere the rule is the one it was.
+
+## Size and bad bytes
+
+The copy of the transcript that is handed to a judge cuts any single ${code("text")} or ${code("output")} longer than 20,000 bytes. A cut event has ${code("truncated: true")} and keeps its original ${code("bytes")}. The file on disk is never cut.
+
+The output of a harness is decoded as UTF-8 with replacement, so a tool that prints invalid bytes never makes a run fail. Each bad byte becomes the character U+FFFD, which is three bytes in UTF-8, so ${code("bytes")} counts the text as it was decoded and not the raw bytes the tool wrote.
+`,
+});

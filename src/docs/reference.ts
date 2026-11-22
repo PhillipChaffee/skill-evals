@@ -12,6 +12,7 @@ import type { Flag, FlagSpec } from "../usage.js";
 import { FLAGS, commandsTaking, defaultText, flagSyntax } from "../usage.js";
 import { apiReference } from "./api.js";
 import { capabilitiesPage } from "./capabilities-page.js";
+import { transcriptPage } from "./transcript-page.js";
 import type { ReferencePage } from "./markdown.js";
 import { FENCE, code, header, table } from "./markdown.js";
 
@@ -344,7 +345,7 @@ ${apiReference()}`,
 
 /**
  * Writes every reference page from the tables and the doc comments in the code.
- * @returns The pages: checks, commands and flags, the config file, the API, the harnesses, and the capabilities.
+ * @returns The pages: checks, commands and flags, the config file, the API, the harnesses, the capabilities, and the transcript.
  */
 export const referencePages = (): ReferencePage[] => [
   checksPage(),
@@ -353,4 +354,5 @@ export const referencePages = (): ReferencePage[] => [
   apiPage(),
   harnessesPage(),
   capabilitiesPage(),
+  transcriptPage(),
 ];

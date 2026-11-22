@@ -20,6 +20,7 @@ import { allChanged } from "./snapshot.js";
 import type { Copy } from "./run-copy.js";
 import { copyOf, observe } from "./run-copy.js";
 import { fileState } from "./run-files.js";
+import { failedCalls, writeTranscript } from "./transcript.js";
 
 export type { CheckResult, Judge, RunPlan, Usage } from "./run-plan.js";
 
@@ -37,6 +38,8 @@ export interface RunRecord extends Usage {
   skillsLoaded: string[];
   /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
   skillEvents: SkillEvent[];
+  /** The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records. */
+  transcriptFile: string | null;
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
   /** What the harness reported as loaded at startup; a kind it does not report is null. */
@@ -138,11 +141,15 @@ function totalUsage(replies: Usage[]): Usage & { calls: number } {
 }
 
 /**
- * Writes the run's stream and final text under the output directory.
+ * Writes the run's stream, final text and transcript under the output directory.
  * @param plan - The run that was made.
  * @param ran - What the session produced.
+ * @returns The transcript file: its absolute path, and its path relative to the output directory.
  */
-function writeStreams(plan: RunPlan, ran: SessionResult): void {
+function writeStreams(
+  plan: RunPlan,
+  ran: SessionResult,
+): { absolute: string; relative: string } {
   const { harness, subject, caseDef, rep } = plan;
   const stem = path.join(
     plan.outDir,
@@ -153,6 +160,11 @@ function writeStreams(plan: RunPlan, ran: SessionResult): void {
   fs.mkdirSync(path.dirname(stem), { recursive: true });
   fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
   fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
+  const absolute = path.resolve(writeTranscript(stem, ran.parsed.transcript));
+  return {
+    absolute,
+    relative: path.relative(path.resolve(plan.outDir), absolute),
+  };
 }
 
 /**
@@ -175,6 +187,7 @@ const skillEventsOf = (
       pluginName: copy?.loaded.pluginName,
     },
     {
+      failed: failedCalls(ran.parsed.transcript),
       home: ran.home,
       workspace: ran.workspace,
       pathOf: harness.pathOf,
@@ -200,7 +213,7 @@ async function record(
   const events = skillEventsOf(harness, ran, copy);
   const loaded = skillsLoaded(events);
 
-  writeStreams(plan, ran);
+  const transcript = writeStreams(plan, ran);
   const files = fileState(ran);
   const base = {
     harness: harness.id,
@@ -213,6 +226,7 @@ async function record(
     toolCalls: parsed.toolCalls,
     skillsLoaded: loaded,
     skillEvents: events,
+    transcriptFile: transcript.relative,
     ...startupRecord(plan, ran, copy),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
@@ -228,7 +242,7 @@ async function record(
       skillEvents: events,
       legacySkillLoads: plan.lenient ?? false,
       ...files,
-      command: commandContext(ran, caseDef.env),
+      command: commandContext(ran, caseDef.env, transcript.absolute),
       subject: {
         dir: copy?.loaded.dir ?? null,
         mutated: changes ? allChanged(changes) : [],

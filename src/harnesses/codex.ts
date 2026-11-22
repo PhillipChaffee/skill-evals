@@ -1,5 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { EventInput } from "../transcript.js";
+import {
+  callPart,
+  callsOf,
+  numbered,
+  resultPart,
+  textPart,
+} from "../transcript.js";
 import type { Harness, RunInput, ToolKind } from "./shared.js";
 import {
   NOT_REPORTED,
@@ -9,14 +17,16 @@ import {
   placeSkills,
   pluginDir,
   sumTokens,
-  toolCall,
 } from "./shared.js";
 
 /** A thread item of `codex exec --json`; which fields are set depends on its type. */
 interface Item {
   type: string;
+  id?: string;
   text?: string;
   command?: unknown;
+  aggregated_output?: string;
+  exit_code?: number | null;
   changes?: unknown;
   server?: unknown;
   tool?: unknown;
@@ -27,6 +37,7 @@ interface Item {
 
 /** The events of `codex exec --json` that the adapter reads. */
 type Event =
+  | { type: "thread.started"; thread_id?: string }
   | { type: "item.completed"; item: Item }
   | {
       type: "turn.completed";
@@ -52,6 +63,33 @@ const KINDS: Record<string, ToolKind> = {
   web_search: "web",
   collab_tool_call: "subagent",
 };
+
+/**
+ * Reads the transcript parts of the items of a run.
+ * @param items - The completed thread items, in order.
+ * @returns A tool item is a call and its result, in that order, because the stream states both at once; the result is
+ *   the item's aggregated output, and an error when the item has a non-zero exit code. An `agent_message` is text.
+ */
+function itemParts(items: Item[]): EventInput[] {
+  return items.flatMap((item): EventInput[] => {
+    if (item.type === "agent_message") {
+      return item.text ? [textPart(item.text)] : [];
+    }
+    const input = Object.hasOwn(TOOL_ITEMS, item.type)
+      ? TOOL_ITEMS[item.type]
+      : undefined;
+    if (!input) return [];
+    const { id: callId } = item;
+    const failed =
+      item.exit_code !== undefined &&
+      item.exit_code !== null &&
+      item.exit_code !== 0;
+    return [
+      callPart(KINDS, { name: item.type, input: input(item), callId }),
+      resultPart(callId, item.aggregated_output ?? "", { isError: failed }),
+    ];
+  });
+}
 
 /**
  * Reads the marketplace file of a Codex plugin directory.
@@ -120,7 +158,7 @@ const codex: Harness = {
   placedAfterSetup: installedSkills,
   authFiles: [".codex/auth.json"],
   authEnv: OPENAI_ENV,
-  capabilities: new Set(["subagents"]),
+  capabilities: new Set(["subagents", "toolOutputs", "assistantText"]),
   status: "scripted",
 
   invocation({ subject, home, workspace, prompt, model }) {
@@ -155,17 +193,16 @@ const codex: Harness = {
       .filter((e) => e.type === "turn.completed")
       .map((e) => e.usage);
     const failed = events.find((e) => e.type === "turn.failed");
+    const transcript = numbered(itemParts(items));
     const unfinished = usages.length ? null : "no turn.completed event";
     return {
       finalText:
         items.filter((item) => item.type === "agent_message").at(-1)?.text ??
         "",
-      toolCalls: items.flatMap((item) => {
-        const input = Object.hasOwn(TOOL_ITEMS, item.type)
-          ? TOOL_ITEMS[item.type]
-          : undefined;
-        return input ? [toolCall(KINDS, item.type, input(item))] : [];
-      }),
+      toolCalls: callsOf(transcript),
+      transcript,
+      sessionId:
+        events.find((e) => e.type === "thread.started")?.thread_id ?? null,
       tokens: sumTokens(
         usages.map((u) => ({ input: u.input_tokens, output: u.output_tokens })),
       ),

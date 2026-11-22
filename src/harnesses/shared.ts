@@ -36,6 +36,44 @@ export interface ToolCall {
   agent?: { id: string; type: string; parent: string | null; depth: number };
 }
 
+/** Who produced an event. Depth 0 is the main agent, whose id is `main`. */
+export interface AgentRef {
+  id: string;
+  type: string;
+  parent: string | null;
+  depth: number;
+}
+
+/** One step of a run, in the one shape every harness shares. */
+export interface TranscriptEvent {
+  /** The event's position in the run, from 0. */
+  index: number;
+  /** The assistant turn, counted from 1; null where the harness has no grouping. */
+  turn: number | null;
+  /** Which user message this answers, from 0; -1 for seeded history. */
+  userTurn: number;
+  role: "user" | "assistant" | "tool" | "system";
+  agent: AgentRef;
+  type: "text" | "tool_call" | "tool_result" | "hook" | "lifecycle";
+  /** Joins a `tool_call` to its `tool_result`. */
+  callId?: string;
+  kind?: ToolKind;
+  name?: string;
+  input?: unknown;
+  /** What the tool returned, on a `tool_result`, as decoded text. */
+  output?: string;
+  /** What the assistant said, on a `text`. */
+  text?: string;
+  /** The UTF-8 size of `text` or `output` as decoded, before any cut. Invalid bytes were already replaced, three bytes each. */
+  bytes?: number;
+  /** True when `text` or `output` was cut; `bytes` keeps the original size. */
+  truncated?: boolean;
+  /** On a `tool_result`: whether the harness marked the call as failed. */
+  isError?: boolean;
+  /** On a `tool_result`, where the stream says how long the call took. */
+  durationMs?: number;
+}
+
 /** Token counts; input counts every prompt token, cached ones included. */
 export interface Tokens {
   input: number;
@@ -71,7 +109,12 @@ export const NOT_REPORTED: Loaded = {
 /** A harness's output stream in the one shape every harness shares. Null means the harness does not report the field. */
 export interface Parsed {
   finalText: string;
+  /** Always `callsOf(transcript)`: an adapter never builds it. */
   toolCalls: ToolCall[];
+  /** Every text, tool call and tool result the stream shows, in order. */
+  transcript: TranscriptEvent[];
+  /** The harness's own id of the session, for a stream that carries one; null otherwise. */
+  sessionId: string | null;
   tokens: Tokens | null;
   costUsd: number | null;
   /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */

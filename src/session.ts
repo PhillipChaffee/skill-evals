@@ -270,6 +270,8 @@ function parseStream(harness: Harness, stdout: string): Parsed {
     return {
       finalText: "",
       toolCalls: [],
+      transcript: [],
+      sessionId: null,
       tokens: null,
       costUsd: null,
       loaded: NOT_REPORTED,

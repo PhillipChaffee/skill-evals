@@ -86,6 +86,8 @@ type FakeCall = {
     exec?: boolean;
     /** A file to create in the workspace. */
     write?: { path: string; content: string };
+    /** Marks the tool result as an error without running anything; with `exec`, the command's exit status decides. */
+    isError?: boolean;
   };
 };
 

@@ -56,6 +56,8 @@ export interface SkillPaths {
   pathOf: (call: ToolCall) => string | null;
   /** The adapter's `skillOf`: the skill a skill-kind call names, prefix included. Absent: `skillNameArg`. */
   skillOf?: ((call: ToolCall) => string | null) | undefined;
+  /** The positions of the calls whose tool result was an error, from the transcript. A skill-tool call among them is not resolved. Absent: none failed. */
+  failed?: ReadonlySet<number> | undefined;
 }
 
 /** One call of the 0.0.1 rule. */
@@ -289,8 +291,8 @@ function readsOf(call: ToolCall, paths: SkillPaths, roots: Root[]): Read[] {
  * @param subject - What the run loaded.
  * @param paths - The run's directories, and the adapter's way to read a path and a skill name from a call.
  * @returns The events in the order of the calls. A skill-kind call that names a skill is a `skill_tool` load, with
- *   any `plugin:` prefix dropped from `skill`; it is resolved when the skill is the subject's and the name has no
- *   prefix or the subject's own plugin name as the prefix. A read-kind call, or a shell call whose command reads
+ *   any `plugin:` prefix dropped from `skill`; it is resolved when the skill is the subject's, the name has no
+ *   prefix or the subject's own plugin name as the prefix, and its tool result was not an error. A read-kind call, or a shell call whose command reads
  *   (`cat`, `head`, `tail`, `less`, `bat`, `nl`, `sed -n`), of an existing file in a skill directory of the subject
  *   is a `file_read` or `shell_read` event: a `load` for the skill's `SKILL.md`, a `file_read` for any other file. A
  *   search, a listing, a `grep`, a redirection target, and a path in the workspace are none.
@@ -312,6 +314,7 @@ export function skillEvents(
       const prefix = colon < 0 ? null : named.slice(0, colon);
       const skill = named.slice(colon + 1);
       const resolved =
+        !paths.failed?.has(index) &&
         own.has(skill) &&
         (prefix === null || prefix === (subject.pluginName ?? undefined));
       return [{ skill, via: "skill_tool", index, resolved, type: "load" }];

@@ -22,6 +22,7 @@ export function failedRecord(plan: RunPlan, message: string): RunRecord {
     toolCalls: [],
     skillsLoaded: [],
     skillEvents: [],
+    transcriptFile: null,
     subjectLoaded: null,
     loaded: NOT_REPORTED,
     isolated: plan.isolated ?? false,

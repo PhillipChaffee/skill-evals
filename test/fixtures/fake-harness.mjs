@@ -150,17 +150,17 @@ function expand(value) {
 
 /**
  * Does what a scripted call asks for in the workspace.
- * @param call - The call step's fields: its input, and what it executes or writes.
+ * @param call - The call step's fields: its input, what it executes or writes, and `isError` for a result that fails without running anything.
  * @returns What the tool reports: its output text, and whether it failed.
  */
-const perform = ({ input, output = "", exec, write }) => {
+const perform = ({ input, output = "", exec, write, isError = false }) => {
   if (write) {
     // $PLUGIN_DIR stands for the --plugin-dir this run was given, so a script can write into the plugin.
     const target = write.path.replaceAll("$PLUGIN_DIR", pluginDir ?? "");
     fs.mkdirSync(path.dirname(path.resolve(target)), { recursive: true });
     fs.writeFileSync(target, write.content);
   }
-  if (!exec) return { content: output, isError: false };
+  if (!exec) return { content: output, isError };
   // The sandbox's PATH holds node and git only, so a command also gets the system's. Its output goes to a file, and the
   // run's own standard output is handed to it as descriptor 3, so a process it leaves in the background holds the
   // harness's pipe open as a real agent's would.

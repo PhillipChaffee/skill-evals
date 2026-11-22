@@ -14,7 +14,7 @@ export interface CommandContext {
   seedDir: string | null;
   /** The run's throwaway home. */
   home: string;
-  /** The run's transcript file. Null until the transcript is written (Task 14). */
+  /** The absolute path of the run's transcript file, written before any check runs. Null when none was written. */
   transcriptFile: string | null;
   /** The run's per-run directory outside the workspace, for bare remotes and linked worktrees; null when none was made. */
   remoteDir: string | null;
@@ -31,7 +31,8 @@ export interface CommandContext {
  * @param ran.graderDir - The copy of the case's `grader/` directory; null when the case has none.
  * @param ran.remoteDir - The run's remote directory; null when none was made.
  * @param env - The case's `env`.
- * @returns The context. The transcript is null until a later task writes it.
+ * @param transcriptFile - The absolute path of the run's transcript file; null when none was written.
+ * @returns The context, with the transcript's path as `transcriptFile`.
  */
 export function commandContext(
   ran: Pick<
@@ -39,13 +40,14 @@ export function commandContext(
     "workspace" | "home" | "graderDir" | "seedDir" | "remoteDir"
   >,
   env: Record<string, string>,
+  transcriptFile: string | null = null,
 ): CommandContext {
   return {
     workspace: ran.workspace,
     graderDir: ran.graderDir,
     seedDir: ran.seedDir,
     home: ran.home,
-    transcriptFile: null,
+    transcriptFile,
     remoteDir: ran.remoteDir,
     env,
   };

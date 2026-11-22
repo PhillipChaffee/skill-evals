@@ -1,12 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  Harness,
-  Loaded,
-  LoadedSubject,
-  ToolCall,
-  ToolKind,
-} from "./shared.js";
+import { callsOf, numbered } from "../transcript.js";
+import type { MessageEvent } from "./claude-code-stream.js";
+import { transcriptParts } from "./claude-code-stream.js";
+import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
 import {
   ANTHROPIC_ENV,
   foreignPaths,
@@ -16,7 +13,6 @@ import {
   pluginDir,
   samePath,
   stringArg,
-  toolCall,
 } from "./shared.js";
 
 const KINDS: Record<string, ToolKind> = {
@@ -44,15 +40,10 @@ type Event =
       agents?: string[];
       mcp_servers?: { name: string }[];
     }
-  | {
-      type: "assistant";
-      message?: {
-        id?: string;
-        content?: { type: string; name: string; input: unknown }[];
-      };
-    }
+  | { type: "assistant" | "user" }
   | {
       type: "result";
+      session_id?: string;
       subtype: string;
       result?: string;
       is_error?: boolean;
@@ -111,6 +102,8 @@ const claudeCode: Harness = {
     "loadedReport",
     "skillListing",
     "isolated",
+    "toolOutputs",
+    "assistantText",
   ]),
   status: "real-model",
 
@@ -138,7 +131,9 @@ const claudeCode: Harness = {
   },
 
   parse(stdout) {
-    const events = jsonLines(stdout) as Event[];
+    const raw = jsonLines(stdout);
+    const events = raw as Event[];
+    const transcript = numbered(transcriptParts(raw as MessageEvent[], KINDS));
     const init = events
       .filter((e) => e.type === "system")
       .find((e) => e.subtype === "init");
@@ -147,7 +142,10 @@ const claudeCode: Harness = {
     const failure = result?.is_error ? result.result || result.subtype : null;
     return {
       finalText: result?.result ?? "",
-      toolCalls: toolCallsOf(events),
+      toolCalls: callsOf(transcript),
+      transcript,
+      sessionId:
+        (raw as MessageEvent[]).find((e) => e.session_id)?.session_id ?? null,
       tokens: usage
         ? {
             input:
@@ -182,31 +180,6 @@ const claudeCode: Harness = {
   strays: strayskills,
   isolation: ISOLATION,
 };
-
-/**
- * Reads the tool calls of a stream, with the assistant turn of each.
- * @param events - The events of the stream, in order.
- * @returns The `tool_use` blocks of every assistant event, a subagent's included. A turn is one assistant message:
- *   the counter, from 1, moves on at each `message.id` it has not seen, so the blocks of one message share a turn
- *   even when the stream splits them over several events. An assistant event without an id is a turn of its own.
- */
-function toolCallsOf(events: Event[]): ToolCall[] {
-  const turns = new Map<string, number>();
-  let turn = 0;
-  return events.flatMap((event) => {
-    if (event.type !== "assistant") return [];
-    const id = event.message?.id;
-    const known = id === undefined ? undefined : turns.get(id);
-    const current = known ?? ++turn;
-    if (id !== undefined) turns.set(id, current);
-    return (event.message?.content ?? [])
-      .filter((block) => block.type === "tool_use")
-      .map(({ name, input }) => ({
-        ...toolCall(KINDS, name, input),
-        turn: current,
-      }));
-  });
-}
 
 /**
  * Names what Claude Code loaded that is not the subject's.

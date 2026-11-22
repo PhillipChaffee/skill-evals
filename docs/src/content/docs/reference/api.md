@@ -239,6 +239,17 @@ What `evaluate` writes to `results.json`.
 | `sourceChanged` | `string[]`                                                                    | The paths of a subject directory that changed while the command ran, each as the user would type it.                                                                                                    |
 | `records`       | `RunRecord[]`                                                                 |                                                                                                                                                                                                         |
 
+### AgentRef
+
+Who produced an event. Depth 0 is the main agent, whose id is `main`.
+
+| Property | Type             | Description |
+| -------- | ---------------- | ----------- |
+| `id`     | `string`         |             |
+| `type`   | `string`         |             |
+| `parent` | `string \| null` |             |
+| `depth`  | `number`         |             |
+
 ### Harness
 
 The adapter of one coding-agent CLI.
@@ -305,14 +316,16 @@ type LoadedSubject = Pick<Subject, "skills" | "skillDirs"> & {
 
 A harness's output stream in the one shape every harness shares. Null means the harness does not report the field.
 
-| Property    | Type             | Description                                                                                                       |
-| ----------- | ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `finalText` | `string`         |                                                                                                                   |
-| `toolCalls` | `ToolCall[]`     |                                                                                                                   |
-| `tokens`    | `Tokens \| null` |                                                                                                                   |
-| `costUsd`   | `number \| null` |                                                                                                                   |
-| `loaded`    | `Loaded`         | What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. |
-| `error`     | `string \| null` |                                                                                                                   |
+| Property     | Type                | Description                                                                                                       |
+| ------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `finalText`  | `string`            |                                                                                                                   |
+| `toolCalls`  | `ToolCall[]`        | Always `callsOf(transcript)`: an adapter never builds it.                                                         |
+| `transcript` | `TranscriptEvent[]` | Every text, tool call and tool result the stream shows, in order.                                                 |
+| `sessionId`  | `string \| null`    | The harness's own id of the session, for a stream that carries one; null otherwise.                               |
+| `tokens`     | `Tokens \| null`    |                                                                                                                   |
+| `costUsd`    | `number \| null`    |                                                                                                                   |
+| `loaded`     | `Loaded`            | What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. |
+| `error`      | `string \| null`    |                                                                                                                   |
 
 ### Tokens
 
@@ -335,6 +348,29 @@ One tool call of the agent.
 | `index?` | `number \| undefined`                                                                             | The call's position in the run's list, from 0. Set once, after parsing; an adapter never sets it, and a 0.0.1 record lacks it.                         |
 | `turn?`  | `number \| undefined`                                                                             | The assistant turn that issued the call, counted from 1. Only an adapter with the `turnGrouping` capability sets it.                                   |
 | `agent?` | `{ id: string; type: string; parent: string \| null; depth: number; } \| undefined`               | The agent that made the call (depth 0 is the main agent, id `main`). Absent until the harness attributes calls to agents; absent means the main agent. |
+
+### TranscriptEvent
+
+One step of a run, in the one shape every harness shares.
+
+| Property      | Type                                                                                                           | Description                                                                                                             |
+| ------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `index`       | `number`                                                                                                       | The event's position in the run, from 0.                                                                                |
+| `turn`        | `number \| null`                                                                                               | The assistant turn, counted from 1; null where the harness has no grouping.                                             |
+| `userTurn`    | `number`                                                                                                       | Which user message this answers, from 0; -1 for seeded history.                                                         |
+| `role`        | `"user" \| "assistant" \| "tool" \| "system"`                                                                  |                                                                                                                         |
+| `agent`       | `AgentRef`                                                                                                     |                                                                                                                         |
+| `type`        | `"text" \| "tool_call" \| "tool_result" \| "hook" \| "lifecycle"`                                              |                                                                                                                         |
+| `callId?`     | `string \| undefined`                                                                                          | Joins a `tool_call` to its `tool_result`.                                                                               |
+| `kind?`       | `"shell" \| "read" \| "write" \| "edit" \| "search" \| "web" \| "skill" \| "subagent" \| "other" \| undefined` |                                                                                                                         |
+| `name?`       | `string \| undefined`                                                                                          |                                                                                                                         |
+| `input?`      | `unknown`                                                                                                      |                                                                                                                         |
+| `output?`     | `string \| undefined`                                                                                          | What the tool returned, on a `tool_result`, as decoded text.                                                            |
+| `text?`       | `string \| undefined`                                                                                          | What the assistant said, on a `text`.                                                                                   |
+| `bytes?`      | `number \| undefined`                                                                                          | The UTF-8 size of `text` or `output` as decoded, before any cut. Invalid bytes were already replaced, three bytes each. |
+| `truncated?`  | `boolean \| undefined`                                                                                         | True when `text` or `output` was cut; `bytes` keeps the original size.                                                  |
+| `isError?`    | `boolean \| undefined`                                                                                         | On a `tool_result`: whether the harness marked the call as failed.                                                      |
+| `durationMs?` | `number \| undefined`                                                                                          | On a `tool_result`, where the stream says how long the call took.                                                       |
 
 ### CheckResult
 
@@ -369,6 +405,7 @@ Everything kept about one run.
 | `toolCalls`      | `ToolCall[]`                           |                                                                                                                                 |
 | `skillsLoaded`   | `string[]`                             |                                                                                                                                 |
 | `skillEvents`    | `SkillEvent[]`                         | Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads.          |
+| `transcriptFile` | `string \| null`                       | The run's whole transcript, relative to the output directory; null when none was written. Absent from 0.0.1 records.            |
 | `subjectLoaded`  | `boolean \| null`                      | Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load.  |
 | `loaded`         | `Loaded`                               | What the harness reported as loaded at startup; a kind it does not report is null.                                              |
 | `isolated`       | `boolean`                              | Whether the run was started with `--isolated`.                                                                                  |

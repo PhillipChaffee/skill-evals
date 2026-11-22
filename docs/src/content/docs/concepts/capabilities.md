@@ -88,8 +88,8 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `subagents`     | no   | yes           | yes      | yes        | yes     |
 | `multiTurn`     | no   | no            | no       | no         | no      |
 | `userInvoke`    | no   | no            | no       | no         | no      |
-| `toolOutputs`   | no   | no            | no       | no         | no      |
-| `assistantText` | no   | no            | no       | no         | no      |
+| `toolOutputs`   | yes  | yes           | no       | yes        | yes     |
+| `assistantText` | yes  | yes           | no       | yes        | yes     |
 | `turnGrouping`  | no   | yes           | no       | no         | no      |
 | `childCalls`    | no   | yes           | no       | no         | no      |
 | `childText`     | no   | no            | no       | no         | no      |
@@ -98,7 +98,7 @@ An adapter declares a capability only when a parser test proves it on a stream. 
 | `history`       | no   | no            | no       | no         | no      |
 | `historyNative` | no   | no            | no       | no         | no      |
 | `askUser`       | no   | no            | no       | no         | no      |
-| `toolDurations` | no   | no            | no       | no         | no      |
+| `toolDurations` | no   | no            | no       | yes        | no      |
 | `sessionStore`  | no   | no            | no       | no         | no      |
 | `compact`       | no   | no            | no       | no         | no      |
 | `clear`         | no   | no            | no       | no         | no      |
