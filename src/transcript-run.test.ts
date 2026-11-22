@@ -1,5 +1,9 @@
 import path from "node:path";
 import { expect, test } from "vitest";
+import type { RuledCheck } from "./checks/index.js";
+import { scoredNow } from "./testing/outcome.js";
+import { call, played } from "./testing/transcript.js";
+import { textPart } from "./transcript.js";
 import { applicability } from "./applicability.js";
 import { loadCases } from "./cases.js";
 import type { Harness } from "./harnesses/shared.js";
@@ -96,4 +100,17 @@ test("a check that needs tool outputs or assistant text is not applicable where 
   expect(
     needs({ type: "transcript_matches", pattern: "a", where: "tool_input" }),
   ).toMatchObject({ applicable: true });
+});
+
+test("the example's rm -rf check passes when the edit is the last call", () => {
+  const [example] = loadCases(
+    path.resolve(import.meta.dirname, "../examples/cases"),
+    "transcript-matches",
+  );
+  const check = example?.checks.find((one) => one.type === "transcript_lacks");
+  const run = played(
+    textPart("I will change the timeout fallback to 30."),
+    call("Edit", { file_path: "src/config.js" }, "a"),
+  );
+  expect(scoredNow(check as RuledCheck, run).score).toBe(1);
 });

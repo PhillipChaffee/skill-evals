@@ -4,6 +4,7 @@ import type { ToolMatcher } from "../matchers.js";
 import { describeMatcher, hitsOf, quoteCalls, tester } from "../matchers.js";
 import { callsOf, resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import { UsageError } from "../scope.js";
 import { PASS } from "./rules.js";
 import type { Piece } from "./transcript-slice.js";
 import { pieces, quoteEvent, quotePieces } from "./transcript-slice.js";
@@ -26,6 +27,32 @@ function textNeeds(check: Check): Capability[] {
   const where = check.where ?? "assistant_text";
   if (where === "assistant_text") return ["assistantText"];
   return where === "tool_input" ? [] : ["toolOutputs"];
+}
+
+/**
+ * Checks that a message scope reads assistant text.
+ * @param given - The fields that are set.
+ * @param where - Names the file and the check in an error message.
+ * @throws {UsageError} When `scope` is `first_message`, `final_message` or the bounded form, and `where` is not `assistant_text`.
+ */
+function checkMessageWhere(
+  given: Record<string, unknown>,
+  where: string,
+): void {
+  const { scope } = given;
+  const message =
+    scope === "first_message" ||
+    scope === "final_message" ||
+    (typeof scope === "object" && scope !== null && "first_message" in scope);
+  if (
+    message &&
+    given["where"] !== undefined &&
+    given["where"] !== "assistant_text"
+  ) {
+    throw new UsageError(
+      `${where}: first_message and final_message read assistant text; drop "where" or set it to "assistant_text"`,
+    );
+  }
 }
 
 const written = (check: RuledCheck): string =>
@@ -71,19 +98,20 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
  * Scores `transcript_lacks`.
  * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
  * @param outcome - What the run left behind.
- * @returns 1 when no tested text matches. Nothing to test scores 0: an empty transcript does not show that the agent
- *   wrote nothing like the pattern.
+ * @returns 1 when no tested text matches. A run with no events of the chosen `where` at all scores 0, which usually
+ *   means the capture is broken; an empty window after a found cut passes.
  */
 function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   const found = tested(check, outcome);
   if ("problem" in found) return { score: 0, reason: found.problem };
-  if (found.all.length === 0) {
-    const scope = check.scope ?? "any";
-    const named = typeof scope === "string" ? scope : JSON.stringify(scope);
-    return {
-      score: 0,
-      reason: `no ${check.where ?? "assistant_text"} text in ${named} to test`,
-    };
+  const where = check.where ?? "assistant_text";
+  const anywhere = pieces(outcome.transcript, "any", where);
+  if (
+    found.all.length === 0 &&
+    "pieces" in anywhere &&
+    anywhere.pieces.length === 0
+  ) {
+    return { score: 0, reason: `the run has no ${where} text to test` };
   }
   if (found.hits.length === 0) return PASS;
   return {
@@ -271,6 +299,7 @@ export const TRANSCRIPT_CHECKS = {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
     notYet: ["by"],
+    validate: checkMessageWhere,
     needs: textNeeds,
     scores:
       "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names.",
@@ -281,9 +310,10 @@ export const TRANSCRIPT_CHECKS = {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
     notYet: ["by"],
+    validate: checkMessageWhere,
     needs: textNeeds,
     scores:
-      "None of the tested texts matches the regular expression. Nothing to test scores 0: a `scope` that holds no text, such as `first_message` of a run with no assistant text, or a `where` with no events, does not show that the agent wrote nothing like the pattern.",
+      "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results, no calls) scores 0, since that usually means the capture is broken. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0.",
     note: CAP_NOTE,
     rule: textLacks,
   },

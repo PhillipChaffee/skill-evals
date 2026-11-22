@@ -268,7 +268,7 @@ test("slice gives the texts to test, and none when the scope cannot be applied",
   expect(slice(transcript, { before: { kind: "web" } }, "all")).toEqual([]);
 });
 
-test("transcript_lacks fails closed when there is nothing to test", () => {
+test("transcript_lacks fails when the run has no events of its where, and passes an empty window after a found cut", () => {
   const lacks = (
     scope: Scope | undefined,
     where: Given["where"],
@@ -285,13 +285,35 @@ test("transcript_lacks fails closed when there is nothing to test", () => {
     );
   const silent = played(call(BASH, { command: "ls" }, "a"));
   expect(lacks(undefined, undefined, silent).reason).toBe(
-    "no assistant_text text in any to test",
+    "the run has no assistant_text text to test",
   );
-  expect(lacks(undefined, "tool_output", silent).score).toBe(0);
+  expect(lacks(undefined, "tool_output", silent).reason).toBe(
+    "the run has no tool_output text to test",
+  );
+  expect(lacks(undefined, "tool_input", played(textPart("x"))).score).toBe(0);
+  expect(lacks(undefined, "all", played()).score).toBe(0);
   const ends = played(textPart("x"), call(BASH, { command: "ls" }, "a"));
-  const last = lacks({ after: { kind: "shell" } }, "all", ends);
-  expect(last.score).toBe(0);
-  expect(last.reason).toContain("no all text in");
-  expect(lacks("first_message", "tool_input").score).toBe(0);
+  expect(lacks({ after: { kind: "shell" } }, "all", ends).score).toBe(1);
+  expect(lacks({ after: { kind: "web" } }, "all", ends).score).toBe(0);
   expect(lacks(undefined, undefined).score).toBe(1);
+});
+
+test("first_message and final_message with another where are a load error", () => {
+  const load = (scope: unknown, where: string) =>
+    readCheck(
+      { type: "transcript_lacks", pattern: "a", scope, where },
+      "case.json",
+      {
+        lenient: false,
+      },
+    );
+  for (const scope of [
+    "first_message",
+    "final_message",
+    { first_message: true, before: EDIT },
+  ]) {
+    expect(() => load(scope, "tool_input")).toThrow(/read assistant text/);
+  }
+  expect(load("first_message", "assistant_text")).toBeTruthy();
+  expect(load({ before: EDIT }, "all")).toBeTruthy();
 });

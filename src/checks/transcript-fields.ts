@@ -10,7 +10,7 @@ const WHERE_VALUES = [
 /** What a check tests. */
 export type Where = (typeof WHERE_VALUES)[number];
 
-/** Task 16 (subagent attribution) deletes this sentence; the checks page and the schema take it from here. */
+/** Task 16 (subagent attribution) deletes this sentence here and its twin in docs/src/content/docs/guides/write-a-case.md (search "Until subagent attribution lands"); the checks page and the schema take it from here. */
 export const SUBAGENT_CAVEAT =
   "Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.";
 

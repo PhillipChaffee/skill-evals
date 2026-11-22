@@ -2306,7 +2306,7 @@
     },
     "check-transcript_lacks": {
       "title": "transcript_lacks",
-      "description": "None of the tested texts matches the regular expression. Nothing to test scores 0: a `scope` that holds no text, such as `first_message` of a run with no assistant text, or a `where` with no events, does not show that the agent wrote nothing like the pattern. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "description": "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results, no calls) scores 0, since that usually means the capture is broken. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
