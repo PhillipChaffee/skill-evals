@@ -1,5 +1,10 @@
-import type { CaseDelta } from "../comparison.js";
-import { FAILING_CEILING, NON_DISCRIMINATING_FLOOR } from "../comparison.js";
+import type { CaseDelta, HarnessDelta } from "../comparison.js";
+import {
+  FAILING_CEILING,
+  MIN_RUNS_FOR_SUITE,
+  MIN_RUNS_FOR_VERDICT,
+  NON_DISCRIMINATING_FLOOR,
+} from "../comparison.js";
 import { verdictText } from "../delta-format.js";
 import { describeCheck } from "../checks/index.js";
 import type { Evaluation } from "../evaluate.js";
@@ -28,49 +33,120 @@ export function flakeRate(runs: RunRecord[], index: number): number | null {
 /**
  * Renders a flake rate.
  * @param rate - What `flakeRate` returned.
- * @returns A whole percentage such as "33%"; "n/a" for none.
+ * @param counts - How many runs stand behind it; when some planned runs are unscored the cell says how many it is over.
+ * @param counts.valid - The valid runs.
+ * @param counts.planned - The runs the plan holds.
+ * @returns A whole percentage such as "33%", or "33% (of 2)" when some runs are unscored; "n/a" for none.
  */
-export const flakeText = (rate: number | null): string =>
-  rate === null ? "n/a" : `${String(Math.round(rate * PERCENT))}%`;
+export function flakeText(
+  rate: number | null,
+  counts?: { valid: number; planned: number },
+): string {
+  if (rate === null) return "n/a";
+  const over =
+    counts !== undefined && counts.valid < counts.planned
+      ? ` (of ${String(counts.valid)})`
+      : "";
+  return `${String(Math.round(rate * PERCENT))}%${over}`;
+}
 
 /**
  * Renders the verdict of a case for a table cell.
  * @param delta - The case's comparison entry; undefined for a case that was not compared.
- * @returns "helped (+0.12, 95% −0.03..+0.27)"; "n/a" when a side has no valid run.
+ * @returns "helped (+0.12, 95% −0.03..+0.27)"; "too few runs (A n=3, B n=3)" below `MIN_RUNS_FOR_VERDICT`; "n/a" when
+ *   a side has no valid run.
  */
-export const verdictCell = (delta: CaseDelta | undefined): string =>
-  delta === undefined ? "n/a" : verdictText(delta);
+export function verdictCell(delta: CaseDelta | undefined): string {
+  if (delta?.verdict === "too few runs") {
+    return `too few runs (A n=${String(delta.n.a)}, B n=${String(delta.n.b)})`;
+  }
+  return delta === undefined ? "n/a" : verdictText(delta);
+}
+
+/**
+ * Renders the verdict of a suite for a table cell or a line.
+ * @param suite - The suite's comparison entry.
+ * @returns As `verdictCell`, with the fewest runs on a side when there are too few.
+ */
+export const suiteVerdictCell = (suite: HarnessDelta["suite"]): string =>
+  suite.verdict === "too few runs"
+    ? `too few runs (fewest on a side: n=${String(suite.fewest)})`
+    : verdictText(suite);
 
 /**
  * Lists the cases that a noise file leaves out.
  * @param evaluation - What `evaluate` returned.
- * @returns The ids of the compared cases that the noise file does not list; none without a noise file.
+ * @returns The ids of the compared cases of the calibrated harness that the noise file does not list; none without a
+ *   noise file.
  */
 function unlisted(evaluation: Evaluation): string[] {
-  if (evaluation.noiseFile === null) return [];
+  const { noiseMeta } = evaluation;
+  if (noiseMeta === null) return [];
   return [
     ...new Set(
-      (evaluation.comparison?.harnesses ?? []).flatMap(({ cases }) =>
-        cases.filter((one) => one.noise === null).map((one) => one.id),
-      ),
+      (evaluation.comparison?.harnesses ?? [])
+        .filter(({ harness }) => harness === noiseMeta.harness)
+        .flatMap(({ cases }) =>
+          cases.filter((one) => one.noise === null).map((one) => one.id),
+        ),
     ),
   ];
 }
 
 /**
+ * Words what the noise file does and does not cover.
+ * @param evaluation - What `evaluate` returned.
+ * @returns A sentence or two; the one that says no file was given when there is none.
+ */
+function noiseNote(evaluation: Evaluation): string {
+  const { noiseFile, noiseMeta } = evaluation;
+  if (noiseFile === null || noiseMeta === null) {
+    return "No noise file was given, so the interval alone decides.";
+  }
+  const others = evaluation.harnesses.filter((id) => id !== noiseMeta.harness);
+  const missing = unlisted(evaluation);
+  const compared = (evaluation.comparison?.harnesses ?? []).flatMap(
+    ({ cases }) => cases.map((one) => one.id),
+  );
+  return [
+    `Noise file: ${noiseFile}, calibrated on ${noiseMeta.harness} at ${String(noiseMeta.reps)} reps; a case is judged against its perCase p95AbsDelta there and the suite against suite.p95AbsDelta.`,
+    ...(others.length === 0
+      ? []
+      : [
+          `It is not applied to ${others.join(", ")}: other harnesses have their own noise.`,
+        ]),
+    ...(noiseMeta.reps === evaluation.reps
+      ? []
+      : [
+          `This run uses ${String(evaluation.reps)} reps, not ${String(noiseMeta.reps)}, so the noise bound may not fit.`,
+        ]),
+    ...(compared.length > 0 &&
+    !compared.some((id) => noiseMeta.caseIds.includes(id))
+      ? [
+          "No case of this suite is in the noise file: it was calibrated on another suite.",
+        ]
+      : []),
+    ...(missing.length === 0
+      ? []
+      : [
+          `Not in the noise file, so judged by the interval alone: ${missing.join(", ")}.`,
+        ]),
+  ].join(" ");
+}
+
+/**
  * Words the method behind every verdict, in one footnote.
  * @param evaluation - What `evaluate` returned.
- * @returns The footnote: the method, the number of resamples, the seed, the stratification and the noise file used;
- *   null for one subject, which has no delta.
+ * @returns The footnote: the method, the number of resamples, the seed, the stratification, the runs a verdict needs
+ *   and the noise file used; null for one subject, which has no delta.
  */
 export function footnote(evaluation: Evaluation): string | null {
   if (evaluation.comparison === null) return null;
-  const missing = unlisted(evaluation);
-  const noise =
-    evaluation.noiseFile === null
-      ? "No noise file was given, so the interval alone decides."
-      : `Noise file: ${evaluation.noiseFile}; a case is judged against its maxAbsDelta there and the suite against its p95AbsDelta.${missing.length === 0 ? "" : ` Not in the noise file, so judged by the interval alone: ${missing.join(", ")}.`}`;
-  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound. ${noise}`;
+  const orientation =
+    evaluation.subjects[1]?.kind === "none"
+      ? " Verdicts are B minus A; with B none, hurt means A scored higher."
+      : "";
+  return `Verdicts: percentile bootstrap over run scores (valid runs only), ${String(CONFIDENCE * PERCENT)}% interval, ${String(RESAMPLES)} resamples, seed ${String(evaluation.seed)}, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A case needs at least ${String(MIN_RUNS_FOR_VERDICT)} valid runs on each side (MIN_RUNS_FOR_VERDICT) and the suite at least ${String(MIN_RUNS_FOR_SUITE)} in every case it covers; below that the verdict is "too few runs". Percentile intervals under-cover at small n, so an interval from few runs is narrower than its 95% says. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound.${orientation} ${noiseNote(evaluation)}`;
 }
 
 /** One case of the discrimination table. */
@@ -126,6 +202,8 @@ export interface FlakeRow {
   check: string;
   /** What `flakeRate` returned. */
   rate: number | null;
+  /** The valid runs behind the rate, and the runs planned. */
+  counts: { valid: number; planned: number };
 }
 
 /**
@@ -150,6 +228,14 @@ export function flakeRows(evaluation: Evaluation): FlakeRow[] {
           caseId: caseDef.id,
           check: describeCheck(check),
           rate: flakeRate(valid, index),
+          counts: {
+            valid: valid.length,
+            planned:
+              evaluation.suites
+                .find((suite) => suite.harness === harness)
+                ?.cases.find((one) => one.id === caseDef.id)?.runs[label]
+                ?.planned ?? 0,
+          },
         }));
       }),
     ),

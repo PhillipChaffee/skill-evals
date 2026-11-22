@@ -202,9 +202,12 @@ function stoppedSection(evaluation: Evaluation): string[] {
  */
 function deltaBarsSection(evaluation: Evaluation): string[] {
   if (evaluation.comparison !== null) return [];
-  const ids = evaluation.cases
-    .filter((caseDef) => caseDef.minDelta !== undefined)
-    .map((caseDef) => `\`${caseDef.id}\``);
+  const ids = [
+    ...(evaluation.minDeltaIgnored ? ["the config's minDelta"] : []),
+    ...evaluation.cases
+      .filter((caseDef) => caseDef.minDelta !== undefined)
+      .map((caseDef) => `\`${caseDef.id}\``),
+  ];
   return ids.length === 0
     ? []
     : [

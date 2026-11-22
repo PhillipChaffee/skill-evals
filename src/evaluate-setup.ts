@@ -57,6 +57,8 @@ export interface DeltaSetup {
   minDelta: number | undefined;
   /** The seed of the bootstrap. */
   seed: number;
+  /** True when `minDelta` was set and one subject has no delta to hold to it: it is ignored, and the report says so. */
+  ignored: boolean;
   /** The noise file and where it was read from; null for none. */
   noise: { file: string; noise: NoiseFile } | null;
 }
@@ -67,8 +69,8 @@ export interface DeltaSetup {
  * @param shape - How many subjects there are, and whether they are one subject run against itself.
  * @param shape.subjects - The number of subjects: 1 or 2.
  * @param shape.same - True for `calibrate`, which measures the noise and so ignores a bar and a noise file.
- * @returns The bar, the seed (default 1) and the noise file.
- * @throws {UsageError} When `minDelta` is not from -1 to 1 or is set with one subject, when `seed` is not a positive
+ * @returns The bar, the seed (default 1) and the noise file. With one subject a `minDelta` of the config is ignored.
+ * @throws {UsageError} When `minDelta` is not from -1 to 1, when `seed` is not a positive
  *   integer up to 4294967295, or when the noise file is not one.
  */
 export function requireDeltaSetup(
@@ -85,15 +87,11 @@ export function requireDeltaSetup(
     if (!(minDelta >= -1 && minDelta <= 1)) {
       throw new UsageError("minDelta must be a number from -1 to 1");
     }
-    if (shape.subjects !== COMPARED) {
-      throw new UsageError(
-        "minDelta applies to run, which compares two subjects: score has one, so there is no delta to hold to a bar",
-      );
-    }
   }
   const compared = shape.subjects === COMPARED && !shape.same;
   return {
-    minDelta: shape.same ? undefined : minDelta,
+    minDelta: compared ? minDelta : undefined,
+    ignored: minDelta !== undefined && shape.subjects !== COMPARED,
     seed,
     noise:
       compared && file !== undefined ? { file, noise: readNoise(file) } : null,

@@ -1,6 +1,5 @@
 import type { Case } from "../cases.js";
 import type { HarnessDelta } from "../comparison.js";
-import { verdictText } from "../delta-format.js";
 import { describeCheck, isJudged } from "../checks/index.js";
 import type { Evaluation } from "../evaluate.js";
 import { METRICS, checkRate, median, scorerLine, versus } from "./metrics.js";
@@ -12,6 +11,7 @@ import {
   flakeRate,
   flakeText,
   footnote,
+  suiteVerdictCell,
   verdictCell,
 } from "./delta.js";
 import { noteSections } from "./notes.js";
@@ -73,7 +73,14 @@ function caseRow(caseDef: Case, section: Section): string {
   });
   const flakes = caseDef.checks.map((_check, index) =>
     valid
-      .map(({ label, runs }) => tag(label) + flakeText(flakeRate(runs, index)))
+      .map(
+        ({ label, runs }) =>
+          tag(label) +
+          flakeText(flakeRate(runs, index), {
+            valid: runs.length,
+            planned: scored?.runs[label]?.planned ?? 0,
+          }),
+      )
       .join(", "),
   );
   const cells = [
@@ -138,7 +145,7 @@ function deltaLines(section: Section): string[] {
   const { delta, discrimination } = section;
   if (!delta) return [];
   return [
-    `Suite delta: ${verdictText(delta.suite)} over ${String(delta.suite.cases)} cases`,
+    `Suite delta: ${suiteVerdictCell(delta.suite)} over ${String(delta.suite.cases)} ${delta.suite.cases === 1 ? "case" : "cases"}`,
     ...(discrimination.length === 0
       ? []
       : [

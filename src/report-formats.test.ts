@@ -124,7 +124,7 @@ test("html escapes every value and holds no script or external reference", () =>
   expect(html).not.toMatch(/(src|href)="https?:/);
   expect(html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
   expect(html).toContain("The command stopped early: budget");
-  expect(html).toContain("<h2>Flake</h2>");
+  expect(html).toContain("<th>Flake</th>");
 });
 
 test("--report picks the formats: md goes to standard output only when listed, the rest to files", async () => {

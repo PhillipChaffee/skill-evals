@@ -33,8 +33,8 @@ test("a flaky check shows its rate", async () => {
     path.join(box.root, "results", "report.html"),
     "utf8",
   );
-  expect(html).toContain("<h2>Flake</h2>");
-  expect(html).toContain("<td>33%</td>");
+  expect(html).toContain("<th>Flake</th>");
+  expect(html).toContain("<td>0%, 33%</td>");
   expect(html).toContain("at a score of 0.5 or more");
   expect(readResults(path.join(box.root, "results")).records).toHaveLength(3);
 });

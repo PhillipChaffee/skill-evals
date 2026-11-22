@@ -18,6 +18,11 @@ export const FAILING_CEILING = 0.5;
 /** The score from which the none arm shows that the case does not need the skill. */
 export const NON_DISCRIMINATING_FLOOR = 0.9;
 
+/** A case needs this many valid runs on each side before its delta is judged: below it the verdict is "too few runs". */
+export const MIN_RUNS_FOR_VERDICT = 5;
+/** The suite delta needs this many valid runs on each side of every case it covers. */
+export const MIN_RUNS_FOR_SUITE = 2;
+
 /** What a case shows about whether the subject matters to it. */
 export type Discrimination =
   | "non-discriminating"
@@ -45,6 +50,8 @@ export interface CaseDelta extends Judged {
   guard: boolean;
   /** The case's `minDelta`; null for none. */
   minDelta: number | null;
+  /** How many valid runs stand behind each side. */
+  n: { a: number; b: number };
   /** The mean run score of each side; null for a side with no valid run. */
   a: number | null;
   b: number | null;
@@ -57,7 +64,11 @@ export interface HarnessDelta {
   harness: string;
   cases: CaseDelta[];
   /** The delta of the suite score over the cases scored on both sides; `cases` is how many that is. */
-  suite: Judged & { cases: number };
+  suite: Judged & {
+    cases: number;
+    /** The fewest valid runs on a side in any case the suite delta covers; null for no case. */
+    fewest: number | null;
+  };
 }
 
 /** A comparison of two subjects: the delta, interval and verdict of each case and of the suite. */
@@ -107,12 +118,22 @@ const scoresOf = (
  * Judges an interval, or says there is none.
  * @param found - The bootstrap's result; null for no runs on a side.
  * @param noise - The noise bound; null for none.
+ * @param enough - Whether enough runs stand behind each side to judge; when not, the verdict is "too few runs".
  * @returns The delta, interval, verdict and the noise used.
  */
-function judged(found: Interval | null, noise: number | null): Judged {
-  return found === null
-    ? { delta: null, low: null, high: null, verdict: null, noise }
-    : { ...found, verdict: verdict(found.delta, found, noise), noise };
+function judged(
+  found: Interval | null,
+  noise: number | null,
+  enough: boolean,
+): Judged {
+  if (found === null) {
+    return { delta: null, low: null, high: null, verdict: null, noise };
+  }
+  return {
+    ...found,
+    verdict: enough ? verdict(found.delta, found, noise) : "too few runs",
+    noise,
+  };
 }
 
 /**
@@ -123,7 +144,7 @@ function judged(found: Interval | null, noise: number | null): Judged {
  * @param sides.helped - Whether the delta, taken from the none arm to the subject, has the verdict "helped".
  * @returns The first label that fits: non-discriminating, failing with the subject, discriminating, no evidence.
  */
-function discriminate(sides: {
+function label(sides: {
   none: number | null;
   subject: number | null;
   helped: boolean;
@@ -139,6 +160,54 @@ function discriminate(sides: {
 }
 
 /**
+ * Finds which arm is "none", when exactly one is.
+ * @param kinds - The kind of each subject.
+ * @param kinds.a - The kind of subject A.
+ * @param kinds.b - The kind of subject B.
+ * @returns "a" or "b"; null when neither or both are none.
+ */
+function noneArm(kinds: { a: string; b: string }): "a" | "b" | null {
+  if (kinds.a === "none" && kinds.b !== "none") return "a";
+  return kinds.b === "none" && kinds.a !== "none" ? "b" : null;
+}
+
+/**
+ * Labels one case by what the none arm and the subject arm show.
+ * @param none - Which label is none: "a" or "b".
+ * @param shown - What the case showed.
+ * @param shown.means - The mean score of A and of B; null for a side with no valid run.
+ * @param shown.found - The bootstrap of B minus A; null for no delta.
+ * @param shown.bound - The noise bound of the case; null for none.
+ * @param shown.enough - Whether enough runs stand behind each side to call the subject helped.
+ * @returns The label.
+ */
+function discriminate(
+  none: "a" | "b",
+  shown: {
+    means: (number | null)[];
+    found: Interval | null;
+    bound: number | null;
+    enough: boolean;
+  },
+): Discrimination {
+  const { means, found, bound, enough } = shown;
+  const [meanA = null, meanB = null] = means;
+  // The delta from the none arm to the subject: B minus A when A is none, else A minus B.
+  const towards =
+    found === null || none === "a"
+      ? found
+      : { delta: -found.delta, low: -found.high, high: -found.low };
+  return label({
+    none: none === "a" ? meanA : meanB,
+    subject: none === "a" ? meanB : meanA,
+    helped:
+      enough &&
+      towards !== null &&
+      verdict(towards.delta, towards, bound) === "helped",
+  });
+}
+
+/**
  * Compares the two subjects on every case of one harness, and on its suite.
  * @param input - What the comparison is made from.
  * @param harness - The harness id.
@@ -147,62 +216,60 @@ function discriminate(sides: {
  *   on both sides.
  */
 function harnessDelta(input: CompareInput, harness: string): HarnessDelta {
-  const { records, noise, seed, kinds } = input;
+  const { records, seed, kinds } = input;
+  // A noise file measures one harness, and says nothing about another.
+  const noise = input.noise?.harness === harness ? input.noise : null;
   const options = (name: string) => ({
     resamples: RESAMPLES,
     seed: seedFor(seed, `${harness}\u0000${name}`),
   });
-  const none =
-    kinds.a === "none" && kinds.b !== "none"
-      ? "a"
-      : kinds.b === "none" && kinds.a !== "none"
-        ? "b"
-        : null;
+  const none = noneArm(kinds);
   const strata: Stratum[] = [];
   const cases = (input.applied[harness] ?? []).map((caseDef): CaseDelta => {
     const { id } = caseDef;
     const a = scoresOf(records, { harness, id, label: "a" });
     const b = scoresOf(records, { harness, id, label: "b" });
-    const bound = noise?.perCase[id]?.maxAbsDelta ?? null;
+    const bound = noise?.perCase[id]?.p95AbsDelta ?? null;
+    const enough = Math.min(a.length, b.length) >= MIN_RUNS_FOR_VERDICT;
     const found = bootstrapDelta(a, b, options(id));
     if (found !== null) strata.push({ a, b, weight: caseDef.weight });
-    const mine = judged(found, bound);
+    const mine = judged(found, bound, enough);
     const [meanA, meanB] = [a, b].map((runs) =>
       runs.length === 0 ? null : mean(runs),
     );
-    const subject = none === "a" ? (meanB ?? null) : (meanA ?? null);
-    // The delta from the none arm to the subject: B minus A when A is none, else A minus B.
-    const towards =
-      found === null
-        ? null
-        : none === "a"
-          ? found
-          : { delta: -found.delta, low: -found.high, high: -found.low };
     return {
       id,
       guard: caseDef.guard,
       minDelta: caseDef.minDelta ?? null,
+      n: { a: a.length, b: b.length },
       a: meanA ?? null,
       b: meanB ?? null,
       ...mine,
       discrimination:
         none === null || caseDef.guard
           ? null
-          : discriminate({
-              none: none === "a" ? (meanA ?? null) : (meanB ?? null),
-              subject,
-              helped:
-                towards !== null &&
-                verdict(towards.delta, towards, bound) === "helped",
+          : discriminate(none, {
+              means: [meanA ?? null, meanB ?? null],
+              found,
+              bound,
+              enough,
             }),
     };
   });
   const suiteBound = noise?.suite.p95AbsDelta ?? null;
   const suite = bootstrapSuite(strata, options("suite"));
+  const fewest =
+    strata.length === 0
+      ? null
+      : Math.min(...strata.flatMap(({ a, b }) => [a.length, b.length]));
   return {
     harness,
     cases,
-    suite: { ...judged(suite, suiteBound), cases: strata.length },
+    suite: {
+      ...judged(suite, suiteBound, (fewest ?? 0) >= MIN_RUNS_FOR_SUITE),
+      cases: strata.length,
+      fewest,
+    },
   };
 }
 

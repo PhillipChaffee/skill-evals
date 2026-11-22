@@ -100,7 +100,11 @@ export function prepare(
   const selection = selectHarnesses(options.harness);
   const judgeHarness = judgeHarnessOf(options);
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
-  const cases = casesOf(options);
+  const same = given.sameSubject ?? false;
+  // A calibration measures noise and holds nothing to a bar, so no bar of a case reaches it.
+  const cases = casesOf(options).map((one) =>
+    same ? { ...one, minScore: undefined, minDelta: undefined } : one,
+  );
   const { judgeApi, judgeModel } = judgeSetup(cases, options);
   const limits = requireLimits(options, {
     chosen: selection.chosen,
@@ -117,12 +121,12 @@ export function prepare(
     judgeModel,
     judgeApi,
     model: options.model,
-    minScore: options.minScore,
+    minScore: same ? undefined : options.minScore,
     delta: requireDeltaSetup(options, {
       subjects: pairs.length,
-      same: given.sameSubject ?? false,
+      same,
     }),
-    shared: given.sameSubject ?? false,
+    shared: same,
     maxInvalid,
     reps,
     jobs,

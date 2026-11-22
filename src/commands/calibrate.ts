@@ -43,11 +43,16 @@ export async function calibrate(
     },
     project,
   );
-  const noise = noiseOf(
-    evaluation.records,
-    Object.fromEntries(evaluation.cases.map((one) => [one.id, one.weight])),
-    evaluation.seed,
-  );
+  const [harness] = evaluation.harnesses;
+  const noise = noiseOf(evaluation.records, {
+    harness: harness ?? "",
+    reps: evaluation.reps,
+    seed: evaluation.seed,
+    caseIds: (evaluation.applied[harness ?? ""] ?? []).map((one) => one.id),
+    weights: Object.fromEntries(
+      evaluation.cases.map((one) => [one.id, one.weight]),
+    ),
+  });
   if (noise === null) {
     console.error(
       `skill-evals: no ${NOISE_FILE} written: no case has a valid run on both sides`,

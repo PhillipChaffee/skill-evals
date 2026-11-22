@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   RESAMPLES,
+  percentileBounds,
   bootstrapDelta,
   bootstrapSuite,
   mean,
@@ -86,4 +87,20 @@ test("a verdict is within noise when the interval holds 0 or the delta is inside
   expect(verdict(0.2, clear, 0.2)).toBe(WITHIN);
   expect(verdict(0.2, clear, 0.19)).toBe("helped");
   expect(verdict(-0.2, { low: -0.3, high: -0.1 }, 0.25)).toBe(WITHIN);
+});
+
+test("the interval ends are the ranks floor(0.025 n) and n - 1 - that, whatever the float error", () => {
+  const sorted = Array.from({ length: 2000 }, (_unused, rank) => rank);
+  // 0.025 * 2000 is 50.00000000000004 in floating point; the ranks are 50 and 1949.
+  expect(percentileBounds(sorted)).toEqual({ low: 50, high: 1949 });
+  expect(
+    percentileBounds(Array.from({ length: 1000 }, (_u, rank) => rank)),
+  ).toEqual({ low: 25, high: 974 });
+  expect(percentileBounds([4, 5])).toEqual({ low: 4, high: 5 });
+});
+
+test("an interval whose end is zero to within float error holds 0", () => {
+  expect(verdict(0.2, { low: 1e-12, high: 0.3 }, null)).toBe(WITHIN);
+  expect(verdict(-0.2, { low: -0.3, high: -1e-12 }, null)).toBe(WITHIN);
+  expect(verdict(0.2, { low: 1e-6, high: 0.3 }, null)).toBe("helped");
 });

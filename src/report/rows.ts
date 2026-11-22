@@ -81,6 +81,7 @@ const NO_DELTA: CaseDelta = {
   id: "",
   guard: false,
   minDelta: null,
+  n: { a: 0, b: 0 },
   a: null,
   b: null,
   delta: null,

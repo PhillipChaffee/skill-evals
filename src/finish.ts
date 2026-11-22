@@ -132,6 +132,14 @@ const deltaFields = (delta: DeltaSetup, comparison: Comparison | null) => ({
   minDelta: delta.minDelta ?? null,
   seed: delta.seed,
   noiseFile: delta.noise?.file ?? null,
+  noiseMeta: delta.noise
+    ? {
+        harness: delta.noise.noise.harness,
+        reps: delta.noise.noise.reps,
+        caseIds: delta.noise.noise.caseIds,
+      }
+    : null,
+  minDeltaIgnored: delta.ignored,
   comparison,
 });
 

@@ -16,7 +16,16 @@ import {
 export const NOISE_FILE = "noise.json";
 
 const P95 = 0.95;
-const NOISE_KEYS = ["schemaVersion", "perCase", "perCheckType", "suite"];
+const NOISE_KEYS = [
+  "schemaVersion",
+  "harness",
+  "reps",
+  "seed",
+  "caseIds",
+  "perCase",
+  "perCheckType",
+  "suite",
+];
 
 /** How much a measure moves between runs of one subject. */
 interface Spread {
@@ -28,8 +37,19 @@ interface Spread {
 export interface NoiseFile {
   /** The version of this file's shape. */
   schemaVersion: 1;
-  /** For each case id: `sd` is the run-score standard deviation pooled over the two sides, `maxAbsDelta` is |mean A - mean B|. */
-  perCase: Record<string, Spread & { maxAbsDelta: number }>;
+  /** The harness that was calibrated. The file is applied to that harness only. */
+  harness: string;
+  /** The reps of each subject in the calibration. A comparison at other reps gets a note. */
+  reps: number;
+  /** The seed of the calibration's bootstrap. */
+  seed: number;
+  /** The ids of the cases that were calibrated. A file that shares no id with the suite gets a note. */
+  caseIds: string[];
+  /** For each case id: `sd` is the run-score standard deviation pooled over the two sides, `maxAbsDelta` is |mean A - mean B|, for information, and `p95AbsDelta` is the 95th percentile of |delta*| over that case's A/A bootstrap, which is the bound a case's verdict uses. */
+  perCase: Record<
+    string,
+    Spread & { maxAbsDelta: number; p95AbsDelta: number }
+  >;
   /** For each check type: the standard deviation of that check's score over the reps of one case, pooled. */
   perCheckType: Record<string, Spread>;
   /** `sd` is the spread of the suite delta over the A/A bootstrap, `p95AbsDelta` the 95th percentile of its absolute value. */
@@ -129,13 +149,38 @@ export function readNoise(file: string): NoiseFile {
       );
     }
   }
+  const absent = NOISE_KEYS.filter((key) => !Object.hasOwn(parsed, key));
+  if (absent.length > 0) {
+    throw new UsageError(
+      `${file}: missing ${absent.map((key) => `"${key}"`).join(", ")}; write the file again with \`calibrate\``,
+    );
+  }
   if (parsed["schemaVersion"] !== 1) {
     throw new UsageError(
       `${file}: "schemaVersion" must be 1, as \`calibrate\` writes it`,
     );
   }
   const at = (name: string): Where => ({ file, at: name });
-  requireEntries(at("perCase"), parsed["perCase"], ["sd", "maxAbsDelta"]);
+  const { harness, reps, seed, caseIds } = parsed;
+  if (typeof harness !== "string" || harness === "") {
+    throw new UsageError(`${file}: "harness" must be a harness id`);
+  }
+  for (const [name, value] of [
+    ["reps", reps],
+    ["seed", seed],
+  ] as const) {
+    if (!Number.isInteger(value) || (value as number) < 1) {
+      throw new UsageError(`${file}: "${name}" must be a positive integer`);
+    }
+  }
+  if (!Array.isArray(caseIds) || caseIds.some((id) => typeof id !== "string")) {
+    throw new UsageError(`${file}: "caseIds" must be a list of case ids`);
+  }
+  requireEntries(at("perCase"), parsed["perCase"], [
+    "sd",
+    "maxAbsDelta",
+    "p95AbsDelta",
+  ]);
   requireEntries(at("perCheckType"), parsed["perCheckType"], ["sd"]);
   requireFields(at("suite"), parsed["suite"], ["sd", "p95AbsDelta"]);
   return parsed as unknown as NoiseFile;
@@ -186,17 +231,38 @@ function checkGroups(records: RunRecord[]): Map<string, number[][]> {
 }
 
 /**
+ * Takes the 95th percentile of the absolute values of resampled deltas.
+ * @param deltas - The resampled deltas.
+ * @returns The 95th percentile of their absolute values.
+ */
+const p95Of = (deltas: number[]): number =>
+  quantile(
+    deltas.map(Math.abs).sort((x, y) => x - y),
+    P95,
+  );
+
+/**
  * Measures how much a subject moves against itself.
  * @param records - The runs of one harness, scored with A and B the same subject; invalid runs are left out.
- * @param weights - The weight of each case in the suite score, by case id; a case that is not listed counts 1.
- * @param seed - The seed of the bootstrap for the suite.
+ * @param calibration - What was calibrated.
+ * @param calibration.harness - The harness id.
+ * @param calibration.reps - The reps of each subject.
+ * @param calibration.seed - The seed of the bootstrap.
+ * @param calibration.caseIds - The ids of the cases that ran.
+ * @param calibration.weights - The weight of each case in the suite score, by case id; a case that is not listed counts 1.
  * @returns The noise file; null when no case has a valid run on both sides, since nothing was measured.
  */
 export function noiseOf(
   records: RunRecord[],
-  weights: Record<string, number>,
-  seed: number,
+  calibration: {
+    harness: string;
+    reps: number;
+    seed: number;
+    caseIds: string[];
+    weights: Record<string, number>;
+  },
 ): NoiseFile | null {
+  const { seed, weights } = calibration;
   const sides = [...sidesOf(records)].filter(
     ([, { a, b }]) => a.length > 0 && b.length > 0,
   );
@@ -210,13 +276,25 @@ export function noiseOf(
     resamples: RESAMPLES,
     seed: seedFor(seed, "calibrate"),
   });
-  const absolute = deltas.map(Math.abs).sort((x, y) => x - y);
   return {
     schemaVersion: 1,
+    harness: calibration.harness,
+    reps: calibration.reps,
+    seed,
+    caseIds: calibration.caseIds,
     perCase: Object.fromEntries(
       sides.map(([id, { a, b }]) => [
         id,
-        { sd: pooledSd([a, b]), maxAbsDelta: Math.abs(mean(a) - mean(b)) },
+        {
+          sd: pooledSd([a, b]),
+          maxAbsDelta: Math.abs(mean(a) - mean(b)),
+          p95AbsDelta: p95Of(
+            resampledDeltas([{ a, b, weight: 1 }], {
+              resamples: RESAMPLES,
+              seed: seedFor(seed, `calibrate\u0000${id}`),
+            }),
+          ),
+        },
       ]),
     ),
     perCheckType: Object.fromEntries(
@@ -227,7 +305,7 @@ export function noiseOf(
     ),
     suite: {
       sd: pooledSd([deltas]),
-      p95AbsDelta: quantile(absolute, P95),
+      p95AbsDelta: p95Of(deltas),
     },
   };
 }

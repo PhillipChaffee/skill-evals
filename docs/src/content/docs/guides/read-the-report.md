@@ -21,13 +21,13 @@ A comparison adds a **Verdict** column, one **Flake** column, and, when one subj
 | Case    | Score, A / B (B - A)                 | Verdict                           | Checks                  | Flake    |
 | restate | 0.80 / 1.00 (+0.20) (A 3 of 3 ...)   | helped (+0.20, 95% +0.12..+0.28)  | `skill_loaded bro` ...  | A 0%, B 0% |
 
-Suite delta: helped (+0.20, 95% +0.12..+0.28) over 1 cases
+Suite delta: helped (+0.20, 95% +0.12..+0.28) over 1 case
 
 > Verdicts: percentile bootstrap over run scores (valid runs only), 95% interval, 2000 resamples, seed 1, resampled within each case (stratified); the suite delta is the mean of the case deltas by weight over the cases scored on both subjects. A delta reads "within noise" when its interval holds 0 or it is no larger than the noise bound. No noise file was given, so the interval alone decides.
 ```
 
-- **Verdict** is the delta, B minus A, with its 95% interval: `helped (+0.12, 95% −0.03..+0.27)`. The interval is a percentile bootstrap over the run scores of the valid runs, 2000 resamples, with a seeded generator. The suite delta is stratified: the runs are resampled within each case that has a valid run on both sides, and the suite delta is the mean of the case deltas by weight, the formula of the suite score. A verdict is `within noise` when the interval holds 0, or when the delta is no larger than the noise bound (a case's `maxAbsDelta`, the suite's `p95AbsDelta`, from `--noise`). Otherwise it is `helped` for a positive delta and `hurt` for a negative one. A case with no valid run on one side has no delta: the cell says `n/a`, with no verdict. With one rep per side the interval has no width, so read the run counts beside the score. The footnote under the tables states the method, the resamples, the seed, the stratification and the noise file, and names the cases that the noise file does not list.
-- **Flake** is the share of valid reps that disagree with the majority outcome of that check, for each subject: `A 33%, B 0%`. A rep passes a check when its check score is at least 0.5. An even split is 50%. `n/a` means no valid run.
+- **Verdict** is the delta, B minus A, with its 95% interval: `helped (+0.12, 95% −0.03..+0.27)`. The interval is a percentile bootstrap over the run scores of the valid runs, 2000 resamples, with a seeded generator. The suite delta is stratified: the runs are resampled within each case that has a valid run on both sides, and the suite delta is the mean of the case deltas by weight, the formula of the suite score. A verdict is `within noise` when the interval holds 0, or when the delta is no larger than the noise bound (a case's `maxAbsDelta`, the suite's `p95AbsDelta`, from `--noise`). Otherwise it is `helped` for a positive delta and `hurt` for a negative one. A case with no valid run on one side has no delta: the cell says `n/a`, with no verdict. A case with fewer than 5 valid runs on a side (`MIN_RUNS_FOR_VERDICT`) is `too few runs (A n=3, B n=3)`, and the suite needs at least 2 on each side of every case it covers (`too few runs (fewest on a side: n=1)`). The footnote says that percentile intervals under-cover at small n. With B `none`, the footnote adds that verdicts are B minus A, so `hurt` means A scored higher. The footnote under the tables states the method, the resamples, the seed, the stratification and the noise file, and names the cases that the noise file does not list.
+- **Flake** is the share of valid reps that disagree with the majority outcome of that check, for each subject: `A 33%, B 0%`. A rep passes a check when its check score is at least 0.5. An even split is 50%. `n/a` means no valid run. When some planned runs are unscored the cell says how many it is over: `33% (of 2)`.
 - **Discrimination** is only for a comparison where A or B is `none`; a guard case is left out. Each case gets the first label that fits: `non-discriminating` when the none arm scores at least 0.9 (`NON_DISCRIMINATING_FLOOR`: the case does not need the skill), `failing with the subject` when the subject scores below 0.5 (`FAILING_CEILING`), `discriminating` when the verdict, taken from none to the subject, is `helped`, else `no evidence`. The report prints both constants.
 
 ```text
@@ -38,7 +38,7 @@ Suite delta: helped (+0.20, 95% +0.12..+0.28) over 1 cases
 | easy   | 1.00 | 1.00    | non-discriminating |
 ```
 
-In `report.json` each entry of `cases` gains `delta`, `low`, `high`, `verdict` and `discrimination`. They are the case's, so the entries for A and B hold the same values, and all are `null` for `score`. A new top-level `method` holds `interval`, `confidence`, `resamples`, `seed`, `stratified`, `noiseFile`, `discrimination` (the two thresholds, or `null`) and the `footnote` text; it is `null` for `score`. `report.html` has the same verdicts, discrimination and footnote as tables, and a flake table. `report.xml` changes only through the bars: a case under its `minDelta` is a `failure`.
+In `report.json` each entry of `cases` gains `delta`, `low`, `high`, `verdict` and `discrimination`. They are the case's, so the entries for A and B hold the same values, and all are `null` for `score`. A new top-level `method` holds `interval`, `confidence`, `resamples`, `seed`, `stratified`, `noiseFile`, `discrimination` (the two thresholds, or `null`) and the `footnote` text; it is `null` for `score`. `report.html` has the verdict and flake as columns of its case table (and the verdict in its suite table), then the discrimination table and the footnote. `report.xml` changes only through the bars: a case under its `minDelta` is a `failure`.
 
 ```jsonc
 {
@@ -58,7 +58,7 @@ In `report.json` each entry of `cases` gains `delta`, `low`, `high`, `verdict` a
 }
 ```
 
-`results.json` records `seed`, `noiseFile` (the path, or `null`), `minDelta` (or `null`) and `comparison`: for each harness, `cases` (each with `id`, `guard`, `minDelta`, the means `a` and `b`, `delta`, `low`, `high`, `verdict`, the `noise` bound used and `discrimination`) and `suite` (the same, and `cases`, how many cases it covers). `comparison` is `null` for `score`.
+`results.json` records `seed`, `noiseFile` (the path, or `null`), `noiseMeta` (the file's `harness`, `reps` and `caseIds`), `minDelta` (or `null`), `minDeltaIgnored` and `comparison`: for each harness, `cases` (each with `id`, `guard`, `minDelta`, the means `a` and `b`, `delta`, `low`, `high`, `verdict`, the `noise` bound used and `discrimination`) and `suite` (the same, and `cases`, how many cases it covers). `comparison` is `null` for `score`.
 
 Under the common-set score of several harnesses, the line says how many of those cases ran with checks skipped on some harness: `Common set (3 cases: a, b, c, 2 cases with skipped checks).`
 

@@ -112,7 +112,7 @@ test("the judge sees the task, the answer, and the rubric, and nothing about the
   expect(asked[0]?.pluginDir, "the judge runs with nothing loaded").toBeNull();
 
   expect(tableRow(result.stdout, "restate")).toMatch(
-    /^\| restate \| 0\.38 \/ 0\.38 \(\+0\.00\) \(A 1 of 2 runs, B 2 of 2 runs\) \| within noise \(\+0\.00, 95% [^|]+\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50 \(1 of 2 runs\), B 0\.50 \(2 of 2 runs\)<br>`output_contains "broken"` A 0\/1, B 0\/2 \| A 0%, B 50%<br>A 0%, B 0% \|/,
+    /^\| restate \| 0\.38 \/ 0\.38 \(\+0\.00\) \(A 1 of 2 runs, B 2 of 2 runs\) \| too few runs \(A n=1, B n=2\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50 \(1 of 2 runs\), B 0\.50 \(2 of 2 runs\)<br>`output_contains "broken"` A 0\/1, B 0\/2 \| A 0% \(of 1\), B 50%<br>A 0% \(of 1\), B 0% \|/,
   );
   expect(result.stdout).toMatch(
     /^- Judge: the harness under test, model run-model$/m,

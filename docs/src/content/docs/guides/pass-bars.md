@@ -20,7 +20,7 @@ A verdict is not a bar. The report says `helped`, `hurt` or `within noise` for e
 
 ## Delta bars
 
-A delta bar holds the _difference_ to a floor, not the score. It is on the point delta, B minus A, over the runs as they are, and not on the interval of the verdict. `--min-delta` takes a number from -1 to 1, and the config key `minDelta` sets its default. A negative bar lets B score lower by at most that much. A shell reads `-0.05` as a flag, so write it with an equals sign:
+A delta bar holds the _difference_ to a floor, not the score. It is on the point delta, B minus A, over the runs as they are, and not on the interval of the verdict. `--min-delta` takes a number from -1 to 1, and the config key `minDelta` sets its default. A negative bar lets B score lower by at most that much. The command line parser (`parseArgs`, not the shell) reads `-0.05` as a flag, so write it with an equals sign:
 
 ```sh
 skill-evals run --a main --b . --min-delta 0.05
@@ -43,7 +43,11 @@ A case's `minDelta` is a key of its `case.json`:
 }
 ```
 
-`--min-delta` with `score` is a usage error, because `score` has one subject and no difference to measure: `score` does not take the flag, and a `minDelta` in the config file is refused there too. A `minDelta` in a `case.json` that `score` runs is not checked, and the report says so once: `minDelta applies to run`. A case under its `minDelta` is a `failure` in the JUnit report, as a case under its `minScore` is.
+`--min-delta` with `score` is a usage error, because `score` has one subject and no difference to measure: `score` does not take the flag. A `minDelta` in the config file is ignored under `score`, and the report says so in the same note. A `minDelta` in a `case.json` that `score` runs is not checked, and the report says so once: `minDelta applies to run`. A case under its `minDelta` is a `failure` in the JUnit report, as a case under its `minScore` is.
+
+## How many runs a verdict needs
+
+A case is judged only when each side has at least 5 valid runs (`MIN_RUNS_FOR_VERDICT`); below that its verdict is `too few runs`, with the run count of each side. The suite delta needs at least 2 valid runs on each side of every case it covers. A percentile interval under-covers at small n, so the report does not widen it; it declines to judge instead. Bars and exit codes ignore the run count: a bar is on the point delta.
 
 ## Measure the noise first
 
@@ -54,14 +58,23 @@ skill-evals calibrate --subject . --harness claude-code --out calibration
 skill-evals run --a main --b . --noise calibration/noise.json
 ```
 
-`calibrate` writes the other files that `run` writes as well, and exits as `run` does with no pass bar. It measures one harness, because noise differs between harnesses: more than one is a usage error. It writes no `noise.json` when no case has a valid run on both sides. `noise.json` holds:
+`calibrate` writes the other files that `run` writes as well. It applies no pass bar at all, neither `--min-score`, `--min-delta`, nor a case's `minScore` or `minDelta`: it measures, and holds nothing to a floor. It measures one harness, because noise differs between harnesses: more than one is a usage error. It writes no `noise.json` when no case has a valid run on both sides. `noise.json` holds:
 
 ```jsonc
 {
   "schemaVersion": 1,
+  // What was calibrated. The file is applied to this harness only, and a run at other reps,
+  // or of a suite that shares no case id, gets a note in the report.
+  "harness": "claude-code",
+  "reps": 5,
+  "seed": 1,
+  "caseIds": ["restate"],
   // For each case: the standard deviation of the run scores, pooled over the two sides,
-  // and |mean A - mean B|.
-  "perCase": { "restate": { "sd": 0.08, "maxAbsDelta": 0.05 } },
+  // |mean A - mean B| (for information), and the 95th percentile of |delta*| over that case's A/A bootstrap,
+  // which is the bound a case's verdict uses.
+  "perCase": {
+    "restate": { "sd": 0.08, "maxAbsDelta": 0.05, "p95AbsDelta": 0.09 },
+  },
   // For each check type: the standard deviation of a check's score over the reps of one case, pooled.
   "perCheckType": { "file_exists": { "sd": 0.0 } },
   // The spread of the suite delta over the A/A bootstrap, and the 95th percentile of its absolute value.
@@ -69,7 +82,7 @@ skill-evals run --a main --b . --noise calibration/noise.json
 }
 ```
 
-`--noise <file>`, or `noise` in the config file (relative to the project root), makes a verdict use it: a delta no larger than the noise of its case, or than `p95AbsDelta` for the suite, reads `within noise`, whatever its interval. A case that the file does not list is judged by its interval alone, and the report says so. The file is read strictly: a file that is not JSON, has another `schemaVersion`, lacks a key, has an unknown key, or holds a number outside 0 to 1 is a usage error that names the file and the field.
+`--noise <file>`, or `noise` in the config file (relative to the project root), makes a verdict use it: a delta no larger than the `p95AbsDelta` of its case, or of the suite, reads `within noise`, whatever its interval. The file applies to its own `harness` only: for another harness it is not applied, and the report says so. A case that the file does not list is judged by its interval alone, and the report says so. The file is read strictly: a file that is not JSON, has another `schemaVersion`, lacks a key (a file without `harness`, `reps`, `seed` or `caseIds` is refused, naming them), has an unknown key, or holds a number outside 0 to 1 is a usage error that names the file and the field.
 
 The intervals come from a bootstrap that a seed makes reproducible. `--seed <n>` (config key `seed`) is a positive integer up to 4294967295 and defaults to 1; the same runs and the same seed give the same report, byte for byte, and `results.json` records the seed.
 

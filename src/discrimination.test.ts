@@ -11,6 +11,8 @@ import {
   readJson,
 } from "./testing/delta.js";
 
+// Five reps on each of seven cases, twice, take longer than the default limit.
+const SLOW = 60_000;
 const REPORT_JSON = "report.json";
 // Each case says which label it should get, and why that label is the first that fits.
 const CASES: Record<
@@ -61,7 +63,7 @@ async function discriminated(flip = false) {
       "--cases",
       `${box.root}/cases`,
       "--reps",
-      "2",
+      "5",
       "--out",
       `${box.root}/results`,
     ],
@@ -75,77 +77,93 @@ type Report = {
   method: { discrimination: unknown };
 };
 
-test("each case gets the first label that fits, in the order of the rule", async () => {
-  const { ran, out } = await discriminated();
-  expect(ran.status, ran.stderr).toBe(0);
-  const report = readJson(out, REPORT_JSON) as Report;
-  const labels = Object.fromEntries(
-    report.cases
-      .filter((one) => one.subject === "b")
-      .map((one) => [one.caseId, one.discrimination]),
-  );
-  expect(labels).toEqual(
-    Object.fromEntries(
-      Object.entries(CASES).map(([id, { label }]) => [id, label]),
-    ),
-  );
-});
+test(
+  "each case gets the first label that fits, in the order of the rule",
+  async () => {
+    const { ran, out } = await discriminated();
+    expect(ran.status, ran.stderr).toBe(0);
+    const report = readJson(out, REPORT_JSON) as Report;
+    const labels = Object.fromEntries(
+      report.cases
+        .filter((one) => one.subject === "b")
+        .map((one) => [one.caseId, one.discrimination]),
+    );
+    expect(labels).toEqual(
+      Object.fromEntries(
+        Object.entries(CASES).map(([id, { label }]) => [id, label]),
+      ),
+    );
+  },
+  SLOW,
+);
 
-test("the report prints both thresholds, and the label does not depend on which subject is none", async () => {
-  const { ran, out } = await discriminated();
-  expect(ran.stdout).toContain(
-    "non-discriminating when the none arm scores at least 0.9 (NON_DISCRIMINATING_FLOOR)",
-  );
-  expect(ran.stdout).toContain(
-    "failing with the subject when the subject scores below 0.5 (FAILING_CEILING)",
-  );
-  const report = readJson(out, REPORT_JSON) as Report;
-  expect(report.method.discrimination).toEqual({
-    nonDiscriminatingFloor: 0.9,
-    failingCeiling: 0.5,
-  });
-  const flipped = await discriminated(true);
-  const [first, second] = [out, flipped.out].map((dir) =>
-    (readJson(dir, REPORT_JSON) as Report).cases
-      .filter((one) => one.subject === "b")
-      .map((one) => `${one.caseId} ${String(one.discrimination)}`),
-  );
-  expect(second).toEqual(first);
-});
+test(
+  "the report prints both thresholds, and the label does not depend on which subject is none",
+  async () => {
+    const { ran, out } = await discriminated();
+    expect(ran.stdout).toContain(
+      "non-discriminating when the none arm scores at least 0.9 (NON_DISCRIMINATING_FLOOR)",
+    );
+    expect(ran.stdout).toContain(
+      "failing with the subject when the subject scores below 0.5 (FAILING_CEILING)",
+    );
+    const report = readJson(out, REPORT_JSON) as Report;
+    expect(report.method.discrimination).toEqual({
+      nonDiscriminatingFloor: 0.9,
+      failingCeiling: 0.5,
+    });
+    const flipped = await discriminated(true);
+    const [first, second] = [out, flipped.out].map((dir) =>
+      (readJson(dir, REPORT_JSON) as Report).cases
+        .filter((one) => one.subject === "b")
+        .map((one) => `${one.caseId} ${String(one.discrimination)}`),
+    );
+    expect(second).toEqual(first);
+  },
+  SLOW,
+);
 
-test("guard cases are left out of the discrimination table", async () => {
-  const { ran, out } = await discriminated();
-  const section = ran.stdout.split("### Discrimination")[1] ?? "";
-  const rows = section.split("\n").filter((line) => line.startsWith("| "));
-  const listed = rows.slice(2).map((line) => line.split(" | ")[0]?.slice(2));
-  expect(listed.sort()).toEqual([
-    "broken",
-    "easy",
-    "helped",
-    "partial",
-    "regress",
-    "same",
-  ]);
-  expect(section).toContain("Guard cases are left out");
-  expect(section).not.toContain("guarded");
-  const report = readJson(out, REPORT_JSON) as Report;
-  const guard = report.cases.filter((one) => one.caseId === "guarded");
-  expect(guard.map((one) => one.discrimination)).toEqual([null, null]);
-  const html = fs.readFileSync(`${out}/report.html`, "utf8");
-  const table =
-    html.split("<h2>Discrimination</h2>")[1]?.split("<h2>")[0] ?? "";
-  expect(table).toContain("<td>helped</td>");
-  expect(table).not.toContain("guarded");
-});
+test(
+  "guard cases are left out of the discrimination table",
+  async () => {
+    const { ran, out } = await discriminated();
+    const section = ran.stdout.split("### Discrimination")[1] ?? "";
+    const rows = section.split("\n").filter((line) => line.startsWith("| "));
+    const listed = rows.slice(2).map((line) => line.split(" | ")[0]?.slice(2));
+    expect(listed.sort()).toEqual([
+      "broken",
+      "easy",
+      "helped",
+      "partial",
+      "regress",
+      "same",
+    ]);
+    expect(section).toContain("Guard cases are left out");
+    expect(section).not.toContain("guarded");
+    const report = readJson(out, REPORT_JSON) as Report;
+    const guard = report.cases.filter((one) => one.caseId === "guarded");
+    expect(guard.map((one) => one.discrimination)).toEqual([null, null]);
+    const html = fs.readFileSync(`${out}/report.html`, "utf8");
+    const table =
+      html.split("<h2>Discrimination</h2>")[1]?.split("<h2>")[0] ?? "";
+    expect(table).toContain("<td>helped</td>");
+    expect(table).not.toContain("guarded");
+  },
+  SLOW,
+);
 
-test("there is no discrimination when neither subject is none, or both are", async () => {
-  const box = sandbox();
-  const plain = await compared(box, { checks: [WRITES_SUMMARY] });
-  expect(plain.ran.stdout).not.toContain("Discrimination");
-  const same = await compared(box, {
-    checks: [WRITES_SUMMARY],
-    a: "none",
-    b: "none",
-  });
-  expect(same.ran.stdout).not.toContain("### Discrimination");
-});
+test(
+  "there is no discrimination when neither subject is none, or both are",
+  async () => {
+    const box = sandbox();
+    const plain = await compared(box, { checks: [WRITES_SUMMARY] });
+    expect(plain.ran.stdout).not.toContain("Discrimination");
+    const same = await compared(box, {
+      checks: [WRITES_SUMMARY],
+      a: "none",
+      b: "none",
+    });
+    expect(same.ran.stdout).not.toContain("### Discrimination");
+  },
+  SLOW,
+);

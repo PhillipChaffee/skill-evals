@@ -12,6 +12,7 @@ const TAIL = (1 - CONFIDENCE) / BOTH_TAILS;
 const EPSILON = 1e-9;
 const UINT32 = 4294967296;
 const MIN_FOR_SPREAD = 2;
+const RANK_SCALE = 1e6;
 // The constants of mulberry32 and of the 32-bit FNV-1a hash.
 const MULBERRY_STEP = 0x6d2b79f5;
 const SHIFT_ONE = 15;
@@ -50,7 +51,12 @@ export interface Stratum {
 }
 
 /** What the verdict of a delta is: the subject helped, hurt, or the difference is inside the noise. */
-export type DeltaVerdict = "helped" | "hurt" | "within noise";
+export type DeltaVerdict =
+  | "helped"
+  | "hurt"
+  | "within noise"
+  /** Set by the comparison, never by `verdict`: too few valid runs behind a side to judge. */
+  | "too few runs";
 
 /**
  * Makes a seeded generator, mulberry32.
@@ -162,6 +168,25 @@ export function resampledDeltas(
 }
 
 /**
+ * Picks the ends of the 95% interval out of sorted resamples, by rank: `low = floor(TAIL * n)` and `high = n - 1 - low`.
+ * @param sorted - The resampled deltas, ascending.
+ * @returns The lower and upper end. For 2000 resamples the ranks are 50 and 1949.
+ */
+export function percentileBounds(sorted: number[]): {
+  low: number;
+  high: number;
+} {
+  // Rounding first, because TAIL * 2000 is 50.00000000000004 in floating point.
+  const rank = Math.floor(
+    Math.round(TAIL * sorted.length * RANK_SCALE) / RANK_SCALE,
+  );
+  return {
+    low: sorted[rank] as number,
+    high: sorted[sorted.length - 1 - rank] as number,
+  };
+}
+
+/**
  * Bootstraps the suite delta, stratified: the runs are resampled within each case, never across cases.
  * @param strata - The cases scored on both sides, each with its runs.
  * @param options - The number of resamples and the seed.
@@ -176,8 +201,7 @@ export function bootstrapSuite(
   const deltas = resampledDeltas(strata, options);
   return {
     delta: suiteDelta(strata, (runs) => runs),
-    low: quantile(deltas, TAIL),
-    high: quantile(deltas, 1 - TAIL),
+    ...percentileBounds(deltas),
   };
 }
 
@@ -211,8 +235,10 @@ export function verdict(
   delta: number,
   interval: { low: number; high: number },
   noise: number | null,
-): DeltaVerdict {
-  if (interval.low <= 0 && interval.high >= 0) return "within noise";
+): Exclude<DeltaVerdict, "too few runs"> {
+  if (interval.low <= EPSILON && interval.high >= -EPSILON) {
+    return "within noise";
+  }
   if (noise !== null && Math.abs(delta) <= noise + EPSILON) {
     return "within noise";
   }

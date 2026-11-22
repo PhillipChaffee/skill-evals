@@ -36,7 +36,11 @@ test("A/A calibrate writes a noise file with zero spread for a deterministic fak
   const noise = readJson(out, NOISE_JSON) as NoiseFile;
   expect(noise).toEqual({
     schemaVersion: 1,
-    perCase: { restate: { sd: 0, maxAbsDelta: 0 } },
+    harness: "claude-code",
+    reps: 5,
+    seed: 1,
+    caseIds: ["restate"],
+    perCase: { restate: { sd: 0, maxAbsDelta: 0, p95AbsDelta: 0 } },
     perCheckType: { file_exists: { sd: 0 }, skill_loaded: { sd: 0 } },
     suite: { sd: 0, p95AbsDelta: 0 },
   });
@@ -106,7 +110,7 @@ test('a delta inside the noise floor reads "within noise"', async () => {
   });
   expect(within.ran.status, within.ran.stderr).toBe(0);
   expect(tableRow(within.ran.stdout, "restate")).toContain(WITHIN);
-  expect(within.ran.stdout).toContain(`Suite delta: ${WITHIN} over 1 cases`);
+  expect(within.ran.stdout).toContain(`Suite delta: ${WITHIN} over 1 case`);
   expect(within.ran.stdout).toContain(`Noise file: ${bound}`);
   expect(within.results?.noiseFile).toBe(bound);
 
@@ -158,7 +162,11 @@ test("a case that the noise file does not list is judged by its interval alone, 
 
 const VALID: NoiseFile = {
   schemaVersion: 1,
-  perCase: { restate: { sd: 0.1, maxAbsDelta: 0.1 } },
+  harness: "claude-code",
+  reps: 5,
+  seed: 1,
+  caseIds: ["restate"],
+  perCase: { restate: { sd: 0.1, maxAbsDelta: 0.1, p95AbsDelta: 0.1 } },
   perCheckType: { file_exists: { sd: 0.1 } },
   suite: { sd: 0.1, p95AbsDelta: 0.1 },
 };
@@ -170,10 +178,31 @@ const WRONG: [string, unknown, RegExp][] = [
     /"schemaVersion" must be 1/,
   ],
   ["an unknown key", { ...VALID, extra: 1 }, /unknown key "extra"/],
+  ["a missing suite", { ...VALID, suite: undefined }, /missing "suite"/],
   [
-    "a missing suite",
-    { ...VALID, suite: undefined },
-    /"suite" must be an object/,
+    "a file written before harness, reps, seed and caseIds",
+    {
+      schemaVersion: 1,
+      perCase: {},
+      perCheckType: {},
+      suite: { sd: 0, p95AbsDelta: 0 },
+    },
+    /missing "harness", "reps", "seed", "caseIds"/,
+  ],
+  [
+    "a reps that is not a count",
+    { ...VALID, reps: 0 },
+    /"reps" must be a positive integer/,
+  ],
+  [
+    "a harness that is not an id",
+    { ...VALID, harness: "" },
+    /"harness" must be a harness id/,
+  ],
+  [
+    "caseIds that are not ids",
+    { ...VALID, caseIds: [1] },
+    /"caseIds" must be a list of case ids/,
   ],
   [
     "a case that is not an object",
@@ -187,7 +216,10 @@ const WRONG: [string, unknown, RegExp][] = [
   ],
   [
     "a negative spread",
-    { ...VALID, perCase: { restate: { sd: -1, maxAbsDelta: 0 } } },
+    {
+      ...VALID,
+      perCase: { restate: { sd: -1, maxAbsDelta: 0, p95AbsDelta: 0 } },
+    },
     /"perCase.restate.sd" must be a number from 0 to 1/,
   ],
   [

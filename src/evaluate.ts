@@ -133,6 +133,10 @@ export interface Results {
   seed: number;
   /** The noise file the verdicts used, as an absolute path; null when none was given. */
   noiseFile: string | null;
+  /** What that file says it measured: its harness, reps and case ids; null with no file. */
+  noiseMeta: { harness: string; reps: number; caseIds: string[] } | null;
+  /** True when `minDelta` was set and ignored, because one subject has no delta. */
+  minDeltaIgnored: boolean;
   /** The share of the planned runs that may be invalid, `--max-invalid`. */
   maxInvalid: number;
   /** How the runs were made: tool and harness versions, models, subject revisions, case hashes. */

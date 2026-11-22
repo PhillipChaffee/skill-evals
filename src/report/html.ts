@@ -1,7 +1,6 @@
 import type { Evaluation } from "../evaluate.js";
 import { describeSubject } from "../subject.js";
 import { formatScore } from "../score.js";
-import { verdictText } from "../delta-format.js";
 import {
   discriminationRows,
   discriminationRule,
@@ -9,6 +8,7 @@ import {
   flakeText,
   PASS_AT,
   footnote,
+  suiteVerdictCell,
   verdictCell,
 } from "./delta.js";
 import { caseRows } from "./rows.js";
@@ -23,6 +23,17 @@ th{background:#eee}
 @media (prefers-color-scheme:dark){body{color:#e6e6e6;background:#161616}th{background:#2a2a2a}td,th{border-color:#555}.below,.invalid{color:#ff8080}.not-run,.not-applicable{color:#e6c84d}}`;
 
 const e = escapeXml;
+
+// What a suite cell shows when a harness has no comparison entry.
+const NO_SUITE = {
+  delta: null,
+  low: null,
+  high: null,
+  verdict: null,
+  noise: null,
+  cases: 0,
+  fewest: null,
+};
 
 /**
  * Writes one table.
@@ -51,12 +62,6 @@ function comparisonHtml(evaluation: Evaluation): string {
   const { comparison } = evaluation;
   const note = footnote(evaluation);
   if (comparison === null || note === null) return "";
-  const verdicts = comparison.harnesses.flatMap(({ harness, cases, suite }) => [
-    ...cases.map((one) => ({
-      cells: [harness, one.id, verdictCell(one)],
-    })),
-    { cells: [harness, "suite", verdictText(suite)] },
-  ]);
   const found = discriminationRows(evaluation);
   const discrimination =
     found.length === 0
@@ -73,34 +78,89 @@ function comparisonHtml(evaluation: Evaluation): string {
             ],
           })),
         )}`;
-  return `<h2>Verdicts</h2>
-${table(["Harness", "Case", "Verdict"], verdicts)}
-${discrimination}
+  return `${discrimination}
 <p>${e(note)}</p>
 `;
 }
 
 /**
- * Writes the table of how much each check flipped between reps.
- * @param evaluation - What `evaluate` returned.
- * @returns The HTML of the section.
+ * Words the flake of each check of a case, for one cell.
+ * @param rows - Every flake row of the evaluation.
+ * @param row - The case row the cell is for.
+ * @param row.harness - Which harness ran the case.
+ * @param row.subject - The label of the subject on the row.
+ * @param row.caseId - Which case the row sums up.
+ * @returns The rates of the case's checks, in order: "0%, 33%".
  */
-const flakeHtml = (evaluation: Evaluation): string =>
-  `<h2>Flake</h2>
-<p>A rep passes a check at a score of ${String(PASS_AT)} or more. Flake is the share of valid reps that disagree with the majority outcome; an even split is 50%.</p>
-${table(
-  ["Harness", "Subject", "Case", "Check", "Flake"],
-  flakeRows(evaluation).map((row) => ({
+const flakeCell = (
+  rows: ReturnType<typeof flakeRows>,
+  row: { harness: string; subject: string; caseId: string },
+): string =>
+  rows
+    .filter(
+      (one) =>
+        one.harness === row.harness &&
+        one.subject === row.subject &&
+        one.caseId === row.caseId,
+    )
+    .map((one) => flakeText(one.rate, one.counts))
+    .join(", ");
+
+/**
+ * Writes the suite table and the case table, which a comparison gives a verdict column, and every table a flake column.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The HTML of both tables and the note on flake.
+ */
+function tablesHtml(evaluation: Evaluation): string {
+  const runs = (valid: number, planned: number): string =>
+    `${String(valid)} of ${String(planned)} runs`;
+  const { comparison } = evaluation;
+  const verdict = (cells: string[]): string[] =>
+    comparison === null ? [] : cells;
+  const suites = evaluation.suites.flatMap((suite) =>
+    evaluation.subjects.map(({ label }) => ({
+      cells: [
+        suite.harness,
+        label,
+        formatScore(suite.suite[label] ?? null),
+        ...verdict([
+          suiteVerdictCell(
+            comparison?.harnesses.find((one) => one.harness === suite.harness)
+              ?.suite ?? NO_SUITE,
+          ),
+        ]),
+        `${String(suite.applicable)} of ${String(suite.total)} cases`,
+        runs(suite.runs[label]?.valid ?? 0, suite.runs[label]?.planned ?? 0),
+      ],
+    })),
+  );
+  const flakes = flakeRows(evaluation);
+  const cases = caseRows(evaluation).map((row) => ({
+    status: row.status,
     cells: [
       row.harness,
       row.subject,
       row.caseId,
-      row.check,
-      flakeText(row.rate),
+      formatScore(row.score),
+      ...verdict([
+        verdictCell(
+          comparison?.harnesses
+            .find((one) => one.harness === row.harness)
+            ?.cases.find((one) => one.id === row.caseId),
+        ),
+      ]),
+      runs(row.validRuns, row.plannedRuns),
+      flakeCell(flakes, row),
+      row.status,
+      row.reason,
     ],
-  })),
-)}
-`;
+  }));
+  return `<h2>Suite scores</h2>
+${table(["Harness", "Subject", "Score", ...verdict(["Verdict"]), "Cases", "Runs"], suites)}
+<h2>Cases</h2>
+${table(["Harness", "Subject", "Case", "Score", ...verdict(["Verdict"]), "Runs", "Flake", "Status", "Reason"], cases)}
+<p>A rep passes a check at a score of ${String(PASS_AT)} or more. Flake is the share of valid reps that disagree with the majority outcome, for each check in order; an even split is 50%.</p>`;
+}
 
 /**
  * Renders an evaluation as one self-contained HTML page: inline style, tables only, no script and no reference to
@@ -109,31 +169,6 @@ ${table(
  * @returns The text of `report.html`.
  */
 export function renderHtml(evaluation: Evaluation): string {
-  const runs = (valid: number, planned: number): string =>
-    `${String(valid)} of ${String(planned)} runs`;
-  const suites = evaluation.suites.flatMap((suite) =>
-    evaluation.subjects.map(({ label }) => ({
-      cells: [
-        suite.harness,
-        label,
-        formatScore(suite.suite[label] ?? null),
-        `${String(suite.applicable)} of ${String(suite.total)} cases`,
-        runs(suite.runs[label]?.valid ?? 0, suite.runs[label]?.planned ?? 0),
-      ],
-    })),
-  );
-  const cases = caseRows(evaluation).map((row) => ({
-    status: row.status,
-    cells: [
-      row.harness,
-      row.subject,
-      row.caseId,
-      formatScore(row.score),
-      runs(row.validRuns, row.plannedRuns),
-      row.status,
-      row.reason,
-    ],
-  }));
   const subjects = evaluation.subjects
     .map(
       (subject) =>
@@ -152,11 +187,8 @@ export function renderHtml(evaluation: Evaluation): string {
 <body><h1>Skill scores</h1>
 <ul>${subjects}</ul>
 <p>Exit code ${String(evaluation.exit)}. Output: ${e(evaluation.outDir)}</p>${stopped}
-<h2>Suite scores</h2>
-${table(["Harness", "Subject", "Score", "Cases", "Runs"], suites)}
-<h2>Cases</h2>
-${table(["Harness", "Subject", "Case", "Score", "Runs", "Status", "Reason"], cases)}
-${comparisonHtml(evaluation)}${flakeHtml(evaluation)}${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
+${tablesHtml(evaluation)}
+${comparisonHtml(evaluation)}${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
 </body></html>
 `;
 }

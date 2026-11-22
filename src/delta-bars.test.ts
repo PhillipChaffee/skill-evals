@@ -92,13 +92,15 @@ test("--min-delta with score is a usage error that names run", async () => {
   expect(flagged.status).toBe(EXIT.usage);
   expect(flagged.stderr).toContain("Unknown option '--min-delta' for score");
   expect(flagged.stderr).toContain("it applies to run, plan");
-  // The config key reaches score too, and is refused there with the reason.
+  // The config key is ignored under score, with one note.
   box.write("skill-evals.config.json", { minDelta: 0.1 });
   const configured = await box.cli([
     ...["score", "--subject", "none", "--cases", cases],
   ]);
-  expect(configured.status).toBe(EXIT.usage);
-  expect(configured.stderr).toContain("minDelta applies to run");
+  expect(configured.status, configured.stderr).toBe(0);
+  expect(configured.stdout).toContain(
+    "minDelta applies to run: the config's minDelta set one, and it was not checked.",
+  );
 });
 
 test("a minDelta that is out of range, or a bad seed, is a usage error", async () => {

@@ -29,7 +29,7 @@ interface Comparing {
   flags?: string[];
   /** The command: `run` by default. */
   command?: "run" | "calibrate";
-  /** Default: 2. */
+  /** Default: 5, the fewest runs a case verdict is judged on. */
   reps?: number;
   /** The output directory under the sandbox root. Default: `results`. */
   out?: string;
@@ -42,7 +42,7 @@ interface Comparing {
  * @returns The command's result, its output directory, and `results.json` when the command wrote one.
  */
 export async function compared(box: Sandbox, comparing: Comparing) {
-  const { checks, more, flags = [], command = "run", reps = 2 } = comparing;
+  const { checks, more, flags = [], command = "run", reps = 5 } = comparing;
   const cases = plantCase(box, checks, more);
   const first = comparing.a ?? plugin(box, "plugin-alpha", {});
   const second =
@@ -78,20 +78,27 @@ export const readJson = (out: string, file: string): unknown =>
  * @param bounds - The `maxAbsDelta` of each case id, and the suite's `p95AbsDelta`.
  * @param bounds.cases - The `maxAbsDelta` by case id.
  * @param bounds.suite - The suite's `p95AbsDelta`.
+ * @param over - Keys that replace the file's own, such as `harness` or `reps`.
  * @returns The file's path.
  */
 export const noiseFile = (
   box: Sandbox,
   bounds: { cases: Record<string, number>; suite: number },
+  over: Record<string, unknown> = {},
 ): string =>
   box.write("noise.json", {
     schemaVersion: 1,
+    harness: "claude-code",
+    reps: 5,
+    seed: 1,
+    caseIds: Object.keys(bounds.cases),
     perCase: Object.fromEntries(
       Object.entries(bounds.cases).map(([id, bound]) => [
         id,
-        { sd: 0.1, maxAbsDelta: bound },
+        { sd: 0.1, maxAbsDelta: bound, p95AbsDelta: bound },
       ]),
     ),
     perCheckType: { file_exists: { sd: 0.1 } },
     suite: { sd: 0.1, p95AbsDelta: bounds.suite },
+    ...over,
   });

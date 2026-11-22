@@ -153,12 +153,27 @@ test("the comparison depends on the runs and the seed, and on nothing else", () 
 });
 
 test("the noise a calibration measures comes from the spread between runs", () => {
-  const noise = noiseOf(spread(), { x: 1, y: 1 }, 1);
+  const noise = noiseOf(spread(), {
+    harness: CLAUDE_CODE,
+    reps: 5,
+    seed: 1,
+    caseIds: ["x", "y"],
+    weights: { x: 1, y: 1 },
+  });
   expect(noise?.perCase["x"]?.sd).toBeGreaterThan(0);
+  expect(noise?.perCase["x"]?.p95AbsDelta).toBeGreaterThan(0);
   expect(noise?.perCase["x"]?.maxAbsDelta).toBeCloseTo(0.09, 10);
   expect(noise?.suite.p95AbsDelta).toBeGreaterThan(0.09);
   expect(noise?.suite.sd).toBeGreaterThan(0);
-  expect(noiseOf([], {}, 1)).toBeNull();
+  expect(
+    noiseOf([], {
+      harness: CLAUDE_CODE,
+      reps: 5,
+      seed: 1,
+      caseIds: [],
+      weights: {},
+    }),
+  ).toBeNull();
 });
 
 test("a rep passes a check at a score of 0.5, and a flake is a rep against the majority", () => {
@@ -196,8 +211,37 @@ test("the html report shows the verdicts, the footnote and a suite row", async (
     flags: ["--report", "html"],
   });
   const html = fs.readFileSync(path.join(out, "report.html"), "utf8");
-  expect(html).toContain("<h2>Verdicts</h2>");
-  expect(html).toContain("<td>suite</td>");
-  expect(html).toContain("helped (+1.00, 95% +1.00..+1.00)");
+  // Verdict and flake are columns of the case table and the suite table, as they are in markdown.
+  expect(html).toContain("<th>Verdict</th>");
+  expect(html).toContain("<th>Flake</th>");
+  expect(html).not.toContain("<h2>Verdicts</h2>");
+  expect(html).toContain("<td>helped (+1.00, 95% +1.00..+1.00)</td>");
+  expect(html).toContain("<td>0%</td>");
   expect(html).toContain("2000 resamples, seed 1");
+});
+
+test("identical inputs and seed give byte-identical reports at --jobs 4 too", async () => {
+  const once = async () => {
+    const box = sandbox();
+    const { ran, out } = await compared(box, {
+      checks: [{ type: "skill_loaded", skill: "bro" }],
+      flags: ["--jobs", "4", "--seed", "9", "--report", "md,json"],
+    });
+    const report = readJson(out, "report.json") as {
+      cases: unknown;
+      method: unknown;
+    };
+    const verdicts = ran.stdout
+      .split("\n")
+      .filter((line) => /^(\| restate |Suite delta|> Verdicts)/.test(line))
+      .map((line) =>
+        line.replace(/ \| [\d.]+ s \/.*$/, "").replace(/Noise file.*/, ""),
+      );
+    return JSON.stringify({
+      cases: report.cases,
+      method: report.method,
+      verdicts,
+    });
+  };
+  expect(await once()).toBe(await once());
 });
