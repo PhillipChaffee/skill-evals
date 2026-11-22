@@ -116,6 +116,7 @@ test("git never writes to the seed and never reaches a repository around the wor
         {
           type: "command",
           run: 'git -C "$SKILL_EVALS_SEED_DIR" status --porcelain',
+          expectExit: 0,
           stdoutLacks: ".",
         },
       ],

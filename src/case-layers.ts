@@ -44,6 +44,6 @@ export function layersOf(
       read("fixtures") as string[] | undefined,
     ),
     fixtureDir: fixtureOf(dir, file),
-    homeDir: homeOf(dir, file, read("home") as string | undefined),
+    homeDir: homeOf({ dir, file, root }, read("home") as string | undefined),
   };
 }

@@ -157,8 +157,10 @@ test("fixtures and home refuse a folder that is, holds or sits in a case's own f
 test("a shared folder that holds another case is refused, and one with an ordinary tree is not", () => {
   const box = sandbox();
   box.write("cases/_shared/shop/package.json", "{}");
-  box.write("cases/_shared/shop/nested/other/case.json", "{}");
-  expect(load(box, { fixtures: [SHOP] })).toThrow(/would copy a case folder/);
+  box.write("cases/groups/shop/other/case.json", "{}");
+  expect(load(box, { fixtures: ["../groups/shop"] })).toThrow(
+    /would copy a case folder/,
+  );
   const ok = sandbox();
   ok.write("cases/_shared/shop/package.json", "{}");
   ok.write("cases/other/prompt.md", "p");
@@ -168,4 +170,21 @@ test("a shared folder that holds another case is refused, and one with an ordina
     fixtures: [SHOP, "../other/workspace"],
   })();
   expect(cases.map((one) => one.id)).toEqual(["c", "other"]);
+});
+
+test("a shared folder with a data prompt.md or a nested case.json is not a case and loads", () => {
+  const box = sandbox();
+  box.write("cases/_shared/s/prompt.md", "data, not a prompt");
+  box.write("cases/_shared/s/sub/case.json", "{}");
+  const cases = load(box, { fixtures: ["../_shared/s"] })();
+  expect(cases.map((one) => one.id)).toEqual(["c"]);
+});
+
+test("an ordinary folder with a data file named case.json inside a case is not refused as a nested case", () => {
+  const box = sandbox();
+  box.write("cases/other/prompt.md", "p");
+  box.write("cases/other/case.json", { checks: [DONE] });
+  box.write("cases/other/workspace/prompt.md", "data");
+  box.write("cases/other/workspace/sub/case.json", "{}");
+  expect(load(box, { fixtures: ["../other/workspace"] })()).toHaveLength(2);
 });

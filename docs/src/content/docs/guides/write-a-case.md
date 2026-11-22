@@ -294,9 +294,11 @@ The seed that file checks and `$SKILL_EVALS_SEED_DIR` compare against is taken a
 }
 ```
 
-A folder whose name starts with `_` is never a case, so keep shared fixtures under `_shared/`. A path that leaves the cases folder, or does not exist, is a load error. So is a `fixtures` or `home` folder that is a case folder (it holds `case.json` or `prompt.md`), holds one, or is or sits inside any case's `grader/` or `fixture/` folder: it would hand the agent held-out files. The full case is in `examples/cases/shared-fixture`.
+A folder whose name starts with `_` is never a case, so keep shared fixtures under `_shared/`. A path that leaves the cases folder, or does not exist, is a load error. So is a `fixtures` or `home` folder that is a case folder, holds one, or is or sits inside any case's `grader/` or `fixture/` folder: it would hand the agent held-out files. A case folder here is what discovery treats as a case: a folder with `case.json` or `prompt.md` that has no `_`-prefixed folder on its path and no case above it. A `prompt.md` or `case.json` that is data in a `_shared/` fixture is fine. The full case is in `examples/cases/shared-fixture`.
 
 **Links.** `workspace/`, each shared fixture folder, `fixture/` and `home/` are copied with their links unchanged. A link whose target is absolute, or leaves its own folder, is a load error that names it.
+
+A `tool_not_called` check with `inputMatches` reads the whole input of a call. To forbid a bare force push, use `\\bpush\\b(?!.*--force-with-lease)(?=.*(\\s-[a-zA-Z]*f[a-zA-Z]*(?=[\\s"]|$)|\\s--force(?=[\\s"]|$)|\\s\\+\\S))` (as written in JSON). It cannot tell two commands of one call apart, so `git push --force-with-lease && git push -f` in a single call is not flagged. Target case 5 in `test/target/cases/history-clean-up` uses it.
 
 The full case is in `examples/cases/setup-git`.
 

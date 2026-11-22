@@ -73,32 +73,52 @@ export function fixtureOf(dir: string, file: string): string | null {
   return fixture;
 }
 
-const holdsCase = (dir: string): boolean =>
+const holdsCaseFile = (dir: string): boolean =>
   ["case.json", "prompt.md"].some((name) =>
     fs.existsSync(path.join(dir, name)),
   );
 
 /**
+ * Tells whether discovery would treat a directory as a case: it holds `case.json` or `prompt.md`, no directory from
+ * the cases directory down to it starts with `_`, and none of those above it is a case, because nothing under a case
+ * is searched.
+ * @param dir - The real path of a directory inside the cases directory.
+ * @param root - The real path of the cases directory.
+ * @returns True when it is a case.
+ */
+function isCaseDir(dir: string, root: string): boolean {
+  const names = path.relative(root, dir).split(path.sep);
+  if (names[0] === "" || names.some((name) => name.startsWith("_"))) {
+    return false;
+  }
+  const above = names
+    .slice(0, -1)
+    .map((_, index) => path.join(root, ...names.slice(0, index + 1)));
+  return holdsCaseFile(dir) && !above.some(holdsCaseFile);
+}
+
+/**
  * Tells whether copying a directory into a run would hand the agent a case's own files: the directory is a case
  * folder, holds one, or is a case's `grader/` or `fixture/` folder or inside one.
  * @param real - The real path of the directory.
+ * @param root - The real path of the cases directory.
  * @returns True when it would.
  */
-function exposesCase(real: string): boolean {
-  const inside = real
+function exposesCase(real: string, root: string): boolean {
+  const chain = real
     .split(path.sep)
     .map(
       (_, index, parts) => parts.slice(0, index + 1).join(path.sep) || path.sep,
-    )
-    .some(
-      (each) =>
-        ["grader", "fixture"].includes(path.basename(each)) &&
-        holdsCase(path.dirname(each)),
     );
-  let holds = holdsCase(real);
+  const inside = chain.some(
+    (each) =>
+      ["grader", "fixture"].includes(path.basename(each)) &&
+      isCaseDir(path.dirname(each), root),
+  );
+  let holds = isCaseDir(real, root);
   walkTree(real, {
     visit: ({ file, dirent }) => {
-      holds ||= dirent.isDirectory() && holdsCase(file);
+      holds ||= dirent.isDirectory() && isCaseDir(file, root);
       return undefined;
     },
   });
@@ -114,13 +134,20 @@ function exposesCase(real: string): boolean {
  * @param where.inside - The directory the path must resolve inside, without being it.
  * @param where.from - What the path is relative to.
  * @param where.outside - The words of the error for a path that leaves `inside`.
+ * @param where.root - The cases directory.
  * @returns The absolute path of an existing directory whose links stay inside it.
  * @throws {UsageError} When the path leaves `inside`, does not exist, is no directory, or holds a link that leaves it.
  */
 function directoryNamed(
   key: string,
   named: string,
-  where: { file: string; inside: string; from: string; outside: string },
+  where: {
+    file: string;
+    inside: string;
+    from: string;
+    outside: string;
+    root: string;
+  },
 ): string {
   const resolved = path.resolve(where.from, named);
   const within = (root: string, target: string): boolean => {
@@ -140,7 +167,7 @@ function directoryNamed(
     throw fail(where.outside);
   }
   if (!fs.statSync(resolved).isDirectory()) throw fail("is not a directory");
-  if (exposesCase(fs.realpathSync(resolved))) {
+  if (exposesCase(fs.realpathSync(resolved), fs.realpathSync(where.root))) {
     throw fail(
       "would copy a case folder, or a grader/ or fixture/ folder, into the run",
     );
@@ -171,6 +198,7 @@ export function fixturesOf(
       file,
       from: dir,
       inside: root,
+      root,
       outside: "is outside the cases directory",
     }),
   );
@@ -178,23 +206,26 @@ export function fixturesOf(
 
 /**
  * Finds the directory that is copied into the run's throwaway home.
- * @param dir - The case's directory.
- * @param file - The case file, for an error message.
+ * @param where - The case's directory, its case file for an error message, and the cases directory.
+ * @param where.dir - The case's directory.
+ * @param where.file - The case file.
+ * @param where.root - The cases directory.
  * @param name - The `home` of the case file, relative to the case's directory; absent when the key is.
  * @returns The directory, or null when the case has no `home`.
  * @throws {UsageError} When it leaves the case's directory, does not exist, is no directory, holds a link that leaves
  *   it, or holds a file at the path of a harness's login file, which the run puts there itself.
  */
 export function homeOf(
-  dir: string,
-  file: string,
+  where: { dir: string; file: string; root: string },
   name: string | undefined,
 ): string | null {
   if (name === undefined) return null;
+  const { dir, file, root } = where;
   const home = directoryNamed("home", name, {
     file,
     from: dir,
     inside: dir,
+    root,
     outside: "must stay inside the case",
   });
   const logins = new Map(
