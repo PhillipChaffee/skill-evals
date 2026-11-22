@@ -9,7 +9,7 @@ import { skillEvents, skillsLoaded } from "./skill-events.js";
 import type { SkillEvent } from "./skill-events.js";
 import type { Spend } from "./gate.js";
 import { spendOf } from "./gate.js";
-import type { RunRecord } from "./run-plan.js";
+import type { CheckResult, RunRecord } from "./run-plan.js";
 import type { RetryKind } from "./retry.js";
 import { retryKind } from "./retry.js";
 import type { RunPlan, Usage } from "./run-plan.js";
@@ -65,6 +65,24 @@ function checkKind(check: Check): string {
 }
 
 /**
+ * Tells whether a run has no check left to score.
+ * @param checks - The run's check results.
+ * @returns The reason when there are checks and every one is on a reply turn that was not asked, naming those turns;
+ *   null otherwise.
+ */
+function nothingScored(checks: CheckResult[]): string | null {
+  if (checks.length === 0 || checks.some((check) => !check.notScored)) {
+    return null;
+  }
+  const turns = checks.flatMap((check) => check.turn ?? []);
+  if (turns.length < checks.length) {
+    return `nothing was scored: ${String(checks[0]?.reason)}`;
+  }
+  const named = [...new Set(turns)].join(", ");
+  return `nothing was scored: every check is on a reply turn that was not asked (turn ${named})`;
+}
+
+/**
  * Decides whether a run counts.
  * @param record - The parts of a run record that can disqualify it.
  * @returns Why the record must not be counted, or null when it is a valid run.
@@ -98,7 +116,7 @@ export function invalidReason(
   if (unscored) {
     return `a ${checkKind(unscored)} check has no score: ${String(unscored.reason)}`;
   }
-  return null;
+  return nothingScored(record.checks);
 }
 
 /**
@@ -285,7 +303,7 @@ async function record(
     transcriptFile: transcript.relative,
     inputHash: inputHash(caseDef, { harness: harness.id, model: plan.model }),
     ...turned,
-    ...(parsed.askedUser === true ? { askedUser: true as const } : {}),
+    askedUser: parsed.askedUser ?? null,
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
     subjectMutated: changes !== null && allChanged(changes).length > 0,

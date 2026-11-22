@@ -16,9 +16,9 @@
 // - A step `{ "onStart": [1, 2], "step": <step> }` plays its `step` only on those starts of this script, counted from 1
 //   across processes in `starts/` of $FAKE_DIR. A step `{ "crash": "text" }` writes the text to standard error and exits 1
 //   with no result event, as a harness that dies does. A step `{ "hang": true }` never returns, so only a kill ends it.
-// - A step `{ "deny": "AskUserQuestion" }` lists that tool among the result's `permission_denials`, which is how the Claude
-//   Code adapter reads that the process stopped for the user's input. A call to the question tool is an ordinary `call`
-//   step: `{ "call": { "name": "AskUserQuestion", "input": { "questions": [{ "question": "..." }] } } }`.
+// - A call step with `"denied": true` is listed in the result's `permission_denials` with its id, as a `-p` process lists a
+//   question it cannot ask. A call to the question tool is an ordinary `call` step:
+//   `{ "call": { "name": "AskUserQuestion", "input": { "questions": [{ "question": "..." }] }, "denied": true } }`.
 // - A script's `costUsd` is the `total_cost_usd` of its result event; without it the result states no cost.
 // - A script's `initOmit` names init fields to leave out, and `noInit` leaves the init event out.
 // - A turn of a multi-turn case is another process of the same run (the same config directory): once a script has matched,
@@ -45,7 +45,7 @@ const emit = (event) => process.stdout.write(`${JSON.stringify(event)}\n`);
 const resumed = flag("--resume");
 // The id of this session: the one it was resumed with, or a new one. A script can leave it out.
 let sessionId = resumed ?? `fake-session-${process.pid}`;
-// The tools a `{ "deny": "<tool>" }` step named: the result lists them as `permission_denials`.
+// The calls with `"denied": true`: the result lists them as `permission_denials`.
 const denials = [];
 const finish = (result, costUsd) =>
   emit({
@@ -326,6 +326,14 @@ function play(steps, turn) {
   const prepare = (scripted) => {
     const call = { ...scripted, input: expand(scripted.input) };
     const use = id("toolu");
+    // A denied call is listed in the result's `permission_denials`, as a `-p` process lists a question it cannot ask.
+    if (call.denied) {
+      denials.push({
+        tool_name: call.name,
+        tool_use_id: use,
+        tool_input: call.input,
+      });
+    }
     return {
       block: { type: "tool_use", id: use, name: call.name, input: call.input },
       settle: (parent) => {
@@ -387,12 +395,6 @@ function play(steps, turn) {
         exit_code: exit,
         output: context,
         outcome: exit === 0 ? "success" : "error",
-      });
-    } else if ("deny" in one) {
-      denials.push({
-        tool_name: one.deny,
-        tool_use_id: id("toolu"),
-        tool_input: {},
       });
     } else if ("fail" in one) {
       throw new Error(one.fail);

@@ -1,6 +1,7 @@
 import type { LifecycleEvent, Loaded } from "./harnesses/shared.js";
 import type { Check, Outcome, TurnSlice } from "./checks/index.js";
 import type { Parsed, TranscriptEvent } from "./harnesses/shared.js";
+import { QUESTION_CHECKS } from "./question.js";
 import type { RunRecord } from "./run-plan.js";
 import type { SkillEvent } from "./skill-events.js";
 import type { ChangedFiles } from "./snapshot.js";
@@ -120,12 +121,16 @@ export function viewFor(check: Check, outcome: Outcome): Outcome | string {
  * @param check - Any check of a case.
  * @param outcome - What the run left behind.
  * @returns The reason the check is left out of the score; null for a check that is scored, which is every check but
- *   those of a reply turn that was not asked.
+ *   those of a reply turn that was not asked, and the question checks of a record made before the question kind.
  */
-export const notScoredFor = (check: Check, outcome: Outcome): string | null =>
-  check.turn === undefined
+export function notScoredFor(check: Check, outcome: Outcome): string | null {
+  if (outcome.preQuestion && QUESTION_CHECKS.has(check.type)) {
+    return "not re-scored: recorded before the question kind";
+  }
+  return check.turn === undefined
     ? null
     : (outcome.turns?.[check.turn - 1]?.notAsked ?? null);
+}
 
 /**
  * Cuts a stored run into the slices of its turns, for a check that is scored again.

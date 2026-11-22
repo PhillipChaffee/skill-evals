@@ -2,7 +2,8 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { script } from "./testing/plant.js";
 import { exec } from "./testing/runs.js";
-import { onlyRecord, REJUDGED } from "./testing/rejudge.js";
+import { onlyRecord, REJUDGED, resultsIn } from "./testing/rejudge.js";
+import type { RunRecord } from "./run.js";
 import { sandbox } from "./testing/sandbox.js";
 
 const EDIT = {
@@ -99,10 +100,20 @@ test("rejudge keeps a reply turn that was not asked out of the score, and reads 
     ],
   };
   box.write(CASE_FILE, file);
-  // The harness says it stopped for input, but no question call shows what was asked: the reply is not asked.
+  // The agent asked about something else than the reply answers, so the reply is not asked.
   script(box, "talk", {
     match: { prompt: "do talk" },
-    turns: [[{ text: "need input" }, { deny: "AskUserQuestion" }]],
+    turns: [
+      [
+        {
+          call: {
+            name: "AskUserQuestion",
+            input: { questions: [{ question: "Which colour?" }] },
+            denied: true,
+          },
+        },
+      ],
+    ],
   });
   const cases = path.join(box.root, "cases");
   const out = path.join(box.root, "results");
@@ -123,4 +134,38 @@ test("rejudge keeps a reply turn that was not asked out of the score, and reads 
     [null, true],
   ]);
   expect(record.score).toBe(1);
+});
+
+test("rejudge does not score the question checks of a run recorded before the question kind", async () => {
+  const box = sandbox();
+  box.write("cases/talk/prompt.md", "do talk\n");
+  box.write(CASE_FILE, {
+    checks: [
+      { type: "ended_awaiting_user" },
+      { type: "output_matches", pattern: "." },
+    ],
+  });
+  script(box, "talk", {
+    match: { prompt: "do talk" },
+    turns: [[{ final: "done" }]],
+  });
+  const cases = path.join(box.root, "cases");
+  const out = path.join(box.root, "results");
+  await box.cli(["score", "--subject", "none", "--cases", cases, "--out", out]);
+  const stored = resultsIn(out);
+  const [first] = stored.records;
+  const earlier = { ...(first as RunRecord), askedUser: undefined };
+  box.write("results/results.json", { ...stored, records: [earlier] });
+  const ran = await box.cli(["rejudge", out, "--cases", cases]);
+  expect(ran.status, ran.stderr).toBe(0);
+  expect(ran.stderr.match(/recorded before the question kind/g)).toHaveLength(
+    1,
+  );
+  const [kept, other] = onlyRecord(out, REJUDGED).checks;
+  expect(kept).toMatchObject({
+    score: null,
+    notScored: true,
+    reason: "not re-scored: recorded before the question kind",
+  });
+  expect(other?.score).toBe(1);
 });

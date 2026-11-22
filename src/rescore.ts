@@ -148,6 +148,7 @@ function outcomeOf(
   return {
     ...storedSlices(record, parts.transcript.events),
     askedUser: record.askedUser ?? null,
+    ...(record.askedUser === undefined ? { preQuestion: true as const } : {}),
     finalText: record.finalText,
     toolCalls: record.toolCalls,
     transcript: parts.transcript.events,

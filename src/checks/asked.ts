@@ -50,16 +50,15 @@ export const ASKED_CHECKS = {
   ended_awaiting_user: {
     fields: [],
     scores:
-      "The last event of the main agent is a question call, or the harness reported that the agent stopped for the user's answer.",
-    note: "In a turn's `checks` it looks at that turn's last event; at case level, at the run's. The results of question calls are not counted as events, since a headless process answers a question with a refusal. A final message that ends with a question mark is not asking. Needs a harness with `askUser`.",
+      "The last event of the main agent is a question call: the agent stopped for the user's answer.",
+    note: "In a turn's `checks` it looks at that turn's last event; at case level, at the run's. The results of question calls are not counted as events, since a headless process answers a question with a refusal. A question that a subagent asked, or that the agent went on after, does not count, and nor does a final message that ends with a question mark. Needs a harness with `askUser`.",
     needs: () => ["askUser"],
     rule: (_check, outcome) =>
       endsAwaiting(outcome.transcript, outcome.askedUser)
         ? PASS
         : {
             score: 0,
-            reason:
-              "the last event of the main agent is not a question call, and the harness did not report that it stopped for input",
+            reason: "the last event of the main agent is not a question call",
           },
   },
 } satisfies Record<string, Spec>;

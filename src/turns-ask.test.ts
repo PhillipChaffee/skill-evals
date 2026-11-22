@@ -9,10 +9,12 @@ import { sandbox } from "./testing/sandbox.js";
 import { failure } from "./testing/turns-case.js";
 import { scored } from "./testing/turns-run.js";
 
-const ask = (question: string) => ({
+// A `-p` process refuses the question tool, and lists the refusal among the result's `permission_denials`.
+const ask = (question: string, denied = false) => ({
   call: {
     name: "AskUserQuestion",
     input: { questions: [{ question, options: [{ label: "a" }] }] },
+    ...(denied ? { denied } : {}),
   },
 });
 const WHICH = "Which database";
@@ -146,11 +148,25 @@ test("ended_awaiting_user passes when the run stops on a question", async () => 
   const box = sandbox();
   const checks = [{ type: "ended_awaiting_user" }];
   const cases: Record<string, Parameters<typeof play>[1]["steps"]> = {
-    stops: [ask("Which database?")],
-    // The harness says it stopped for input, and nothing else.
-    denied: [{ text: "I need an answer." }, { deny: "AskUserQuestion" }],
-    // The agent asked and then went on without the answer: it did not stop.
-    "goes-on": [ask("Which database?"), { text: "I picked postgres." }],
+    // The question is refused, as `-p` does, and the run ends on it.
+    stops: [ask(`${WHICH}?`, true)],
+    // The agent asked, was refused, and went on without the answer: it did not stop.
+    "goes-on": [
+      ask(`${WHICH}?`, true),
+      exec("echo working"),
+      { text: "I picked postgres and finished." },
+    ],
+    // Only a subagent asked. The main agent finished.
+    sub: [
+      {
+        agent: {
+          type: "helper",
+          prompt: "ask",
+          steps: [ask(`${WHICH}?`, true)],
+        },
+      },
+      { text: "All done." },
+    ],
     // Only a question tool asks.
     chats: [{ text: "Which database should I use?" }],
   };
@@ -168,10 +184,17 @@ test("ended_awaiting_user passes when the run stops on a question", async () => 
   const scores = Object.fromEntries(
     records.map(({ caseId, score: value }) => [caseId, value]),
   );
-  expect(scores).toEqual({ stops: 1, denied: 1, "goes-on": 0, chats: 0 });
-  expect(records.find(({ caseId }) => caseId === "denied")?.askedUser).toBe(
-    true,
+  expect(scores).toEqual({ stops: 1, "goes-on": 0, sub: 0, chats: 0 });
+  // The adapter reports a stop for input only when the refused question is the one the run ended on.
+  const asked = Object.fromEntries(
+    records.map(({ caseId, askedUser }) => [caseId, askedUser]),
   );
+  expect(asked).toEqual({
+    stops: true,
+    "goes-on": false,
+    sub: false,
+    chats: false,
+  });
   expect(
     records.find(({ caseId }) => caseId === "chats")?.checks[0]?.reason,
   ).toContain("not a question call");

@@ -1,3 +1,4 @@
+import { QUESTION_CHECKS } from "../question.js";
 import { allChecks } from "../case-checks.js";
 import { applicability, hostCapabilities } from "../applicability.js";
 import { EXIT } from "../exit-codes.js";
@@ -115,6 +116,33 @@ function notApplicable(cases: Case[], context: LintContext): Lint[] {
 }
 
 /**
+ * Warns about reply turns that nothing checks the question of.
+ * @param cases - The loaded cases.
+ * @returns One warning for each reply turn of a case that has no `asked_user` or `ended_awaiting_user` check at case
+ *   level or on an earlier turn: the reply may be skipped as "not asked" with nothing to say the agent should have asked.
+ */
+function unwatchedReplies(cases: Case[]): Lint[] {
+  const asks = (check: { type: string }): boolean =>
+    QUESTION_CHECKS.has(check.type);
+  return cases.flatMap((one) =>
+    (one.turns ?? []).flatMap((turn, index): Lint[] => {
+      const earlier = (one.turns ?? []).slice(0, index);
+      return "reply" in turn &&
+        !one.checks.some(asks) &&
+        !earlier.some(({ checks }) => checks.some(asks))
+        ? [
+            {
+              level: "warning",
+              caseId: one.id,
+              text: `turn ${String(index + 1)} is a reply, and no asked_user or ended_awaiting_user check at case level or on an earlier turn says that the agent should ask: if it does not, the reply is skipped and its checks are not scored`,
+            },
+          ]
+        : [];
+    }),
+  );
+}
+
+/**
  * Warns about `file_unchanged` checks that protect nothing.
  * @param cases - The loaded cases.
  * @returns One warning for each `file_unchanged` check on the workspace whose path or glob matches no file of the
@@ -200,6 +228,7 @@ export const LINTS: LintRule[] = [
   skillNames,
   notApplicable,
   vacuousUnchanged,
+  unwatchedReplies,
   judgedShare,
   filesOutside,
 ];

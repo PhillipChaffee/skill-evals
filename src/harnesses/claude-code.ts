@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { awaitedCalls } from "../question.js";
 import { callsOf, numbered } from "../transcript.js";
 import type { MessageEvent } from "./claude-code-stream.js";
 import {
@@ -7,7 +8,13 @@ import {
   countTurns,
   transcriptParts,
 } from "./claude-code-stream.js";
-import type { Harness, Loaded, LoadedSubject, ToolKind } from "./shared.js";
+import type {
+  Harness,
+  Loaded,
+  LoadedSubject,
+  ToolKind,
+  TranscriptEvent,
+} from "./shared.js";
 import {
   ANTHROPIC_ENV,
   foreignPaths,
@@ -56,7 +63,7 @@ type Event =
       is_error?: boolean;
       total_cost_usd?: number;
       /** The tool calls that a `-p` process could not carry out; an `AskUserQuestion` among them is the agent asking. */
-      permission_denials?: { tool_name?: string }[];
+      permission_denials?: { tool_name?: string; tool_use_id?: string }[];
       usage?: {
         input_tokens: number;
         output_tokens: number;
@@ -94,6 +101,25 @@ const ISOLATION: NonNullable<Harness["isolation"]> = {
     "- Not proven by the record: managed policy settings (hooks, environment, permissions), a managed `CLAUDE.md` file, rules, hooks, and managed agents. The report does not list them.",
   ].join("\n"),
 };
+
+/**
+ * Tells whether the harness refused the question call that the run ended on.
+ * @param denials - The result's `permission_denials`.
+ * @param transcript - The run's events.
+ * @returns True when a denied `AskUserQuestion` has the id of a question call that is among the main agent's last events,
+ *   with nothing after it but its result.
+ */
+function stoppedOn(
+  denials: { tool_name?: string; tool_use_id?: string }[] | undefined,
+  transcript: TranscriptEvent[],
+): boolean {
+  const awaited = awaitedCalls(transcript).map((event) => event.callId);
+  return (denials ?? []).some(
+    (denied) =>
+      denied.tool_name === "AskUserQuestion" &&
+      awaited.includes(denied.tool_use_id),
+  );
+}
 
 const claudeCode: Harness = {
   id: "claude-code",
@@ -186,11 +212,11 @@ const claudeCode: Harness = {
           }
         : null,
       agentTokens: agentTokens(raw as MessageEvent[]),
-      // Unconfirmed against a real run: a `-p` process denies the question tool, and the result lists the denial.
+      // Unconfirmed against a real run: a `-p` process refuses the question tool, and its result lists the refusal as
+      // `{ tool_name, tool_use_id, tool_input }`. Only a refusal of the question that the run ended on counts: the agent
+      // goes on after a refused question, and a subagent's question is not the user's to answer for this run.
       askedUser: result
-        ? (result.permission_denials ?? []).some(
-            (denied) => denied.tool_name === "AskUserQuestion",
-          )
+        ? stoppedOn(result.permission_denials, transcript)
         : null,
       costUsd: result?.total_cost_usd ?? null,
       loaded: {

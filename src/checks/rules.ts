@@ -82,6 +82,8 @@ export interface Outcome {
   skillEvents: SkillEvent[];
   /** What the harness itself said of stopping for the user's answer (`Parsed.askedUser`); `ended_awaiting_user` reads it. */
   askedUser?: boolean | null;
+  /** Set when the outcome is read from a record made before the question kind: its calls cannot be told apart as questions. */
+  preQuestion?: true;
   /** What the harness said it loaded at startup; `skills` is null for a harness that lists none. */
   loaded: Loaded;
   /** True under `--lenient`: a `skill_loaded` or `skill_not_loaded` without `via` or `resolved` keeps the 0.0.1 rule. */

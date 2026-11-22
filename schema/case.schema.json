@@ -2166,7 +2166,7 @@
     },
     "check-ended_awaiting_user": {
       "title": "ended_awaiting_user",
-      "description": "The last event of the main agent is a question call, or the harness reported that the agent stopped for the user's answer. In a turn's `checks` it looks at that turn's last event; at case level, at the run's. The results of question calls are not counted as events, since a headless process answers a question with a refusal. A final message that ends with a question mark is not asking. Needs a harness with `askUser`.",
+      "description": "The last event of the main agent is a question call: the agent stopped for the user's answer. In a turn's `checks` it looks at that turn's last event; at case level, at the run's. The results of question calls are not counted as events, since a headless process answers a question with a refusal. A question that a subagent asked, or that the agent went on after, does not count, and nor does a final message that ends with a question mark. Needs a harness with `askUser`.",
       "type": "object",
       "required": ["type"],
       "properties": {

@@ -45,6 +45,13 @@ test("Claude Code's AskUserQuestion is a question call, and the result's denial 
   expect(parsed.toolCalls.map(({ kind }) => kind)).toEqual(["question"]);
   expect(parsed.askedUser).toBe(true);
   // A denial of another tool, or none, is not asking; with no result nothing is reported.
+  const stale = {
+    ...done,
+    permission_denials: [{ tool_name: "AskUserQuestion", tool_use_id: "q0" }],
+  };
+  expect(parseText(CLAUDE, lines(init, assistant, stale)).askedUser).toBe(
+    false,
+  );
   const other = { ...done, permission_denials: [{ tool_name: "Bash" }] };
   expect(parseText(CLAUDE, lines(init, assistant, other)).askedUser).toBe(
     false,
@@ -121,7 +128,8 @@ test("ended_awaiting_user reads the last main-agent event, and not a question ca
   expect(endsAwaiting([], null)).toBe(false);
   // The adapter's own word is enough.
   expect(endsAwaiting(after.transcript, true)).toBe(true);
-  expect(questionsIn(after.transcript)).toEqual(["Which?"]);
+  expect(questionsIn(after.transcript)).toEqual([]);
+  expect(questionsIn(last.transcript)).toEqual(["Which?"]);
   const check = { type: "ended_awaiting_user", weight: 1 } as RuledCheck;
   expect((await checkScore(check, last)).score).toBe(1);
   expect((await checkScore(check, after)).score).toBe(0);

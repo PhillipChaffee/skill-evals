@@ -38,7 +38,7 @@ interface Where {
 function checkMeans(
   results: Results,
   where: Where,
-): { checks: Check[]; means: number[] } | null {
+): { checks: Check[]; means: (number | undefined)[] } | null {
   const valid = results.records.filter(
     (one) =>
       one.harness === where.harness &&
@@ -54,14 +54,17 @@ function checkMeans(
     const matched = matchChecks(first.checks, one.checks);
     for (const [index, check] of one.checks.entries()) {
       const at = matched[index];
-      if (at === null || at === undefined) continue;
-      sums[at] = (sums[at] ?? 0) + (check.score ?? 0);
+      // A check that was never scored (a reply turn that was not asked) has no score to average.
+      if (at === null || at === undefined || check.score === null) continue;
+      sums[at] = (sums[at] ?? 0) + check.score;
       counts[at] = (counts[at] ?? 0) + 1;
     }
   }
   return {
     checks: first.checks,
-    means: sums.map((sum, index) => sum / (counts[index] || 1)),
+    means: sums.map((sum, index) =>
+      counts[index] ? sum / (counts[index] ?? 1) : undefined,
+    ),
   };
 }
 

@@ -152,6 +152,8 @@ function runnerEvent(record: TurnRecord, state: State): Step {
   if (record.event === "clear") {
     state.continuing = false;
     state.session = null;
+    // A reply answers a question of the session it was asked in.
+    state.sent = { turn: 0, parsed: emptyParse() };
   }
   const events = numbered([lifecyclePart(record.event ?? "resume")]);
   return {
@@ -297,14 +299,18 @@ function blocked(run: SessionInput, place: Place, record: TurnRecord): boolean {
 async function runTurn(run: SessionInput, place: Place): Promise<Step> {
   const { turn, index, state } = place;
   const record = recordOf(turn, index);
+  // A reply that is not asked needs no process, so a time limit does not stop it; a stopped run still does.
+  const why =
+    state.stop === null && "reply" in turn
+      ? unasked(turn.reply, state.sent)
+      : null;
+  if (why !== null) return unaskedStep(record, why);
   if (blocked(run, place, record)) {
     return skippedStep(record, state.stop?.why ?? "");
   }
   if (record.kind === "event" && record.event !== "compact") {
     return runnerEvent(record, state);
   }
-  const why = "reply" in turn ? unasked(turn.reply, state.sent) : null;
-  if (why !== null) return unaskedStep(record, why);
   const seconds = secondsLeft(run, state);
   const made = await runProcess(
     { ...run, timeoutSeconds: seconds },

@@ -107,7 +107,7 @@ function checkLines(record: RunRecord): string[] {
   return [
     `checks${record.ok ? "" : ` (run invalid: ${clean(String(record.error))})`}`,
     ...record.checks.flatMap((check, index) => [
-      `${String(index + 1)}. ${clean(describeCheck(check))}: ${check.score === null ? "no score" : check.score.toFixed(SCORE_DIGITS)}`,
+      `${String(index + 1)}. ${clean(describeCheck(check))}: ${check.score === null ? (check.notScored ? "not scored" : "no score") : check.score.toFixed(SCORE_DIGITS)}`,
       ...(check.reason === undefined
         ? []
         : check.reason.split("\n").map((row) => `   ${shown(row)}`)),

@@ -133,8 +133,8 @@ export interface RunRecord extends Usage, LimitFields {
   transcriptFile?: string | null;
   /** The sha256 of what the agent saw: the prompt, files, setup, harness, model, `maxTurns` and env names; not the checks. Absent from earlier records. */
   inputHash?: string;
-  /** True when the harness reported that the agent stopped for the user's answer (`Parsed.askedUser`), for `ended_awaiting_user` at case level. Absent otherwise. */
-  askedUser?: true;
+  /** What the harness reported of stopping for the user's answer (`Parsed.askedUser`), for `ended_awaiting_user` at case level; null when it reports nothing. Absent from a record made before the question kind, which `rescore` does not score `asked_user` and `ended_awaiting_user` from. */
+  askedUser?: boolean | null;
   /** Each turn of a case with `turns`, in order, with what it said and whether it was sent. Absent for a single prompt. */
   userTurns?: TurnRecord[];
   /** What each turn created, modified and deleted in the workspace, from a hash taken after it (no files are copied); the order of `userTurns`. Absent for a single prompt. */

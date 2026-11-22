@@ -1,3 +1,4 @@
+import { allChecks } from "./case-checks.js";
 import { openCache, scopedCache } from "./cache.js";
 import type { Cache } from "./cache.js";
 import type { Case } from "./cases.js";
@@ -10,6 +11,7 @@ import type { Located } from "./harnesses/index.js";
 import type { Harness } from "./harnesses/shared.js";
 import type { JudgeApi } from "./judge-api.js";
 import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
+import { QUESTION_CHECKS } from "./question.js";
 import type { Plan } from "./rejudge-plan.js";
 import type { Source } from "./rejudge-source.js";
 import type { Results } from "./evaluate.js";
@@ -279,6 +281,16 @@ async function rescoreKept(
 }
 
 /**
+ * Tells whether a stored run cannot answer the question checks that its case now has.
+ * @param record - The stored run; a run recorded before the question kind has no `askedUser`.
+ * @param caseDef - The case as it is now.
+ * @returns True for such a run, when the case has an `asked_user` or `ended_awaiting_user` check.
+ */
+const recordedBeforeQuestions = (record: RunRecord, caseDef: Case): boolean =>
+  record.askedUser === undefined &&
+  allChecks(caseDef).some((check) => QUESTION_CHECKS.has(check.type));
+
+/**
  * Re-scores every run that the plan says to re-score, one after the other. No harness of the agent is started; a judge
  * harness starts only for a judged check whose answer the cache does not hold.
  * @param source - The earlier command's directory and results.
@@ -300,6 +312,7 @@ export async function rescoreAll(
   const records: RunRecord[] = [];
   const notes: string[] = [];
   const keyless = new Set<string>();
+  let warnedQuestion = false;
   for (const [index, record] of source.results.records.entries()) {
     const verdict = plan.verdicts[index];
     if (verdict?.kind !== "rescore") {
@@ -312,6 +325,12 @@ export async function rescoreAll(
       keyless.add(record.caseId);
       console.error(
         "skill-evals: warning: a run has no key in results.jsonl, so its judge answers are cached apart from the earlier command's",
+      );
+    }
+    if (!warnedQuestion && recordedBeforeQuestions(record, verdict.caseDef)) {
+      warnedQuestion = true;
+      console.error(
+        "skill-evals: warning: a run was recorded before the question kind, so its asked_user and ended_awaiting_user checks are not re-scored",
       );
     }
     const slot = scopedCache(cache, slotName(key, record.subject));
