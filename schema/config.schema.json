@@ -24,6 +24,11 @@
       "description": "Runs for each subject and case.",
       "type": "number"
     },
+    "jobs": {
+      "title": "jobs",
+      "description": "How many runs may be in flight at once. A positive integer. Each run has its own home, workspace and copy of the subject; the records are written in plan order whatever order the runs end in.",
+      "type": "number"
+    },
     "model": {
       "title": "model",
       "description": "Passed to the harness unchanged.",

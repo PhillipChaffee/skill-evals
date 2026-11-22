@@ -164,6 +164,7 @@ export const EXAMPLE_CONFIG: Record<
   cases: "evals/cases",
   harness: CLAUDE_CODE,
   reps: 3,
+  jobs: 4,
   model: "<model-id>",
   judgeHarness: CLAUDE_CODE,
   judgeModel: "<model-id>",

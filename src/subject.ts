@@ -6,6 +6,7 @@ import type { Exclusions } from "./exclusions.js";
 import { exportSubject, leaveOut } from "./isolate.js";
 import type { Project } from "./project.js";
 import { UsageError } from "./scope.js";
+import { hashTree } from "./tree-hash.js";
 import { allChanged, diffSnapshots, snapshot } from "./snapshot.js";
 
 /** A comparison has the labels "a" and "b"; a single subject is "subject". */
@@ -41,6 +42,11 @@ export interface Subject extends SubjectSummary {
   exportChanged: () => string[];
   /** The paths of the source directory that changed since the subject was resolved; none for a git ref and "none". */
   sourceChanges: () => string[];
+  /**
+   * What a reused result must share: the git tree hash of a ref; for a directory, the content hash of the export; for
+   * "none", "none".
+   */
+  revision: string;
   /** Removes the export. */
   dispose: () => void;
 }
@@ -236,6 +242,7 @@ const baseline = (label: Label): Subject => ({
   exported: null,
   exportChanged: () => [],
   sourceChanges: () => [],
+  revision: "none",
   dispose: () => undefined,
 });
 
@@ -294,6 +301,9 @@ export function resolveSubject(
       exported: exported.dir,
       exportChanged: exported.changed,
       sourceChanges: watchSource(source, left),
+      revision: source.commit
+        ? git(scope.root, "rev-parse", `${source.commit}^{tree}`)
+        : hashTree(exported.dir),
       dispose: exported.dispose,
     };
   } catch (error) {

@@ -83,6 +83,8 @@ export interface Case {
   homeDir: string | null;
   /** The keys of the case file that start with `x-`, which belong to the case's author. */
   extensions: Record<string, unknown>;
+  /** The case's directory; set by the loader. A reused result is tied to its content (`runKey`). */
+  dir?: string | undefined;
 }
 
 // The top-level keys of a case file. Any other key is a load error, unless it starts with `x-`.
@@ -299,6 +301,7 @@ function loadCase(found: Found, mode: Mode, root: string): Case[] {
     timeoutSeconds:
       (read("timeoutSeconds") as number | undefined) ?? DEFAULT_TIMEOUT_SECONDS,
     ...settingsOf(read),
+    dir,
     workspaceDir: workspaceOf(workspaceDir, file),
     graderDir: graderOf(dir, file),
     ...layersOf(found, read, root),

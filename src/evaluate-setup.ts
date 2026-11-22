@@ -1,5 +1,9 @@
 import { connect } from "./baseten.js";
 import type { Case } from "./cases.js";
+import type { EvaluateOptions } from "./evaluate.js";
+import type { SelectionOptions } from "./select.js";
+import { loadSelection, selectionOf } from "./select.js";
+import type { Label } from "./subject.js";
 import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
 import { requireEnvNames } from "./env.js";
@@ -50,3 +54,50 @@ export function decisionFor(
   const timeoutMs = seconds === undefined ? undefined : seconds * MS_PER_SECOND;
   return connect({ model, url, env: process.env, timeoutMs });
 }
+
+/**
+ * Reads how many runs may be in flight at once.
+ * @param options - The options after the config file was applied.
+ * @returns `jobs`; 1 when it is not set.
+ * @throws {UsageError} When it is not a positive integer.
+ */
+export function requireJobs(options: Config): number {
+  const { jobs = 1 } = options;
+  if (!Number.isInteger(jobs) || jobs < 1) {
+    throw new UsageError("jobs must be a positive integer");
+  }
+  return jobs;
+}
+
+/**
+ * Pairs each subject with its label.
+ * @param specs - What the caller passed as `subjects`.
+ * @returns "subject" for one; "a" for the baseline and "b" for the subject under test for two.
+ * @throws {UsageError} When there are not one or two.
+ */
+export function labelled(specs: string[]): { label: Label; spec: string }[] {
+  const [first, second, ...more] = Array.isArray(specs) ? specs : [];
+  if (first === undefined || more.length > 0) {
+    throw new UsageError("subjects must hold one or two subjects");
+  }
+  return second === undefined
+    ? [{ label: "subject", spec: first }]
+    : [
+        { label: "a", spec: first },
+        { label: "b", spec: second },
+      ];
+}
+
+/**
+ * Loads the cases the options name.
+ * @param options - The options after the config file was applied.
+ * @returns The cases that the selection options choose.
+ */
+export const casesOf = (
+  options: SelectionOptions &
+    Pick<EvaluateOptions, "lenient" | "onWarning"> & { cases: string },
+): Case[] =>
+  loadSelection(options.cases, selectionOf(options), {
+    lenient: options.lenient ?? false,
+    ...(options.onWarning && { onWarning: options.onWarning }),
+  });

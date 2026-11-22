@@ -90,6 +90,7 @@ export default defineConfig({
             "guides/decision-checks",
             "guides/read-the-report",
             "guides/pass-bars",
+            "guides/jobs-resume-plan",
             "guides/ci",
             "guides/from-code",
           ],

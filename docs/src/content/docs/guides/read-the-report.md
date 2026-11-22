@@ -21,6 +21,7 @@ One repetition tells you little. A check that passes 3 of 3 times on A and 1 of 
 
 ```text
 <out>/results.json                          every run record, with check scores, judge reasons, and probabilities
+<out>/results.jsonl                         one line for each finished run, added as it ends; what --resume reads
 <out>/<harness>/<case>/a1.final.md          final answer of subject A, repetition 1
 <out>/<harness>/<case>/b1.final.md          final answer of subject B, repetition 1
 <out>/<harness>/<case>/a1.stream.jsonl      the harness's raw event stream for that run

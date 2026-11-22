@@ -16,6 +16,7 @@ import { UsageError, requireSupportedPlatform } from "./scope.js";
 import { SUBJECT_CHANGED_EXIT_CODE, sourceChangedMessage } from "./subject.js";
 import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
 import { FLAGS, commandUsage, usageText } from "./usage.js";
+import { plan, printPlan } from "./commands/plan.js";
 import { validate } from "./commands/validate.js";
 
 const USAGE_EXIT_CODE = 2;
@@ -28,20 +29,26 @@ const STOPS = {
 
 /**
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
- * @param options - What to evaluate.
- * @returns The exit code: 1 when any run is invalid, a pass bar is not reached, or the subject directory changed
+ * @param options - What to evaluate; with `dryRun`, the plan is printed and nothing runs.
+ * @param project - Where the config file and the default cases directory are.
+ * @returns The exit code: 0 for `dryRun`; else 1 when any run is invalid, a pass bar is not reached, or the subject directory changed
  *   during the command, else 0.
  */
-async function suite(options: EvaluateOptions): Promise<number> {
-  const onRun = (record: RunRecord): void => {
+async function suite(
+  options: EvaluateOptions & { dryRun?: boolean | undefined },
+  project: Project,
+): Promise<number> {
+  const { dryRun, ...given } = options;
+  if (dryRun) return printPlan(given, project);
+  const onRun = (record: RunRecord, info: { reused: boolean }): void => {
     const outcome =
       invalidReason(record) ??
       `score ${formatScore(record.score)}${STOPS[record.stoppedBy ?? "agent"]}`;
     console.error(
-      `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}`,
+      `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}${info.reused ? " (reused)" : ""}`,
     );
   };
-  const evaluation = await evaluate({ ...options, onRun });
+  const evaluation = await evaluate({ ...given, onRun });
   console.log(renderReport(evaluation));
   if (evaluation.sourceChanged.length > 0) {
     console.error(
@@ -107,6 +114,7 @@ const SUITE_FLAGS: Flag[] = [
   "heldout",
   "cases",
   "reps",
+  "jobs",
   "model",
   "min-score",
   "judge-harness",
@@ -119,6 +127,8 @@ const SUITE_FLAGS: Flag[] = [
   "lenient",
   "isolated",
   "out",
+  "resume",
+  "dry-run",
 ];
 
 /** A command: what it does with its options, the flags it takes, and what the help text says about it. */
@@ -132,14 +142,37 @@ export const COMMANDS: Record<string, Command> = {
     description:
       "Run every case against subject A and subject B, score both, and print a comparison.",
     handler: ({ a = "main", b, ...options }, project) =>
-      suite({ ...options, subjects: [a, b ?? project.root] }),
+      suite({ ...options, subjects: [a, b ?? project.root] }, project),
     flags: ["a", "b", ...SUITE_FLAGS],
   },
   score: {
     description: "Run every case against one subject and print its scores.",
     handler: ({ subject, ...options }, project) =>
-      suite({ ...options, subjects: [subject ?? project.root] }),
+      suite({ ...options, subjects: [subject ?? project.root] }, project),
     flags: ["subject", ...SUITE_FLAGS],
+  },
+  plan: {
+    description:
+      "Print what run or score would make: the matrix of harnesses, cases, subjects and reps, the number of runs, and the cases that are not applicable. With --resume or --out naming an earlier command's directory, also an estimate of cost and duration. It starts no harness and writes nothing.",
+    handler: plan,
+    flags: [
+      "a",
+      "b",
+      "subject",
+      "harness",
+      "case",
+      "not-case",
+      "tag",
+      "tag-all",
+      "not-tag",
+      "heldout",
+      "cases",
+      "reps",
+      "jobs",
+      "lenient",
+      "out",
+      "resume",
+    ],
   },
   check: {
     description:

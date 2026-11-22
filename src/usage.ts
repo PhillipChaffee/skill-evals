@@ -7,7 +7,12 @@ export type Options = Omit<
   EvaluateOptions,
   "cwd" | "subjects" | "onRun" | "onWarning"
 > &
-  ProbeOptions & { a?: string; b?: string; targets?: boolean };
+  ProbeOptions & {
+    a?: string;
+    b?: string;
+    targets?: boolean;
+    dryRun?: boolean;
+  };
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
 export interface FlagSpec {
@@ -108,6 +113,13 @@ export const FLAGS = {
     description: "Runs for each subject and case.",
     default: "3",
   },
+  jobs: {
+    read: Number,
+    value: "n",
+    description:
+      "How many runs may be in flight at once. A positive integer. Each run has its own home, workspace and copy of the subject; the records are written in plan order whatever order the runs end in.",
+    default: "1",
+  },
   model: {
     value: "id",
     description: "Passed to the harness unchanged.",
@@ -183,8 +195,23 @@ export const FLAGS = {
   out: {
     as: "outDir",
     value: "dir",
-    description: "Where results go.",
+    description:
+      "Where results go. A fresh run starts an empty results.jsonl there.",
     default: "a new temp directory",
+  },
+  resume: {
+    value: "dir",
+    description:
+      "Continue the earlier command whose output directory this is. It implies --out and must name the same directory as --out when both are given. A run whose key matches a valid record in results.jsonl is not repeated; every other run is made and added. It also turns the judge cache on.",
+    default: "none: a fresh run",
+  },
+  "dry-run": {
+    as: "dryRun",
+    kind: "switch",
+    value: "",
+    description:
+      "Print what the command would run, as plan does, and exit 0. It starts no harness and writes nothing.",
+    default: "off",
   },
 } satisfies Record<string, FlagSpec>;
 /** The name of a flag, without its dashes. */

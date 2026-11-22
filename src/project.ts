@@ -40,6 +40,7 @@ export const CONFIG_KEYS: Record<
   cases: "string",
   harness: "string",
   reps: "number",
+  jobs: "number",
   model: "string",
   judgeHarness: "string",
   judgeModel: "string",
@@ -64,6 +65,8 @@ export interface Config {
   cases?: string;
   harness?: string;
   reps?: number;
+  /** How many runs may be in flight at once, a positive integer. Default: 1. */
+  jobs?: number;
   model?: string;
   judgeHarness?: string;
   judgeModel?: string;
