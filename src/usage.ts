@@ -133,6 +133,19 @@ export const FLAGS = {
     description: "The model that scores judged checks.",
     default: "the value of --model",
   },
+  "judge-api": {
+    as: "judgeApi",
+    value: "kind",
+    description:
+      "Ask the judge model over this API and start no harness process for it. Only anthropic. --judge-harness is then ignored.",
+    default: "a harness session",
+  },
+  "judge-url": {
+    as: "judgeUrl",
+    value: "url",
+    description: "The base URL of the judge API.",
+    default: "the provider's own",
+  },
   "decision-model": {
     as: "decisionModel",
     value: "id",

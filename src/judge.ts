@@ -1,4 +1,5 @@
 import type { Rubric, Scale } from "./checks/judge-fields.js";
+import type { Attachment } from "./judge-api.js";
 import type { Seen } from "./judge-render.js";
 import { tagged } from "./judge-render.js";
 import { isUnitScore } from "./score.js";
@@ -20,6 +21,28 @@ export interface Question {
   votes?: number;
   /** What the judge sees besides the task; default: the final answer only, which is what 0.0.1 sent. */
   seen?: Seen;
+  /** Files sent with the prompt, on the API path. */
+  attachments?: Attachment[];
+}
+
+/** Which question a vote answers. */
+export interface Spot {
+  /** The judge's whole prompt. */
+  prompt: string;
+  /** The index of the vote. */
+  vote: number;
+}
+
+/** Lets a judge reuse an answer it was given before, and keep each usable one. */
+export interface Memo<Reply> {
+  /** The usable answer to this question, when there is one. */
+  recall(spot: Spot): (Vote & { score: number }) | undefined;
+  /** Keeps a usable answer, with the reply that gave it. */
+  remember(
+    spot: Spot,
+    given: { score: number; reason: string },
+    reply: Reply,
+  ): void;
 }
 
 /**
@@ -133,30 +156,47 @@ export interface Judged<Reply> {
   replies: Reply[];
   /** Every vote, when there was more than one. */
   ballots?: Vote[];
+  /** How many votes came from the cache; absent when none did. */
+  hits?: number;
+}
+
+/** Sends a prompt, and the files that go with it, to the judging model. */
+type Ask<Reply> = (prompt: string, attachments: Attachment[]) => Promise<Reply>;
+
+/** What one vote is asked: the prompt, how it is read, and where it may be remembered. */
+interface Ballot<Reply> {
+  prompt: string;
+  scale: Scale;
+  attachments: Attachment[];
+  memo: Memo<Reply> | undefined;
+  /** The index of the vote. */
+  index: number;
 }
 
 /**
  * Asks for one vote: a reply, and one more when the first is unusable.
  * @param ask - Sends a prompt to the judging model.
- * @param prompt - The whole text sent to the judge.
- * @param scale - Whether the reply is read as a score or a verdict.
- * @returns The vote and every reply it took. The score is null after two unusable answers.
+ * @param ballot - The prompt, how the reply is read, and the memo.
+ * @returns The vote and every reply it took; a vote the memo gave took none. The score is null after two unusable
+ *   answers, which the memo is not told.
  */
 async function oneVote<
   Reply extends { finalText: string; error: string | null },
->(
-  ask: (prompt: string) => Promise<Reply>,
-  prompt: string,
-  scale: Scale,
-): Promise<Judged<Reply>> {
+>(ask: Ask<Reply>, ballot: Ballot<Reply>): Promise<Judged<Reply>> {
+  const { prompt, scale, memo, index } = ballot;
+  const hit = memo?.recall({ prompt, vote: index });
+  if (hit)
+    return { score: hit.score, reason: hit.reason, replies: [], hits: 1 };
   const replies: Reply[] = [];
   let failure = "";
   while (replies.length < ATTEMPTS) {
-    const reply = await ask(prompt);
+    const reply = await ask(prompt, ballot.attachments);
     replies.push(reply);
     try {
       if (reply.error) throw new Error(reply.error);
-      return { ...parseVerdict(reply.finalText, scale), replies };
+      const given = parseVerdict(reply.finalText, scale);
+      memo?.remember({ prompt, vote: index }, given, reply);
+      return { ...given, replies };
     } catch (error) {
       failure = messageOf(error);
     }
@@ -170,26 +210,36 @@ async function oneVote<
 
 /**
  * Asks a model for a score, once more when an answer is unusable, and again for each further vote.
- * @param ask - Sends a prompt to the judging model and resolves with its reply.
+ * @param ask - Sends a prompt, and the files that go with it, to the judging model and resolves with its reply.
  * @param question - What to grade.
+ * @param memo - The cache: a vote it already holds is not asked for, and each usable vote is kept. Each vote has its own
+ *   place in it.
  * @returns The verdict and every reply it took. With several votes, the majority (binary) or the median (0-1) of the
  *   usable ones, and each vote. The score is null when no vote was usable.
  */
 export async function judge<
   Reply extends { finalText: string; error: string | null },
 >(
-  ask: (prompt: string) => Promise<Reply>,
+  ask: Ask<Reply>,
   question: Question,
+  memo?: Memo<Reply>,
 ): Promise<Judged<Reply>> {
   const prompt = judgePrompt(question);
   const scale = question.scale ?? "0-1";
   const count = question.votes ?? 1;
-  if (count === 1) return oneVote(ask, prompt, scale);
+  const attachments = question.attachments ?? [];
   const cast: Judged<Reply>[] = [];
-  while (cast.length < count) cast.push(await oneVote(ask, prompt, scale));
+  while (cast.length < count) {
+    const index = cast.length;
+    cast.push(await oneVote(ask, { prompt, scale, attachments, memo, index }));
+  }
+  const [only] = cast;
+  if (count === 1 && only) return only;
+  const hits = cast.reduce((total, { hits: some = 0 }) => total + some, 0);
   return {
     ...tally(cast, scale),
     replies: cast.flatMap(({ replies }) => replies),
     ballots: cast.map(({ score, reason }) => ({ score, reason })),
+    ...(hits > 0 ? { hits } : {}),
   };
 }

@@ -43,6 +43,11 @@ export const CONFIG_KEYS: Record<
   model: "string",
   judgeHarness: "string",
   judgeModel: "string",
+  judgeApi: "string",
+  judgeUrl: "string",
+  judgeKeyVar: "string",
+  judgeTimeout: "number",
+  judgeFallbacks: "boolean",
   decisionModel: "string",
   decisionUrl: "string",
   decisionTimeout: "number",
@@ -62,6 +67,16 @@ export interface Config {
   model?: string;
   judgeHarness?: string;
   judgeModel?: string;
+  /** Ask the judge model over this API and start no harness for it. Only "anthropic". Default: a harness session. */
+  judgeApi?: string;
+  /** The base URL of the judge API. Default: the provider's own. */
+  judgeUrl?: string;
+  /** The variable that holds the judge API's key. Default: ANTHROPIC_API_KEY. */
+  judgeKeyVar?: string;
+  /** The seconds one judge request may take, a positive integer. Default: 120. */
+  judgeTimeout?: number;
+  /** Ask the server to fall back when the judge model refuses. Default: true. */
+  judgeFallbacks?: boolean;
   decisionModel?: string;
   decisionUrl?: string;
   decisionTimeout?: number;

@@ -1,11 +1,13 @@
 import type { Outcome, RuledCheck, Verdict } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import { removeLogin } from "./command.js";
+import type { Via } from "./score-models.js";
 import { decideAll, judgedResult } from "./score-models.js";
 import type { CheckResult, RunPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
+import { apiAsker } from "./judge-api.js";
 
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
 // does not start without a decision model.
@@ -71,6 +73,34 @@ async function runCommands(
 }
 
 /**
+ * Chooses how the judge is reached for a run.
+ * @param plan - The run: its judge API or its judge harness, its cache, and the case's own `judgeModel`.
+ * @param problems - Receives why a judge session does not prove it loaded nothing.
+ * @returns The function that asks the judge, and what the scoring of a judge check needs to know of it.
+ */
+function judgeOf(plan: RunPlan, problems: string[]) {
+  const { judgeApi, caseDef } = plan;
+  const model = caseDef.judgeModel ?? (judgeApi ?? plan.judge).model;
+  const ask = judgeApi
+    ? apiAsker({ ...judgeApi, model: model ?? judgeApi.model })
+    : judgeAsker(
+        { ...plan.judge, model },
+        {
+          isolated: plan.isolated ?? false,
+          withhold: withheld(plan),
+          pass: plan.pass,
+        },
+        problems,
+      );
+  const via: Via = {
+    images: judgeApi !== undefined,
+    cache: plan.cache ?? null,
+    model: model ?? "",
+  };
+  return { ask, via };
+}
+
+/**
  * Scores every check of a case for one run.
  * @param plan - The run; its judge scores the judged checks, with nothing loaded and a prompt that carries nothing
  *   about the subject.
@@ -87,15 +117,13 @@ export async function scoreChecks(
   replies: Usage[];
   requests: Usage[];
   judgeProblem: string | null;
+  /** How many judge votes the cache answered. */
+  hits: number;
 }> {
   const { prompt: task, checks: asked } = plan.caseDef;
-  const withhold = withheld(plan);
   const problems: string[] = [];
-  const ask = judgeAsker(
-    { ...plan.judge, model: plan.caseDef.judgeModel ?? plan.judge.model },
-    { isolated: plan.isolated ?? false, withhold, pass: plan.pass },
-    problems,
-  );
+  const { ask, via } = judgeOf(plan, problems);
+  let hits = 0;
   // One request carries every decision check of the case.
   const decisions = asked.filter(isDecision);
   const decided =
@@ -120,8 +148,9 @@ export async function scoreChecks(
       const reason = "not judged, because the run is invalid";
       slots[index] = { ...check, score: null, reason };
     } else {
-      const judged = await judgedResult(ask, { task, outcome }, check);
+      const judged = await judgedResult(ask, { task, outcome, ...via }, check);
       replies.push(...judged.replies);
+      hits += judged.hits;
       slots[index] = judged.result;
     }
   }
@@ -132,5 +161,6 @@ export async function scoreChecks(
     replies,
     requests: decided?.calls ?? [],
     judgeProblem: problems[0] ?? null,
+    hits,
   };
 }

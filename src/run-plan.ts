@@ -1,7 +1,9 @@
 import type { Case } from "./cases.js";
 import type { Check, Verdict } from "./checks/index.js";
+import type { Cache } from "./cache.js";
 import type { DecisionService } from "./decision.js";
 import type { Harness, Tokens } from "./harnesses/shared.js";
+import type { JudgeApi } from "./judge-api.js";
 import type { Subject } from "./subject.js";
 
 /** What a session cost. A number the harness does not report is null. */
@@ -51,12 +53,21 @@ export interface RunPlan {
   decision: DecisionService | null;
   /** Where the run's stream and final text are written. */
   outDir: string;
+  /** Set, the judge asks the API and starts no harness process; `judge` is then not used. */
+  judgeApi?: JudgeApi | undefined;
+  /** What the judge answered before, in this output directory; none for no cache. */
+  cache?: Cache | undefined;
 }
 
 /**
  * Names what no harness process of a run may get.
  * @param plan - The run.
- * @returns The decision model's key, when there is a decision model.
+ * @returns The decision model's key, when there is a decision model, and the judge API's key, unless it is one of this
+ *   harness's own login variables: then the agent already has it.
  */
-export const withheld = (plan: RunPlan): string[] =>
-  plan.decision ? [plan.decision.secret] : [];
+export const withheld = (plan: RunPlan): string[] => [
+  ...(plan.decision ? [plan.decision.secret] : []),
+  ...(plan.judgeApi && !plan.harness.authEnv.includes(plan.judgeApi.keyVar)
+    ? [plan.judgeApi.keyVar]
+    : []),
+];

@@ -167,6 +167,11 @@ export const EXAMPLE_CONFIG: Record<
   model: "<model-id>",
   judgeHarness: CLAUDE_CODE,
   judgeModel: "<model-id>",
+  judgeApi: "anthropic",
+  judgeUrl: "<base-url>",
+  judgeKeyVar: "ANTHROPIC_API_KEY",
+  judgeTimeout: 120,
+  judgeFallbacks: true,
   decisionModel: "<decision-model-id>",
   decisionUrl: "<base-url>",
   decisionTimeout: 60,
@@ -191,6 +196,9 @@ const flagsOf = (key: string): Flag[] =>
 
 // Keys that no flag sets.
 const CONFIG_ONLY: Record<string, string> = {
+  judgeKeyVar: `The variable that holds the key of the judge API. The agent under test never gets it, unless it is one of that harness's own login variables. Default: ${code("ANTHROPIC_API_KEY")}.`,
+  judgeTimeout: `The seconds one request to the judge API may take. A positive integer. A timeout counts as a failed attempt. Default: 120.`,
+  judgeFallbacks: `Ask the judge API to fall back when the model refuses: the ${code("anthropic-beta")} header and ${code('fallbacks: "default"')} in the request. Set it to ${code("false")} for a proxy that rejects them. Default: ${code("true")}.`,
   maxJudgedWeightShare: `The share of a case's total check weight, from 0 to 1, that ${code("judge")} and ${code("decision")} checks may carry before ${code("validate")} warns. Default: 0.5.`,
   env: `Names of environment variables the harness gets besides the allowlist. ${ENV_NAME_RULE} Anything else is an error.`,
   subjectExclude: `Globs, relative to the subject, of paths that a run never gets: they are left out of its copy, besides ${code(".git")}, ${code("node_modules")}, the cases directory and the output directory. ${code("*")} matches within one directory, ${code("**")} matches any depth, ${code("?")} one character, and ${code("{a,b}")} either. See [Subjects](../concepts/subjects.md).`,

@@ -64,7 +64,7 @@ export interface RunRecord extends Usage {
   /** The run score, null when the run is invalid. */
   score: number | null;
   /** What the judged checks cost, kept apart from the run's own numbers; null when no judge ran. */
-  judge: (Usage & { calls: number }) | null;
+  judge: (Usage & { calls: number; cacheHits?: number }) | null;
   /** What the decision checks cost, kept apart in the same way; null when no request was sent. */
   decision: (Usage & { calls: number }) | null;
 }
@@ -238,7 +238,7 @@ async function record(
     agentTokens: parsed.agentTokens ?? null,
     costUsd: parsed.costUsd,
   };
-  const { checks, replies, requests, judgeProblem } = await scoreChecks(
+  const { checks, replies, requests, judgeProblem, hits } = await scoreChecks(
     plan,
     {
       ...parsed,
@@ -258,7 +258,10 @@ async function record(
   return {
     ...judged,
     score: invalidReason(judged) ? null : weightedMean(checks),
-    judge: replies.length ? totalUsage(replies) : null,
+    judge:
+      replies.length || hits
+        ? { ...totalUsage(replies), ...(hits ? { cacheHits: hits } : {}) }
+        : null,
     decision: requests.length ? totalUsage(requests) : null,
   };
 }

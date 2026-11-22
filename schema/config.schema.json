@@ -39,6 +39,31 @@
       "description": "The model that scores judged checks.",
       "type": "string"
     },
+    "judgeApi": {
+      "title": "judgeApi",
+      "description": "Ask the judge model over this API and start no harness process for it. Only anthropic. --judge-harness is then ignored.",
+      "type": "string"
+    },
+    "judgeUrl": {
+      "title": "judgeUrl",
+      "description": "The base URL of the judge API.",
+      "type": "string"
+    },
+    "judgeKeyVar": {
+      "title": "judgeKeyVar",
+      "description": "The variable that holds the key of the judge API. The agent under test never gets it, unless it is one of that harness's own login variables. Default: `ANTHROPIC_API_KEY`.",
+      "type": "string"
+    },
+    "judgeTimeout": {
+      "title": "judgeTimeout",
+      "description": "The seconds one request to the judge API may take. A positive integer. A timeout counts as a failed attempt. Default: 120.",
+      "type": "number"
+    },
+    "judgeFallbacks": {
+      "title": "judgeFallbacks",
+      "description": "Ask the judge API to fall back when the model refuses: the `anthropic-beta` header and `fallbacks: \"default\"` in the request. Set it to `false` for a proxy that rejects them. Default: `true`.",
+      "type": "boolean"
+    },
     "decisionModel": {
       "title": "decisionModel",
       "description": "The decision model that scores decision checks.",

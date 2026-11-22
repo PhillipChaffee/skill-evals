@@ -24,7 +24,7 @@ interface Asked {
 }
 
 /**
- * Compares two plugins that give the same answer, on a case with one judged and one deterministic check.
+ * Compares two plugins whose answers differ only by a word, on a case with one judged and one deterministic check.
  * @param replies - What the fake judge answers, one entry for each call.
  * @param extra - More flags for `run`.
  * @returns What the command did, what the judge was asked, and the run records.
@@ -35,11 +35,21 @@ async function judgedRun(replies: string[], ...extra: string[]) {
     costUsd: 0.01,
     answer: ANSWER,
   });
-  const pluginB = plugin(box, "plugin-beta", { costUsd: 0.01, answer: ANSWER });
+  const pluginB = plugin(box, "plugin-beta", {
+    costUsd: 0.01,
+    answer: `${ANSWER} Really.`,
+  });
   const cases = plantCase(box, [
     { type: "judge", rubric: RUBRIC, weight: 3 },
     { type: "output_contains", text: "broken" },
   ]);
+  // A second case with another prompt: the judge keeps its answers, so a repeated rep or subject with the same answer
+  // would not be asked again, and these tests need every call to be made.
+  box.write("cases/restate-two/prompt.md", "say it again in plain words\n");
+  fs.copyFileSync(
+    path.join(cases, "restate/case.json"),
+    path.join(cases, "restate-two/case.json"),
+  );
   box.write(REPLIES_FILE, replies);
   const outDir = path.join(box.root, "results");
   const flags = ["--cases", cases, "--out", outDir, ...extra];
@@ -65,7 +75,7 @@ const REPLIES = [
   '{"score": "high"}',
   '{"score": 0, "reason": "none of it"}',
 ];
-const REPS_AND_MODEL = ["--reps", "2", "--model", "run-model"];
+const REPS_AND_MODEL = ["--reps", "1", "--model", "run-model"];
 
 test("a judged check takes its score from the judge's reply, asked once more after an unusable one", async () => {
   const { result, records } = await judgedRun(REPLIES, ...REPS_AND_MODEL);
@@ -92,7 +102,10 @@ test("the judge sees the task, the answer, and the rubric, and nothing about the
   const { box, result, asked } = await judgedRun(REPLIES, ...REPS_AND_MODEL);
 
   expect(asked).toHaveLength(REPLIES.length);
-  expect(new Set(asked.map((call) => call.prompt)).size).toBe(1);
+  expect(
+    new Set(asked.map((call) => call.prompt)).size,
+    "one prompt for each run; a retry repeats it",
+  ).toBe(4);
   const prompt = asked[0]?.prompt;
   for (const part of ["say it in plain words", ANSWER, RUBRIC]) {
     expect(prompt).toContain(part);
@@ -111,7 +124,7 @@ test("the judge sees the task, the answer, and the rubric, and nothing about the
   expect(asked[0]?.pluginDir, "the judge runs with nothing loaded").toBeNull();
 
   expect(tableRow(result.stdout, "restate")).toMatch(
-    /^\| restate \| 0\.38 \/ 0\.38 \(\+0\.00\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50, B 0\.50<br>`output_contains "broken"` A 0\/1, B 0\/2 \|/,
+    /^\| restate \| 0\.38 \/ 0\.75 \(\+0\.38\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50, B 1\.00<br>`output_contains "broken"` A 0\/1, B 0\/1 \|/,
   );
   expect(result.stdout).toMatch(
     /^- Judge: the harness under test, model run-model$/m,
@@ -120,7 +133,7 @@ test("the judge sees the task, the answer, and the rubric, and nothing about the
     /^Judge, in total and not counted in the table: 6 calls, .*cost \$0\.0120$/m,
   );
   expect(result.stdout).toMatch(
-    /^- A `restate` rep 2: a judged check has no score: the judge gave no usable score/m,
+    /^- A `restate-two` rep 1: a judged check has no score: the judge gave no usable score/m,
   );
 });
 
@@ -128,6 +141,8 @@ test("the judge runs on the harness and the model that the judge flags name", as
   const flags = [
     "--reps",
     "1",
+    "--case",
+    "restate",
     "--model",
     "run-model",
     "--judge-model",

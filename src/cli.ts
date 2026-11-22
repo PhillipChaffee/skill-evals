@@ -104,6 +104,8 @@ const SUITE_FLAGS: Flag[] = [
   "min-score",
   "judge-harness",
   "judge-model",
+  "judge-api",
+  "judge-url",
   "decision-model",
   "decision-url",
   "decision-timeout",

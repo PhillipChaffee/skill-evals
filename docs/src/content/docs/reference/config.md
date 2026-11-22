@@ -18,6 +18,11 @@ An optional `skill-evals.config.json` in the project root sets defaults. A flag 
 | `model`                | string   | `--model <id>`                 | Passed to the harness unchanged.                                                                                                                                                                                                                                                                                       |
 | `judgeHarness`         | string   | `--judge-harness <id>`         | The harness that scores judged checks.                                                                                                                                                                                                                                                                                 |
 | `judgeModel`           | string   | `--judge-model <id>`           | The model that scores judged checks.                                                                                                                                                                                                                                                                                   |
+| `judgeApi`             | string   | `--judge-api <kind>`           | Ask the judge model over this API and start no harness process for it. Only anthropic. --judge-harness is then ignored.                                                                                                                                                                                                |
+| `judgeUrl`             | string   | `--judge-url <url>`            | The base URL of the judge API.                                                                                                                                                                                                                                                                                         |
+| `judgeKeyVar`          | string   | none                           | The variable that holds the key of the judge API. The agent under test never gets it, unless it is one of that harness's own login variables. Default: `ANTHROPIC_API_KEY`.                                                                                                                                            |
+| `judgeTimeout`         | number   | none                           | The seconds one request to the judge API may take. A positive integer. A timeout counts as a failed attempt. Default: 120.                                                                                                                                                                                             |
+| `judgeFallbacks`       | boolean  | none                           | Ask the judge API to fall back when the model refuses: the `anthropic-beta` header and `fallbacks: "default"` in the request. Set it to `false` for a proxy that rejects them. Default: `true`.                                                                                                                        |
 | `decisionModel`        | string   | `--decision-model <id>`        | The decision model that scores decision checks.                                                                                                                                                                                                                                                                        |
 | `decisionUrl`          | string   | `--decision-url <url>`         | The base URL of the decision model's API.                                                                                                                                                                                                                                                                              |
 | `decisionTimeout`      | number   | `--decision-timeout <seconds>` | How long one request to the decision model may take. A positive integer.                                                                                                                                                                                                                                               |
@@ -40,6 +45,11 @@ A file that sets every key:
   "model": "<model-id>",
   "judgeHarness": "claude-code",
   "judgeModel": "<model-id>",
+  "judgeApi": "anthropic",
+  "judgeUrl": "<base-url>",
+  "judgeKeyVar": "ANTHROPIC_API_KEY",
+  "judgeTimeout": 120,
+  "judgeFallbacks": true,
   "decisionModel": "<decision-model-id>",
   "decisionUrl": "<base-url>",
   "decisionTimeout": 60,

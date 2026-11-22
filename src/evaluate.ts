@@ -1,21 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import { connect } from "./baseten.js";
 import type { CaseMeta } from "./case-meta.js";
 import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
-import { isDecision } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
-import { judgeModelOf } from "./judge-warning.js";
+import { decisionFor, requireUsable } from "./evaluate-setup.js";
+import { openCache } from "./cache.js";
+import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
+import type { JudgeApi } from "./judge-api.js";
 import type { Located } from "./harnesses/index.js";
 import { requireIsolatedRun, selectHarnesses } from "./harnesses/index.js";
-import type { Config } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
-import { requireEnvNames } from "./env.js";
 import { invalidReason, modesOf, runOnce } from "./run.js";
 import type { CommonSet, SuiteScore } from "./score.js";
-import { commonSet, failedBars, isUnitScore, scoreSuites } from "./score.js";
+import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
 import { loadSelection, selectionOf } from "./select.js";
 import { UsageError, outputDir, requireSupportedPlatform } from "./scope.js";
@@ -47,6 +46,16 @@ export interface EvaluateOptions extends SelectionOptions {
   judgeHarness?: string | undefined;
   /** The model that scores judged checks. A case's own `judgeModel` wins. Default: `model`. */
   judgeModel?: string | undefined;
+  /** Ask the judge model over this API and start no harness for it: "anthropic". Default: a harness session. */
+  judgeApi?: string | undefined;
+  /** The base URL of the judge API. Default: the provider's own. */
+  judgeUrl?: string | undefined;
+  /** The variable that holds the judge API's key. Default: `ANTHROPIC_API_KEY`. */
+  judgeKeyVar?: string | undefined;
+  /** The seconds one judge request may take, a positive integer. Default: 120. */
+  judgeTimeout?: number | undefined;
+  /** Ask the server to fall back when the judge model refuses. Default: true. */
+  judgeFallbacks?: boolean | undefined;
   /** The model that scores decision checks. No default: a suite with a decision check needs it. */
   decisionModel?: string | undefined;
   /** The base URL of the decision model's API. Default: the provider's own. */
@@ -108,11 +117,6 @@ export interface Evaluation extends Results {
   outDir: string;
 }
 
-const DEFAULT_REPS = 3;
-const MS_PER_SECOND = 1000;
-// The longest time limit a timer takes is 2^32 - 1 milliseconds.
-const MAX_TIMEOUT_SECONDS = 4_294_967;
-
 /**
  * Pairs each subject with its label.
  * @param specs - What the caller passed as `subjects`.
@@ -130,56 +134,6 @@ function labelled(specs: string[]): { label: Label; spec: string }[] {
         { label: "a", spec: first },
         { label: "b", spec: second },
       ];
-}
-
-/**
- * Rejects option values that no run could use, before any harness starts.
- * @param options - The options after the config file was applied.
- * @returns The number of runs for each subject and case.
- * @throws {UsageError} When `reps`, `minScore`, or `decisionTimeout` is out of range.
- */
-function requireUsable(options: Config): number {
-  const { reps = DEFAULT_REPS, minScore, decisionTimeout: seconds } = options;
-  requireEnvNames(options.env ?? [], "env");
-  if (!Number.isInteger(reps) || reps < 1) {
-    throw new UsageError("reps must be a positive integer");
-  }
-  if (minScore !== undefined && !isUnitScore(minScore)) {
-    throw new UsageError("minScore must be a number from 0 to 1");
-  }
-  if (
-    seconds !== undefined &&
-    !(
-      Number.isInteger(seconds) &&
-      seconds >= 1 &&
-      seconds <= MAX_TIMEOUT_SECONDS
-    )
-  ) {
-    throw new UsageError(
-      `decisionTimeout must be a positive integer of seconds, at most ${String(MAX_TIMEOUT_SECONDS)}`,
-    );
-  }
-  return reps;
-}
-
-/**
- * Connects to the decision model when a case needs one, before any harness starts.
- * @param cases - The cases of the suite.
- * @param options - The options after the config file was applied.
- * @returns The decision model, or null when no case has a decision check.
- * @throws {UsageError} When a case has a decision check and the model or its API key is not set.
- */
-function decisionFor(cases: Case[], options: Config): DecisionService | null {
-  if (!cases.some((caseDef) => caseDef.checks.some(isDecision))) return null;
-  const { decisionModel: model, decisionUrl: url } = options;
-  const { decisionTimeout: seconds } = options;
-  if (!model) {
-    throw new UsageError(
-      "a case has a decision check, but no decision model is set: pass --decision-model or set decisionModel in the config file",
-    );
-  }
-  const timeoutMs = seconds === undefined ? undefined : seconds * MS_PER_SECOND;
-  return connect({ model, url, env: process.env, timeoutMs });
 }
 
 /**
@@ -210,6 +164,7 @@ interface Plan {
   isolated: boolean;
   lenient: boolean;
   outDir: string;
+  judgeApi: JudgeApi | null;
   onRun: EvaluateOptions["onRun"];
 }
 
@@ -222,6 +177,8 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
   const { reps, subjects, model, outDir, decision, pass } = plan;
   const { isolated, lenient } = plan;
   const records: RunRecord[] = [];
+  // Read at the start, and added to after each judged answer.
+  const cache = openCache(outDir);
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
     for (const caseDef of plan.applied[located.harness.id] ?? []) {
@@ -239,6 +196,8 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
             isolated,
             lenient,
             outDir,
+            judgeApi: plan.judgeApi ?? undefined,
+            cache,
           };
           const record = await runOnce(run);
           records.push(record);
@@ -256,6 +215,7 @@ interface Finished {
   selection: { chosen: Located[]; reason: string };
   judgeHarness: Located | undefined;
   judgeModel: string | undefined;
+  judgeApi: JudgeApi | null;
   decisionModel: string | undefined;
   model: string | undefined;
   minScore: number | undefined;
@@ -273,6 +233,9 @@ interface Finished {
  */
 function summarize(finished: Finished): Results {
   const { subjects, selection, judgeHarness, judgeModel, model } = finished;
+  const judgeWho = finished.judgeApi
+    ? `the ${finished.judgeApi.kind} API`
+    : (judgeHarness?.harness.id ?? "the harness under test");
   const { cases, records } = finished;
   const labels = subjects.map(({ label }) => label);
   const harnesses = selection.chosen.map(({ harness }) => harness.id);
@@ -299,7 +262,7 @@ function summarize(finished: Finished): Results {
     harnesses,
     harnessReason: selection.reason,
     model: model ?? null,
-    judge: `${judgeHarness?.harness.id ?? "the harness under test"}, model ${judgeModel ?? "the harness default"}`,
+    judge: `${judgeWho}, model ${judgeModel ?? "the harness default"}`,
     decisionModel: finished.decisionModel ?? null,
     reps: finished.reps,
     caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
@@ -348,12 +311,10 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const { minScore, model } = options;
   const reps = requireUsable(options);
   const selection = selectHarnesses(options.harness);
-  const [judgeHarness] = options.judgeHarness
-    ? selectHarnesses(options.judgeHarness).chosen
-    : [];
+  const judgeHarness = judgeHarnessOf(options);
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
   const cases = casesOf(options);
-  const judgeModel = judgeModelOf(options, cases);
+  const { judgeApi, judgeModel } = judgeSetup(cases, options);
   const decision = decisionFor(cases, options);
   const parts = partitionApplicable(selection.chosen, cases);
   const subjects: Subject[] = [];
@@ -370,6 +331,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
         model: judgeModel,
       }),
       decision,
+      judgeApi,
       pass: options.env,
       applied: parts.ran,
       reps,
@@ -384,6 +346,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       selection,
       judgeHarness,
       judgeModel,
+      judgeApi,
       decisionModel: options.decisionModel,
       model,
       minScore,

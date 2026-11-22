@@ -5,7 +5,11 @@ import type {
   DecisionResult,
 } from "./decision.js";
 import { decide } from "./decision.js";
+import type { Cache } from "./cache.js";
+import { memoOf } from "./cache.js";
 import { judge } from "./judge.js";
+import type { Attachment } from "./judge-api.js";
+import { imagesOf } from "./judge-images.js";
 import { materialFor } from "./judge-render.js";
 import type { CheckResult, Usage } from "./run-plan.js";
 
@@ -14,6 +18,16 @@ interface Material {
   /** The prompt the agent got. */
   task: string;
   outcome: Outcome;
+}
+
+/** How the judge is reached. */
+export interface Via {
+  /** Whether image files go with the prompt (the API path); otherwise they are named and not shown. */
+  images: boolean;
+  /** What the judge has answered before; none for no cache. */
+  cache: Cache | null;
+  /** The judge's model, for the cache key; empty when the harness picks. */
+  model: string;
 }
 
 /**
@@ -64,29 +78,44 @@ export async function decideAll(
 /**
  * Scores one judge check.
  * @param ask - Sends a prompt to the judge.
- * @param run - The prompt the agent got, and what the run left behind.
+ * @param run - The prompt the agent got, what the run left behind, and how the judge is reached.
  * @param check - The judge check.
- * @returns The check with its score, reason and, when it had several votes, each ballot; and every reply it took.
+ * @returns The check with its score, reason and, when it had several votes, each ballot; every reply it took; and how
+ *   many votes the cache answered.
  */
 export async function judgedResult<
   Reply extends Usage & { finalText: string; error: string | null },
 >(
-  ask: (prompt: string) => Promise<Reply>,
-  run: Material,
+  ask: (prompt: string, attachments: Attachment[]) => Promise<Reply>,
+  run: Material & Via,
   check: JudgedCheck,
-): Promise<{ result: CheckResult; replies: Reply[] }> {
-  const verdict = await judge(ask, {
-    task: run.task,
-    answer: run.outcome.finalText,
-    rubric: check.rubric,
-    ...(check.scale === undefined ? {} : { scale: check.scale }),
-    ...(check.votes === undefined ? {} : { votes: check.votes }),
-    ...(check.sees === undefined
-      ? {}
-      : { seen: materialFor(check, run.outcome) }),
-  });
+): Promise<{ result: CheckResult; replies: Reply[]; hits: number }> {
+  const attachments =
+    run.images && check.sees?.includes("files")
+      ? imagesOf(check.files ?? [], run.outcome.workspace)
+      : [];
+  const scale = check.scale ?? "0-1";
+  const memo = run.cache
+    ? memoOf(run.cache, { model: run.model, attachments, scale })
+    : undefined;
+  const verdict = await judge<Reply>(
+    ask,
+    {
+      task: run.task,
+      answer: run.outcome.finalText,
+      rubric: check.rubric,
+      ...(check.scale === undefined ? {} : { scale: check.scale }),
+      ...(check.votes === undefined ? {} : { votes: check.votes }),
+      ...(check.sees === undefined
+        ? {}
+        : { seen: materialFor(check, run.outcome, attachments) }),
+      attachments,
+    },
+    memo,
+  );
   return {
     replies: verdict.replies,
+    hits: verdict.hits ?? 0,
     result: {
       ...check,
       score: verdict.score,

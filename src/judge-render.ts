@@ -3,6 +3,7 @@ import type { Sees } from "./checks/judge-fields.js";
 import { find } from "./checks/tree.js";
 import { GLOB_LIMIT } from "./glob.js";
 import type { TranscriptEvent } from "./harnesses/shared.js";
+import type { Attachment } from "./judge-api.js";
 import { forRecord } from "./transcript.js";
 
 /** The default size of a transcript rendering, in characters. */
@@ -174,11 +175,19 @@ function dropped(
  * Reads one file for a model.
  * @param relative - The file's relative path.
  * @param real - The file's real path.
+ * @param attached - The paths of the images that are sent with the prompt.
  * @returns The `<file>` block: the text cut to 20,000 characters, or the name and why it is not shown.
  */
-function fileBlock(relative: string, real: string): string {
+function fileBlock(
+  relative: string,
+  real: string,
+  attached: Set<string>,
+): string {
   const named = (why: string): string =>
     `<file path="${relative}">not shown (${why})</file>`;
+  if (attached.has(relative)) {
+    return `<file path="${relative}">attached as an image</file>`;
+  }
   if (IMAGE.test(relative)) return named("image");
   // A character is at most four bytes, so this much holds the first 20,000 characters.
   const size = fs.statSync(real).size;
@@ -203,9 +212,15 @@ function fileBlock(relative: string, real: string): string {
  * @param globs - Paths or globs, relative to the workspace, by the rules of the file checks: a link that leaves the
  *   workspace is not read, and a path that names a directory means the files under it.
  * @param workspace - The workspace as the run left it.
+ * @param attached - The images that are sent with the prompt; each is named as attached. Default: none.
  * @returns One block for each file, once, in path order; a line that says nothing matched when no file did.
  */
-export function renderFiles(globs: string[], workspace: string): string {
+export function renderFiles(
+  globs: string[],
+  workspace: string,
+  attached: Attachment[] = [],
+): string {
+  const sent = new Set(attached.map(({ name }) => name));
   const tree = {
     dir: workspace,
     seed: new Map<string, string>(),
@@ -234,7 +249,7 @@ export function renderFiles(globs: string[], workspace: string): string {
       ? [`No file matches: ${globs.join(", ")}`]
       : [...files]
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([relative, real]) => fileBlock(relative, real));
+          .map(([relative, real]) => fileBlock(relative, real, sent));
   return [...shown, ...notes].join("\n");
 }
 
@@ -247,6 +262,7 @@ export function renderFiles(globs: string[], workspace: string): string {
  * @param outcome - The run's events and the workspace it left, from which the parts are read.
  * @param outcome.transcript - The events to render.
  * @param outcome.workspace - The directory the `files` globs resolve against.
+ * @param attached - The images that are sent with the prompt. Default: none.
  * @returns The parts to show.
  */
 export function materialFor(
@@ -256,6 +272,7 @@ export function materialFor(
     maxChars?: number | undefined;
   },
   outcome: { transcript: TranscriptEvent[]; workspace: string },
+  attached: Attachment[] = [],
 ): Seen {
   const sees = check.sees ?? ["final"];
   return {
@@ -264,7 +281,7 @@ export function materialFor(
       ? { transcript: renderTranscript(outcome.transcript, check.maxChars) }
       : {}),
     ...(sees.includes("files")
-      ? { files: renderFiles(check.files ?? [], outcome.workspace) }
+      ? { files: renderFiles(check.files ?? [], outcome.workspace, attached) }
       : {}),
   };
 }

@@ -116,7 +116,12 @@ function scorerLine(
     const total = values.reduce((sum, value) => sum + value, 0);
     return [`${metric.title.toLowerCase()} ${metric.format(total)}`];
   });
-  const parts = [`${String(calls)} calls`, ...totals];
+  const hits = judged.reduce(
+    (total, usage) => total + (usage.cacheHits ?? 0),
+    0,
+  );
+  const cached = hits > 0 ? [`${String(hits)} cache hits`] : [];
+  const parts = [`${String(calls)} calls`, ...cached, ...totals];
   return [
     "",
     `${title}, in total and not counted in the table: ${parts.join(", ")}`,
