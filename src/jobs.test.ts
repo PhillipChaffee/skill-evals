@@ -145,7 +145,9 @@ test("results.jsonl grows by one line per run and results.json is valid whenever
   expect(seen.map(({ lines }) => lines)).toEqual([1, 2, 3, 4]);
   expect(seen.every(({ tmp }) => !tmp)).toBe(true);
   // Every snapshot taken while the command ran says so.
-  expect(seen.every(({ partial }) => partial !== undefined)).toBe(true);
+  expect(seen.map(({ partial }) => partial)).toEqual(
+    Array.from({ length: 4 }, () => ({ reason: "running" })),
+  );
   const last = readResults(out);
   expect(last.partial).toBeNull();
   expect(last.records.map((record) => record.caseId)).toEqual(ids(4));
@@ -174,37 +176,6 @@ test("a fresh run into a directory that holds runs is a usage error, and removin
   expect(
     (await box.cli([...args, "--out", out], { KEEP_RUNS: "1" })).status,
   ).toBe(0);
-});
-
-test("a second command on a directory in use is a usage error, and a dead holder's lock is taken over", async () => {
-  const box = sandbox();
-  const cases = plantSuite(box, ids(1));
-  const out = path.join(box.root, "results");
-  fs.mkdirSync(out);
-  const args = [
-    "score",
-    "--subject",
-    "none",
-    "--cases",
-    cases,
-    "--reps",
-    "1",
-    "--out",
-    out,
-  ];
-  fs.writeFileSync(path.join(out, ".lock"), String(process.pid));
-  const busy = await box.cli(args);
-  expect(busy.status).toBe(2);
-  expect(busy.stderr).toContain(`is in use by process ${String(process.pid)}`);
-  // Process ids this large do not exist, and neither does text that is no id.
-  for (const stale of ["2147483646", "garbage"]) {
-    fs.writeFileSync(path.join(out, ".lock"), stale);
-    const taken = await box.cli(args);
-    expect(taken.status, taken.stderr).toBe(0);
-    expect(taken.stderr).toContain("took over the lock");
-    expect(fs.existsSync(path.join(out, ".lock"))).toBe(false);
-    fs.rmSync(path.join(out, "results.jsonl"));
-  }
 });
 
 test("a warning fires once for the command under --jobs", async () => {

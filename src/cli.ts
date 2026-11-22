@@ -39,7 +39,7 @@ async function suite(
   project: Project,
 ): Promise<number> {
   const { dryRun, ...given } = options;
-  if (dryRun) return printPlan({ ...given, cwd: project.cwd });
+  if (dryRun) return printPlan({ ...given, cwd: project.cwd }, false);
   const onRun = (record: RunRecord, info: { reused: boolean }): void => {
     const outcome =
       invalidReason(record) ??

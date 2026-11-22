@@ -95,7 +95,7 @@ const passedEnv = (
  * @returns The sha256 of the canonical JSON of the case hash, the subject's revision, the harness and its executable
  *   (real path, size, modification time), the model, the rep, the tool's version (the package version, so a rebuilt
  *   tool with the same version shares keys), the names and value hashes of the passed variables, and the scoring: the
- *   judge's harness, API, URL, fallbacks and model, the decision model and URL, `isolated` and `lenient`. Each of these changes what a run is or how it is scored.
+ *   judge's harness, its executable when it is not the harness under test, API, URL, fallbacks and model, the decision model and URL, `isolated` and `lenient`. Each of these changes what a run is or how it is scored.
  */
 export function runKey(plan: RunPlan): string {
   const { judgeApi, judge } = plan;
@@ -111,6 +111,10 @@ export function runKey(plan: RunPlan): string {
       env: passedEnv(plan.pass),
       scoring: {
         judgeHarness: judgeApi ? null : judge.harness.id,
+        judgeBin:
+          judgeApi || judge.harness.id === plan.harness.id
+            ? null
+            : binOf(judge.bin),
         judgeApi: judgeApi?.kind ?? null,
         judgeUrl: judgeApi?.url ?? null,
         judgeFallbacks: judgeApi?.fallbacks ?? null,

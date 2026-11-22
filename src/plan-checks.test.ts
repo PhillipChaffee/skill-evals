@@ -79,3 +79,26 @@ test("plan estimates from valid runs only, the last of each run", async () => {
   expect(ran.stdout).toContain("- cost: $8.00 (from 2 of 2 runs)");
   expect(ran.stdout).toContain("estimate covers 2 of 2 runs");
 });
+
+test("a valid record that a later invalid line replaced does not feed the medians", async () => {
+  const box = sandbox();
+  const cases = plantSuite(box, ["alpha"]);
+  const out = path.join(box.root, "results");
+  const args = ["--subject", "none", "--cases", cases];
+  await box.cli(["score", ...args, "--reps", "2", "--out", out]);
+  const lines = linesIn(out).map(
+    (line) => JSON.parse(line) as Record<string, unknown>,
+  );
+  const line = (index: number, cost: number, more: object = {}): string =>
+    JSON.stringify({ ...lines[index], costUsd: cost, ...more });
+  // Rep 1 cost 10 and was run again, and failed at 99; rep 2 cost 2.
+  fs.writeFileSync(
+    path.join(out, "results.jsonl"),
+    `${[line(0, 10), line(0, 99, { error: "crashed" }), line(1, 2)].join("\n")}\n`,
+  );
+  const ran = await box.cli(["plan", ...args, "--reps", "3", "--resume", out]);
+  expect(ran.status, ran.stderr).toBe(0);
+  // Rep 3 is the only run left to estimate, besides rep 1, which failed: both at the median of the only valid run, 2.
+  expect(ran.stdout).toContain("1 of 3 runs would be reused");
+  expect(ran.stdout).toContain("- cost: $4.00 (from 2 of 2 runs)");
+});

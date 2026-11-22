@@ -71,8 +71,11 @@ export interface Plan extends PlanBase {
   store: Store;
   /** The records of an earlier command that a run may reuse, by `slotName`. Empty for a fresh run. */
   reused: Map<string, RunRecord>;
-  /** Called with every record so far, in plan order, so that `results.json` can be rewritten. */
-  flush: (records: RunRecord[]) => void;
+  /**
+   * Called with every record so far, in plan order, so that `results.json` can be rewritten; with "error" when a run
+   * threw and the command ends.
+   */
+  flush: (records: RunRecord[], reason?: "error") => void;
   /** Called with each run's record as soon as the run ends, in the order the runs end. */
   onRun: ((record: RunRecord, info: { reused: boolean }) => void) | undefined;
 }
@@ -136,7 +139,13 @@ export async function runAll(
     finished.filter((each) => each !== undefined);
   plan.flush(sofar());
   for (const record of sofar()) plan.onRun?.(record, { reused: true });
-  const flushSoon = throttled(plan.flush, FLUSH_INTERVAL_MS, clock);
+  const flushSoon = throttled(
+    (records: RunRecord[]) => {
+      plan.flush(records);
+    },
+    FLUSH_INTERVAL_MS,
+    clock,
+  );
   const jobs = planned.flatMap(({ run, key, subject }, index) =>
     finished[index] !== undefined
       ? []
@@ -154,6 +163,12 @@ export async function runAll(
           },
         ],
   );
-  await pool(jobs, plan.jobs, () => "go");
+  try {
+    await pool(jobs, plan.jobs, () => "go");
+  } catch (error) {
+    // The file must not go on saying "running" for a command that has ended.
+    plan.flush(sofar(), "error");
+    throw error;
+  }
   return sofar();
 }

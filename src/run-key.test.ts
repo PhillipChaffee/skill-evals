@@ -155,6 +155,28 @@ test("a run key changes with every part that decides the result, and with nothin
   );
 });
 
+test("the judge's executable counts only when the judge is another harness than the one under test", () => {
+  const { box, load } = planted();
+  const caseDef = load();
+  const judgeBin = box.write("bin/judge", "one\n");
+  const keyOf = (change: Partial<RunPlan>): string =>
+    runKey({ ...PLAN, caseDef, ...change });
+  const other = { harness: harness("j"), bin: judgeBin, model: "jm" };
+  const first = keyOf({ judge: other });
+  box.write("bin/judge", "a different judge\n");
+  expect(keyOf({ judge: other })).not.toBe(first);
+  // The same harness judges: its executable is already in the key as the harness under test.
+  const same = { harness: harness("h"), bin: judgeBin, model: "jm" };
+  const before = keyOf({ judge: same });
+  box.write("bin/judge", "changed again\n");
+  expect(keyOf({ judge: same })).toBe(before);
+  // The API path starts no judge process.
+  const api = { kind: "anthropic", model: "a" } as RunPlan["judgeApi"];
+  const viaApi = keyOf({ judgeApi: api, judge: other });
+  box.write("bin/judge", "and again\n");
+  expect(keyOf({ judgeApi: api, judge: other })).toBe(viaApi);
+});
+
 test("the passed variables count by name and by the hash of their value", () => {
   const { load } = planted();
   const caseDef = load();

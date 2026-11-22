@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test, vi } from "vitest";
 import type { Results } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
+import { LINE_FIELDS } from "./store-shape.js";
 import { UsageError } from "./scope.js";
 import {
   openStore,
@@ -23,7 +24,14 @@ const run = (more: Partial<StoredRun> = {}): StoredRun =>
     subject: "subject",
     caseId: "c",
     rep: 1,
+    ok: true,
     error: null,
+    finalText: "",
+    durationMs: 0,
+    tokens: null,
+    costUsd: null,
+    judge: null,
+    decision: null,
     subjectLoaded: null,
     isolated: false,
     reportMissing: false,
@@ -171,4 +179,29 @@ test("a directory that holds runs is refused for a fresh command, and one that h
   requireFresh(out);
   fs.rmSync(path.join(out, RUNS));
   requireFresh(out);
+});
+
+test("a line that lacks any field that the report, the progress line or a resume reads is refused", () => {
+  const fields = Object.keys(LINE_FIELDS);
+  expect(fields).toContain("score");
+  for (const field of fields) {
+    const whole = Object.fromEntries(
+      Object.entries(run()).filter(([name]) => name !== field),
+    );
+    const out = holding([JSON.stringify(whole), JSON.stringify(run())]);
+    expect(() => readRuns(out), field).toThrow(
+      /line 1 is not a valid run record/,
+    );
+  }
+  // And one that has the field with the wrong kind of value.
+  const out = holding([
+    JSON.stringify({ ...run(), score: "1" }),
+    JSON.stringify(run()),
+  ]);
+  expect(() => readRuns(out)).toThrow(/line 1/);
+  const checks = holding([
+    JSON.stringify({ ...run(), checks: [{ score: "x" }] }),
+    JSON.stringify(run()),
+  ]);
+  expect(() => readRuns(checks)).toThrow(/line 1/);
 });

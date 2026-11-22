@@ -29,19 +29,20 @@ interface Prior {
 /**
  * Keeps the valid records of a list, the last of each run.
  * @param all - Records in the order they were made.
- * @returns The records that count as valid runs, without one that a later record of the same run replaced.
+ * @returns The records that count as valid runs. The last record of each run is taken first, so that a valid record
+ *   that a later invalid one replaced does not count.
  */
 function validOnes(all: RunRecord[]): RunRecord[] {
   const last = new Map<string, RunRecord>();
   for (const record of all) {
-    if (Array.isArray(record.checks) && invalidReason(record) === null) {
-      last.set(
-        `${record.harness}\n${record.caseId}\n${record.subject}\n${String(record.rep)}`,
-        record,
-      );
-    }
+    last.set(
+      `${record.harness}\n${record.caseId}\n${record.subject}\n${String(record.rep)}`,
+      record,
+    );
   }
-  return [...last.values()];
+  return [...last.values()].filter(
+    (record) => Array.isArray(record.checks) && invalidReason(record) === null,
+  );
 }
 
 /**
@@ -129,13 +130,14 @@ function estimateLines(what: {
  * directory; it looks harnesses up on `PATH`, and exports each subject to a temp directory to key the runs. It raises
  * every usage error that the command would.
  * @param given - The options of the command, with its subjects.
+ * @param inspect - True for `plan`, which may read the output directory of an earlier command.
  * @returns The matrix of harnesses, cases, subjects and reps, the number of runs, the pairs that are not applicable,
  *   and, when `resume` or `outDir` names a directory with an earlier command's results, how many runs a resume would
  *   reuse and an estimate of cost and duration for the rest.
  * @throws {UsageError} For a wrong option, subject or case file, as the command itself would.
  */
-function planText(given: PlanOptions): string {
-  const prepared = prepare(given);
+function planText(given: PlanOptions, inspect: boolean): string {
+  const prepared = prepare(given, { inspect });
   const { context, pairs } = prepared;
   const subjects: Subject[] = [];
   try {
@@ -183,11 +185,14 @@ function planText(given: PlanOptions): string {
 
 /**
  * Prints the plan of a command line.
+
  * @param given - The options and subjects of the command.
+ * @param inspect - True for `plan`, which may name the directory of an earlier command to read it; false for
+ *   `--dry-run`, which raises the usage errors about the output directory that the command would.
  * @returns 0.
  */
-export function printPlan(given: PlanOptions): number {
-  console.log(planText(given));
+export function printPlan(given: PlanOptions, inspect: boolean): number {
+  console.log(planText(given, inspect));
   return 0;
 }
 
@@ -203,5 +208,5 @@ export function plan(options: Options, project: Project): number {
     a === undefined && b === undefined
       ? [subject ?? project.root]
       : [a ?? "main", b ?? project.root];
-  return printPlan({ ...rest, subjects, cwd: project.cwd });
+  return printPlan({ ...rest, subjects, cwd: project.cwd }, true);
 }

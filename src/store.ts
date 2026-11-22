@@ -4,6 +4,7 @@ import type { Results } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { UsageError } from "./scope.js";
+import { isStoredRun } from "./store-shape.js";
 
 /** The file with one line for each finished run. */
 export const RUNS_FILE = "results.jsonl";
@@ -58,31 +59,15 @@ interface Read {
   dropped: boolean;
 }
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-
 /**
  * Parses one line of `results.jsonl`.
  * @param line - The text.
- * @returns The stored run; null when the text is not JSON, or lacks the shape of a run record that scoring reads.
+ * @returns The stored run; null when the text is not JSON, or lacks the shape of a run record.
  */
 function parseLine(line: string): StoredRun | null {
   try {
     const value: unknown = JSON.parse(line);
-    if (!isObject(value)) return null;
-    const { key, attempt, harness, caseId, subject, rep } = value;
-    const { checks, unexpected } = value;
-    const whole =
-      typeof key === "string" &&
-      typeof attempt === "number" &&
-      typeof harness === "string" &&
-      typeof caseId === "string" &&
-      typeof subject === "string" &&
-      typeof rep === "number" &&
-      Array.isArray(checks) &&
-      checks.every(isObject) &&
-      Array.isArray(unexpected);
-    return whole ? (value as unknown as StoredRun) : null;
+    return isStoredRun(value) ? (value as StoredRun) : null;
   } catch {
     return null;
   }

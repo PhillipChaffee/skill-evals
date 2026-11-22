@@ -9,7 +9,7 @@ import type { Located } from "./harnesses/index.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
-import { openStore, requireFresh } from "./store.js";
+import { openStore } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
@@ -50,7 +50,7 @@ export interface EvaluateOptions extends SelectionOptions {
   judgeTimeout?: number | undefined;
   /** Ask the server to fall back when the judge model refuses. Default: true. */
   judgeFallbacks?: boolean | undefined;
-  /** Serve judge answers from `judge-cache.jsonl` in the output directory. A fresh run only writes it. Default: false. */
+  /** Serve judge answers from `judge-cache.jsonl` in the output directory. A fresh run only writes it. Into a directory that already holds `results.jsonl` it needs `resume`, or that file removed. Default: false. */
   useCache?: boolean | undefined;
   /** The model that scores decision checks. No default: a suite with a decision check needs it. */
   decisionModel?: string | undefined;
@@ -110,9 +110,9 @@ export interface Results {
   sourceChanged: string[];
   /**
    * Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is
-   * "running". The last write has null.
+   * "running"; "error" when a run threw and ended the command. The last write of a command that finished has null.
    */
-  partial: { reason: "running" } | null;
+  partial: { reason: "running" | "error" } | null;
   records: RunRecord[];
 }
 
@@ -214,8 +214,7 @@ async function runSuite(
   const { context } = prepared;
   const { options, resumed } = context;
   const outDir = resumed ?? outputDir(options.outDir, context.cwd);
-  if (resumed === undefined) requireFresh(outDir);
-  else if (context.model === undefined) {
+  if (resumed !== undefined && context.model === undefined) {
     console.error(
       "skill-evals: warning: --resume without --model: reused runs may come from a different default model",
     );
@@ -230,13 +229,13 @@ async function runSuite(
       store,
       reused:
         resumed === undefined ? new Map<string, RunRecord>() : store.load(),
-      flush: (records) => {
+      flush: (records, reason: "running" | "error" = "running") => {
         store.flush(
           summarize({
             ...finished,
             records,
             sourceChanged: [],
-            partial: { reason: "running" },
+            partial: { reason },
           }),
         );
       },

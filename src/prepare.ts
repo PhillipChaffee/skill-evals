@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Partition } from "./applicability.js";
 import { partitionApplicable } from "./applicability.js";
 import type { Case } from "./cases.js";
@@ -17,7 +19,9 @@ import type { JudgeApi } from "./judge-api.js";
 import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
 import type { Config, Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
+import { requireUnlocked } from "./lock.js";
 import { resumeDir } from "./resume.js";
+import { requireFresh } from "./store.js";
 import { modesOf } from "./run.js";
 import type { PlanBase } from "./run-loop.js";
 import { requireSupportedPlatform } from "./scope.js";
@@ -57,10 +61,17 @@ export interface Prepared {
 /**
  * Settles everything that can be wrong with a command line before any harness starts or any file is written.
  * @param given - The options of `run` or `score`, as `evaluate` takes them.
+ * @param look - How the command uses the output directory.
+ * @param look.inspect - True for `plan`, which reads the output directory of an earlier command and writes nothing: it
+ *   skips the checks of the directory that a command that runs must pass.
  * @returns What the command works with.
- * @throws {UsageError} For a wrong option, case file, config file or harness.
+ * @throws {UsageError} For a wrong option, case file, config file or harness; for an output directory that a live
+ *   command holds; and, without `resume`, for one that already holds runs. `--dry-run` raises these too.
  */
-export function prepare(given: Omit<EvaluateOptions, "onRun">): Prepared {
+export function prepare(
+  given: Omit<EvaluateOptions, "onRun">,
+  look: { inspect?: boolean } = {},
+): Prepared {
   const { cwd = process.cwd(), subjects: specs, ...rest } = given;
   requireSupportedPlatform();
   const pairs = labelled(specs);
@@ -69,6 +80,7 @@ export function prepare(given: Omit<EvaluateOptions, "onRun">): Prepared {
   const reps = requireUsable(options);
   const jobs = requireJobs(options);
   const resumed = resumeDir(options, cwd);
+  if (look.inspect !== true) requireUsableOut(resumed, options.outDir, cwd);
   const selection = selectHarnesses(options.harness);
   const judgeHarness = judgeHarnessOf(options);
   if (options.isolated) requireIsolatedRun(selection.chosen, judgeHarness);
@@ -92,6 +104,25 @@ export function prepare(given: Omit<EvaluateOptions, "onRun">): Prepared {
     parts: partitionApplicable(selection.chosen, cases),
   };
   return { context, project, pairs };
+}
+
+/**
+ * Checks the output directory of a command that runs: first its lock, then, for a fresh command, that it holds no runs.
+ * @param resumed - The directory of `--resume`, or undefined.
+ * @param outDir - `--out` as given, or undefined for a new temp directory, which is always usable.
+ * @param cwd - What a relative `outDir` resolves against.
+ * @throws {UsageError} When a live command holds the directory, or a fresh command would empty the runs in it.
+ */
+function requireUsableOut(
+  resumed: string | undefined,
+  outDir: string | undefined,
+  cwd: string,
+): void {
+  const dir =
+    resumed ?? (outDir === undefined ? undefined : path.resolve(cwd, outDir));
+  if (dir === undefined || !fs.existsSync(dir)) return;
+  requireUnlocked(dir);
+  if (resumed === undefined) requireFresh(dir);
 }
 
 /**
