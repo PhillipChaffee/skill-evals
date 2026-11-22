@@ -20,7 +20,7 @@ export interface LimitFields {
    */
   maxTurnsEnforced?: boolean | null;
   /**
-   * The main-thread turns the runner counted in the stream, subagent turns left out, as they stood at the stop (output that arrives while the process group is killed is not counted); null for a harness without
+   * The main-thread turns the runner counted in the stream, subagent turns left out, up to the stop for a run stopped at `maxTurns` (output that arrives while the process group is killed is not counted), and the lines read until the process was gone for a timeout (the drain included); null for a harness without
    * `turnGrouping`. A run stopped at `maxTurns` shows at least `maxTurns + 1`, because the runner stops as the next turn begins, and turns that arrive in the same chunk are counted too.
    * Absent from earlier records.
    */

@@ -8,7 +8,7 @@ const SLOW_ENV = [
   "SLOW_HEARTBEAT_FILE",
   "SLOW_PID_FILE",
   "SLOW_TURNS",
-  "SLOW_LATE_MS",
+  "SLOW_LATE",
 ];
 
 /** How one run of the "hello" case is made. */
@@ -54,8 +54,8 @@ export interface Slow {
   turns: number;
   /** More keys for the case file. */
   caseFile: Record<string, unknown>;
-  /** When a helper outside the process group writes two more turns, in milliseconds; absent: never. */
-  lateMs?: number;
+  /** True: a helper outside the process group writes two more turns as soon as the harness is gone. */
+  late?: boolean;
 }
 
 /**
@@ -75,7 +75,7 @@ export async function slowRun(box: Sandbox, run: Slow) {
     SLOW_HEARTBEAT_FILE: files.heartbeat,
     SLOW_PID_FILE: files.pid,
     SLOW_TURNS: String(run.turns),
-    ...(run.lateMs === undefined ? {} : { SLOW_LATE_MS: String(run.lateMs) }),
+    ...(run.late ? { SLOW_LATE: "1" } : {}),
   };
   return { ...(await scored(box, { env, caseFile: run.caseFile })), files };
 }

@@ -17,6 +17,49 @@ export interface RunEnd {
   parsed: Parsed;
 }
 
+/** What `endOf` is given. */
+type Ended = {
+  parsed: Parsed;
+  stdout: string;
+  failure: string | null;
+  exec: Pick<ExecResult, "kind" | "stopped" | "exit" | "signal">;
+  onTimeout?: OnTimeout | undefined;
+  fault?: string | null;
+};
+
+/**
+ * Says who ended a run. A timeout wins over a stop, whatever order the process saw them in.
+ * @param run - What the process and the parse showed.
+ * @returns "timeout", "maxTurns" (the runner's stop, or the harness's own limit), or "agent".
+ */
+function stoppedByOf(run: Ended): StoppedBy {
+  if (run.exec.kind === "timeout") return "timeout";
+  return run.exec.stopped || run.parsed.hitMaxTurns === true
+    ? "maxTurns"
+    : "agent";
+}
+
+/**
+ * Finds the error of a stopped run, which is only what is not excused.
+ * @param run - What the process and the parse showed.
+ * @param stoppedBy - Who ended the run: "maxTurns" or "timeout".
+ * @returns The error; null when the run is to be scored.
+ */
+function stoppedError(run: Ended, stoppedBy: StoppedBy): string | null {
+  const { parsed, failure } = run;
+  const timedOut = stoppedBy === "timeout";
+  // What the harness or the adapter said went wrong; a stream with no ending is not that.
+  const reported = parsed.unfinished === true ? null : parsed.error;
+  if (timedOut && run.onTimeout !== "score") return reported || failure;
+  if (reported) return reported;
+  // Claude Code's own limit ends with exit code 1; any other way of failing is a real failure.
+  const exited = run.exec.exit === 1 && run.exec.signal === null;
+  if (!timedOut && !run.exec.stopped && failure && !exited) return failure;
+  return timedOut && parsed.transcript.length === 0
+    ? `${String(failure)} before the agent did anything`
+    : null;
+}
+
 /**
  * Decides who ended a run and whether it failed.
  * A run stopped at `maxTurns`, by the runner or by the harness's own limit, is scored. So is a timed-out run whose case
@@ -29,44 +72,30 @@ export interface RunEnd {
  * @param run.parsed - The adapter's reading of the stream.
  * @param run.stdout - What the harness wrote.
  * @param run.failure - Why the process failed, or null.
- * @param run.exec - How the process ended: its `kind` and whether the runner `stopped` it.
+ * @param run.exec - How the process ended: its `kind`, whether the runner `stopped` it, and its `exit` and `signal`.
  * @param run.onTimeout - What the case does with a timeout; absent is "invalid".
  * @param run.fault - Why the turn counter threw, or null.
  * @returns Who ended the run, its error, and the parse to use.
  */
-export function endOf(run: {
-  parsed: Parsed;
-  stdout: string;
-  failure: string | null;
-  exec: Pick<ExecResult, "kind" | "stopped">;
-  onTimeout?: OnTimeout | undefined;
-  fault?: string | null;
-}): RunEnd {
+export function endOf(run: Ended): RunEnd {
   const { parsed, failure } = run;
-  const timedOut = run.exec.kind === "timeout";
-  const limited = run.exec.stopped || parsed.hitMaxTurns === true;
-  // A timeout wins over a stop, whatever the order the process saw them in.
-  const stoppedBy: StoppedBy = timedOut
-    ? "timeout"
-    : limited
-      ? "maxTurns"
-      : "agent";
-  const fail = (error: string | null): RunEnd => ({ stoppedBy, error, parsed });
-  // What the harness or the adapter said went wrong; a stream with no ending is not that.
-  const reported = parsed.unfinished === true ? null : parsed.error;
+  const stoppedBy = stoppedByOf(run);
   // The runner stopped the process only because its own counter broke, which the agent did not cause.
-  if (run.fault) return { stoppedBy: "agent", error: run.fault, parsed };
+  if (run.fault) {
+    return {
+      stoppedBy: stoppedBy === "timeout" ? "timeout" : "agent",
+      error: run.fault,
+      parsed,
+    };
+  }
   if (stoppedBy === "agent") {
     // The harness's own message is the most specific one, but only when it produced a stream at all.
-    return fail(
-      (run.stdout.trim() && parsed.error) || failure || parsed.error || null,
-    );
+    const error =
+      (run.stdout.trim() && parsed.error) || failure || parsed.error || null;
+    return { stoppedBy, error, parsed };
   }
-  if (timedOut && run.onTimeout !== "score") return fail(reported || failure);
-  if (reported) return fail(reported);
-  if (timedOut && parsed.transcript.length === 0) {
-    return fail(`${String(failure)} before the agent did anything`);
-  }
+  const error = stoppedError(run, stoppedBy);
+  if (error !== null) return { stoppedBy, error, parsed };
   const finalText = parsed.finalText || lastAssistantText(parsed.transcript);
   return { stoppedBy, error: null, parsed: { ...parsed, finalText } };
 }

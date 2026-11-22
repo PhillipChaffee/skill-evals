@@ -197,7 +197,7 @@ const notStarted = (failure: string, home: string) => ({
   stdout: "",
   failure,
   durationMs: 0,
-  exec: { kind: null, stopped: false } as const,
+  exec: { kind: null, stopped: false, exit: null, signal: null } as const,
   turns: null,
   fault: null,
   firstOutputMs: null,
@@ -212,7 +212,7 @@ interface Attempt {
   failure: string | null;
   durationMs: number;
   /** How the process ended: its failure kind, and whether the runner stopped it. */
-  exec: Pick<ExecResult, "kind" | "stopped">;
+  exec: Pick<ExecResult, "kind" | "stopped" | "exit" | "signal">;
   turns: number | null;
   /** Why the turn counter threw, or null. */
   fault: string | null;

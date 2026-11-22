@@ -80,24 +80,24 @@ const FIXTURES = fs
     name,
   ]);
 
+// Pi's `pi-error.stream.jsonl` has one turn, an error turn with empty content, so no transcript event carries a turn
+// number and the parse shows none; a turn did begin, and the runner counts it. Every other fixture matches exactly.
+const EXCEPTIONS: Record<string, number> = { "pi-error.stream.jsonl": 1 };
+
 test.each(FIXTURES)(
-  "%s: the runner's count of %s, over chunks that cut lines, is the parse's main-thread turns",
+  "%s: the runner's count of %s, over chunks that cut lines, is exactly the parse's main-thread turns",
   (id, name) => {
     const harness = byId(id as string);
     const parsed = harness.parse(
       fs.readFileSync(fixture(name as string), "utf8"),
     );
-    const turns = new Set(
+    const distinct = new Set(
       parsed.transcript
         .filter((event) => event.agent.depth === 0 && event.turn !== null)
         .map((event) => event.turn),
-    );
-    // Pi numbers its turns from 0 and the others from 1, and a turn that shows nothing in the transcript has no number.
-    expect(watched(harness, name as string).turns).toBeGreaterThanOrEqual(
-      turns.size,
-    );
-    expect(watched(harness, name as string).turns).toBeLessThanOrEqual(
-      turns.size + 1,
+    ).size;
+    expect(watched(harness, name as string).turns).toBe(
+      EXCEPTIONS[name as string] ?? distinct,
     );
   },
 );

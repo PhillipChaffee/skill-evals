@@ -1,5 +1,6 @@
 import type { Evaluation } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
+import { invalidReason } from "./run.js";
 
 /**
  * Lists the pairs of harness and case that were not run.
@@ -85,7 +86,7 @@ function stoppedSection(evaluation: Evaluation): string[] {
   const lines = [...groups].flatMap(([key, runs]) => {
     const at = runs.filter((run) => run.stoppedBy === "maxTurns").length;
     const late = runs.filter(
-      (run) => run.stoppedBy === "timeout" && !run.error,
+      (run) => run.stoppedBy === "timeout" && invalidReason(run) === null,
     ).length;
     return [
       ...(at

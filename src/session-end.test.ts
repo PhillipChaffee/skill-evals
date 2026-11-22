@@ -5,10 +5,12 @@ import { endOf } from "./session-end.js";
 import { lines } from "./testing/streams.js";
 
 const byId = (id: string) => HARNESSES.find((harness) => harness.id === id);
-const TIMED_OUT = { kind: "timeout", stopped: false } as const;
-const STOPPED = { kind: null, stopped: true } as const;
+const KILLED = { exit: null, signal: "SIGKILL" } as const;
+const TIMED_OUT = { kind: "timeout", stopped: false, ...KILLED } as const;
+const STOPPED = { kind: null, stopped: true, ...KILLED } as const;
 const TIMEOUT = "timed out after 5 s";
 const CLAUDE_ID = "claude-code";
+const BOOM = "the turn counter failed: boom";
 const SCORE = "score" as const;
 
 /**
@@ -76,11 +78,11 @@ test("an adapter that cannot read a stream, and a failing turn counter, fail a s
     stdout,
     failure: null,
     exec: STOPPED,
-    fault: "the turn counter failed: boom",
+    fault: BOOM,
   });
   expect(counted).toMatchObject({
     stoppedBy: "agent",
-    error: "the turn counter failed: boom",
+    error: BOOM,
   });
 });
 
@@ -94,7 +96,7 @@ test("Claude Code's own limit is a scored stop even though the process exits 1",
     parsed,
     stdout,
     failure: "exit 1: ",
-    exec: { kind: null, stopped: false },
+    exec: { kind: null, stopped: false, exit: 1, signal: null },
   });
   expect(end).toMatchObject({ stoppedBy: "maxTurns", error: null });
   expect(end.parsed.finalText).toBe("got far");
@@ -161,7 +163,7 @@ test('onTimeout "score" still fails a run whose harness reported an error, and a
 
 test("a run that ended by itself keeps the old rule: the stream's error, then the process's", () => {
   const { stdout, parsed } = parsedBy(CLAUDE_ID, textTurn("m1", "x"));
-  const alone = { kind: null, stopped: false } as const;
+  const alone = { kind: null, stopped: false, exit: 1, signal: null } as const;
   expect(endOf({ parsed, stdout, failure: null, exec: alone })).toMatchObject({
     stoppedBy: "agent",
     error: "no result event",
@@ -183,4 +185,44 @@ test("every adapter marks a stream with no ending apart from one that reports an
     lines({ type: "turn.failed", error: { message: "no" } }),
   );
   expect(codex).toMatchObject({ error: "no", unfinished: false });
+});
+
+test("Claude Code's own limit excuses exit 1 only: a crash after it is a failure", () => {
+  const { stdout, parsed } = parsedBy(CLAUDE_ID, textTurn("m1", "got far"), {
+    type: "result",
+    subtype: "error_max_turns",
+    is_error: true,
+  });
+  const crashed = {
+    kind: null,
+    stopped: false,
+    exit: null,
+    signal: "SIGSEGV",
+  } as const;
+  const end = endOf({
+    parsed,
+    stdout,
+    failure: "exit SIGSEGV: ",
+    exec: crashed,
+  });
+  expect(end).toMatchObject({ stoppedBy: "maxTurns", error: "exit SIGSEGV: " });
+  const code2 = { kind: null, stopped: false, exit: 2, signal: null } as const;
+  expect(
+    endOf({ parsed, stdout, failure: "exit 2: ", exec: code2 }).error,
+  ).toBe("exit 2: ");
+});
+
+test("a counter fault during a timeout's drain keeps the run a timeout", () => {
+  const { stdout, parsed } = parsedBy(CLAUDE_ID, textTurn("m1", "x"));
+  const end = endOf({
+    parsed,
+    stdout,
+    failure: TIMEOUT,
+    exec: TIMED_OUT,
+    fault: BOOM,
+  });
+  expect(end).toMatchObject({
+    stoppedBy: "timeout",
+    error: BOOM,
+  });
 });

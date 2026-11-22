@@ -113,7 +113,7 @@ interface Ending {
   spawnError: string | undefined;
   timedOut: boolean;
   timeoutSeconds: number;
-  /** True when `onStdout` asked for the stop while the command was live and within its time. */
+  /** True when `onStdout` asked for a stop that the runner's kill carried out: the command ended by a signal. */
   stopped: boolean;
 }
 
@@ -142,11 +142,12 @@ function concluded(
     const failure = how.spawnError;
     return { ...base, exit: null, signal: null, failure, kind: "spawn" };
   }
-  if (how.stopped) return { ...base, failure: null, kind: null };
+  // A timeout comes first: a command that was overdue was not stopped for anything else.
   if (how.timedOut) {
     const failure = `timed out after ${String(how.timeoutSeconds)} s`;
-    return { ...base, failure, kind: "timeout" };
+    return { ...base, stopped: false, failure, kind: "timeout" };
   }
+  if (how.stopped) return { ...base, failure: null, kind: null };
   if (code === 0) return { ...base, failure: null, kind: null };
   const tail = kept.stderr.trim().slice(-SHOWN_STDERR_LENGTH);
   return {
@@ -245,7 +246,11 @@ function readers(
   });
   return {
     concluded: (how: Omit<Ending, "stopped">): ExecResult =>
-      concluded(kept(), { ...how, stopped: asked }),
+      // A stop counts only when the kill ended the command. An exit with a code means it ended by itself, first.
+      concluded(kept(), {
+        ...how,
+        stopped: asked && how.code === null && how.spawnError === undefined,
+      }),
   };
 }
 

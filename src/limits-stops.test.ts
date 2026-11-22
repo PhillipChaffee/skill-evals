@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import type { Harness } from "./harnesses/shared.js";
+import { noteSections } from "./report-notes.js";
 import { session } from "./session.js";
 import { judgeAsker } from "./startup.js";
 import { scored, slowRun } from "./testing/limits.js";
@@ -11,8 +12,6 @@ const TEST_TIMEOUT_MS = 30_000;
 const CLAUDE = HARNESSES.find(
   (harness) => harness.id === "claude-code",
 ) as Harness;
-// The timeout is 1000 ms and the drain 250 ms after it; this is counted from the harness's start, a few ms after the timer.
-const LATE_MS = 1120;
 
 /**
  * Runs a callback with environment variables set, and restores them.
@@ -46,7 +45,7 @@ test(
     const { record } = await slowRun(box, {
       turns: 1,
       caseFile: { maxTurns: 1, timeoutSeconds: 1 },
-      lateMs: LATE_MS,
+      late: true,
     });
 
     expect(record).toMatchObject({
@@ -168,4 +167,31 @@ test(
 test("a report with no stopped run has no such section", async () => {
   const { result } = await scored(sandbox());
   expect(result.stdout).not.toContain("Stopped by the runner");
+});
+
+test("the report counts a timed-out run as scored only when it has no invalid reason at all", () => {
+  const record = (more: Record<string, unknown>) =>
+    ({
+      harness: "claude-code",
+      caseId: "c",
+      stoppedBy: "timeout",
+      error: null,
+      subjectLoaded: true,
+      isolated: false,
+      reportMissing: false,
+      unexpected: [],
+      judgeProblem: null,
+      checks: [],
+      ...more,
+    }) as never;
+  const evaluation = {
+    records: [record({}), record({ subjectLoaded: false })],
+    cases: [],
+    skippedChecks: [],
+    notApplicable: [],
+  } as never;
+
+  expect(noteSections(evaluation).join("\n")).toContain(
+    "- claude-code `c`: 1 of 2 runs timed out and were scored (onTimeout: score)",
+  );
 });
