@@ -1,74 +1,91 @@
 import { UsageError, isObject } from "./scope.js";
 
 /**
- * Words that tell an agent it is being evaluated. A prompt, a path or the environment that holds one may change what
- * the agent does. Config `blindingWords` replaces this list.
+ * Roots of words that tell an agent it is being evaluated: a prompt, a path or the environment that holds one may
+ * change what the agent does. A root matches with an optional ending from `BLINDING_ENDINGS`, so "evaluat" finds
+ * evaluate, evaluation and evaluator. Config `blindingWords` replaces this list and follows the same rule.
  */
 export const DEFAULT_BLINDING_WORDS: readonly string[] = [
   "eval",
+  "evaluat",
   "test",
-  "judge",
+  "judg",
   "experiment",
   "rubric",
-  "score",
-  "compare",
+  "scor",
+  "compar",
   "benchmark",
-  "candidate",
+  "candidat",
   "arena",
 ];
 
-// A word and its stem forms, as a whole word. A word inside another word ("contest" for "test") does not match.
-const STEM_SUFFIXES = "s|ed|ing|er|ation";
-const PATH_SEPARATORS = /[-_./]/;
-const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
+/** The endings that a root may take. */
+export const BLINDING_ENDINGS: readonly string[] = [
+  "e",
+  "es",
+  "ed",
+  "ing",
+  "er",
+  "ers",
+  "or",
+  "ors",
+  "ion",
+  "ions",
+  "ive",
+  "ment",
+  "ments",
+  "al",
+  "s",
+  "ation",
+  "ations",
+];
+
+// A word is a run of letters, so "_", "-", "." and digits end it, and "contest" does not hold "test".
+const ENDINGS = BLINDING_ENDINGS.join("|");
+const CAMEL = /([\p{Ll}\p{N}])(\p{Lu})/gu;
+/** What a blinding word must look like: letters, digits and hyphens, starting with a letter. */
+const WORD_SHAPE = /^\p{L}[\p{L}\p{N}-]*$/u;
 
 const compiled = new Map<string, RegExp>();
 
 /**
  * Builds the pattern of one word, once.
  * @param word - A blinding word, lowercase.
- * @returns The pattern: the word with an optional stem ending, as a whole word, case-insensitive.
+ * @returns The pattern: the word with an optional ending, between non-letters, on lowercase text.
  */
 function patternOf(word: string): RegExp {
   let pattern = compiled.get(word);
   if (pattern === undefined) {
-    const escaped = word.replace(REGEX_SPECIAL, "\\$&");
-    pattern = new RegExp(`\\b(${escaped})(${STEM_SUFFIXES})?\\b`, "i");
+    pattern = new RegExp(`(?<!\\p{L})${word}(?:${ENDINGS})?(?!\\p{L})`, "u");
     compiled.set(word, pattern);
   }
   return pattern;
 }
 
 /**
- * Finds the listed words in a text.
- * @param text - What the agent may read.
+ * Finds the listed words in a text, a path or a name.
+ * @param text - What the agent may read. A camelCase name is split first, and case does not matter.
  * @param words - The blinding words, lowercase.
- * @returns Each listed word that occurs in the text as a whole word or with a stem ending, once, in the order of the
- *   list. Case does not matter.
+ * @returns Each listed word that occurs in the text, once, in the order of the list. "test_parse", "run_tests",
+ *   "RunTest" and "test2" hold "test"; "contest", "latest" and "attestation" do not.
  */
-export const textHits = (text: string, words: readonly string[]): string[] =>
-  words.filter((word) => patternOf(word).test(text));
-
-/**
- * Finds the listed words in a path or a name.
- * @param name - A path, a file name or a variable name.
- * @param words - The blinding words, lowercase.
- * @returns The words that any segment holds; the segments are the parts between `-`, `_`, `.` and `/`.
- */
-export const pathHits = (name: string, words: readonly string[]): string[] =>
-  textHits(name.split(PATH_SEPARATORS).join(" "), words);
+export function textHits(text: string, words: readonly string[]): string[] {
+  const lowered = text.replace(CAMEL, "$1 $2").toLowerCase();
+  return words.filter((word) => patternOf(word).test(lowered));
+}
 
 /**
  * Checks a list of blinding words.
  * @param list - What the config file or a case lists.
  * @param where - Names the list in the message.
- * @throws {UsageError} For an entry that is empty or not lowercase.
+ * @throws {UsageError} For an entry that is not lowercase letters, digits and hyphens that starts with a letter: a word
+ *   with punctuation or a space could never match.
  */
 export function requireBlindingWords(list: string[], where: string): void {
   for (const word of list) {
-    if (word === "" || word !== word.toLowerCase()) {
+    if (!WORD_SHAPE.test(word) || word !== word.toLowerCase()) {
       throw new UsageError(
-        `${where} needs non-empty lowercase words, not "${word}"`,
+        `${where} needs lowercase words of letters, digits and hyphens that start with a letter, not "${word}"`,
       );
     }
   }

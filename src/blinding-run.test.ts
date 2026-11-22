@@ -42,8 +42,8 @@ test("a variable name with a word, and a variable that names this tool, are repo
   expect(ran.status).toBe(USAGE_ERROR);
   expect(ran.stderr).toContain('the variable name TEST_TOKEN holds "test"');
   expect(ran.stderr).toContain("the variable CASE_NOTE names this tool");
-  // A variable that the user passes on purpose keeps its value to itself.
-  expect(ran.stderr).not.toContain("OWN_SECRET");
+  // A variable that the user passes on purpose is warned about by name, never by value.
+  expect(ran.stderr).toContain("the value of OWN_SECRET names this tool");
   expect(fs.existsSync(box.started)).toBe(false);
 });
 

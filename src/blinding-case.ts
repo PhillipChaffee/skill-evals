@@ -1,6 +1,6 @@
 import path from "node:path";
 import { agentSources } from "./blinding-agent.js";
-import { pathHits, readUnblinded, textHits } from "./blinding.js";
+import { readUnblinded, textHits } from "./blinding.js";
 import type { Case } from "./cases.js";
 import type { Lint } from "./commands/validate.js";
 import { walkTree } from "./walk.js";
@@ -40,7 +40,7 @@ export function pathLints(
   words: readonly string[],
 ): Lint[] {
   const { caseId, area } = place;
-  const hits = paths.map((one) => ({ one, found: pathHits(one, words) }));
+  const hits = paths.map((one) => ({ one, found: textHits(one, words) }));
   return words.flatMap((word): Lint[] => {
     const holding = hits
       .filter(({ found }) => found.includes(word))
@@ -88,14 +88,12 @@ export function scanCase(
 ): Lint[] {
   const active = activeWords(caseDef, words);
   if (active.length === 0) return [];
-  const found = agentSources(caseDef).flatMap(({ where, text, name }) =>
-    (name === true ? pathHits(text, active) : textHits(text, active)).map(
-      (word): Lint => ({
-        level: "warning",
-        caseId: caseDef.id,
-        text: `${where} holds "${word}", ${WHY}`,
-      }),
-    ),
+  const found = agentSources(caseDef).flatMap(({ where, text }) =>
+    textHits(text, active).map((word): Lint => ({
+      level: "warning",
+      caseId: caseDef.id,
+      text: `${where} holds "${word}", ${WHY}`,
+    })),
   );
   // A tool description and a response may each hold the word; one line says it.
   const texts = [...new Map(found.map((lint) => [lint.text, lint])).values()];

@@ -7,8 +7,6 @@ import type { History } from "./history-types.js";
 export interface Source {
   where: string;
   text: string;
-  /** True for a name (of a file, a tool or a session), which is read in segments as a path is. */
-  name?: boolean;
 }
 
 /**
@@ -32,8 +30,7 @@ function stringsOf(value: unknown): string[] {
  * Lists the texts of a conversation that already happened.
  * @param history - The messages.
  * @param where - Names the conversation.
- * @returns Each message's text, and each tool call's name, input and output. A call's name and input hold identifiers, and
- *   are read as names are, in segments.
+ * @returns Each message's text, and each tool call's name, input and output.
  */
 function historySources(history: History, where: string): Source[] {
   return history.flatMap((message, index) => [
@@ -95,7 +92,6 @@ function mcpSources(dir: string): Source[] {
         {
           where: `the name of ${where}`,
           text: `${server}/${file}`,
-          name: true,
         },
         ...stringsOf(tool.description).map((text) => ({
           where: `the description of ${where}`,
@@ -104,7 +100,6 @@ function mcpSources(dir: string): Source[] {
         ...stringsOf(tool.inputSchema).map((text) => ({
           where: `the input schema of ${where}`,
           text,
-          name: true,
         })),
         ...(tool.responses ?? []).flatMap((response) =>
           stringsOf(response.text).map((text) => ({
@@ -129,11 +124,16 @@ export function agentSources(caseDef: Case): Source[] {
     ...promptSources(caseDef),
     ...historySources(caseDef.history ?? [], "history.json"),
     ...(caseDef.sessions ?? []).flatMap((session) => [
+      { where: `the id of session ${session.id}`, text: session.id },
       ...(session.cwd === undefined
         ? []
-        : [{ where: `session ${session.id}`, text: session.cwd, name: true }]),
+        : [{ where: `session ${session.id}`, text: session.cwd }]),
       ...historySources(session.messages, `session ${session.id}`),
     ]),
     ...(caseDef.mcp === undefined ? [] : mcpSources(caseDef.mcp.dir)),
+    ...Object.entries(caseDef.env).flatMap(([name, value]) => [
+      { where: `the name of the variable ${name}`, text: name },
+      { where: `the value of the variable ${name}`, text: value },
+    ]),
   ];
 }

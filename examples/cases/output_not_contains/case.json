@@ -8,6 +8,6 @@
   ],
   "x-unblinded": {
     "words": ["test"],
-    "why": "The prompt is about software tests (running, fixing or explaining them), so the word is the task and not a hint that the agent is being evaluated."
+    "why": "The prompt asks what a unit test is, so the word is the question and the check is on how the answer is worded."
   }
 }

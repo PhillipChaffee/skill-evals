@@ -1,16 +1,17 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { DEFAULT_BLINDING_WORDS, textHits } from "../blinding.js";
 
 // Gives every test worker an environment that holds no blinding word and no mention of this tool, whatever the
-// operator's is: a fresh TMPDIR, and a PATH without the directories that name this tool (`npm run` puts the project's
-// node_modules/.bin there, and the project may be called skill-evals). A command that starts a real run checks both
-// before it starts. vitest.config.ts lists this file as a setup file.
-const tmp = fs.mkdtempSync(path.join("/tmp", "runs-"));
+// operator's is: a fresh TMPDIR. A command that starts a real run checks it before it starts. vitest.config.ts lists this file as a setup file.
+// The system's temp directory is used unless the operator's holds a blinding word.
+const base =
+  textHits(os.tmpdir(), DEFAULT_BLINDING_WORDS).length === 0
+    ? os.tmpdir()
+    : "/tmp";
+const tmp = fs.mkdtempSync(path.join(base, "runs-"));
 process.env["TMPDIR"] = tmp;
-process.env["PATH"] = (process.env["PATH"] ?? "")
-  .split(path.delimiter)
-  .filter((entry) => !/skill.?evals?/i.test(entry))
-  .join(path.delimiter);
 process.on("exit", () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });

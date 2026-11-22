@@ -66,7 +66,7 @@ function fits(
     return (
       Object.hasOwn(args, name) &&
       value !== undefined &&
-      new RegExp(pattern).test(argumentText(value))
+      new RegExp(pattern).exec(argumentText(value)) !== null
     );
   });
 }

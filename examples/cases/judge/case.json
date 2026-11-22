@@ -13,6 +13,6 @@
   ],
   "x-unblinded": {
     "words": ["test"],
-    "why": "The prompt is about software tests (running, fixing or explaining them), so the word is the task and not a hint that the agent is being evaluated."
+    "why": "The prompt asks for an explanation of why a software test should fail before it passes, so the word is the topic the rubric is about."
   }
 }

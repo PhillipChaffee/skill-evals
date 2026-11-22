@@ -21,7 +21,7 @@ test("turn files and replies are scanned, and the skill name of an invocation is
   fs.rmSync(`${box.root}/cases/t/prompt.md`);
   const { lines } = await validated(box, [], { benchmark: "# b\n" });
   const text = lines.join("\n");
-  expect(text).toContain('turn 2 (an invocation) holds "candidate"');
+  expect(text).toContain('turn 2 (an invocation) holds "candidat"');
   expect(text).toContain('turn 3 (a reply) holds "rubric"');
   expect(text).not.toContain('"benchmark"');
 });
@@ -42,10 +42,10 @@ test("a hit in a mock MCP description, schema, response or name warns", async ()
     'the description of mcp/tracker/run_test.json holds "benchmark"',
   );
   expect(text).toContain(
-    'the input schema of mcp/tracker/run_test.json holds "candidate"',
+    'the input schema of mcp/tracker/run_test.json holds "candidat"',
   );
   expect(text).toContain(
-    'the input schema of mcp/tracker/run_test.json holds "judge"',
+    'the input schema of mcp/tracker/run_test.json holds "judg"',
   );
   expect(text).toContain(
     'a response of mcp/tracker/run_test.json holds "arena"',
@@ -79,7 +79,7 @@ test("a hit in history text, a tool call of it or a prior session warns", async 
   const text = (await validated(box)).lines.join("\n");
   expect(text).toContain('history.json, message 1 holds "test"');
   expect(text).toContain('a tool call of message 2 holds "experiment"');
-  expect(text).toContain('session earlier, message 1 holds "compare"');
+  expect(text).toContain('session earlier, message 1 holds "compar"');
 });
 
 test("the names of files under workspace, a fixture and home are scanned, not their contents", async () => {

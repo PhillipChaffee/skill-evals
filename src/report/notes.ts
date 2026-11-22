@@ -1,3 +1,8 @@
+import { unblindedOf } from "../blinding.js";
+import type { Evaluation } from "../evaluate.js";
+import type { RunRecord } from "../run.js";
+import { invalidReason } from "../run.js";
+import { plannedRuns } from "../not-run.js";
 const MS_PER_SECOND = 1000;
 // The flag that each reason of a stopped command names; the other reasons are not stops by a limit.
 const LIMIT_FLAGS: Record<string, string | undefined> = {
@@ -5,11 +10,6 @@ const LIMIT_FLAGS: Record<string, string | undefined> = {
   duration: "--max-duration",
 };
 const COST_DECIMALS = 4;
-import { unblindedOf } from "../blinding.js";
-import type { Evaluation } from "../evaluate.js";
-import type { RunRecord } from "../run.js";
-import { invalidReason } from "../run.js";
-import { plannedRuns } from "../not-run.js";
 
 /**
  * Says that the command stopped before the end, and how many runs did not run.

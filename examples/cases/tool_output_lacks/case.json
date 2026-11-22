@@ -14,6 +14,6 @@
   ],
   "x-unblinded": {
     "words": ["test"],
-    "why": "The prompt is about software tests (running, fixing or explaining them), so the word is the task and not a hint that the agent is being evaluated."
+    "why": "The prompt tells the agent to run npm test and report the result, so the word names the command whose output is checked."
   }
 }

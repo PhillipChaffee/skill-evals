@@ -240,7 +240,7 @@ export const FLAGS = {
     kind: "switch",
     value: "",
     description:
-      "Also run the setup steps of each case in a throwaway directory, and look for blinding words in the paths they make. Plain validate never runs a setup step and looks only at the files the case holds. The steps can take time and touch the network.",
+      "Also run the setup steps of each case in a throwaway directory, and look for blinding words in the paths they make. Plain validate never runs a setup step and looks only at the files the case holds. --deep runs the suite's shell commands with your permissions, in a throwaway directory, and each step's timeoutSeconds still applies.",
     default: "off: setup is not run",
   },
   isolated: {

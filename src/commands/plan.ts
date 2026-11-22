@@ -138,7 +138,7 @@ function estimateLines(what: {
  * @throws {UsageError} For a wrong option, subject or case file, as the command itself would.
  */
 function planText(given: PlanOptions, inspect: boolean): string {
-  const prepared = prepare(given, { inspect });
+  const prepared = prepare(given, { inspect, blind: false });
   const { context, pairs } = prepared;
   const subjects: Subject[] = [];
   try {

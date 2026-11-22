@@ -1,3 +1,4 @@
+import { blindingNotes } from "../blinding-notes.js";
 import { scanCases } from "../blinding-case.js";
 import { deepLints } from "../blinding-deep.js";
 import { DEFAULT_BLINDING_WORDS } from "../blinding.js";
@@ -255,8 +256,10 @@ function rulesClash(cases: Case[], context: LintContext): Lint[] {
  * @returns One warning for each word in each place: prompts, turns, history, mock servers and paths. A case's
  *   `x-unblinded` silences its listed words.
  */
-const blinding = (cases: Case[], context: LintContext): Lint[] =>
-  scanCases(cases, context.blindingWords ?? DEFAULT_BLINDING_WORDS);
+const blinding = (cases: Case[], context: LintContext): Lint[] => {
+  const words = context.blindingWords ?? DEFAULT_BLINDING_WORDS;
+  return [...blindingNotes({ ...context, words }), ...scanCases(cases, words)];
+};
 
 /**
  * Every lint, in the order its lines are written. A later task adds a lint by appending a function here.

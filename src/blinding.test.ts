@@ -2,12 +2,7 @@ import { expect, test } from "vitest";
 import { scanCase, scanCases } from "./blinding-case.js";
 import { scanRuntime } from "./blinding-runtime.js";
 import { loadCases } from "./cases.js";
-import {
-  DEFAULT_BLINDING_WORDS,
-  pathHits,
-  textHits,
-  unblindedOf,
-} from "./blinding.js";
+import { DEFAULT_BLINDING_WORDS, textHits, unblindedOf } from "./blinding.js";
 import { referencePages } from "./docs/reference.js";
 import { childEnv } from "./env.js";
 import { CONFIG_FILE } from "./project.js";
@@ -84,9 +79,12 @@ test("x-unblinded of a variant is checked, and a malformed one is a load error",
   expect(lines.join("\n")).toMatch(/problem upper: .*lowercase/);
 });
 
-test("a word inside another word is not flagged, and the stem endings are", () => {
-  expect(textHits("enter the contest", ["test"])).toEqual([]);
-  expect(textHits("the latest news, a retest", ["test"])).toEqual([]);
+test("a word inside another word is not flagged, and the endings are", () => {
+  const roots = DEFAULT_BLINDING_WORDS;
+  for (const text of ["enter the contest", "the latest news", "attestation"]) {
+    expect(textHits(text, ["test"]), text).toEqual([]);
+  }
+  expect(textHits("a retest", ["test"])).toEqual([]);
   for (const text of ["a test", "Tests", "tested", "testing", "a tester"]) {
     expect(textHits(text, ["test"]), text).toEqual(["test"]);
   }
@@ -94,9 +92,39 @@ test("a word inside another word is not flagged, and the stem endings are", () =
     "test",
     "eval",
   ]);
-  expect(textHits("a.b (c)", ["a.b", "(c"])).toEqual(["a.b"]);
-  expect(pathHits("src/my_test-file.TS", ["test"])).toEqual(["test"]);
-  expect(pathHits("src/contest.ts", ["test"])).toEqual([]);
+  // Letter boundaries: "_", digits, dots and a change of case end a word.
+  for (const text of [
+    "Fix test_parse in run_tests.py",
+    "eval_results",
+    "RunTest",
+    "test2",
+    "src/my_test-file.TS",
+  ]) {
+    expect(textHits(text, ["test", "eval"]).length, text).toBeGreaterThan(0);
+  }
+  // Roots with endings.
+  for (const word of [
+    "evaluate",
+    "evaluation",
+    "evaluator",
+    "evaluated",
+    "judging",
+    "judged",
+    "judgment",
+    "scored",
+    "scoring",
+    "compared",
+    "comparing",
+    "experimental",
+    "candidates",
+    "benchmarking",
+  ]) {
+    expect(textHits(word, roots).length, word).toBeGreaterThan(0);
+  }
+  // Words of any script are fine, and match as letters.
+  expect(textHits("une évaluation", ["évaluation"])).toEqual(["évaluation"]);
+  expect(textHits("テスト", ["テスト"])).toEqual(["テスト"]);
+  expect(textHits("a scoreboard, a candidacy", roots)).toEqual([]);
 });
 
 test("a prompt that holds only a word inside another word is not flagged by validate", async () => {
@@ -123,22 +151,22 @@ test("blindingWords replaces the default list, and a bad entry is a usage error"
   expect(lines[0]).toMatch(/^warning c: the prompt holds "contest"/);
   expect(lines).toHaveLength(2);
 
-  for (const bad of [[""], ["Test"]]) {
+  for (const bad of [[""], ["Test"], ["c++"], ["two words"], ["1st"]]) {
     const other = sandbox();
     other.write(CONFIG_FILE, { blindingWords: bad });
     plant(other, "c");
     const ran = await other.cli(["validate", "--subject", "none"]);
-    expect(ran.status).toBe(USAGE_ERROR);
+    expect(ran.status, JSON.stringify(bad)).toBe(USAGE_ERROR);
     expect(ran.stderr).toContain(
-      '"blindingWords" needs non-empty lowercase words',
+      '"blindingWords" needs lowercase words of letters, digits and hyphens',
     );
   }
   const empty = sandbox();
   empty.write(CONFIG_FILE, { blindingWords: [] });
   plant(empty, "c", { prompt: "the benchmark\n" });
-  expect((await validated(empty)).lines).toEqual([
-    "1 cases, 0 problems, 0 warnings",
-  ]);
+  const { lines: none } = await validated(empty);
+  expect(none[0]).toContain("note: blindingWords is empty");
+  expect(none).toHaveLength(2);
 });
 
 test("the tool's own temp names, and the names it sets, hold no default word", () => {

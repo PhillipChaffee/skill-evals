@@ -29,6 +29,6 @@
   "timeoutSeconds": 300,
   "x-unblinded": {
     "words": ["test"],
-    "why": "The prompt is about software tests (running, fixing or explaining them), so the word is the task and not a hint that the agent is being evaluated."
+    "why": "The word is part of the research question given to the first subagent (the testing question), and the case checks how subagents are ordered, not the topic."
   }
 }

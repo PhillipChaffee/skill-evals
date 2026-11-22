@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { UsageError } from "./scope.js";
 
@@ -66,6 +67,43 @@ export function requireEnvNames(names: string[], where: string): void {
   }
 }
 
+/** What this tool is called, in any spelling that a path or a variable may use. */
+export const OWN_NAME = /skill.?evals?/i;
+const warnedPaths = new Set<string>();
+
+/**
+ * Takes the entries that name this tool out of a `PATH` value. `npm run` and `npx` put every ancestor's
+ * `node_modules/.bin` on `PATH`, so a checkout whose path names this tool would otherwise show it to the agent.
+ * @param value - The `PATH` value.
+ * @param needs - Executables the run needs: names to look for in an entry, or absolute paths.
+ * @returns The `PATH` value without those entries. One warning on standard error lists them, once for each list.
+ * @throws {UsageError} When an entry that names this tool holds a needed executable: it cannot be dropped.
+ */
+function withoutOwnName(value: string, needs: string[]): string {
+  const entries = value.split(path.delimiter);
+  const named = entries.filter((entry) => OWN_NAME.test(entry));
+  for (const entry of named) {
+    const held = needs.find((need) =>
+      path.isAbsolute(need)
+        ? path.dirname(need) === entry
+        : fs.existsSync(path.join(entry, need)),
+    );
+    if (held !== undefined) {
+      throw new UsageError(
+        `the PATH entry "${entry}" names this tool and holds ${held}, which the run needs: put ${held} in a directory whose path does not name skill-evals, for example by linking it into ~/bin, and start the command with that directory on PATH`,
+      );
+    }
+  }
+  const list = named.join(path.delimiter);
+  if (named.length > 0 && !warnedPaths.has(list)) {
+    warnedPaths.add(list);
+    console.error(
+      `skill-evals: warning: left out of the agent's PATH, because they name this tool: ${named.join(", ")}`,
+    );
+  }
+  return entries.filter((entry) => !named.includes(entry)).join(path.delimiter);
+}
+
 /** What decides the environment of a harness process. */
 export interface ChildEnvInput {
   /** The throwaway home. */
@@ -80,6 +118,8 @@ export interface ChildEnvInput {
   pass: string[];
   /** Names the harness must not get, such as the key of the model that scores its answer. They win over everything. */
   withhold: string[];
+  /** Executables the run needs on `PATH`: names to look for in a directory, or absolute paths. A `PATH` entry that names this tool is dropped unless it holds one. Default: none. */
+  needs?: string[];
   /** What a case sets in its `env`: values given outright, which win over what `base` holds. Default: none. */
   caseEnv?: Record<string, string>;
 }
@@ -114,11 +154,15 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
     ...harnessEnv,
     ...caseEnv,
   };
-  return Object.fromEntries(
+  const kept = Object.fromEntries(
     Object.entries(env).filter(
       ([name]) => !withhold.includes(name) && !NEVER_PASSED.includes(name),
     ),
   );
+  const searched = kept["PATH"];
+  return searched === undefined
+    ? kept
+    : { ...kept, PATH: withoutOwnName(searched, input.needs ?? []) };
 }
 
 /** The rule for a name in the `env` key of a case, in words. The reference page quotes it. */

@@ -1,18 +1,16 @@
+import fs from "node:fs";
 import os from "node:os";
 import type { Case } from "./cases.js";
-import { childEnv } from "./env.js";
-import type { Harness } from "./harnesses/shared.js";
-import type { Located } from "./harnesses/index.js";
+import { OWN_NAME, childEnv } from "./env.js";
 import type { ChildEnvInput } from "./env.js";
-import { pathHits } from "./blinding.js";
-import { TEMP_PREFIXES, UsageError } from "./scope.js";
-
-// What this tool is called, in any spelling an environment variable may use for it.
-const OWN_NAME = /skill.?evals?/i;
+import type { Located } from "./harnesses/index.js";
+import type { Harness } from "./harnesses/shared.js";
+import { textHits } from "./blinding.js";
+import { UsageError } from "./scope.js";
 
 /**
  * Finds the blinding words in what the agent can see of the machine.
- * @param paths - Paths the agent may see, such as the temp directory and the start of a temp directory's name.
+ * @param paths - Paths the agent may see, such as the temp directory.
  * @param envNames - Names of the variables the agent's process gets.
  * @param words - The blinding words.
  * @returns One line for each word found, naming the word and where it was found. Empty when there is none.
@@ -24,32 +22,15 @@ export function scanRuntime(
 ): string[] {
   return [
     ...paths.flatMap((path) =>
-      pathHits(path, words).map((word) => `the path "${path}" holds "${word}"`),
+      textHits(path, words).map((word) => `the path "${path}" holds "${word}"`),
     ),
     ...envNames.flatMap((name) =>
-      pathHits(name, words).map(
+      textHits(name, words).map(
         (word) => `the variable name ${name} holds "${word}"`,
       ),
     ),
   ];
 }
-
-/**
- * Finds the variables of an environment that name this tool, in the name or in the value.
- * @param env - The environment the agent's process gets.
- * @param own - The names of variables that the user passes on purpose: the harness's login variables and the config's
- *   `env`. Their values are the user's own business, so only their names are looked at.
- * @returns One line for each variable.
- */
-const scanOwnName = (env: Record<string, string>, own: string[]): string[] =>
-  Object.entries(env)
-    .filter(([name, value]) =>
-      OWN_NAME.test(own.includes(name) ? name : `${name}=${value}`),
-    )
-    .map(
-      ([name]) =>
-        `the variable ${name} names this tool, in its name or its value`,
-    );
 
 /**
  * Runs `requireBlindEnvironment` for the harnesses and cases of a command.
@@ -78,9 +59,10 @@ export function requireBlindRun(input: {
         ...input.cases.map((one) => one.env),
       ) as Record<string, string>,
     },
-    harnesses: input.chosen.map(({ harness }) => ({
+    harnesses: input.chosen.map(({ harness, bin }) => ({
       authEnv: harness.authEnv,
       withhold: input.withheldBy(harness),
+      bin,
     })),
   });
 }
@@ -90,16 +72,33 @@ interface RuntimeView {
   words: readonly string[];
   /** What the harnesses get from the user's environment. */
   env: Pick<ChildEnvInput, "base" | "pass" | "caseEnv">;
-  /** Each harness's login variables, and the names it is never given. */
-  harnesses: { authEnv: string[]; withhold: string[] }[];
+  /** Each harness's login variables, the names it is never given, and its executable. */
+  harnesses: { authEnv: string[]; withhold: string[]; bin: string }[];
 }
 
 /**
+ * Reads the temp directory as a process that starts in it would.
+ * @returns The real path of `TMPDIR`, or of the system's temp directory; the path as given when it does not exist.
+ */
+function tempDirectory(): string {
+  const given = process.env["TMPDIR"] ?? os.tmpdir();
+  try {
+    return fs.realpathSync(given);
+  } catch {
+    return given;
+  }
+}
+
+/** The lines of a finding, and what to do about it. */
+type Finding = { lines: string[]; fix: string };
+
+/**
  * Stops a command before any run when the machine would tell the agent that it is being evaluated: a temp directory
- * with a blinding word in its path, a variable name with one, or a variable that names this tool. This tool's own temp
- * directory names are checked too, and none holds a default word.
+ * with a blinding word in its path, a variable name with one, or a variable that names this tool. The environment is
+ * built by `childEnv`, as a run builds it, so a `PATH` entry that names this tool is dropped here as it is there. A
+ * variable that the user passes on purpose and whose value names this tool is warned about, once.
  * @param view - The words, and the environment each harness gets.
- * @throws {UsageError} Naming every hit and what to change: `TMPDIR`, `blindingWords` or the variable.
+ * @throws {UsageError} Naming every hit and what to change for it.
  */
 function requireBlindEnvironment(view: RuntimeView): void {
   const envs = view.harnesses.map((harness) => ({
@@ -107,22 +106,43 @@ function requireBlindEnvironment(view: RuntimeView): void {
     env: childEnv({
       ...view.env,
       ...harness,
+      needs: ["node", harness.bin],
       home: "/home",
       harnessEnv: {},
     }),
   }));
-  const found = new Set([
-    ...scanRuntime(
-      [process.env["TMPDIR"] ?? os.tmpdir(), ...TEMP_PREFIXES],
-      envs.flatMap(({ env }) => Object.keys(env)),
-      view.words,
-    ),
-    ...envs.flatMap(({ harness, env }) =>
-      scanOwnName(env, [...harness.authEnv, ...view.env.pass]),
-    ),
-  ]);
-  if (found.size === 0) return;
+  const named = new Set<string>();
+  const passed = new Set<string>();
+  for (const { harness, env } of envs) {
+    const own = new Set([...harness.authEnv, ...view.env.pass]);
+    for (const [name, value] of Object.entries(env)) {
+      if (!OWN_NAME.test(`${name}=${value}`)) continue;
+      (own.has(name) && !OWN_NAME.test(name) ? passed : named).add(name);
+    }
+  }
+  const findings: Finding[] = [
+    {
+      lines: scanRuntime(
+        [tempDirectory()],
+        [...new Set(envs.flatMap(({ env }) => Object.keys(env)))],
+        view.words,
+      ),
+      fix: 'Set TMPDIR to a directory whose path holds none of the blinding words, rename the variable, or set "blindingWords" in the config file to a list without the word.',
+    },
+    {
+      lines: [...named].map(
+        (name) => `the variable ${name} names this tool, in its name or value`,
+      ),
+      fix: "Unset the variable, or change it so that it does not name this tool: the harness gets it as it is.",
+    },
+  ].filter(({ lines }) => lines.length > 0);
+  if (passed.size > 0) {
+    console.error(
+      `skill-evals: warning: the value of ${[...passed].join(", ")} names this tool, and the agent gets it because you pass it on`,
+    );
+  }
+  if (findings.length === 0) return;
   throw new UsageError(
-    `the agent could see that it is being evaluated:\n${[...found].map((line) => `  - ${line}`).join("\n")}\nSet TMPDIR to a directory whose path holds none of the blinding words, or set "blindingWords" in the config file to a list without them. A variable that names this tool must not reach the harness: unset it, or take it out of "env".`,
+    `the agent could see that it is being evaluated:\n${findings.map(({ lines }) => lines.map((line) => `  - ${line}`).join("\n")).join("\n")}\n${findings.map(({ fix }) => fix).join("\n")}`,
   );
 }

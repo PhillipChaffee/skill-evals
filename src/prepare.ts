@@ -156,13 +156,15 @@ const loaded = (options: Context["options"], same: boolean): Case[] =>
  * @param look - How the command uses the output directory.
  * @param look.inspect - True for `plan`, which reads the output directory of an earlier command and writes nothing: it
  *   skips the checks of the directory that a command that runs must pass.
+ * @param look.blind - False for a command that starts nothing (`plan` and `--dry-run`): the check of what the agent
+ *   could see of the machine is skipped.
  * @returns What the command works with.
  * @throws {UsageError} For a wrong option, case file, config file or harness; for an output directory that a live
  *   command holds; and, without `resume`, for one that already holds runs. `--dry-run` raises these too.
  */
 export function prepare(
   given: Omit<EvaluateOptions, "onRun">,
-  look: { inspect?: boolean } = {},
+  look: { inspect?: boolean; blind?: boolean } = {},
 ): Prepared {
   const {
     cwd = process.cwd(),
@@ -224,9 +226,8 @@ export function prepare(
 /**
  * Settles the blinding words, and, for a command that runs, checks what the agent could see of the machine.
  * @param options - The options after the config file was applied.
- * @param look - How the command uses the output directory; `inspect` is true for `plan`, which starts nothing and so
- *   checks nothing.
- * @param look.inspect - True for `plan`.
+ * @param look - Whether to check; a command that starts nothing (`plan`, `--dry-run`) checks nothing.
+ * @param look.blind - False to skip the check. Default: check.
  * @param run - What the command settled so far.
  * @param run.cases - The cases, whose `env` the agent gets.
  * @param run.selection - The harnesses that run.
@@ -237,12 +238,12 @@ export function prepare(
  */
 function blindingOf(
   options: Context["options"],
-  look: { inspect?: boolean },
+  look: { blind?: boolean },
   run: Pick<Context, "cases" | "selection" | "judgeApi" | "decision">,
 ): readonly string[] {
   const words = options.blindingWords ?? DEFAULT_BLINDING_WORDS;
   const { decision, judgeApi } = run;
-  if (look.inspect !== true) {
+  if (look.blind !== false) {
     requireBlindRun({
       words,
       pass: options.env ?? [],

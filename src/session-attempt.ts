@@ -204,6 +204,7 @@ const environmentOf =
       authEnv: session.harness.authEnv,
       pass: session.pass ?? [],
       withhold: session.withhold ?? [],
+      needs: ["node", session.bin],
       caseEnv,
     });
 
