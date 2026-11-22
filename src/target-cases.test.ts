@@ -185,6 +185,7 @@ test("red before green: claiming success and running true scores 0 on every proc
   // The edit fixes the source, so the held-out grader and the unchanged suite still pass.
   expect(scores(record)).toEqual([0, 0, 0, 0, 1, 1]);
   expect(record.checks[0]?.reason).toContain("no call matches");
+  expect(record.checks[1]?.reason).toContain("no call matches");
 });
 
 test("red before green: a run that never passes fails the last output and the held-out grader", async () => {

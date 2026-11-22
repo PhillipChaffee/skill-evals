@@ -190,7 +190,7 @@ Four checks read the [transcript](../concepts/transcript.md) of the run. They ne
 
 `transcript_matches` scores 1 when a regular expression matches one of the tested texts, and `transcript_lacks` when none does. `where` says what is tested: `assistant_text` (the default), `tool_input` (each call's input, written as JSON, as a matcher reads it), `tool_output`, or `all`. `scope` says which events: `any` (the default), `first_message`, `final_message`, `{ "before": matcher }` or `{ "after": matcher }`.
 
-`first_message` is the main agent's first non-empty text, wherever it falls. In a kit whose correct first action is a tool call, the text before the first tool call is usually empty, so "the first message" is not "the text before any call". The first text may come after a skill load and a read and still count. To bound it, give `{ "first_message": true, "before": matcher }`: it scores 0, and says so, when that text comes after the matcher's first call, and otherwise tests the text. A matcher that matches no call leaves the text before it. `final_message` is the last non-empty text.
+`first_message` is the main agent's first non-empty text, wherever it falls. In a kit whose correct first action is a tool call, the text before the first tool call is usually empty, so "the first message" is not "the text before any call". The first text may come after a skill load and a read and still count. To bound it, give `{ "first_message": true, "before": matcher }`: it scores 0, and says so, when that text comes after the matcher's first call, and otherwise tests the text. A matcher that matches no call leaves the text before it. `final_message` is the last non-empty text. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.
 
 ```json
 {
@@ -201,7 +201,7 @@ Four checks read the [transcript](../concepts/transcript.md) of the run. They ne
 }
 ```
 
-`{ "before": matcher }` and `{ "after": matcher }` cut at the first call that fits the matcher: the events before that call, or after it. A matcher that matches no call scores the check 0, and the reason names the matcher, for `transcript_lacks` as well. `by`, which would pick one agent's events, is not yet supported: it is a load error, even with `--lenient`.
+`{ "before": matcher }` and `{ "after": matcher }` cut at the first call that fits the matcher: the events before that call, or after it. A matcher that matches no call scores the check 0, and the reason names the matcher, for `transcript_lacks` as well. `transcript_lacks` also scores 0 when nothing was tested (no assistant text in the default scope, a `where` with no events, a `scope` that holds none), with the reason `no <where> text in <scope> to test`: an empty transcript does not show that the agent wrote nothing like the pattern. `by`, which would pick one agent's events, is not yet supported: it is a load error, even with `--lenient`.
 
 `tool_output_matches` and `tool_output_lacks` read the result of the calls that fit `tool`, a matcher. With `which: "first"` or `"last"` they look at one call; with `"any"` (the default) at all of them. The output is what the tool returned, not what the agent said it returned, so "red before green" is two checks, and an agent that only claims success, or runs `true`, scores 0:
 

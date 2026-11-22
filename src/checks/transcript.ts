@@ -7,12 +7,14 @@ import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
 import type { Piece } from "./transcript-slice.js";
 import { pieces, quoteEvent, quotePieces } from "./transcript-slice.js";
+import { SUBAGENT_CAVEAT } from "./transcript-fields.js";
 import "./transcript-scope.js";
 
 const SHOWN_LINES = 5;
 const FIELDS_OF_TEXT = { optional: ["flags", "where", "scope"] };
 const CAP_NOTE =
-  "A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.";
+  SUBAGENT_CAVEAT +
+  " A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.";
 
 /**
  * Lists what a check of text needs.
@@ -69,11 +71,20 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
  * Scores `transcript_lacks`.
  * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
  * @param outcome - What the run left behind.
- * @returns 1 when no tested text matches.
+ * @returns 1 when no tested text matches. Nothing to test scores 0: an empty transcript does not show that the agent
+ *   wrote nothing like the pattern.
  */
 function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   const found = tested(check, outcome);
   if ("problem" in found) return { score: 0, reason: found.problem };
+  if (found.all.length === 0) {
+    const scope = check.scope ?? "any";
+    const named = typeof scope === "string" ? scope : JSON.stringify(scope);
+    return {
+      score: 0,
+      reason: `no ${check.where ?? "assistant_text"} text in ${named} to test`,
+    };
+  }
   if (found.hits.length === 0) return PASS;
   return {
     score: 0,
@@ -124,69 +135,95 @@ const noCall = (outcome: Outcome, tool: ToolMatcher): Verdict => ({
   reason: `no call matches ${describeMatcher(tool)}\n${quoteCalls(outcome.toolCalls, [])}`,
 });
 
+/** The calls a `tool_output_*` check looks at, and its compiled pattern. */
+interface Picked {
+  picked: Run[];
+  fits: (text: string) => boolean;
+}
+
+/**
+ * Finds the calls a `tool_output_matches` or `tool_output_lacks` check looks at.
+ * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
+ * @param outcome - What the run left behind.
+ * @returns The chosen calls with their compiled pattern, or the failing verdict when no call fits `tool`.
+ */
+function pick(check: RuledCheck, outcome: Outcome): Picked | Verdict {
+  const tool = check.tool as ToolMatcher;
+  const runs = runsOf(outcome.transcript, tool);
+  if (runs.length === 0) return noCall(outcome, tool);
+  return {
+    picked: chosen(runs, check.which),
+    fits: tester(check.pattern, check.flags),
+  };
+}
+
+/**
+ * Lists the chosen calls whose output matches.
+ * @param found - The chosen calls and the pattern.
+ * @param found.picked - The chosen calls.
+ * @param found.fits - The compiled pattern.
+ * @returns The calls with an output that the pattern matches, each with that output as a piece.
+ */
+const hitsIn = ({ picked, fits }: Picked): (Run & { piece: Piece })[] =>
+  picked.flatMap((run) => {
+    const { result } = run;
+    return result?.output !== undefined && fits(result.output)
+      ? [{ ...run, piece: { event: result, text: result.output } }]
+      : [];
+  });
+
 /**
  * Scores `tool_output_matches`.
- * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
+ * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
  * @param outcome - What the run left behind.
  * @returns 1 when the output of a chosen call matches. A call with no result does not match.
  */
 function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
-  const tool = check.tool as ToolMatcher;
-  const runs = runsOf(outcome.transcript, tool);
-  if (runs.length === 0) return noCall(outcome, tool);
-  const fits = tester(check.pattern, check.flags);
-  const picked = chosen(runs, check.which);
-  if (
-    picked.some(
-      ({ result }) => result?.output !== undefined && fits(result.output),
-    )
-  ) {
-    return PASS;
-  }
+  const found = pick(check, outcome);
+  if ("score" in found) return found;
+  if (hitsIn(found).length > 0) return PASS;
   const silent =
-    check.which === "any"
+    check.which === undefined || check.which === "any"
       ? undefined
-      : picked.find(({ result }) => result?.output === undefined);
-  if (silent)
+      : found.picked.find(({ result }) => result?.output === undefined);
+  if (silent) {
     return { score: 0, reason: `call #${String(silent.at)} has no output` };
-  const shown = picked.flatMap(({ result }) =>
+  }
+  const shown = found.picked.flatMap(({ result }) =>
     result?.output === undefined
       ? []
       : [{ event: result, text: result.output }],
   );
+  const which =
+    check.which === undefined || check.which === "any"
+      ? "any of the matching calls"
+      : `the ${check.which} matching call`;
   return {
     score: 0,
-    reason: `no output of the ${check.which ?? "any"} matching call matches ${written(check)}\n${quotePieces(shown)}`,
+    reason: `no output of ${which} matches ${written(check)}${shown.length === 0 ? ": none has an output" : `\n${quotePieces(shown)}`}`,
   };
 }
 
 /**
  * Scores `tool_output_lacks`.
- * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
+ * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
  * @param outcome - What the run left behind.
  * @returns 1 when no chosen call's output matches. A call with no result cannot be shown to lack the pattern, and
  *   no call that fits the matcher fails too.
  */
 function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
-  const tool = check.tool as ToolMatcher;
-  const runs = runsOf(outcome.transcript, tool);
-  if (runs.length === 0) return noCall(outcome, tool);
-  const fits = tester(check.pattern, check.flags);
-  const picked = chosen(runs, check.which);
-  const hit = picked.filter(
-    ({ result }) => result?.output !== undefined && fits(result.output),
-  );
+  const found = pick(check, outcome);
+  if ("score" in found) return found;
+  const hit = hitsIn(found);
   if (hit.length > 0) {
-    const shown = hit.map(({ result }) => ({
-      event: result as TranscriptEvent,
-      text: (result as TranscriptEvent).output as string,
-    }));
     return {
       score: 0,
-      reason: `an output of call #${String(hit[0]?.at)} matches ${written(check)}\n${quotePieces(shown)}`,
+      reason: `an output of call #${String(hit[0]?.at)} matches ${written(check)}\n${quotePieces(hit.map(({ piece }) => piece))}`,
     };
   }
-  const silent = picked.find(({ result }) => result?.output === undefined);
+  const silent = found.picked.find(
+    ({ result }) => result?.output === undefined,
+  );
   if (!silent) return PASS;
   return {
     score: 0,
@@ -196,7 +233,7 @@ function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
 
 /**
  * Scores `tool_output_size`.
- * @param check - The check, whose `pattern`, `flags` and the fields of its type are read.
+ * @param check - The check, whose `maxBytes` and `tool` are read.
  * @param outcome - What the run left behind.
  * @returns 1 when no output is over `maxBytes`. A call with no result is ignored.
  */
@@ -246,7 +283,7 @@ export const TRANSCRIPT_CHECKS = {
     notYet: ["by"],
     needs: textNeeds,
     scores:
-      "None of the tested texts matches the regular expression. A `scope` that holds no text to test, such as `first_message` of a run with no assistant text, scores 0.",
+      "None of the tested texts matches the regular expression. Nothing to test scores 0: a `scope` that holds no text, such as `first_message` of a run with no assistant text, or a `where` with no events, does not show that the agent wrote nothing like the pattern.",
     note: CAP_NOTE,
     rule: textLacks,
   },

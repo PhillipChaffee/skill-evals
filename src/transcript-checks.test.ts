@@ -267,3 +267,31 @@ test("slice gives the texts to test, and none when the scope cannot be applied",
   ]);
   expect(slice(transcript, { before: { kind: "web" } }, "all")).toEqual([]);
 });
+
+test("transcript_lacks fails closed when there is nothing to test", () => {
+  const lacks = (
+    scope: Scope | undefined,
+    where: Given["where"],
+    run = restates,
+  ) =>
+    scored(
+      {
+        type: "transcript_lacks",
+        pattern: "zzz",
+        ...(scope ? { scope } : {}),
+        ...(where ? { where } : {}),
+      },
+      run,
+    );
+  const silent = played(call(BASH, { command: "ls" }, "a"));
+  expect(lacks(undefined, undefined, silent).reason).toBe(
+    "no assistant_text text in any to test",
+  );
+  expect(lacks(undefined, "tool_output", silent).score).toBe(0);
+  const ends = played(textPart("x"), call(BASH, { command: "ls" }, "a"));
+  const last = lacks({ after: { kind: "shell" } }, "all", ends);
+  expect(last.score).toBe(0);
+  expect(last.reason).toContain("no all text in");
+  expect(lacks("first_message", "tool_input").score).toBe(0);
+  expect(lacks(undefined, undefined).score).toBe(1);
+});

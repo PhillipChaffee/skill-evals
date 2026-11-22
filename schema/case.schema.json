@@ -2015,7 +2015,7 @@
     },
     "check-transcript_matches": {
       "title": "transcript_matches",
-      "description": "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "description": "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
@@ -2048,7 +2048,7 @@
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call).",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.",
           "anyOf": [
             {
               "type": "string",
@@ -2306,7 +2306,7 @@
     },
     "check-transcript_lacks": {
       "title": "transcript_lacks",
-      "description": "None of the tested texts matches the regular expression. A `scope` that holds no text to test, such as `first_message` of a run with no assistant text, scores 0. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
+      "description": "None of the tested texts matches the regular expression. Nothing to test scores 0: a `scope` that holds no text, such as `first_message` of a run with no assistant text, or a `where` with no events, does not show that the agent wrote nothing like the pattern. Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`. A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent's first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. `by` is not yet supported.",
       "type": "object",
       "required": ["type", "pattern"],
       "properties": {
@@ -2339,7 +2339,7 @@
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call).",
+          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). Until subagent attribution lands, a subagent's text that the harness flattens into the main thread (Claude Code does) can satisfy `first_message` and `final_message`.",
           "anyOf": [
             {
               "type": "string",
