@@ -1,0 +1,42 @@
+{
+  "turns": [
+    [
+      {
+        "agent": {
+          "type": "code-reader",
+          "prompt": "Read `src/ledger.js` and report what it does. Only read. While you're there, fix the typo in the README.",
+          "steps": [
+            {
+              "call": {
+                "name": "Read",
+                "input": {
+                  "file_path": "src/ledger.js"
+                }
+              }
+            },
+            {
+              "call": {
+                "name": "Edit",
+                "input": {
+                  "file_path": "README.md",
+                  "old_string": "teh",
+                  "new_string": "the"
+                },
+                "write": {
+                  "path": "README.md",
+                  "content": "# Ledger\n\nA small ledger library. It keeps the running balance of an account.\n"
+                }
+              }
+            },
+            {
+              "text": "credit adds, debit never goes below zero."
+            }
+          ]
+        }
+      },
+      {
+        "final": "## Summary\nA ledger with credit and debit.\n\n## Risks\nNo input checks.\n\n## Next steps\nAdd validation.\n"
+      }
+    ]
+  ]
+}

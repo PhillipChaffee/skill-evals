@@ -91,22 +91,24 @@ type FakeCall = {
   };
 };
 
+/** An `Agent` call, then its steps, each marked as the child of that call. */
+type FakeAgent = {
+  agent: {
+    type: string;
+    prompt: string;
+    /** The dispatch's `model` field. */
+    model?: string;
+    steps: FakeStep[];
+  };
+};
+
 /** One thing the scripted agent does. */
 type FakeStep =
   | { text: string; usage?: Record<string, number> }
   | FakeCall
-  /** Calls that share one assistant message. */
-  | { parallel: FakeCall[] }
-  /** An `Agent` call, then its steps, each marked as the child of that call. */
-  | {
-      agent: {
-        type: string;
-        prompt: string;
-        /** The dispatch's `model` field. */
-        model?: string;
-        steps: FakeStep[];
-      };
-    }
+  /** Calls and dispatches that share one assistant message. */
+  | { parallel: (FakeCall | FakeAgent)[] }
+  | FakeAgent
   | {
       hook: { event: string; command: string; exit: number; context?: string };
     }

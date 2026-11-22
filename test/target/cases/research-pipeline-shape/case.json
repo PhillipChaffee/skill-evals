@@ -1,0 +1,61 @@
+{
+  "description": "A research question: a tier statement first, two researchers in one turn, one synthesizer after the last of them, no researcher writing anything, and one new untracked file under docs/research.",
+  "tags": ["research", "agents", "target"],
+  "setup": [
+    {
+      "git": { "init": true, "branch": "main", "commitAll": "initial import" }
+    }
+  ],
+  "checks": [
+    {
+      "type": "transcript_matches",
+      "pattern": "tier\\s*[:\\-]?\\s*(trivial|standard|complex)",
+      "flags": "i",
+      "scope": "first_message"
+    },
+    {
+      "type": "tool_called",
+      "kind": "subagent",
+      "inputMatches": "\"subagent_type\":\"researcher\"",
+      "min": 2,
+      "sameTurn": true
+    },
+    {
+      "type": "agent_dispatched",
+      "agent": "research-synthesizer",
+      "min": 1,
+      "max": 1
+    },
+    {
+      "type": "tool_order",
+      "before": {
+        "kind": "subagent",
+        "inputMatches": "\"subagent_type\":\"researcher\"",
+        "which": "last"
+      },
+      "after": {
+        "kind": "subagent",
+        "inputMatches": "\"subagent_type\":\"research-synthesizer\"",
+        "which": "first"
+      }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "edit",
+      "by": { "agent": "researcher" }
+    },
+    {
+      "type": "tool_not_called",
+      "kind": "write",
+      "by": { "agent": "researcher" }
+    },
+    { "type": "file_count", "path": "docs/research/*.md", "min": 1, "max": 1 },
+    { "type": "file_exists", "path": "docs/research/*.md", "created": true },
+    {
+      "type": "command",
+      "run": "bash \"$SKILL_EVALS_GRADER_DIR/shape.sh\"",
+      "stdoutMatches": "^ok"
+    }
+  ],
+  "timeoutSeconds": 300
+}

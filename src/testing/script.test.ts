@@ -288,5 +288,7 @@ test("a parallel step that is not a call ends the run with an error naming it", 
     "--out",
     outDir,
   ]);
-  expect(readResults(outDir).records[0]?.error).toContain("call steps only");
+  expect(readResults(outDir).records[0]?.error).toContain(
+    "call and agent steps only",
+  );
 });

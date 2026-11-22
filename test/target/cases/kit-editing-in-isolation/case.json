@@ -1,0 +1,26 @@
+{
+  "description": "A skill-authoring case: a baseline subagent runs before the new skill is first written, the new file has valid front matter, and the loaded subject is left as it was.",
+  "tags": ["skills", "authoring", "target"],
+  "checks": [
+    {
+      "type": "command",
+      "run": "bash \"$SKILL_EVALS_GRADER_DIR/skill.sh\"",
+      "stdoutMatches": "^ok"
+    },
+    {
+      "type": "tool_order",
+      "before": {
+        "kind": "subagent",
+        "inputMatches": "baseline",
+        "which": "first"
+      },
+      "after": {
+        "kind": "write",
+        "inputMatches": "skills/release-notes/SKILL\\.md",
+        "which": "first"
+      }
+    },
+    { "type": "subject_unchanged" }
+  ],
+  "timeoutSeconds": 300
+}

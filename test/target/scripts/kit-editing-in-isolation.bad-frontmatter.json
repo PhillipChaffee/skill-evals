@@ -1,0 +1,41 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Read",
+          "input": {
+            "file_path": "skills/triage/SKILL.md"
+          }
+        }
+      },
+      {
+        "agent": {
+          "type": "general-purpose",
+          "prompt": "As a baseline, turn these merged changes into release notes without any skill: fix cache bug; add export command.",
+          "steps": [
+            {
+              "text": "Release notes: fixed a cache bug, added an export command."
+            }
+          ]
+        }
+      },
+      {
+        "call": {
+          "name": "Write",
+          "input": {
+            "file_path": "skills/release-notes/SKILL.md",
+            "content": "---\nname: release-notes\n---\n\n# Release notes\n\nGroup the changes.\n"
+          },
+          "write": {
+            "path": "skills/release-notes/SKILL.md",
+            "content": "---\nname: release-notes\n---\n\n# Release notes\n\nGroup the changes.\n"
+          }
+        }
+      },
+      {
+        "final": "Wrote it."
+      }
+    ]
+  ]
+}

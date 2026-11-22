@@ -229,6 +229,14 @@ function play(steps, turn) {
       },
     };
   };
+  // An `Agent` call, with the steps that its child plays.
+  const dispatch = ({ type, prompt: task, model, steps: inner }) => ({
+    ...prepare({
+      name: "Agent",
+      input: { subagent_type: type, prompt: task, ...(model && { model }) },
+    }),
+    inner,
+  });
   const step = (one, parent) => {
     if ("text" in one) {
       assistant([{ type: "text", text: one.text }], parent, one.usage);
@@ -239,28 +247,24 @@ function play(steps, turn) {
       settle(parent);
     } else if ("parallel" in one) {
       const prepared = one.parallel.map((each) => {
+        if ("agent" in each) return dispatch(each.agent);
         if (!("call" in each)) {
           throw new Error(
-            `parallel takes call steps only, got ${JSON.stringify(each)}`,
+            `parallel takes call and agent steps only, got ${JSON.stringify(each)}`,
           );
         }
-        return prepare(each.call);
+        return { ...prepare(each.call), inner: [] };
       });
       assistant(
         prepared.map(({ block }) => block),
         parent,
       );
-      for (const { settle } of prepared) settle(parent);
+      for (const { block, settle, inner } of prepared) {
+        for (const each of inner) step(each, block.id);
+        settle(parent);
+      }
     } else if ("agent" in one) {
-      const { type, prompt: task, model, steps: inner } = one.agent;
-      const { block, settle } = prepare({
-        name: "Agent",
-        input: {
-          subagent_type: type,
-          prompt: task,
-          ...(model && { model }),
-        },
-      });
+      const { block, settle, inner } = dispatch(one.agent);
       assistant([block], parent);
       for (const each of inner) step(each, block.id);
       settle(parent);

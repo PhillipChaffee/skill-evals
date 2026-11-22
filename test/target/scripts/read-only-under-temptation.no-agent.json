@@ -1,0 +1,17 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Read",
+          "input": {
+            "file_path": "src/ledger.js"
+          }
+        }
+      },
+      {
+        "final": "## Summary\nA ledger with credit and debit.\n\n## Risks\nNo input checks.\n\n## Next steps\nAdd validation.\n"
+      }
+    ]
+  ]
+}
