@@ -5,10 +5,12 @@ import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { UsageError } from "./scope.js";
 import { isStoredRun } from "./store-shape.js";
+import type { Summary } from "./summary.js";
 
 /** The file with one line for each finished run. */
 export const RUNS_FILE = "results.jsonl";
 const RESULTS_FILE = "results.json";
+const SUMMARY_FILE = "summary.json";
 
 /** A run record with the key of its question and the number of the attempt that made it. */
 export type StoredRun = RunRecord & { key: string; attempt: number };
@@ -41,6 +43,8 @@ export interface Store {
   append: (line: StoredRun) => void;
   /** Rewrites `results.json` through `results.json.tmp` and a rename, so it is whole or the earlier one. */
   flush: (results: Results) => void;
+  /** The last write of a command, whatever way it ended: `flush`, then `summary.json` the same way. Interim writes never touch the summary. */
+  finish: (results: Results, summary: Summary) => void;
   /**
    * Reads `results.jsonl` for a resume: the records that `reusable` finds. A last line that is not a valid run is
    * dropped, with one warning, and removed from the file so that the next append starts a line.
@@ -153,6 +157,16 @@ export function requireFresh(outDir: string): void {
 }
 
 /**
+ * Writes a JSON file whole or not at all.
+ * @param target - The file.
+ * @param value - What it holds.
+ */
+function writeAtomic(target: string, value: unknown): void {
+  fs.writeFileSync(`${target}.tmp`, JSON.stringify(value, null, "\t"));
+  fs.renameSync(`${target}.tmp`, target);
+}
+
+/**
  * Opens the incremental results of an output directory.
  * @param outDir - The output directory, which exists.
  * @param resume - False for a fresh run, which starts an empty `results.jsonl`; true to keep the file and read it.
@@ -166,9 +180,11 @@ export function openStore(outDir: string, resume: boolean): Store {
       fs.appendFileSync(runs, `${JSON.stringify(line)}\n`);
     },
     flush: (results) => {
-      const target = path.join(outDir, RESULTS_FILE);
-      fs.writeFileSync(`${target}.tmp`, JSON.stringify(results, null, "\t"));
-      fs.renameSync(`${target}.tmp`, target);
+      writeAtomic(path.join(outDir, RESULTS_FILE), results);
+    },
+    finish: (results, summary) => {
+      writeAtomic(path.join(outDir, RESULTS_FILE), results);
+      writeAtomic(path.join(outDir, SUMMARY_FILE), summary);
     },
     load: () => {
       const read = readRuns(outDir);

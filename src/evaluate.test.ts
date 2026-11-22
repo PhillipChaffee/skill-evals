@@ -48,16 +48,18 @@ test("evaluate returns suite scores for one subject without printing or exiting"
           weight: 1,
           minScore: undefined,
           scores: { subject: 0.5 },
+          runs: { subject: { valid: 2, planned: 2 } },
         },
       ],
       suite: { subject: 0.5 },
       applicable: 1,
       total: 1,
+      runs: { subject: { valid: 2, planned: 2 } },
     },
   ]);
   expect(evaluation.records.map((record) => record.score)).toEqual([0.5, 0.5]);
   expect(evaluation.belowBar).toEqual([
-    "claude-code: suite score 0.50 does not reach --min-score 0.90",
+    "claude-code: suite score 0.50 (2 of 2 runs) does not reach --min-score 0.90",
   ]);
   expect(evaluation.invalid).toEqual([]);
   expect(evaluation.outDir).toBe(path.join(box.root, "results"));
@@ -67,6 +69,7 @@ test("evaluate returns suite scores for one subject without printing or exiting"
     JSON.stringify(
       {
         ...evaluation,
+        exit: undefined,
         cases: undefined,
         applied: undefined,
         outDir: undefined,

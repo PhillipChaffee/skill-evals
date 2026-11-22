@@ -176,7 +176,7 @@ test("the report lists guard cases in their own table and keeps their scores in 
   expect(tableRow(main ?? "", "dev-case")).not.toBe("");
   expect(tableRow(main ?? "", GUARDED)).toBe("");
   expect(tableRow(guards ?? "", GUARDED)).not.toBe("");
-  expect(result.stdout).toContain("(2 of 2 cases)");
+  expect(result.stdout).toContain("(2 of 2 cases, 2 of 2 runs)");
   expect(result.stdout).toContain("## Coverage by target skill");
   expect(tableRow(result.stdout, "bro")).toBe("| bro | 2 | 1 | 0 | 1 |");
 });

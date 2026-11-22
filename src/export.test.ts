@@ -4,6 +4,7 @@ import { expect, test } from "vitest";
 import { plugin } from "./testing/plant.js";
 import { exec, play, scoreSubject, writeCase } from "./testing/runs.js";
 import { gitRepo, sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const KIT = "kit";
 const SKILL = "kit/skills/x/SKILL.md";
@@ -79,7 +80,7 @@ test("the subject directory changing during the run fails the command", async ()
     subject: kit,
     cases: path.join(box.root, "cases"),
   });
-  expect(status).toBe(1);
+  expect(status).toBe(EXIT.invalid);
   expect(stderr).toContain(
     `skill-evals: the subject directory changed during the run: ${path.join(kit, "skills/x/SKILL.md")}`,
   );

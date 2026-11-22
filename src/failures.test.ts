@@ -10,6 +10,7 @@ import {
   readResults,
   sandbox,
 } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 /**
  * Scores the "none" subject once on a case that any finished run passes.
@@ -56,7 +57,7 @@ test(
       { timeoutSeconds: TIMEOUT_SECONDS },
     );
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(EXIT.invalid);
     expect(record).toMatchObject({
       ok: false,
       error: `timed out after ${String(TIMEOUT_SECONDS)} s`,
@@ -85,7 +86,7 @@ test("a harness executable that cannot start is a failed run, not a crash", asyn
     SKILL_EVALS_BIN_CLAUDE_CODE: broken,
   });
 
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(record?.error).toMatch(/ENOENT/);
   expect(result.stderr).toMatch(/^claude-code hello subject1: run failed: /);
 });

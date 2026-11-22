@@ -10,6 +10,7 @@ import {
   decisionFor,
   labelled,
   requireJobs,
+  requireMaxInvalid,
   requireUsable,
 } from "./evaluate-setup.js";
 import { exclusionsOf } from "./exclusions.js";
@@ -22,6 +23,7 @@ import { judgeHarnessOf, judgeSetup } from "./judge-config.js";
 import type { Config, Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import { requireUnlocked } from "./lock.js";
+import { reportFormats } from "./report/formats.js";
 import { resumeDir } from "./resume.js";
 import { requireFresh } from "./store.js";
 import { modesOf } from "./run.js";
@@ -44,6 +46,8 @@ export interface Context {
   judgeApi: JudgeApi | null;
   model: string | undefined;
   minScore: number | undefined;
+  /** The share of the planned runs that may be invalid before the command exits 3. */
+  maxInvalid: number;
   reps: number;
   cases: Case[];
   parts: Partition;
@@ -83,6 +87,8 @@ export function prepare(
   const options = withConfig(project, rest);
   const reps = requireUsable(options);
   const jobs = requireJobs(options);
+  const maxInvalid = requireMaxInvalid(options);
+  reportFormats(options);
   const resumed = resumeDir(options, cwd);
   if (look.inspect !== true) requireUsableOut(resumed, options.outDir, cwd);
   const selection = selectHarnesses(options.harness);
@@ -106,6 +112,7 @@ export function prepare(
     judgeApi,
     model: options.model,
     minScore: options.minScore,
+    maxInvalid,
     reps,
     jobs,
     limits,

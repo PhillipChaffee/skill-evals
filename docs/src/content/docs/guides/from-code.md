@@ -14,12 +14,7 @@ const evaluation = await evaluate({
   minScore: 0.8,
   onRun: (record) => console.error(record.caseId, record.score),
 });
-if (
-  evaluation.belowBar.length ||
-  evaluation.invalid.length ||
-  evaluation.partial
-)
-  process.exitCode = 1;
+process.exitCode = evaluation.exit; // the code the command line would give, from exitCodeOf
 ```
 
 | Export                 | What it is                                                                                                                         |
@@ -30,7 +25,9 @@ if (
 
 Every option, every field of the result, and every exported type is in the API reference, which is generated from the doc comments in [`src/index.ts`](https://github.com/PhillipChaffee/skill-evals/blob/main/src/index.ts) and the files it exports from when the docs site is built. In the docs site its pages are next to this one in the sidebar.
 
-In what `evaluate` resolves to, `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when both are empty, `sourceChanged` is empty and `partial` is null: a command that stopped at `maxCost` or `maxDuration` has `partial` set and `notRun` listing the runs that did not run, so its scores cover finished runs only. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
+In what `evaluate` resolves to, `suites` holds the case and suite scores for each harness, keyed by the subject's label (`a` and `b`, or `subject`). `belowBar` lists the pass bars that were not reached, and `invalid` lists the runs that do not count. The evaluation passed when `evaluation.exit` is 0, that is when `belowBar` and `sourceChanged` are empty, `partial` is null, and no run is invalid: a command that stopped at `maxCost` or `maxDuration` has `partial` set and `notRun` listing the runs that did not run, so its scores cover finished runs only. Everything but `cases` and `outDir` is also in `<outDir>/results.json`.
+
+`evaluation.exit` is the exit code that `run` and `score` would give: 0, 1, 3, 4, 5 or 130. It comes from `exitCodeOf(results, maxInvalid)`, which the package also exports with `EXIT`, the table of codes, so that your own tooling gives the same answer as the command line. `maxInvalid` is a fraction from 0 to 1, as `--max-invalid` is. `evaluation.schemaVersion` and `evaluation.meta` say how the runs were made; [Read the report](read-the-report.md#what-resultsjson-records-about-the-command) lists them. `evaluate` writes `summary.json` beside `results.json` and no other report file: the formats are the command line's.
 
 The package ships type declarations, so `evaluate`'s options and what it resolves to are typed in TypeScript.
 

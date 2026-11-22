@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { noteSections } from "./report-notes.js";
+import { noteSections } from "./notes.js";
 
 /**
  * Makes the part of an evaluation that the notes read.

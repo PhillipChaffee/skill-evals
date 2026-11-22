@@ -4,12 +4,22 @@
 // - case score: the mean of the run scores over the reps, for one harness and one subject
 // - suite score: the weighted mean of the case scores, for one harness and one subject
 
+/** How many runs stand behind a score: the valid ones and the ones the plan holds. */
+export interface RunCount {
+  /** Runs with a score. An invalid run has none. */
+  valid: number;
+  /** Runs the plan holds, finished or not. */
+  planned: number;
+}
+
 /** A case's scores, keyed by subject label. */
 export interface CaseScore {
   id: string;
   weight: number;
   minScore?: number | undefined;
   scores: Record<string, number | null>;
+  /** The runs behind each score, by subject label. */
+  runs: Record<string, RunCount>;
 }
 
 /** One harness's case scores, and its suite score keyed by subject label. */
@@ -21,6 +31,8 @@ export interface SuiteScore {
   applicable: number;
   /** How many cases the suite has, applicable or not. */
   total: number;
+  /** The runs behind the suite score, by subject label: the sum over its applicable cases. */
+  runs: Record<string, RunCount>;
 }
 
 /** The part of a run record that scoring reads. */
@@ -36,6 +48,8 @@ interface WeightedCase {
   id: string;
   weight: number;
   minScore?: number | undefined;
+  /** The runs planned for each subject; the run's `reps` when absent. */
+  reps?: number | undefined;
 }
 
 // Absorbs float error in a mean, so three runs at 0.8 reach a bar of 0.8.
@@ -88,6 +102,19 @@ const caseScore = (records: ScoredRun[]): number | null =>
       .map((record) => ({ score: record.score, weight: 1 })),
   );
 
+const countsOf = (
+  labels: readonly string[],
+  count: (label: string) => RunCount,
+): Record<string, RunCount> =>
+  Object.fromEntries(labels.map((label) => [label, count(label)]));
+
+const sum = (
+  scored: { runs: Record<string, RunCount> }[],
+  label: string,
+  field: keyof RunCount,
+): number =>
+  scored.reduce((total, one) => total + (one.runs[label]?.[field] ?? 0), 0);
+
 /**
  * Scores every case and the whole suite, once for each harness and subject label.
  * @param run - What ran.
@@ -97,6 +124,8 @@ const caseScore = (records: ScoredRun[]): number | null =>
  * @param run.labels - The subject labels to score.
  * @param run.applicable - For each harness id, the ids of the cases that apply to it. Only those are scored, and the
  *   others count only in `total`. Default: every case on every harness.
+ * @param run.reps - The runs planned for each subject and case, which a case's own `reps` replaces. Default: the number
+ *   of records of the case and subject.
  * @returns One entry for each harness. A case with no valid run has the score null, and so has its suite; so has a
  *   harness to which no case applies.
  */
@@ -106,6 +135,7 @@ export function scoreSuites(run: {
   records: ScoredRun[];
   labels: readonly string[];
   applicable?: Record<string, string[]>;
+  reps?: number;
 }): SuiteScore[] {
   const perLabel = (
     score: (label: string) => number | null,
@@ -116,19 +146,29 @@ export function scoreSuites(run: {
     const ids = run.applicable?.[harness];
     const scored = run.cases
       .filter(({ id }) => ids?.includes(id) ?? true)
-      .map(({ id, weight, minScore }) => ({
-        id,
-        weight,
-        minScore,
-        scores: perLabel((label) =>
-          caseScore(mine.filter((r) => r.caseId === id && r.subject === label)),
-        ),
-      }));
+      .map(({ id, weight, minScore, reps }) => {
+        const of = (label: string): ScoredRun[] =>
+          mine.filter((r) => r.caseId === id && r.subject === label);
+        return {
+          id,
+          weight,
+          minScore,
+          scores: perLabel((label) => caseScore(of(label))),
+          runs: countsOf(run.labels, (label) => ({
+            valid: of(label).filter((r) => r.score !== null).length,
+            planned: reps ?? run.reps ?? of(label).length,
+          })),
+        };
+      });
     return {
       harness,
       cases: scored,
       applicable: scored.length,
       total: run.cases.length,
+      runs: countsOf(run.labels, (label) => ({
+        valid: sum(scored, label, "valid"),
+        planned: sum(scored, label, "planned"),
+      })),
       suite: perLabel((label) =>
         weightedMean(
           scored.map((c) => ({
@@ -141,9 +181,28 @@ export function scoreSuites(run: {
   });
 }
 
-// The bar, when the score does not reach it; a missing score reaches no bar.
+/**
+ * Tells whether a score is below its pass bar.
+ * @param score - The score; null for none.
+ * @param bar - The bar; undefined for none.
+ * @returns True when there is a bar and the score is under it. A missing score reaches no bar.
+ */
+export const missesBar = (
+  score: number | null,
+  bar: number | undefined,
+): boolean => bar !== undefined && (score === null || score < bar - EPSILON);
+
 const missed = (score: number | null, bar: number | undefined): number[] =>
-  bar !== undefined && (score === null || score < bar - EPSILON) ? [bar] : [];
+  bar !== undefined && missesBar(score, bar) ? [bar] : [];
+
+/**
+ * Words a run count for the end of a line about a score.
+ * @param runs - The counts by subject label.
+ * @param label - The subject the score is of.
+ * @returns "(2 of 3 runs)".
+ */
+const counted = (runs: Record<string, RunCount>, label: string): string =>
+  `(${String(runs[label]?.valid ?? 0)} of ${String(runs[label]?.planned ?? 0)} runs)`;
 
 /**
  * Lists the pass bars that the subject under test did not reach.
@@ -157,20 +216,20 @@ export function failedBars(
   label: string,
   minScore: number | undefined,
 ): string[] {
-  return suites.flatMap(({ harness, cases, suite, applicable }) => {
+  return suites.flatMap(({ harness, cases, suite, applicable, runs }) => {
     // A harness to which no case applies has no score to measure against a bar.
     if (applicable === 0) return [];
     const suiteScore = suite[label] ?? null;
     return [
       ...missed(suiteScore, minScore).map(
         (bar) =>
-          `${harness}: suite score ${formatScore(suiteScore)} does not reach --min-score ${formatScore(bar)}`,
+          `${harness}: suite score ${formatScore(suiteScore)} ${counted(runs, label)} does not reach --min-score ${formatScore(bar)}`,
       ),
       ...cases.flatMap((c) => {
         const score = c.scores[label] ?? null;
         return missed(score, c.minScore).map(
           (bar) =>
-            `${harness}: case \`${c.id}\` score ${formatScore(score)} does not reach its minScore ${formatScore(bar)}`,
+            `${harness}: case \`${c.id}\` score ${formatScore(score)} ${counted(c.runs, label)} does not reach its minScore ${formatScore(bar)}`,
         );
       }),
     ];
@@ -182,6 +241,8 @@ export interface CommonSet {
   /** The ids of the cases that apply to all of those harnesses. */
   cases: string[];
   suite: Record<string, Record<string, number | null>>;
+  /** The runs behind each of those scores, by harness and subject label. */
+  runs: Record<string, Record<string, RunCount>>;
 }
 
 /**
@@ -219,6 +280,9 @@ export function commonSet(run: {
     cases: common,
     suite: Object.fromEntries(
       scored.map(({ harness, suite }) => [harness, suite]),
+    ),
+    runs: Object.fromEntries(
+      scored.map(({ harness, runs }) => [harness, runs]),
     ),
   };
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { plantCase, plugin } from "./testing/plant.js";
 import { readResults, sandbox, seenBy, tableRow } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const ALPHA = "plugin-alpha";
 const BETA = "plugin-beta";
@@ -123,7 +124,7 @@ test("run does not count a run whose harness loaded some other plugin, and exits
     "--out",
     outDir,
   ]);
-  expect(result.status, result.stderr).toBe(1);
+  expect(result.status, result.stderr).toBe(EXIT.invalid);
 
   const { records } = readResults(outDir);
   expect(records.map((record) => record.subjectLoaded)).toEqual([true, false]);
@@ -139,6 +140,8 @@ const WEIGHTED = [
   { type: "tool_not_called", name: "^Bash$" },
 ];
 const MIN_SCORE = "--min-score";
+const ONE_RUN = { valid: 1, planned: 1 };
+const TWO_RUNS = { valid: 2, planned: 2 };
 
 /**
  * Plants a plain plugin, a skilled one, the weighted case, and a second case of weight 2 that every run passes.
@@ -182,19 +185,30 @@ test("scores are weighted means of the checks and of the cases", async () => {
     {
       harness: "claude-code",
       cases: [
-        { id: "restate", weight: 1, scores: { a: 1 / 3, b: 1 } },
-        { id: "steady", weight: 2, scores: { a: 1, b: 1 } },
+        {
+          id: "restate",
+          weight: 1,
+          scores: { a: 1 / 3, b: 1 },
+          runs: { a: ONE_RUN, b: ONE_RUN },
+        },
+        {
+          id: "steady",
+          weight: 2,
+          scores: { a: 1, b: 1 },
+          runs: { a: ONE_RUN, b: ONE_RUN },
+        },
       ],
       suite: { a: (1 / 3 + 2) / 3, b: 1 },
       applicable: 2,
       total: 2,
+      runs: { a: TWO_RUNS, b: TWO_RUNS },
     },
   ]);
   expect(better.stdout).toMatch(
-    /^\| restate \| 0\.33 \/ 1\.00 \(\+0\.67\) \| `skill_loaded bro \(weight 3\)` A 0\/1, B 1\/1<br>/m,
+    /^\| restate \| 0\.33 \/ 1\.00 \(\+0\.67\) \(A 1 of 1 runs, B 1 of 1 runs\) \| `skill_loaded bro \(weight 3\)` A 0\/1, B 1\/1<br>/m,
   );
   expect(better.stdout).toMatch(
-    /^Suite score: 0\.78 \/ 1\.00 \(\+0\.22\) \(2 of 2 cases\)$/m,
+    /^Suite score: 0\.78 \/ 1\.00 \(\+0\.22\) \(2 of 2 cases, A 2 of 2 runs, B 2 of 2 runs\)$/m,
   );
   expect(better.stdout).not.toMatch(/pass bar/);
 });
@@ -204,7 +218,7 @@ test("a suite or case score of B under its bar fails the command", async () => {
   const worse = await run(skilled, plain, MIN_SCORE, "0.9");
   expect(worse.status).toBe(1);
   expect(worse.stdout).toMatch(
-    /^- claude-code: suite score 0\.78 does not reach --min-score 0\.90$/m,
+    /^- claude-code: suite score 0\.78 \(2 of 2 runs\) does not reach --min-score 0\.90$/m,
   );
   expect(readResults(outDir).belowBar).toHaveLength(1);
   expect((await run(skilled, plain, MIN_SCORE, "0.7")).status).toBe(0);
@@ -213,7 +227,7 @@ test("a suite or case score of B under its bar fails the command", async () => {
   const underCaseBar = await run(skilled, plain);
   expect(underCaseBar.status).toBe(1);
   expect(underCaseBar.stdout).toMatch(
-    /^- claude-code: case `restate` score 0\.33 does not reach its minScore 0\.50$/m,
+    /^- claude-code: case `restate` score 0\.33 \(1 of 1 runs\) does not reach its minScore 0\.50$/m,
   );
   const reversed = await run(plain, skilled);
   expect(reversed.status, "the bars apply to B").toBe(0);
@@ -241,16 +255,18 @@ test("score runs the suite on one subject and applies the pass bar to it", async
   ]);
   expect(good.stdout).toMatch(/^# Skill scores$/m);
   expect(good.stdout).toMatch(
-    /^\| restate \| 1\.00 \| `skill_loaded bro \(weight 3\)` 2\/2<br>.*\| \$0\.0300 \|$/m,
+    /^\| restate \| 1\.00 \(2 of 2 runs\) \| `skill_loaded bro \(weight 3\)` 2\/2<br>.*\| \$0\.0300 \|$/m,
   );
-  expect(good.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
+  expect(good.stdout).toMatch(
+    /^Suite score: 1\.00 \(1 of 1 cases, 2 of 2 runs\)$/m,
+  );
   const kept = path.join(outDir, "claude-code/restate/subject2.final.md");
   expect(fs.existsSync(kept)).toBe(true);
 
   const bad = await score(plain, MIN_SCORE, "0.5");
   expect(bad.status).toBe(1);
   expect(bad.stdout).toMatch(
-    /suite score 0\.33 does not reach --min-score 0\.50/,
+    /suite score 0\.33 \(2 of 2 runs\) does not reach --min-score 0\.50/,
   );
   const twoSubjects = await box.cli(["score", "--a", plain, "--cases", cases]);
   expect(twoSubjects.status, "score takes one subject").toBe(2);
@@ -277,5 +293,7 @@ test("a prompt that starts with a dash reaches the agent as the prompt", async (
     outDir,
   ]);
   expect(result.status, result.stderr).toBe(0);
-  expect(result.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
+  expect(result.stdout).toMatch(
+    /^Suite score: 1\.00 \(1 of 1 cases, 1 of 1 runs\)$/m,
+  );
 });

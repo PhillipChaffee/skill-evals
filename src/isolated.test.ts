@@ -4,6 +4,7 @@ import { expect, test } from "vitest";
 import { requireIsolation } from "./harnesses/index.js";
 import { plantCase, plugin, script, skillsFolder } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const ISOLATED = "--isolated";
 const NONE = "none";
@@ -72,7 +73,7 @@ test("an extra plugin under --isolated invalidates the run", async () => {
     subject: NONE,
     flags: [ISOLATED],
   });
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(invalid[0]).toMatch(/loaded outside the subject: \/opt\/org\/plugin/);
   expect(records[0]?.score).toBeNull();
   expect(records[0]?.unexpected).toEqual([ORG_PLUGIN]);
@@ -168,7 +169,7 @@ test("a skill an account syncs into the config directory during the run invalida
   const box = sandbox();
   script(box, "sync", { syncSkill: "acct", turns: done });
   const isolated = await scoreOnce(box, { subject: NONE, flags: [ISOLATED] });
-  expect(isolated.result.status).toBe(1);
+  expect(isolated.result.status).toBe(EXIT.invalid);
   expect(isolated.records[0]?.unexpected).toEqual(["account skill acct"]);
   expect(isolated.invalid[0]).toMatch(
     /loaded outside the subject: account skill acct$/,
@@ -203,7 +204,7 @@ test.each([
     const box = sandbox();
     script(box, "partial", { ...more, turns: done });
     const isolated = await scoreOnce(box, { subject: NONE, flags: [ISOLATED] });
-    expect(isolated.result.status).toBe(1);
+    expect(isolated.result.status).toBe(EXIT.invalid);
     expect(isolated.invalid[0]).toMatch(NOT_REPORTED_REASON);
     expect(isolated.records[0]?.score).toBeNull();
     fs.rmSync(path.join(box.root, "results"), { recursive: true });
@@ -291,6 +292,6 @@ test("isolated can be set in the config file", async () => {
     "--reps",
     "1",
   ]);
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(result.stdout).toMatch(/loaded outside the subject/);
 });

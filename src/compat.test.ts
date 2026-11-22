@@ -97,7 +97,7 @@ test("score gives every frozen case, and the suite, the score 0.0.1 gave", async
     suite: LOADED_SUITE,
   });
   expect(readResults(outDir).belowBar).toEqual([
-    "claude-code: case `written-files` score 0.67 does not reach its minScore 0.90",
+    "claude-code: case `written-files` score 0.67 (1 of 1 runs) does not reach its minScore 0.90",
   ]);
 });
 

@@ -41,7 +41,7 @@ What the agent edits in its copy never reaches the source, or the next run. The 
 { "type": "subject_unchanged" }
 ```
 
-The export itself is hashed too, before each run copies it. A run that edited it fails the command, because every later run would load the edit. The tool also hashes the source directory, with the same exclusions, before the first run and after the last one. When it differs, the command prints `the subject directory changed during the run` with the paths, and exits 1. A git ref has no source directory to hash, because a commit cannot change.
+The export itself is hashed too, before each run copies it. A run that edited it fails the command, because every later run would load the edit. The tool also hashes the source directory, with the same exclusions, before the first run and after the last one. When it differs, the command prints `the subject directory changed during the run` with the paths, and exits 3. A git ref has no source directory to hash, because a commit cannot change.
 
 A hook or script in the subject that depends on its absolute path, or on `.git`, sees the copy and not the source. A hook that finds its files relative to the plugin root works. A copy of a large subject takes disk space and time for each run.
 

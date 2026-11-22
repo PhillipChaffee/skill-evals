@@ -1,4 +1,5 @@
 import { applicability, hostCapabilities } from "../applicability.js";
+import { EXIT } from "../exit-codes.js";
 import type { Case } from "../cases.js";
 import { scopeTest } from "../checks/tree.js";
 import { exclusionsOf } from "../exclusions.js";
@@ -12,8 +13,6 @@ import { snapshot } from "../snapshot.js";
 import { resolveSubject } from "../subject.js";
 import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
-
-const PROBLEMS_EXIT_CODE = 2;
 
 /** One thing `validate` has to say about a suite. */
 export interface Lint {
@@ -262,5 +261,5 @@ export function validate(given: Options, project: Project): number {
       `${String(cases.length)} cases, ${String(problems.length)} problems, ${String(warnings.length)} warnings`,
     ].join("\n"),
   );
-  return problems.length > 0 ? PROBLEMS_EXIT_CODE : 0;
+  return problems.length > 0 ? EXIT.usage : EXIT.ok;
 }

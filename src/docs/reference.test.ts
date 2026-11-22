@@ -8,7 +8,7 @@ import { COMMANDS } from "../cli.js";
 import { HARNESSES } from "../harnesses/index.js";
 import { CONFIG_KEYS } from "../project.js";
 import { sandbox } from "../testing/sandbox.js";
-import { FLAGS } from "../usage.js";
+import { FLAGS } from "../flags.js";
 import { EXAMPLE_CONFIG, referencePages } from "./reference.js";
 import { schemaFiles } from "./schema.js";
 

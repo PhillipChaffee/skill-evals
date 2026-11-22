@@ -9,21 +9,23 @@ import type { Progress } from "./progress.js";
 import { progressText } from "./progress.js";
 import type { Project } from "./project.js";
 import { findProject, withConfig } from "./project.js";
-import { renderCoverage, renderReport } from "./report.js";
+import { emitReports } from "./report/emit.js";
+import { reportFormats } from "./report/formats.js";
+import { renderCoverage } from "./report/markdown.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason } from "./run.js";
 import { formatScore } from "./score.js";
 import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
-import { SUBJECT_CHANGED_EXIT_CODE, sourceChangedMessage } from "./subject.js";
-import type { CommandDoc, Flag, FlagSpec, Options } from "./usage.js";
-import { FLAGS, commandUsage, usageText } from "./usage.js";
+import { sourceChangedMessage } from "./subject.js";
+import { EXIT } from "./exit-codes.js";
+import type { Flag, FlagSpec } from "./flags.js";
+import { FLAGS } from "./flags.js";
+import type { CommandDoc, Options } from "./usage.js";
+import { commandUsage, usageText } from "./usage.js";
 import { plan, printPlan } from "./commands/plan.js";
 import { validate } from "./commands/validate.js";
 
-const USAGE_EXIT_CODE = 2;
-/** The exit code of a command that stopped at `--max-cost` or `--max-duration`. It wins over exit code 1. */
-const PARTIAL_EXIT_CODE = 4;
 // What the progress line of a scored run says when the runner ended it.
 const STOPS = {
   agent: "",
@@ -48,8 +50,9 @@ function stoppedMessage(
  * Runs the suite, prints its report to standard output, and prints one line for each finished run to standard error.
  * @param options - What to evaluate; with `dryRun`, the plan is printed and nothing runs.
  * @param project - Where the config file and the default cases directory are.
- * @returns The exit code: 0 for `dryRun`; else 4 when `--max-cost` or `--max-duration` stopped the command, which wins over
- *   1; else 1 when any run is invalid, a pass bar is not reached, or the subject directory changed during the command, else 0.
+ * @returns The exit code: 0 for `dryRun`; else `evaluation.exit`, from `exitCodeOf`: 4 when `--max-cost` or `--max-duration`
+ *   stopped the command, 3 when a subject directory changed or the invalid runs are above `--max-invalid`, 1 when a pass
+ *   bar is not reached, else 0.
  */
 async function suite(
   options: EvaluateOptions & { dryRun?: boolean | undefined },
@@ -68,19 +71,16 @@ async function suite(
       `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}: ${outcome}${info.reused ? " (reused)" : ""} ${progressText(info.progress)}`,
     );
   };
+  const formats = reportFormats(withConfig(project, given));
   const evaluation = await evaluate({ ...given, onRun });
-  console.log(renderReport(evaluation));
+  emitReports(evaluation, formats);
   if (evaluation.sourceChanged.length > 0) {
     console.error(
       `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
     );
   }
-  if (evaluation.partial !== null) {
-    console.error(stoppedMessage(evaluation));
-    return PARTIAL_EXIT_CODE;
-  }
-  if (evaluation.sourceChanged.length > 0) return SUBJECT_CHANGED_EXIT_CODE;
-  return evaluation.invalid.length || evaluation.belowBar.length ? 1 : 0;
+  if (evaluation.partial !== null) console.error(stoppedMessage(evaluation));
+  return evaluation.exit;
 }
 
 /**
@@ -144,6 +144,8 @@ const SUITE_FLAGS: Flag[] = [
   "max-duration",
   "model",
   "min-score",
+  "max-invalid",
+  "report",
   "judge-harness",
   "judge-model",
   "judge-api",
@@ -303,18 +305,36 @@ function help(name: string | undefined): number {
   }
   if (!Object.hasOwn(COMMANDS, name)) {
     console.error(`skill-evals: unknown command "${name}"\n\n${USAGE}`);
-    return USAGE_EXIT_CODE;
+    return EXIT.usage;
   }
   console.log(commandUsage(name, COMMANDS));
   return 0;
 }
 
 /**
+ * Reports a failure of a command line.
+ * @param error - What the command threw.
+ * @returns 2 with one line on standard error for a usage error or a flag that `parseArgs` refused; else 5, with the
+ *   stack trace on standard error.
+ */
+function failed(error: unknown): number {
+  if (error instanceof UsageError || isParseArgsError(error)) {
+    console.error(`skill-evals: ${error.message}`);
+    return EXIT.usage;
+  }
+  console.error(
+    `skill-evals: internal error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+  );
+  return EXIT.error;
+}
+
+/**
  * Runs one command line.
  * @param argv - The command and its flags, without the node and script paths.
- * @returns The exit code: 0, 1 when a run is invalid or a pass bar is not reached, 4 when `--max-cost` or `--max-duration`
- *   stopped the command, or 2 with one line on standard error for a wrong command line, case file, config file, or
- *   platform. `--help` and `help` print to standard output and give 0; `--help` wins over every other flag. It never
+ * @returns The exit code, from `EXIT`: 0, 1 for a pass bar not reached, 2 with one line on standard error for a wrong
+ *   command line, case file, config file, or platform, 3 for invalid runs above `--max-invalid` or a subject that changed,
+ *   4 when `--max-cost` or `--max-duration` stopped the command, or 5 for an internal failure, with its stack trace on
+ *   standard error. `--help` and `help` print to standard output and give 0; `--help` wins over every other flag. It never
  *   calls process.exit; a signal does, with 130, after the results are written.
  */
 export async function main(argv: string[]): Promise<number> {
@@ -342,8 +362,6 @@ export async function main(argv: string[]): Promise<number> {
     const options = readOptions(command, args);
     return await command.handler(options, findProject(process.cwd()));
   } catch (error) {
-    if (!(error instanceof UsageError || isParseArgsError(error))) throw error;
-    console.error(`skill-evals: ${error.message}`);
-    return USAGE_EXIT_CODE;
+    return failed(error);
   }
 }

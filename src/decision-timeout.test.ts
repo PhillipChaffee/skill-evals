@@ -4,6 +4,7 @@ import { expect, test } from "vitest";
 import { decisionServer } from "./testing/decision-server.js";
 import { plantCase } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const MODEL = "decider-one";
 const KEY = "skill-evals-decision-key";
@@ -43,7 +44,7 @@ test.each([
   "%s sets how long a request to the decision model may take",
   async (_, extra, config) => {
     const { result, outDir } = await unanswered(extra, config);
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(EXIT.invalid);
     const [record] = readResults(outDir).records;
     expect(record?.checks[0]?.reason).toMatch(/timeout/i);
     expect(record?.decision?.calls).toBe(2);

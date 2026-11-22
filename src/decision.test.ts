@@ -6,6 +6,7 @@ import type { Scripted } from "./testing/decision-server.js";
 import { choice, decisionServer, yesNo } from "./testing/decision-server.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { readResults, sandbox, seenBy, tableRow } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const ANSWER = "It is fixed now.";
 const MODEL = "decider-one";
@@ -131,7 +132,7 @@ test("the decision model sees the task and the answer, and nothing about the sub
   );
 
   expect(tableRow(result.stdout, "restate")).toMatch(
-    /^\| restate \| 0\.86 \/ 0\.86 \(\+0\.00\) \| `decision "Is it plain\?" yes \(weight 2\)` A 0\.90, B 0\.90<br>`decision "Does it mention weather\?" no` A 0\.75, B 0\.75<br>`decision "How well is the meaning kept\?" fully\/mostly\/partly\/not at all` A 0\.74, B 0\.74<br>`output_contains "fixed"` A 1\/1, B 1\/1 \|/,
+    /^\| restate \| 0\.86 \/ 0\.86 \(\+0\.00\) \(A 1 of 1 runs, B 1 of 1 runs\) \| `decision "Is it plain\?" yes \(weight 2\)` A 0\.90 \(1 of 1 runs\), B 0\.90 \(1 of 1 runs\)<br>`decision "Does it mention weather\?" no` A 0\.75 \(1 of 1 runs\), B 0\.75 \(1 of 1 runs\)<br>`decision "How well is the meaning kept\?" fully\/mostly\/partly\/not at all` A 0\.74 \(1 of 1 runs\), B 0\.74 \(1 of 1 runs\)<br>`output_contains "fixed"` A 1\/1, B 1\/1 \|/,
   );
   expect(result.stdout).toMatch(/^- Decision model: decider-one$/m);
   expect(result.stdout).toMatch(
@@ -243,7 +244,7 @@ test("two unusable answers leave the decision checks without a score and the run
     [{ answers: { ...ANSWERS, q2: yesNo(1.2) } }],
     CHECKS,
   );
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(received).toHaveLength(2);
   const [record] = readResults(outDir).records;
   const reason =
@@ -261,7 +262,9 @@ test("two unusable answers leave the decision checks without a score and the run
   expect(result.stdout).toContain(
     `- SUBJECT \`restate\` rep 1: a decision check has no score: ${reason}`,
   );
-  expect(tableRow(result.stdout, "restate")).toMatch(/^\| restate \| n\/a \|/);
+  expect(tableRow(result.stdout, "restate")).toMatch(
+    /^\| restate \| n\/a \(0 of 1 runs\) \|/,
+  );
 });
 
 test("a suite with a decision check does not start without the model, its key, and a usable URL", async () => {
@@ -313,7 +316,7 @@ test("a decision check of an invalid run is not sent to the model", async () => 
     ["score", "--subject", ghost, ...flags, ...decision],
     { BASETEN_API_KEY: KEY },
   );
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   const [record] = readResults(outDir).records;
   expect(record?.checks[0]).toMatchObject({
     score: null,

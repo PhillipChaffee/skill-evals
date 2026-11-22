@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import type { Harness } from "./harnesses/shared.js";
-import { noteSections } from "./report-notes.js";
+import { noteSections } from "./report/notes.js";
 import { retryKind } from "./retry.js";
 import { session } from "./session.js";
 import { judgeAsker } from "./startup.js";

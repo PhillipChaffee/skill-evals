@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import { gone, scored, slowRun } from "./testing/limits.js";
 import { script } from "./testing/plant.js";
 import { fixture, sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 // A stop and a timeout both take the case's timeout plus a drain; vitest's 5 s default is too tight under load.
 const TEST_TIMEOUT_MS = 30_000;
@@ -83,7 +84,7 @@ test(
       },
     });
 
-    expect(result.status).toBe(1);
+    expect(result.status).toBe(EXIT.invalid);
     expect(record).toMatchObject({
       ok: false,
       error: `timed out after ${String(SAFE_TIMEOUT_SECONDS)} s`,

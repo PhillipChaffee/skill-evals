@@ -5,14 +5,21 @@ description: Exit codes, and what a run needs on a machine that is not yours.
 
 `run` and `score` can gate a pull request: the exit code says whether the suite passed.
 
-| Exit code | Meaning                                                                                                                                                |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0         | Every run is valid and every pass bar is reached.                                                                                                      |
-| 1         | A run failed or is invalid, a score is under its bar, or the subject directory changed while the command ran.                                          |
-| 2         | A wrong command line, case file, config file, or subject. A decision check with no decision model or no API key. Also Windows, which is not supported. |
-| 4         | The command stopped before the end because it reached `--max-cost` or `--max-duration`. `results.json` has `partial` set. It wins over exit code 1.    |
-| 130       | SIGINT or SIGTERM ended the command. The results so far are written first.                                                                             |
+| Exit code | Meaning                                                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0         | Every run is valid and every pass bar is reached.                                                                                           |
+| 1         | A score is under its bar.                                                                                                                   |
+| 2         | A wrong command line, case file, config file, or subject. A decision check with no decision model or no API key. Also Windows.              |
+| 3         | More of the planned runs are invalid than `--max-invalid` allows (by default, any), or the subject directory changed while the command ran. |
+| 4         | The command stopped before the end because it reached `--max-cost` or `--max-duration`. `results.json` has `partial` set.                   |
+| 5         | An internal failure that is not a usage error. The stack trace is on standard error.                                                        |
+| 130       | SIGINT or SIGTERM ended the command. The results so far are written first.                                                                  |
 
+When several apply, the first of 2, 130, 5, 4, 3 and 1 wins. [Exit codes](../reference/exit-codes.md) says more, and lists the codes of `check` and `validate`.
+
+A run that is invalid used to exit 1, and now exits 3, so a pipeline that treated every non-zero code alike keeps working, and one that tested for 1 must change. To tolerate a few, pass `--max-invalid 0.1`: the command then exits 3 only when more than a tenth of the planned runs are invalid.
+
+- **Read the summary.** Every `run` and `score` writes `summary.json` in the output directory, with the exit code and the figures a gate needs. `--report json,junit` adds `report.json` and `report.xml`, which most CI systems show as test results. [Read the report](read-the-report.md#the-summary-and-the-report-formats) has the fields.
 - **Set the bar.** `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, and `minScore` in a `case.json` does the same for one case. See [Set a pass bar](pass-bars.md).
 - **Isolate the run.** `--isolated` (or `"isolated": true` in the config file) starts the harness with nothing loaded but the subject, and checks the harness's own report of what it loaded. A run that reports a plugin, a prefixed skill or agent, or an MCP server that is not the subject's, such as a plugin that your organization installs on the runner, is invalid with the reason `loaded outside the subject: <names>`. A harness that should report what it loaded and does not makes the run invalid too. Use it in CI, where the machine's settings can change a score without a case change. It covers only what the report lists. It does not prove that managed policy settings (hooks, environment, permissions), a managed `CLAUDE.md`, rules, hooks and managed agents are off. User level is the throwaway home plus anything the account syncs into it: synced skills and plugins are detected from the files they leave, and the `user` setting source also lets the organization's default model apply, so pass `--model` in CI; [Harnesses](../agents/harnesses.md) says what each harness covers and which harnesses take the flag (today Claude Code only).
 - **Name the model.** Each run starts in a new, empty home directory, so no settings and no default model are there. Pass `--model`, or set `model` in the [config file](../reference/config.md). Without it each harness uses its built-in default, which may be a provider you have no key for.

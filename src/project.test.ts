@@ -141,7 +141,7 @@ test("config values become defaults and flags override them", async () => {
     "the harness under test, model config-judge",
   );
   expect(fromConfig.result.stdout).toMatch(
-    /suite score 0\.00 does not reach --min-score 0\.50/,
+    /suite score 0\.00 \(2 of 2 runs\) does not reach --min-score 0\.50/,
   );
 
   const flags = ["--reps", "1", "--model", "flag-model"];

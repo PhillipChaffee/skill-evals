@@ -5,10 +5,10 @@ const LIMIT_FLAGS: Record<string, string | undefined> = {
   duration: "--max-duration",
 };
 const COST_DECIMALS = 4;
-import type { Evaluation } from "./evaluate.js";
-import type { RunRecord } from "./run.js";
-import { invalidReason } from "./run.js";
-import { plannedRuns } from "./not-run.js";
+import type { Evaluation } from "../evaluate.js";
+import type { RunRecord } from "../run.js";
+import { invalidReason } from "../run.js";
+import { plannedRuns } from "../not-run.js";
 
 /**
  * Says that the command stopped before the end, and how many runs did not run.

@@ -8,6 +8,12 @@ import { existsSync, writeFileSync } from "node:fs";
 import process from "node:process";
 import { setTimeout } from "node:timers";
 
+// A question about the version is answered at once, and starts nothing.
+if (process.argv.includes("--version")) {
+  process.stdout.write("slow-harness 1.0.0\n");
+  process.exit(0);
+}
+
 const HOUR_MS = 3_600_000;
 const beat = `
   const fs = require("node:fs");

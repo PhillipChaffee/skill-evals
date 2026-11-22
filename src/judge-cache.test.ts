@@ -6,6 +6,7 @@ import { apiCase, evaluateCase, judgedWith, PASS } from "./testing/judged.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { reply } from "./testing/judge-server.js";
 import { sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const RUBRIC = "It names the fix.";
 const SCORE_HALF = '{"reason": "ok", "score": 0.5}';
@@ -118,7 +119,7 @@ test("the harness path writes the cache when it is off", async () => {
     [PASS],
     { flags: ["--reps", "2"] },
   );
-  expect(ran.status, ran.stderr).toBe(1);
+  expect(ran.status, ran.stderr).toBe(EXIT.invalid);
   // Off: both reps asked (the fake had one reply, so the second was unusable) and the one usable answer was written.
   expect(prompts).toHaveLength(3);
   expect(linesOf(out)).toHaveLength(1);

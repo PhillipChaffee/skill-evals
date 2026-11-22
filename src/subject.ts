@@ -325,9 +325,6 @@ function watchSource(source: Located, globs: string[]): () => string[] {
     allChanged(diffSnapshots(before, snapshot(source.dir, left))).sort();
 }
 
-/** The exit code of a command whose subject directory changed while it ran. A later task makes it 3. */
-export const SUBJECT_CHANGED_EXIT_CODE = 1;
-
 /**
  * Words the hard error for a subject directory that changed during the command.
  * @param paths - The changed paths, as the user would type them.

@@ -34,7 +34,7 @@ The numbers are from a real run. The table is shortened: the report that the com
 2. **Each case runs on both sides.** A run starts the harness in a new, empty home directory and a new workspace, with only the subject loaded: your skills, a plugin, or nothing. Your login is copied in. Your settings and the skills you installed globally are not. Each side runs three times unless you set `--reps`.
 3. **Checks become scores.** Every check scores a run from 0 to 1. The checks of a run give a run score, the runs give a case score, and the cases give a suite score. Weights and pass bars are yours to set.
 
-A run that failed or is invalid does not count. It is listed under the table and makes the command exit 1. [What one run does](concepts/one-run.md) has every step.
+A run that failed or is invalid does not count. It is listed under the table and makes the command exit 3, unless `--max-invalid` allows it. [What one run does](concepts/one-run.md) has every step.
 
 ## Three kinds of check
 

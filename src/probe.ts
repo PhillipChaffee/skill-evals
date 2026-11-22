@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { binNeeds, hostCapabilities } from "./applicability.js";
+import { EXIT } from "./exit-codes.js";
 import { exclusionsOf } from "./exclusions.js";
 import type { Case } from "./cases.js";
 import { loadCases } from "./cases.js";
@@ -12,7 +13,6 @@ import { invalidReason, runOnce } from "./run.js";
 import { UsageError, outputDir } from "./scope.js";
 import type { Subject } from "./subject.js";
 import {
-  SUBJECT_CHANGED_EXIT_CODE,
   changedAtSource,
   describeSubject,
   resolveSubject,
@@ -180,8 +180,8 @@ function loadSafely(dir: string, lenient: boolean): Case[] | string {
  * Runs one small prompt in each harness and prints what its adapter reports, as a table.
  * @param given - The options of the command line.
  * @param project - Where the config file and the default subject are.
- * @returns The exit code: 1 when any installed harness failed its run, else 0. A harness that is not installed is
- *   a row in the table, not a failure.
+ * @returns The exit code: 3 when the subject directory changed during the command, else 1 when any installed harness
+ *   failed its run, else 0. A harness that is not installed is a row in the table, not a failure.
  */
 export async function check(
   given: ProbeOptions,
@@ -234,9 +234,9 @@ export async function check(
     const changed = changedAtSource([subject]);
     if (changed.length > 0) {
       console.error(`skill-evals: ${sourceChangedMessage(changed)}`);
-      return SUBJECT_CHANGED_EXIT_CODE;
+      return EXIT.invalid;
     }
-    return failed ? 1 : 0;
+    return failed ? EXIT.bar : EXIT.ok;
   } finally {
     subject.dispose();
   }

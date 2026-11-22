@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { plantCase, script } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const YES = '{"score": 1, "reason": "yes"}';
 
@@ -49,7 +50,7 @@ test("a judge that reports something loaded invalidates an isolated run and name
   const { isolated, plain, invalid } = await judgedBoth({
     plugins: [{ name: "org", path: "/opt/org/plugin" }],
   });
-  expect(isolated.status).toBe(1);
+  expect(isolated.status).toBe(EXIT.invalid);
   expect(invalid[0]).toMatch(
     /the judge loaded outside the subject: \/opt\/org\/plugin$/,
   );
@@ -58,7 +59,7 @@ test("a judge that reports something loaded invalidates an isolated run and name
 
 test("a judge that does not report what it loaded invalidates an isolated run", async () => {
   const { isolated, plain, invalid } = await judgedBoth({ omit: ["plugins"] });
-  expect(isolated.status).toBe(1);
+  expect(isolated.status).toBe(EXIT.invalid);
   expect(invalid[0]).toMatch(
     /the judge harness did not report what it loaded$/,
   );

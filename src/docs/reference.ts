@@ -8,10 +8,12 @@ import { TOOL_KIND_MEANINGS } from "../harnesses/shared.js";
 import { ENV_NAME_RULE } from "../env.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
 import { VARIANT_KEYS } from "../variants.js";
-import type { Flag, FlagSpec } from "../usage.js";
-import { FLAGS, commandsTaking, defaultText, flagSyntax } from "../usage.js";
+import type { Flag, FlagSpec } from "../flags.js";
+import { FLAGS } from "../flags.js";
+import { commandsTaking, defaultText, flagSyntax } from "../usage.js";
 import { apiReference } from "./api.js";
 import { capabilitiesPage } from "./capabilities-page.js";
+import { exitCodesPage } from "./exit-codes-page.js";
 import { transcriptPage } from "./transcript-page.js";
 import type { ReferencePage } from "./markdown.js";
 import { FENCE, code, header, table } from "./markdown.js";
@@ -180,6 +182,8 @@ export const EXAMPLE_CONFIG: Record<
   decisionUrl: "<base-url>",
   decisionTimeout: 60,
   minScore: 0.8,
+  maxInvalid: 0.1,
+  report: ["md", "json"],
   maxJudgedWeightShare: 0.5,
   lenient: false,
   isolated: false,
@@ -359,11 +363,12 @@ ${apiReference()}`,
 
 /**
  * Writes every reference page from the tables and the doc comments in the code.
- * @returns The pages: checks, commands and flags, the config file, the API, the harnesses, the capabilities, and the transcript.
+ * @returns The pages: checks, commands and flags, the exit codes, the config file, the API, the harnesses, the capabilities, and the transcript.
  */
 export const referencePages = (): ReferencePage[] => [
   checksPage(),
   commandsPage(),
+  exitCodesPage(),
   configPage(),
   apiPage(),
   harnessesPage(),

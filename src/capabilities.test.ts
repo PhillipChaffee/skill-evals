@@ -166,7 +166,9 @@ test("the suite line shows the applicable count, and a bar of a not applicable c
     plain: { checks: [PROMPT_SEEN] },
     [NEEDS_MCP]: { requires: [MCP], minScore: BAR, checks: [NEVER_SEEN] },
   });
-  expect(ran.stdout).toMatch(/Suite score: 1\.00 \(1 of 2 cases\)/);
+  expect(ran.stdout).toMatch(
+    /Suite score: 1\.00 \(1 of 2 cases, 1 of 1 runs\)/,
+  );
   expect(results?.suites[0]).toMatchObject({ applicable: 1, total: 2 });
   expect(results?.belowBar).toEqual([]);
   expect(ran.status).toBe(0);
@@ -214,9 +216,15 @@ test("two harnesses with different applicable sets get a common-set score", asyn
       [CLAUDE_CODE]: { subject: 0.75 },
       pi: { subject: 0.75 },
     },
+    runs: {
+      [CLAUDE_CODE]: { subject: { valid: 2, planned: 2 } },
+      pi: { subject: { valid: 2, planned: 2 } },
+    },
   });
   expect(ran.stdout).toMatch(/Common set \(2 cases: half, plain\)/);
-  expect(ran.stdout).toMatch(/Suite score: .* \(2 of 3 cases\)/);
+  expect(ran.stdout).toMatch(
+    /Suite score: .* \(2 of 3 cases, \d+ of \d+ runs\)/,
+  );
 });
 
 test("a harness with no applicable case gets a report line and no score, and one harness alone has no common set", async () => {

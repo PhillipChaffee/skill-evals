@@ -45,6 +45,18 @@ const finish = (result, costUsd) =>
     },
   });
 
+// `--version` is a question about the executable, not a run: it is logged apart, and it never counts as a start.
+// - FAKE_VERSION_LOG: a file that gets one line for each question.
+// - FAKE_VERSION_FAIL: when set, the question fails with exit code 1 and no output.
+if (process.argv.includes("--version")) {
+  if (process.env.FAKE_VERSION_LOG) {
+    fs.appendFileSync(process.env.FAKE_VERSION_LOG, "version\n");
+  }
+  if (process.env.FAKE_VERSION_FAIL) process.exit(1);
+  process.stdout.write("fake-harness 9.9.9\nsecond line\n");
+  process.exit(0);
+}
+
 // Every start is logged, so a test can tell that no harness ran.
 if (process.env.FAKE_START_LOG) {
   fs.appendFileSync(process.env.FAKE_START_LOG, "start\n");

@@ -6,8 +6,7 @@ import { script, skillsFolder } from "./testing/plant.js";
 import { exec as agentRuns } from "./testing/runs.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 import { go, printed } from "./testing/setup.js";
-
-const INVALID_RUNS = 1;
+import { EXIT } from "./exit-codes.js";
 
 const BUILD_HISTORY = `set -e
 git checkout -q -b feature/clean-me
@@ -260,7 +259,7 @@ test("layers that cannot be merged make a run record with the error, not a crash
   const got = await go(box, {
     case: { fixtures: ["../_shared/one", "../_shared/two"] },
   });
-  expect(got.status).toBe(INVALID_RUNS);
+  expect(got.status).toBe(EXIT.invalid);
   expect(got.results?.invalid[0]).toMatch(/run failed: /);
   expect(fs.existsSync(box.started)).toBe(false);
 });

@@ -6,6 +6,7 @@ import { CONFIG_FILE } from "./project.js";
 import { decisionServer, yesNo } from "./testing/decision-server.js";
 import { plantCase, plugin } from "./testing/plant.js";
 import { readResults, sandbox, tableRow } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const REPLIES_FILE = "fake/judge/replies.json";
 const PROMPTS_FILE = "fake/judge/prompts.jsonl";
@@ -69,7 +70,7 @@ const REPS_AND_MODEL = ["--reps", "2", "--model", "run-model"];
 
 test("a judged check takes its score from the judge's reply, asked once more after an unusable one", async () => {
   const { result, records } = await judgedRun(REPLIES, ...REPS_AND_MODEL);
-  expect(result.status, "one run has no score").toBe(1);
+  expect(result.status, "one run has no score").toBe(EXIT.invalid);
 
   const judged = records.map((record) => record.checks[0]);
   expect(judged.map((check) => check?.score)).toEqual([0.5, 1, null, 0]);
@@ -111,7 +112,7 @@ test("the judge sees the task, the answer, and the rubric, and nothing about the
   expect(asked[0]?.pluginDir, "the judge runs with nothing loaded").toBeNull();
 
   expect(tableRow(result.stdout, "restate")).toMatch(
-    /^\| restate \| 0\.38 \/ 0\.38 \(\+0\.00\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50, B 0\.50<br>`output_contains "broken"` A 0\/1, B 0\/2 \|/,
+    /^\| restate \| 0\.38 \/ 0\.38 \(\+0\.00\) \(A 1 of 2 runs, B 2 of 2 runs\) \| `judge "Says the word fixed[^`]*\(weight 3\)` A 0\.50 \(1 of 2 runs\), B 0\.50 \(2 of 2 runs\)<br>`output_contains "broken"` A 0\/1, B 0\/2 \|/,
   );
   expect(result.stdout).toMatch(
     /^- Judge: the harness under test, model run-model$/m,
@@ -147,7 +148,7 @@ test("the judge runs on the harness and the model that the judge flags name", as
     "--judge-harness",
     "codex",
   );
-  expect(otherHarness.result.status).toBe(1);
+  expect(otherHarness.result.status).toBe(EXIT.invalid);
   expect(otherHarness.asked, "two runs, each asked twice").toHaveLength(4);
   expect(otherHarness.records[0]?.checks[0]?.reason).toMatch(
     /no turn\.completed event/,
@@ -169,7 +170,7 @@ test("a judged check of an invalid run is not sent to the judge", async () => {
   const flags = ["--cases", cases, "--reps", "1", "--out", outDir];
 
   const result = await box.cli(["score", "--subject", ghost, ...flags]);
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(readResults(outDir).records[0]?.checks[0]).toMatchObject({
     score: null,
     reason: "not judged, because the run is invalid",

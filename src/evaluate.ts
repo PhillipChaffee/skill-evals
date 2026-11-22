@@ -1,27 +1,22 @@
 import type { CaseMeta } from "./case-meta.js";
-import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
+import type { ExitCode } from "./exit-codes.js";
+import { exitCodeOf } from "./exit-codes.js";
+import { finalWrite, metaOfCommand, summarize, writeLast } from "./finish.js";
+import type { RunMeta } from "./meta.js";
 import { basePlan, prepare, resolveAll } from "./prepare.js";
 import type { Prepared } from "./prepare.js";
 import { lockDir } from "./lock.js";
-import type { JudgeApi } from "./judge-api.js";
-import type { Located } from "./harnesses/index.js";
 import type { Progress } from "./progress.js";
 import type { RunRecord } from "./run.js";
-import { invalidReason } from "./run.js";
 import { runAll } from "./run-loop.js";
-import type { Store } from "./store.js";
 import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
-import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
-import { onInterrupt, outputDir } from "./scope.js";
+import { outputDir } from "./scope.js";
 import type { Subject, SubjectSummary } from "./subject.js";
-import { changedAtSource } from "./subject.js";
 import type { Partition } from "./applicability.js";
-import type { StopReason } from "./gate.js";
 import type { NotRun } from "./not-run.js";
-import { notRunOf, plannedRuns } from "./not-run.js";
 
 /** What `evaluate` takes. An option that is not set takes its value from the project's config file. */
 export interface EvaluateOptions extends SelectionOptions {
@@ -71,6 +66,10 @@ export interface EvaluateOptions extends SelectionOptions {
   onWarning?: ((text: string) => void) | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
+  /** The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0. */
+  maxInvalid?: number | undefined;
+  /** The report formats the command line writes: "md" to standard output, the others to `report.<ext>` in the output directory. `evaluate` itself writes none. Default: ["md"]. */
+  report?: string[] | undefined;
   /** Where results go. Default: a new temp directory. */
   outDir?: string | undefined;
   /** How many runs may be in flight at once, a positive integer. Default: 1. */
@@ -102,6 +101,10 @@ export interface EvaluateOptions extends SelectionOptions {
 
 /** What `evaluate` writes to `results.json`. */
 export interface Results {
+  /** The version of this file's shape. */
+  schemaVersion: 1;
+  /** How the runs were made: tool and harness versions, models, subject revisions, case hashes. */
+  meta: RunMeta;
   subjects: SubjectSummary[];
   harnesses: string[];
   harnessReason: string;
@@ -149,134 +152,13 @@ export interface Results {
 
 /** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished. */
 export interface Evaluation extends Results {
+  /** The exit code the command line gives: 0, 1, 3, 4, 5 or 130. `summary.json` holds the same number. */
+  exit: ExitCode;
   /** Every loaded case, applicable or not. */
   cases: Case[];
   /** For each harness id, the cases it ran, with the checks that it dropped left out. */
   applied: Record<string, Case[]>;
   outDir: string;
-}
-
-/** What a finished evaluation is summed up from. */
-interface Finished {
-  subjects: Subject[];
-  selection: { chosen: Located[]; reason: string };
-  judgeHarness: Located | undefined;
-  judgeModel: string | undefined;
-  judgeApi: JudgeApi | null;
-  decisionModel: string | undefined;
-  model: string | undefined;
-  minScore: number | undefined;
-  reps: number;
-  cases: Case[];
-  parts: Partition;
-  records: RunRecord[];
-  sourceChanged: string[];
-  partial: Results["partial"];
-}
-
-/**
- * Scores the runs and sums up what ran.
- * @param finished - The runs and what they were made with.
- * @returns What goes into `results.json`. The pass bars apply to the last subject, which is the one under test.
- */
-function summarize(finished: Finished): Results {
-  const { subjects, selection, judgeHarness, judgeModel, model } = finished;
-  const judgeWho = finished.judgeApi
-    ? `the ${finished.judgeApi.kind} API`
-    : (judgeHarness?.harness.id ?? "the harness under test");
-  const { cases, records } = finished;
-  const labels = subjects.map(({ label }) => label);
-  const harnesses = selection.chosen.map(({ harness }) => harness.id);
-  const { parts } = finished;
-  const applicable = Object.fromEntries(
-    Object.entries(parts.ran).map(([id, ran]) => [id, ran.map((c) => c.id)]),
-  );
-  const suites = scoreSuites({
-    harnesses,
-    cases,
-    records,
-    labels,
-    applicable,
-  });
-  return {
-    subjects: subjects.map(({ label, spec, kind, dir, skills, commit }) => ({
-      label,
-      spec,
-      kind,
-      dir,
-      skills,
-      commit,
-    })),
-    harnesses,
-    harnessReason: selection.reason,
-    model: model ?? null,
-    judge: `${judgeWho}, model ${judgeModel ?? "the harness default"}`,
-    decisionModel: finished.decisionModel ?? null,
-    reps: finished.reps,
-    caseMeta: Object.fromEntries(cases.map((one) => [one.id, metaOf(one)])),
-    suites,
-    belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
-    notApplicable: parts.notApplicable,
-    skippedChecks: parts.skippedChecks,
-    commonSet: commonSet({ harnesses, cases, records, labels, applicable }),
-    invalid: records.flatMap((record) => {
-      const reason = invalidReason(record);
-      const run = `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`;
-      return reason === null ? [] : [`${run}: ${reason}`];
-    }),
-    sourceChanged: finished.sourceChanged,
-    partial: finished.partial,
-    notRun: notRunOf(
-      plannedRuns({
-        harnesses,
-        applied: parts.ran,
-        reps: finished.reps,
-        labels,
-      }),
-      records,
-    ),
-    records,
-  };
-}
-
-/**
- * Writes the last `results.json` of a command that ran its runs. A signal while the subjects are checked still leaves
- * the file saying "interrupted", not "running".
- * @param store - Where the results go.
- * @param finished - What the results are summed up from, besides the records.
- * @param ran - What `runAll` returned.
- * @param ran.records - The finished runs.
- * @param ran.stopped - Why the command stopped early, or null.
- * @returns The results that were written.
- */
-function finalWrite(
-  store: Store,
-  finished: Omit<Finished, "records" | "sourceChanged" | "partial">,
-  ran: { records: RunRecord[]; stopped: StopReason | null },
-): Results {
-  const { records, stopped } = ran;
-  const off = onInterrupt(() => {
-    store.flush(
-      summarize({
-        ...finished,
-        records,
-        sourceChanged: [],
-        partial: { reason: "interrupted" },
-      }),
-    );
-  });
-  try {
-    const results = summarize({
-      ...finished,
-      records,
-      sourceChanged: changedAtSource(finished.subjects),
-      partial: stopped === null ? null : { reason: stopped },
-    });
-    store.flush(results);
-    return results;
-  } finally {
-    off();
-  }
 }
 
 /**
@@ -306,7 +188,11 @@ async function runSuite(
     // Another command may have filled the directory while the subjects were exported, and before it was locked.
     if (resumed === undefined) requireFresh(outDir);
     const store = openStore(outDir, resumed !== undefined);
-    const finished = { ...context, subjects };
+    const finished = {
+      ...context,
+      subjects,
+      meta: metaOfCommand(context, subjects),
+    };
     const { records, stopped } = await runAll({
       ...basePlan(context, subjects, outDir),
       useCache: resumed !== undefined || (options.useCache ?? false),
@@ -317,14 +203,14 @@ async function runSuite(
         records,
         reason: Exclude<Results["partial"], null>["reason"] = "running",
       ) => {
-        store.flush(
-          summarize({
-            ...finished,
-            records,
-            sourceChanged: [],
-            partial: { reason },
-          }),
-        );
+        const results = summarize({
+          ...finished,
+          records,
+          sourceChanged: [],
+          partial: { reason },
+        });
+        if (reason === "running") store.flush(results);
+        else writeLast(store, results, finished.maxInvalid);
       },
       onRun: hooks.onRun,
       began: hooks.began,
@@ -359,8 +245,14 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       onRun,
       began,
     });
-    const { cases, parts } = prepared.context;
-    return { ...results, cases, applied: parts.ran, outDir };
+    const { cases, parts, maxInvalid } = prepared.context;
+    return {
+      ...results,
+      exit: exitCodeOf(results, maxInvalid),
+      cases,
+      applied: parts.ran,
+      outDir,
+    };
   } finally {
     for (const subject of subjects) subject.dispose();
   }

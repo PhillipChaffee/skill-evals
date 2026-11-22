@@ -41,11 +41,11 @@ test("a case score is the mean over the reps of the valid runs, and a suite with
 test("a mean that equals its bar reaches it, and a missing score reaches no bar", () => {
   expect(failedBars(suites, "a", 0.7875)).toEqual([]);
   expect(failedBars(suites, "a", 0.79)).toEqual([
-    "h: suite score 0.79 does not reach --min-score 0.79",
+    "h: suite score 0.79 (5 of 6 runs) does not reach --min-score 0.79",
   ]);
   expect(failedBars(suites, "b", 0.1)).toEqual([
-    "h: suite score n/a does not reach --min-score 0.10",
-    "h: case `two` score n/a does not reach its minScore 0.80",
+    "h: suite score n/a (2 of 3 runs) does not reach --min-score 0.10",
+    "h: case `two` score n/a (0 of 1 runs) does not reach its minScore 0.80",
   ]);
   expect(failedBars(suites, "b", undefined)).toHaveLength(1);
 });

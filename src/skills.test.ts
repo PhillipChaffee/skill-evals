@@ -5,6 +5,7 @@ import { MAIN_AGENT } from "./agents.js";
 import { plantCase, plugin, script, skillsFolder } from "./testing/plant.js";
 import { scoreSubject } from "./testing/runs.js";
 import { readResults, sandbox, seenBy } from "./testing/sandbox.js";
+import { EXIT } from "./exit-codes.js";
 
 const COPY_UNDER_TEST = "the copy under test\n";
 
@@ -74,7 +75,7 @@ test("run --a none --b <skills dir> reports the no-skills baseline as A", async 
   expect(result.stdout).toMatch(/^- A: no skills$/m);
   expect(result.stdout).toMatch(/`skill_loaded greet` A 0\/1, B 1\/1/);
   expect(result.stdout).toMatch(
-    /^Suite score: 0\.00 \/ 1\.00 \(\+1\.00\) \(1 of 1 cases\)$/m,
+    /^Suite score: 0\.00 \/ 1\.00 \(\+1\.00\) \(1 of 1 cases, A 1 of 1 runs, B 1 of 1 runs\)$/m,
   );
 });
 
@@ -83,7 +84,7 @@ test("a run whose harness lists none of the subject's skills is invalid", async 
     (mine) => ["score", "--subject", mine],
     true,
   );
-  expect(result.status).toBe(1);
+  expect(result.status).toBe(EXIT.invalid);
   expect(records[0]?.subjectLoaded).toBe(false);
   expect(records[0]?.score).toBeNull();
   expect(result.stdout).toMatch(

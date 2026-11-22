@@ -56,6 +56,37 @@ Runs every case against each subject, scores the runs, and writes `results.json`
 
 **Throws `UsageError`.** For a wrong option, case file, or config file, before any harness starts.
 
+### EXIT
+
+What the process exits with. `docs/.../reference/exit-codes.md` is written from this table.
+
+```ts
+const EXIT: {
+  readonly ok: 0;
+  readonly bar: 1;
+  readonly usage: 2;
+  readonly invalid: 3;
+  readonly partial: 4;
+  readonly error: 5;
+  readonly interrupted: 130;
+};
+```
+
+### exitCodeOf()
+
+```ts
+function exitCodeOf(results: Exiting, maxInvalid?: number): ExitCode;
+```
+
+Decides the exit code of a command that ran. This one function serves the command line, `summary.json` and the library, so that they cannot disagree.
+
+| Parameter    | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| `results`    | What `evaluate` wrote to `results.json`.                                    |
+| `maxInvalid` | The share of the planned runs that may be invalid, from 0 to 1. Default: 0. |
+
+**Returns.** 130 for an interrupt, 5 when a run threw, 4 when a limit stopped the command, 3 when a subject directory changed or the invalid runs are above `maxInvalid`, 1 when a pass bar is missed, else 0. A usage error never reaches here: the command line raises it before anything runs.
+
 ### HARNESSES
 
 The harness adapters in default-preference order: the first installed one runs when `--harness` is absent. Pi leads because it has the smallest install, the fastest start, and reports tokens and cost.
@@ -160,15 +191,26 @@ One thing a case expects of a run.
 type Check = RuledCheck | JudgedCheck | DecisionCheck;
 ```
 
+### ExitCode
+
+One of the values of `EXIT`.
+
+```ts
+type ExitCode = (typeof EXIT)[keyof typeof EXIT];
+```
+
 ### Evaluation
 
 What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished.
 
 | Property        | Type                                                                                   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exit`          | `ExitCode`                                                                             | The exit code the command line gives: 0, 1, 3, 4, 5 or 130. `summary.json` holds the same number.                                                                                                                                                                                                                                                                                                                                                                            |
 | `cases`         | `Case[]`                                                                               | Every loaded case, applicable or not.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `applied`       | `Record<string, Case[]>`                                                               | For each harness id, the cases it ran, with the checks that it dropped left out.                                                                                                                                                                                                                                                                                                                                                                                             |
 | `outDir`        | `string`                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `schemaVersion` | `1`                                                                                    | The version of this file's shape.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `meta`          | `RunMeta`                                                                              | How the runs were made: tool and harness versions, models, subject revisions, case hashes.                                                                                                                                                                                                                                                                                                                                                                                   |
 | `subjects`      | `SubjectSummary[]`                                                                     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `harnesses`     | `string[]`                                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `harnessReason` | `string`                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -184,7 +226,7 @@ What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and
 | `commonSet`     | `CommonSet \| null`                                                                    | The score over the cases that apply to every harness that has any, for each harness and subject label. Only that number compares harnesses. Null when fewer than two harnesses have an applicable case.                                                                                                                                                                                                                                                                      |
 | `invalid`       | `string[]`                                                                             | The runs that do not count, each with its reason.                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `sourceChanged` | `string[]`                                                                             | The paths of a subject directory that changed while the command ran, each as the user would type it.                                                                                                                                                                                                                                                                                                                                                                         |
-| `partial`       | `{ reason: "running" \| "error" \| "budget" \| "duration" \| "interrupted"; } \| null` | Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is "running". The last write of a command that stopped early has its reason: "error" when a run threw, "budget" at `maxCost`, "duration" at `maxDuration` (both exit 4), "interrupted" on SIGINT or SIGTERM (exit 130). A command that ran to the end has null. A run in flight at "budget" or "duration" may carry `skippedGraders`; `--resume` repeats it. |
+| `partial`       | `{ reason: "error" \| "interrupted" \| "running" \| "budget" \| "duration"; } \| null` | Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is "running". The last write of a command that stopped early has its reason: "error" when a run threw, "budget" at `maxCost`, "duration" at `maxDuration` (both exit 4), "interrupted" on SIGINT or SIGTERM (exit 130). A command that ran to the end has null. A run in flight at "budget" or "duration" may carry `skippedGraders`; `--resume` repeats it. |
 | `notRun`        | `NotRun[]`                                                                             | The runs of the plan that did not run, in plan order: those that were never started because the command stopped, and those that were started but had their judged and decision checks skipped (they are in `records`, invalid, with `skippedGraders`). Empty for a command that ran to the end. While the command runs, the runs not finished yet.                                                                                                                           |
 | `records`       | `RunRecord[]`                                                                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -217,6 +259,8 @@ What `evaluate` takes. An option that is not set takes its value from the projec
 | `isolated?`           | `boolean \| undefined`                                                                       | Start the harness with nothing loaded but the subject, and invalidate a run that reports more. Default: false.                                                                                                                                                                                                                             |
 | `onWarning?`          | `((text: string) => void) \| undefined`                                                      | Called with a line of text for each key that `lenient` drops.                                                                                                                                                                                                                                                                              |
 | `minScore?`           | `number \| undefined`                                                                        | The pass bar for the suite score of the subject under test.                                                                                                                                                                                                                                                                                |
+| `maxInvalid?`         | `number \| undefined`                                                                        | The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0.                                                                                                                                                                                                                                     |
+| `report?`             | `string[] \| undefined`                                                                      | The report formats the command line writes: "md" to standard output, the others to `report.<ext>` in the output directory. `evaluate` itself writes none. Default: ["md"].                                                                                                                                                                 |
 | `outDir?`             | `string \| undefined`                                                                        | Where results go. Default: a new temp directory.                                                                                                                                                                                                                                                                                           |
 | `jobs?`               | `number \| undefined`                                                                        | How many runs may be in flight at once, a positive integer. Default: 1.                                                                                                                                                                                                                                                                    |
 | `retries?`            | `number \| undefined`                                                                        | Tries after the first for a run that failed for a reason that is not the agent's: a harness crash, a rate limit, or a timeout before the harness produced any agent event (its opening init event does not count). The record's `attempts` lists the error, cost and duration of each earlier attempt. A non-negative integer. Default: 0. |
@@ -238,6 +282,8 @@ What `evaluate` writes to `results.json`.
 
 | Property        | Type                                                                                   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemaVersion` | `1`                                                                                    | The version of this file's shape.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `meta`          | `RunMeta`                                                                              | How the runs were made: tool and harness versions, models, subject revisions, case hashes.                                                                                                                                                                                                                                                                                                                                                                                   |
 | `subjects`      | `SubjectSummary[]`                                                                     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `harnesses`     | `string[]`                                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `harnessReason` | `string`                                                                               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -253,7 +299,7 @@ What `evaluate` writes to `results.json`.
 | `commonSet`     | `CommonSet \| null`                                                                    | The score over the cases that apply to every harness that has any, for each harness and subject label. Only that number compares harnesses. Null when fewer than two harnesses have an applicable case.                                                                                                                                                                                                                                                                      |
 | `invalid`       | `string[]`                                                                             | The runs that do not count, each with its reason.                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `sourceChanged` | `string[]`                                                                             | The paths of a subject directory that changed while the command ran, each as the user would type it.                                                                                                                                                                                                                                                                                                                                                                         |
-| `partial`       | `{ reason: "running" \| "error" \| "budget" \| "duration" \| "interrupted"; } \| null` | Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is "running". The last write of a command that stopped early has its reason: "error" when a run threw, "budget" at `maxCost`, "duration" at `maxDuration` (both exit 4), "interrupted" on SIGINT or SIGTERM (exit 130). A command that ran to the end has null. A run in flight at "budget" or "duration" may carry `skippedGraders`; `--resume` repeats it. |
+| `partial`       | `{ reason: "error" \| "interrupted" \| "running" \| "budget" \| "duration"; } \| null` | Set while the command runs: `results.json` is then a snapshot, rewritten at most every 10 seconds, and `reason` is "running". The last write of a command that stopped early has its reason: "error" when a run threw, "budget" at `maxCost`, "duration" at `maxDuration` (both exit 4), "interrupted" on SIGINT or SIGTERM (exit 130). A command that ran to the end has null. A run in flight at "budget" or "duration" may carry `skippedGraders`; `--resume` repeats it. |
 | `notRun`        | `NotRun[]`                                                                             | The runs of the plan that did not run, in plan order: those that were never started because the command stopped, and those that were started but had their judged and decision checks skipped (they are in `records`, invalid, with `skippedGraders`). Empty for a command that ran to the end. While the command runs, the runs not finished yet.                                                                                                                           |
 | `records`       | `RunRecord[]`                                                                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -399,6 +445,19 @@ One step of a run, in the one shape every harness shares.
 | `isError?`    | `boolean \| undefined`                                                                                         | On a `tool_result`: whether the harness marked the call as failed.                                                                                    |
 | `durationMs?` | `number \| undefined`                                                                                          | On a `tool_result`, where the stream says how long the call took.                                                                                     |
 
+### RunMeta
+
+What a command records about how its runs were made, so that a number can be traced to its tools.
+
+| Property          | Type                                                                          | Description                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toolVersion`     | `string`                                                                      | The version of this package.                                                                                                                                                                                                                      |
+| `harnessVersions` | `Record<string, string \| null>`                                              | For each harness that the command could start, the first line of `<bin> --version`; null when that failed.                                                                                                                                        |
+| `models`          | `{ agent: string \| null; judge: string \| null; decision: string \| null; }` | The models of the agent, the judge and the decision checks; null when not set.                                                                                                                                                                    |
+| `subjects`        | `{ label: string; revision: string; dirty: boolean \| null; }[]`              | The subjects. `revision` is the content hash of what a run loads. `dirty` is true when the working tree has uncommitted changes under the subject's path, false for a git ref, and null when the subject is not in a git repository or is "none". |
+| `caseHashes`      | `Record<string, string>`                                                      | The hash of each case as a run sees it, by case id.                                                                                                                                                                                               |
+| `isolated`        | `boolean`                                                                     | Whether the command ran with `--isolated`.                                                                                                                                                                                                        |
+
 ### Progress
 
 How far a command has got.
@@ -486,21 +545,32 @@ Everything kept about one run.
 
 A case's scores, keyed by subject label.
 
-| Property    | Type                             | Description |
-| ----------- | -------------------------------- | ----------- |
-| `id`        | `string`                         |             |
-| `weight`    | `number`                         |             |
-| `minScore?` | `number \| undefined`            |             |
-| `scores`    | `Record<string, number \| null>` |             |
+| Property    | Type                             | Description                                   |
+| ----------- | -------------------------------- | --------------------------------------------- |
+| `id`        | `string`                         |                                               |
+| `weight`    | `number`                         |                                               |
+| `minScore?` | `number \| undefined`            |                                               |
+| `scores`    | `Record<string, number \| null>` |                                               |
+| `runs`      | `Record<string, RunCount>`       | The runs behind each score, by subject label. |
 
 ### CommonSet
 
 The score over the cases that apply to every harness that has any, for each harness and subject label.
 
-| Property | Type                                             | Description                                                |
-| -------- | ------------------------------------------------ | ---------------------------------------------------------- |
-| `cases`  | `string[]`                                       | The ids of the cases that apply to all of those harnesses. |
-| `suite`  | `Record<string, Record<string, number \| null>>` |                                                            |
+| Property | Type                                             | Description                                                         |
+| -------- | ------------------------------------------------ | ------------------------------------------------------------------- |
+| `cases`  | `string[]`                                       | The ids of the cases that apply to all of those harnesses.          |
+| `suite`  | `Record<string, Record<string, number \| null>>` |                                                                     |
+| `runs`   | `Record<string, Record<string, RunCount>>`       | The runs behind each of those scores, by harness and subject label. |
+
+### RunCount
+
+How many runs stand behind a score: the valid ones and the ones the plan holds.
+
+| Property  | Type     | Description                                 |
+| --------- | -------- | ------------------------------------------- |
+| `valid`   | `number` | Runs with a score. An invalid run has none. |
+| `planned` | `number` | Runs the plan holds, finished or not.       |
 
 ### SuiteScore
 
@@ -513,6 +583,37 @@ One harness's case scores, and its suite score keyed by subject label.
 | `suite`      | `Record<string, number \| null>` |                                                                                        |
 | `applicable` | `number`                         | How many cases apply to the harness. Only these are in `cases` and in the suite score. |
 | `total`      | `number`                         | How many cases the suite has, applicable or not.                                       |
+| `runs`       | `Record<string, RunCount>`       | The runs behind the suite score, by subject label: the sum over its applicable cases.  |
+
+### Summary
+
+What `summary.json` holds: the figures a gate or a dashboard reads, in a stable shape.
+
+| Property        | Type                                                         | Description                                                                                                            |
+| --------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `schemaVersion` | `1`                                                          |                                                                                                                        |
+| `exit`          | `ExitCode`                                                   | The exit code of the command, from the same function as the command line's.                                            |
+| `suites`        | `SummarySuite[]`                                             |                                                                                                                        |
+| `belowBar`      | `string[]`                                                   | The pass bars that were not reached, each in words.                                                                    |
+| `invalid`       | `number`                                                     | How many finished runs are invalid. A run that did not run, because the command stopped, is not counted.               |
+| `notApplicable` | `number`                                                     | How many pairs of harness and case were not applicable.                                                                |
+| `partial`       | `"error" \| "interrupted" \| "budget" \| "duration" \| null` | Why the command stopped early: "budget", "duration", "interrupted" or "error"; null for a command that ran to the end. |
+| `costUsd`       | `number \| null`                                             | The cost of every run, judge, decision and failed attempt that reported one; null when none did.                       |
+| `durationMs`    | `number`                                                     | The time of every run and failed attempt, added up. Runs in parallel overlap, so it is not wall time.                  |
+
+### SummarySuite
+
+One harness and subject: the score and how many runs stand behind it.
+
+| Property      | Type             | Description                                         |
+| ------------- | ---------------- | --------------------------------------------------- |
+| `harness`     | `string`         |                                                     |
+| `label`       | `string`         | The subject's label: "subject", "a" or "b".         |
+| `score`       | `number \| null` | The suite score; null when no case has a valid run. |
+| `applicable`  | `number`         | How many cases apply to the harness.                |
+| `total`       | `number`         | How many cases the suite has.                       |
+| `validRuns`   | `number`         |                                                     |
+| `plannedRuns` | `number`         |                                                     |
 
 ### SubjectSummary
 

@@ -12,6 +12,7 @@ import {
   run,
   scores,
 } from "./testing/target.js";
+import { EXIT } from "./exit-codes.js";
 
 test("the agent target cases tell the agent nothing about being graded", () => {
   for (const id of [
@@ -154,7 +155,7 @@ test("kit editing: a script that edits the source directory itself makes the com
   });
   fs.cpSync(path.join(TARGET, "subject"), source, { recursive: true });
   const ran = await run("kit-editing-in-isolation.edits-source", source);
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(ran.stderr).toContain(
     `the subject directory changed during the run: ${path.join(source, "bug-fix/SKILL.md")}`,
   );

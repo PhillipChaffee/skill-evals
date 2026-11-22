@@ -1,15 +1,16 @@
-import type { Case } from "./cases.js";
-import type { Check } from "./checks/index.js";
-import { describeCheck, isDecision, isJudged } from "./checks/index.js";
-import type { Evaluation } from "./evaluate.js";
-import { noteSections } from "./report-notes.js";
-import type { RunRecord, Usage } from "./run.js";
-import { invalidReason } from "./run.js";
-import type { SuiteScore } from "./score.js";
-import { formatScore } from "./score.js";
-import type { Coverage } from "./select.js";
-import { coverageOf } from "./select.js";
-import { describeSubject } from "./subject.js";
+import type { Case } from "../cases.js";
+import type { Check } from "../checks/index.js";
+import { describeCheck, isDecision, isJudged } from "../checks/index.js";
+import type { Evaluation } from "../evaluate.js";
+import { runsText } from "./counts.js";
+import { noteSections } from "./notes.js";
+import type { RunRecord, Usage } from "../run.js";
+import { invalidReason } from "../run.js";
+import type { SuiteScore } from "../score.js";
+import { formatScore } from "../score.js";
+import type { Coverage } from "../select.js";
+import { coverageOf } from "../select.js";
+import { describeSubject } from "../subject.js";
 
 const MS_PER_SECOND = 1000;
 const COST_DECIMALS = 4;
@@ -84,18 +85,25 @@ function versus(
  * Sums up how one check went over the valid runs of one subject.
  * @param check - Decides the form: a rule gives pass or fail, a judge or a decision model gives a score.
  * @param index - Its place among the case's checks.
- * @param records - The valid runs.
+ * @param runs - What stands behind the rate.
+ * @param runs.valid - The valid runs of the case and subject.
+ * @param runs.planned - How many runs the plan holds for them.
  * @returns For a deterministic check the share of runs that passed it, for a judged check or a decision check its
- *   mean score.
+ *   mean score with the number of runs behind it.
  */
-function checkRate(check: Check, index: number, records: RunRecord[]): string {
+function checkRate(
+  check: Check,
+  index: number,
+  runs: { valid: RunRecord[]; planned: number },
+): string {
+  const { valid: records, planned } = runs;
   if (records.length === 0) return "n/a";
   const total = records.reduce(
     (sum, record) => sum + (record.checks[index]?.score ?? 0),
     0,
   );
   return isJudged(check) || isDecision(check)
-    ? formatScore(total / records.length)
+    ? `${formatScore(total / records.length)} (${String(records.length)} of ${String(planned)} runs)`
     : `${String(total)}/${String(records.length)}`;
 }
 
@@ -159,16 +167,21 @@ function caseRow(caseDef: Case, section: Section): string {
         !invalidReason(record),
     ),
   }));
+  const scored = suite.cases.find((one) => one.id === caseDef.id);
   const checks = caseDef.checks.map((check, index) => {
     const rates = valid.map(
-      ({ label, runs }) => tag(label) + checkRate(check, index, runs),
+      ({ label, runs }) =>
+        tag(label) +
+        checkRate(check, index, {
+          valid: runs,
+          planned: scored?.runs[label]?.planned ?? 0,
+        }),
     );
     return `\`${describeCheck(check)}\` ${rates.join(", ")}`;
   });
-  const scores = suite.cases.find((scored) => scored.id === caseDef.id)?.scores;
   const cells = [
     caseDef.id,
-    versus(Object.values(scores ?? {}), formatScore),
+    `${versus(Object.values(scored?.scores ?? {}), formatScore)} ${runsText(scored?.runs ?? {}, labels)}`,
     checks.join("<br>"),
     ...METRICS.map((metric) =>
       versus(
@@ -230,7 +243,7 @@ function harnessSection(section: Section): string {
         ]
       : []),
     "",
-    `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases)`,
+    `Suite score: ${versus(Object.values(suite.suite), formatScore)} (${String(suite.applicable)} of ${String(suite.total)} cases, ${runsText(suite.runs, labels).slice(1, -1)})`,
     ...scorerLine(
       "Judge",
       records.flatMap((record) => record.judge ?? []),
@@ -291,6 +304,7 @@ function coverageSection(evaluation: Evaluation): string[] {
 function commonSection(evaluation: Evaluation): string[] {
   const { commonSet } = evaluation;
   if (!commonSet) return [];
+  const labels = evaluation.subjects.map((subject) => subject.label);
   return [
     "",
     "## Common set",
@@ -299,7 +313,7 @@ function commonSection(evaluation: Evaluation): string[] {
     "",
     ...Object.entries(commonSet.suite).map(
       ([harness, scores]) =>
-        `- ${harness}: ${versus(Object.values(scores), formatScore)}`,
+        `- ${harness}: ${versus(Object.values(scores), formatScore)} ${runsText(commonSet.runs[harness] ?? {}, labels)}`,
     ),
   ];
 }

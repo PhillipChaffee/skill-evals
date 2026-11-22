@@ -108,6 +108,7 @@ export default defineConfig({
           label: "Reference",
           items: [
             "reference/commands",
+            "reference/exit-codes",
             "reference/checks",
             "reference/config",
             "reference/api",

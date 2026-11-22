@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { requireEnvNames } from "./env.js";
+import { reportFormats } from "./report/formats.js";
 import { globToRegExp } from "./glob.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
 import { UsageError, messageOf } from "./scope.js";
@@ -56,6 +57,8 @@ export const CONFIG_KEYS: Record<
   decisionUrl: "string",
   decisionTimeout: "number",
   minScore: "number",
+  maxInvalid: "number",
+  report: "string[]",
   maxJudgedWeightShare: "number",
   lenient: "boolean",
   isolated: "boolean",
@@ -93,6 +96,10 @@ export interface Config {
   decisionUrl?: string;
   decisionTimeout?: number;
   minScore?: number;
+  /** The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0. */
+  maxInvalid?: number;
+  /** The report formats to write: "md", "json", "junit", "html". Default: ["md"]. */
+  report?: string[];
   /** The share of a case's weight that judge and decision checks may carry before `validate` warns. Default: 0.5. */
   maxJudgedWeightShare?: number;
   lenient?: boolean;
@@ -118,7 +125,7 @@ function checkValue(file: string, key: string, value: unknown): void {
       throw new UsageError(`${file}: "${key}" must be a ${type}`);
     }
     if (
-      key === "maxJudgedWeightShare" &&
+      (key === "maxJudgedWeightShare" || key === "maxInvalid") &&
       !((value as number) >= 0 && (value as number) <= 1)
     ) {
       throw new UsageError(`${file}: "${key}" must be a number from 0 to 1`);
@@ -134,6 +141,10 @@ function checkValue(file: string, key: string, value: unknown): void {
         throw new UsageError(`${file}: "${key}" has an empty glob`);
       globToRegExp(glob);
     }
+    return;
+  }
+  if (key === "report") {
+    reportFormats({ report: value as string[] }, `${file}: "${key}"`);
     return;
   }
   requireEnvNames(value as string[], `${file}: "${key}"`);

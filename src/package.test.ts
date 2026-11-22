@@ -80,7 +80,9 @@ test(
     ];
     const scored = run(bin, "score", "--subject", "none", ...flags);
     expect(scored.status, scored.stderr).toBe(0);
-    expect(scored.stdout).toMatch(/^Suite score: 1\.00 \(1 of 1 cases\)$/m);
+    expect(scored.stdout).toMatch(
+      /^Suite score: 1\.00 \(1 of 1 cases, 1 of 1 runs\)$/m,
+    );
     expect(fs.existsSync(path.join(project, "results/results.json"))).toBe(
       true,
     );
@@ -89,7 +91,7 @@ test(
       'import("skill-evals").then((api) => console.log(Object.keys(api).sort().join()))';
     const imported = run(process.execPath, "-e", script);
     expect(imported.stdout.trim(), imported.stderr).toBe(
-      "HARNESSES,evaluate,loadCases",
+      "EXIT,HARNESSES,evaluate,exitCodeOf,loadCases",
     );
   },
   TIMEOUT_MS,

@@ -33,6 +33,20 @@ export function requireUsable(options: Config): number {
 }
 
 /**
+ * Reads the share of the planned runs that may be invalid.
+ * @param options - The options after the config file was applied.
+ * @returns `maxInvalid`; 0 when it is not set.
+ * @throws {UsageError} When it is not a number from 0 to 1.
+ */
+export function requireMaxInvalid(options: Config): number {
+  const { maxInvalid = 0 } = options;
+  if (!isUnitScore(maxInvalid)) {
+    throw new UsageError("maxInvalid must be a number from 0 to 1");
+  }
+  return maxInvalid;
+}
+
+/**
  * Connects to the decision model when a case needs one, before any harness starts.
  * @param cases - The cases of the suite.
  * @param options - The options after the config file was applied.

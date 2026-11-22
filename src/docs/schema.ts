@@ -8,6 +8,7 @@ import { HARNESSES } from "../harnesses/index.js";
 import { MATCHER_KEYS } from "../matchers.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { CONFIG_FILE, CONFIG_KEYS } from "../project.js";
+import { FORMATS } from "../report/formats.js";
 import { SCHEMA_KEY } from "../schema-key.js";
 import { VARIANT_KEYS } from "../variants.js";
 import { configMeaning } from "./reference.js";
@@ -328,7 +329,13 @@ export function configSchema(): Schema {
             title: key,
             description: configMeaning(key),
             ...byType[type],
-            ...(key === "maxJudgedWeightShare" && { minimum: 0, maximum: 1 }),
+            ...((key === "maxJudgedWeightShare" || key === "maxInvalid") && {
+              minimum: 0,
+              maximum: 1,
+            }),
+            ...(key === "report" && {
+              items: { enum: Object.keys(FORMATS) },
+            }),
             ...(key === "env" && {
               items: { type: "string", pattern: ENV_NAME_PATTERN },
             }),

@@ -2,6 +2,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 import { evaluate } from "./evaluate.js";
 import { scoreArgs, scriptedCase } from "./testing/budget.js";
+import { EXIT } from "./exit-codes.js";
 
 const RESULTS = "results";
 const FOREIGN = { name: "org", path: "/opt/org/plugin" };
@@ -48,7 +49,7 @@ test("a crash is not retried without --retries, and the run is invalid", async (
   });
   const out = path.join(box.root, "results");
   const ran = await box.cli(scoreArgs(box, "results"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(1);
   const [record] = readResults(out).records;
   expect(record).not.toHaveProperty("attempts");
@@ -62,7 +63,7 @@ test("the retries run out: three crashes with --retries 2 leave an invalid run w
   });
   const out = path.join(box.root, "results");
   const ran = await box.cli(scoreArgs(box, "results", "--retries", "2"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(3);
   const [record] = readResults(out).records;
   expect(record?.attempts).toHaveLength(2);
@@ -123,7 +124,7 @@ test("a timeout after the agent did something is not retried", async () => {
   });
   const out = path.join(box.root, "results");
   const ran = await box.cli(scoreArgs(box, "results", "--retries", "2"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(1);
   expect(readResults(out).records[0]).not.toHaveProperty("attempts");
 });
@@ -133,7 +134,7 @@ test("a setup failure is not retried", async () => {
   scriptedCase(box, "broken", { more: { setup: [{ run: "exit 3" }] } });
   const out = path.join(box.root, "results");
   const ran = await box.cli(scoreArgs(box, "results", "--retries", "2"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   // The harness never started, so there was nothing to try again.
   expect(startsOf(box)).toBe(0);
   const [record] = readResults(out).records;
@@ -180,7 +181,7 @@ test("an error with a stack trace that has 429 and a rate-limit path in it is no
     before: [{ onStart: [1, 2, 3], step: { fail: trace } }],
   });
   const ran = await box.cli(scoreArgs(box, RESULTS, "--retries", "2"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(1);
 });
 
@@ -204,7 +205,7 @@ test("a crash in a run that loaded outside the subject is not retried", async ()
   const ran = await box.cli(
     scoreArgs(box, RESULTS, "--isolated", "--retries", "2"),
   );
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(1);
   const [record] = readResults(path.join(box.root, RESULTS)).records;
   expect(record?.unexpected).toEqual(["/opt/org/plugin"]);
@@ -221,7 +222,7 @@ test("retries in the config file apply, and the flag wins", async () => {
   expect(ran.status, ran.stderr).toBe(0);
   expect(startsOf(box)).toBe(2);
   const off = await box.cli(scoreArgs(box, "second", "--retries", "0"));
-  expect(off.status, off.stderr).toBe(1);
+  expect(off.status, off.stderr).toBe(EXIT.invalid);
 });
 
 test("a run that reports a rate limit is not retried without retries", async () => {
@@ -231,6 +232,6 @@ test("a run that reports a rate limit is not retried without retries", async () 
   });
   // Without retries the run is made once, whatever its error says.
   const ran = await box.cli(scoreArgs(box, "results"));
-  expect(ran.status).toBe(1);
+  expect(ran.status).toBe(EXIT.invalid);
   expect(startsOf(box)).toBe(1);
 });
