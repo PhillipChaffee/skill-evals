@@ -5,22 +5,12 @@ description: Exit codes, and what a run needs on a machine that is not yours.
 
 `run` and `score` can gate a pull request: the exit code says whether the suite passed.
 
-| Exit code | Meaning                                                                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0         | Every run is valid and every pass bar is reached.                                                                                           |
-| 1         | A score is under its bar.                                                                                                                   |
-| 2         | A wrong command line, case file, config file, or subject. A decision check with no decision model or no API key. Also Windows.              |
-| 3         | More of the planned runs are invalid than `--max-invalid` allows (by default, any), or the subject directory changed while the command ran. |
-| 4         | The command stopped before the end because it reached `--max-cost` or `--max-duration`. `results.json` has `partial` set.                   |
-| 5         | An internal failure that is not a usage error. The stack trace is on standard error.                                                        |
-| 130       | SIGINT or SIGTERM ended the command. The results so far are written first.                                                                  |
+`run` and `score` exit with a code that says why they did not pass. [Exit codes](../reference/exit-codes.md) lists every code, says which wins when several apply, and gives the codes of `check` and `validate`. Test for success, `0`, and for the cause when you need it.
 
-When several apply, the first of 2, 130, 5, 4, 3 and 1 wins. [Exit codes](../reference/exit-codes.md) says more, and lists the codes of `check` and `validate`.
-
-A run that is invalid used to exit 1, and now exits 3, so a pipeline that treated every non-zero code alike keeps working, and one that tested for 1 must change. To tolerate a few, pass `--max-invalid 0.1`: the command then exits 3 only when more than a tenth of the planned runs are invalid.
+A run that is invalid used to exit with the code of a missed bar, and now has a code of its own, so a pipeline that tested for that code must change. To tolerate a few invalid runs, pass `--max-invalid 0.1`: the command then gives that code only when more than a tenth of the planned runs are invalid. A case with no valid run at all is never tolerated.
 
 - **Read the summary.** Every `run` and `score` writes `summary.json` in the output directory, with the exit code and the figures a gate needs. `--report json,junit` adds `report.json` and `report.xml`, which most CI systems show as test results. [Read the report](read-the-report.md#the-summary-and-the-report-formats) has the fields.
-- **Set the bar.** `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, and `minScore` in a `case.json` does the same for one case. See [Set a pass bar](pass-bars.md).
+- **Set the bar.** `--min-score 0.8` makes the command exit with the missed-bar code when the suite score is under 0.8, and `minScore` in a `case.json` does the same for one case. See [Set a pass bar](pass-bars.md).
 - **Isolate the run.** `--isolated` (or `"isolated": true` in the config file) starts the harness with nothing loaded but the subject, and checks the harness's own report of what it loaded. A run that reports a plugin, a prefixed skill or agent, or an MCP server that is not the subject's, such as a plugin that your organization installs on the runner, is invalid with the reason `loaded outside the subject: <names>`. A harness that should report what it loaded and does not makes the run invalid too. Use it in CI, where the machine's settings can change a score without a case change. It covers only what the report lists. It does not prove that managed policy settings (hooks, environment, permissions), a managed `CLAUDE.md`, rules, hooks and managed agents are off. User level is the throwaway home plus anything the account syncs into it: synced skills and plugins are detected from the files they leave, and the `user` setting source also lets the organization's default model apply, so pass `--model` in CI; [Harnesses](../agents/harnesses.md) says what each harness covers and which harnesses take the flag (today Claude Code only).
 - **Name the model.** Each run starts in a new, empty home directory, so no settings and no default model are there. Pass `--model`, or set `model` in the [config file](../reference/config.md). Without it each harness uses its built-in default, which may be a provider you have no key for.
 - **Give the harness a login.** A run copies the harness's credential files into its new home. A login stored in the operating system's keychain may not follow. Run `skill-evals check` on the machine first, and if it reports a login error, set the harness's API key variable.
@@ -55,9 +45,9 @@ Both are checked before each run starts and before each retry. When the summed c
 }
 ```
 
-The command then writes `results.json` with `"partial": { "reason": "budget" }` (or `"duration"`) and `notRun`, the list of the runs that were never started or had their graders skipped (`{ "harness", "caseId", "subject", "rep" }` each). It prints the report, which has a "Stopped early" section: the limit, "K of N runs did not run; scores cover finished runs only" for each harness and subject, and a note when the two subjects of a comparison finished different numbers of runs. It exits 4. A stopped command did not succeed, whatever its scores say. Continue it with `--resume <dir>`; a run with `skippedGraders` is repeated in full, because only a valid record is reused. A later command, `rejudge`, will score such a run without repeating the agent, and will be the cheap way to finish it.
+The command then writes `results.json` with `"partial": { "reason": "budget" }` (or `"duration"`) and `notRun`, the list of the runs that were never started or had their graders skipped (`{ "harness", "caseId", "subject", "rep" }` each). It prints the report, which has a "Stopped early" section: the limit, "K of N runs did not run; scores cover finished runs only" for each harness and subject, and a note when the two subjects of a comparison finished different numbers of runs. It exits with the partial code. A stopped command did not succeed, whatever its scores say. Continue it with `--resume <dir>`; a run with `skippedGraders` is repeated in full, because only a valid record is reused. A later command, `rejudge`, will score such a run without repeating the agent, and will be the cheap way to finish it.
 
-`--max-cost` is a usage error (exit 2, before any run) when it cannot count the whole command:
+`--max-cost` is a usage error (a usage error, before any run) when it cannot count the whole command:
 
 - a selected harness does not report its cost (today `codex` and `cursor`);
 - the judge cannot report one: the judge API (`--judge-api`) reports no cost, and neither does a judge harness that reports none;
@@ -107,9 +97,9 @@ SIGINT (Ctrl-C) and SIGTERM, which most CI systems send to cancel a job, end the
 1. The process group of each harness that is running is killed. Nothing is recorded for them. A process that left the group with `setsid` can survive; the tool does not chase it.
 2. `results.json` is written with the finished runs and `"partial": { "reason": "interrupted" }`.
 3. The lock on the output directory is released.
-4. The command exits 130.
+4. The command exits with the interrupted code.
 
-A second signal while this runs exits 130 at once. Continue with `--resume <dir>`; the runs that were in flight start again.
+A second signal while this runs exits at once. Continue with `--resume <dir>`; the runs that were in flight start again.
 
 ## Resume in CI
 

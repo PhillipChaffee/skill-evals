@@ -45,6 +45,8 @@ export interface Store {
   flush: (results: Results) => void;
   /** The last write of a command, whatever way it ended: `flush`, then `summary.json` the same way. Interim writes never touch the summary. */
   finish: (results: Results, summary: Summary) => void;
+  /** Writes `summary.json` alone, after the reports, which the last write of a command that ran to the end waits for. */
+  writeSummary: (summary: Summary) => void;
   /**
    * Reads `results.jsonl` for a resume: the records that `reusable` finds. A last line that is not a valid run is
    * dropped, with one warning, and removed from the file so that the next append starts a line.
@@ -184,6 +186,9 @@ export function openStore(outDir: string, resume: boolean): Store {
     },
     finish: (results, summary) => {
       writeAtomic(path.join(outDir, RESULTS_FILE), results);
+      writeAtomic(path.join(outDir, SUMMARY_FILE), summary);
+    },
+    writeSummary: (summary) => {
       writeAtomic(path.join(outDir, SUMMARY_FILE), summary);
     },
     load: () => {

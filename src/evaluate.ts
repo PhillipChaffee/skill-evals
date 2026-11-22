@@ -2,7 +2,15 @@ import type { CaseMeta } from "./case-meta.js";
 import type { Case } from "./cases.js";
 import type { ExitCode } from "./exit-codes.js";
 import { exitCodeOf } from "./exit-codes.js";
-import { finalWrite, metaOfCommand, summarize, writeLast } from "./finish.js";
+import {
+  clearStale,
+  evaluationOf,
+  finalWrite,
+  metaOfCommand,
+  noteFailure,
+  summarize,
+  writeLast,
+} from "./finish.js";
 import type { RunMeta } from "./meta.js";
 import { basePlan, prepare, resolveAll } from "./prepare.js";
 import type { Prepared } from "./prepare.js";
@@ -64,6 +72,11 @@ export interface EvaluateOptions extends SelectionOptions {
   isolated?: boolean | undefined;
   /** Called with a line of text for each key that `lenient` drops. */
   onWarning?: ((text: string) => void) | undefined;
+  /**
+   * Called when the runs are over and `results.json` is written, before `summary.json`: the command line writes its
+   * reports here. When it throws, `results.json` and `summary.json` say "error" (exit 5), and `evaluate` rejects.
+   */
+  onFinal?: ((evaluation: Evaluation) => void) | undefined;
   /** The pass bar for the suite score of the subject under test. */
   minScore?: number | undefined;
   /** The share of the planned runs that may be invalid before the command exits 3, from 0 to 1. Default: 0. */
@@ -103,6 +116,10 @@ export interface EvaluateOptions extends SelectionOptions {
 export interface Results {
   /** The version of this file's shape. */
   schemaVersion: 1;
+  /** The pass bar for the suite score, `--min-score`; null when none was set. */
+  minScore: number | null;
+  /** The share of the planned runs that may be invalid, `--max-invalid`. */
+  maxInvalid: number;
   /** How the runs were made: tool and harness versions, models, subject revisions, case hashes. */
   meta: RunMeta;
   subjects: SubjectSummary[];
@@ -150,9 +167,9 @@ export interface Results {
   records: RunRecord[];
 }
 
-/** What `evaluate` returns. The evaluation succeeded when `belowBar`, `invalid` and `sourceChanged` are all empty and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished. */
+/** What `evaluate` returns. The evaluation succeeded when `exit` is 0, that is when `belowBar`, `sourceChanged` and `invalid` (within `maxInvalid`) are clear, every case has a valid run, and `partial` is null: a command that stopped early (`partial` set, `notRun` listing what did not run) scored only the runs that finished. */
 export interface Evaluation extends Results {
-  /** The exit code the command line gives: 0, 1, 3, 4, 5 or 130. `summary.json` holds the same number. */
+  /** The exit code the command line gives: 0, 1, 3 or 4. A failure rejects, and a signal ends the process, so 5 and 130 are never returned. `summary.json` holds the same number. */
   exit: ExitCode;
   /** Every loaded case, applicable or not. */
   cases: Case[];
@@ -161,65 +178,105 @@ export interface Evaluation extends Results {
   outDir: string;
 }
 
+/** What the caller hooks into, and when the command started. */
+interface Hooks {
+  onRun: EvaluateOptions["onRun"];
+  onFinal: EvaluateOptions["onFinal"];
+  began: number;
+}
+
 /**
  * Makes the runs, writing each record as its run ends, and sums them up.
  * @param prepared - What `prepare` returned.
  * @param subjects - The subjects, resolved.
- * @param hooks - The hook of the caller, and when the command started.
+ * @param hooks - The output directory, which is locked, the hooks of the caller, and when the command started.
+ * @param hooks.outDir - The output directory.
  * @param hooks.onRun - Called with each run's record as it ends.
+ * @param hooks.onFinal - Called when `results.json` is written, before `summary.json`.
+ * @param hooks.began - When the command started, which `maxDuration` counts from.
+ * @returns The results.
+ */
+async function runLocked(
+  prepared: Prepared,
+  subjects: Subject[],
+  hooks: Hooks & { outDir: string },
+): Promise<Results> {
+  const { outDir } = hooks;
+  const { context } = prepared;
+  const { options, resumed } = context;
+  // Another command may have filled the directory while the subjects were exported, and before it was locked.
+  if (resumed === undefined) requireFresh(outDir);
+  clearStale(outDir);
+  const store = openStore(outDir, resumed !== undefined);
+  const finished = {
+    ...context,
+    subjects,
+    meta: await metaOfCommand(context, subjects),
+  };
+  const { records, stopped } = await runAll({
+    ...basePlan(context, subjects, outDir),
+    useCache: resumed !== undefined || (options.useCache ?? false),
+    store,
+    reused: resumed === undefined ? new Map<string, RunRecord>() : store.load(),
+    flush: (
+      records,
+      reason: Exclude<Results["partial"], null>["reason"] = "running",
+    ) => {
+      const results = summarize({
+        ...finished,
+        records,
+        sourceChanged: [],
+        partial: { reason },
+      });
+      if (reason === "running") store.flush(results);
+      else writeLast(store, results, finished.maxInvalid);
+    },
+    onRun: hooks.onRun,
+    began: hooks.began,
+    rateLimitBackoffMs: options.rateLimitBackoffMs,
+  });
+  return finalWrite(store, finished, {
+    records,
+    stopped,
+    after: (results, exit) => {
+      hooks.onFinal?.(evaluationOf(results, context, { outDir, exit }));
+    },
+  });
+}
+
+/**
+ * Locks the output directory and makes the runs in it. A failure that is not a usage error leaves a summary that says
+ * exit 5, when none was written.
+ * @param prepared - What `prepare` returned.
+ * @param subjects - The subjects, resolved.
+ * @param hooks - See `runLocked`.
+ * @param hooks.onRun - Called with each run's record as it ends.
+ * @param hooks.onFinal - Called when `results.json` is written, before `summary.json`.
  * @param hooks.began - When the command started, which `maxDuration` counts from.
  * @returns The results and the output directory.
  */
 async function runSuite(
   prepared: Prepared,
   subjects: Subject[],
-  hooks: { onRun: EvaluateOptions["onRun"]; began: number },
+  hooks: Hooks,
 ): Promise<{ results: Results; outDir: string }> {
   const { context } = prepared;
-  const { options, resumed } = context;
-  const outDir = resumed ?? outputDir(options.outDir, context.cwd);
-  if (resumed !== undefined && context.model === undefined) {
+  const outDir =
+    context.resumed ?? outputDir(context.options.outDir, context.cwd);
+  if (context.resumed !== undefined && context.model === undefined) {
     console.error(
       "skill-evals: warning: --resume without --model: reused runs may come from a different default model",
     );
   }
   const release = lockDir(outDir);
   try {
-    // Another command may have filled the directory while the subjects were exported, and before it was locked.
-    if (resumed === undefined) requireFresh(outDir);
-    const store = openStore(outDir, resumed !== undefined);
-    const finished = {
-      ...context,
-      subjects,
-      meta: metaOfCommand(context, subjects),
-    };
-    const { records, stopped } = await runAll({
-      ...basePlan(context, subjects, outDir),
-      useCache: resumed !== undefined || (options.useCache ?? false),
-      store,
-      reused:
-        resumed === undefined ? new Map<string, RunRecord>() : store.load(),
-      flush: (
-        records,
-        reason: Exclude<Results["partial"], null>["reason"] = "running",
-      ) => {
-        const results = summarize({
-          ...finished,
-          records,
-          sourceChanged: [],
-          partial: { reason },
-        });
-        if (reason === "running") store.flush(results);
-        else writeLast(store, results, finished.maxInvalid);
-      },
-      onRun: hooks.onRun,
-      began: hooks.began,
-      rateLimitBackoffMs: options.rateLimitBackoffMs,
-    });
     return {
-      results: finalWrite(store, finished, { records, stopped }),
+      results: await runLocked(prepared, subjects, { ...hooks, outDir }),
       outDir,
     };
+  } catch (error) {
+    noteFailure(outDir, error);
+    throw error;
   } finally {
     release();
   }
@@ -236,23 +293,21 @@ async function runSuite(
  */
 export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const began = Date.now();
-  const { onRun, ...rest } = given;
+  const { onRun, onFinal, ...rest } = given;
   const prepared = prepare(rest);
   const subjects: Subject[] = [];
   try {
     resolveAll(prepared, subjects);
     const { results, outDir } = await runSuite(prepared, subjects, {
       onRun,
+      onFinal,
       began,
     });
-    const { cases, parts, maxInvalid } = prepared.context;
-    return {
-      ...results,
-      exit: exitCodeOf(results, maxInvalid),
-      cases,
-      applied: parts.ran,
+    const { maxInvalid } = prepared.context;
+    return evaluationOf(results, prepared.context, {
       outDir,
-    };
+      exit: exitCodeOf(results, maxInvalid),
+    });
   } finally {
     for (const subject of subjects) subject.dispose();
   }

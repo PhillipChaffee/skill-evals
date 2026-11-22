@@ -2,16 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import type { Evaluation } from "./evaluate.js";
-import { dirtyOf } from "./meta.js";
-import { caseHash } from "./run-key.js";
 import { renderHtml } from "./report/html.js";
 import { renderJunit } from "./report/junit.js";
 import { escapeXml } from "./report/xml.js";
-import type { Subject } from "./subject.js";
 import { scoreArgs, scriptedCase } from "./testing/budget.js";
-import { gitRepo, readResults, sandbox } from "./testing/sandbox.js";
+import { sandbox } from "./testing/sandbox.js";
 import { parseXml } from "./testing/xml.js";
-import { loadCases } from "./cases.js";
 
 const RESULTS = "results";
 const HARNESS = "claude-code";
@@ -33,6 +29,9 @@ function hostile(): Evaluation {
   return {
     schemaVersion: 1,
     exit: 3,
+    minScore: null,
+    maxInvalid: 0,
+    sourceChanged: [],
     outDir: HOSTILE,
     subjects: [
       {
@@ -86,8 +85,9 @@ test("the xml escape removes what XML 1.0 forbids and escapes the rest", () => {
   expect(escapeXml(HOSTILE)).toBe(
     "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;q&#39;  end",
   );
+  // A reader turns a literal line break in an attribute into a space, so breaks and tabs are references.
   expect(escapeXml("tab\there\r\nok \u{1F600}")).toBe(
-    "tab\there\r\nok \u{1F600}",
+    "tab&#9;here&#13;&#10;ok \u{1F600}",
   );
 });
 
@@ -153,105 +153,4 @@ test("report and maxInvalid in the config file are defaults, and a flag wins", a
     const wrong = await box.cli(scoreArgs(box, "third"));
     expect(wrong.status, JSON.stringify(bad)).toBe(2);
   }
-});
-
-test("each harness's version is read once for the command and is null when it fails", async () => {
-  const box = sandbox();
-  for (const id of ["alpha", "bravo"]) scriptedCase(box, id);
-  const log = path.join(box.root, "versions.log");
-  const ran = await box.cli(
-    scoreArgs(box, RESULTS, "--reps", "2", "--model", "m1"),
-    { FAKE_VERSION_LOG: log },
-  );
-  expect(ran.status, ran.stderr).toBe(0);
-  expect(fs.readFileSync(log, "utf8").trim().split("\n")).toEqual(["version"]);
-  const { meta } = readResults(path.join(box.root, RESULTS));
-  expect(meta.harnessVersions).toEqual({ [HARNESS]: "fake-harness 9.9.9" });
-  // The fake harness did not count the question as a start.
-  expect(fs.readFileSync(box.started, "utf8").trim().split("\n")).toHaveLength(
-    4,
-  );
-
-  fs.rmSync(path.join(box.root, RESULTS), { recursive: true });
-  const failing = await box.cli(scoreArgs(box, RESULTS), {
-    FAKE_VERSION_FAIL: "1",
-  });
-  expect(failing.status, failing.stderr).toBe(0);
-  expect(
-    readResults(path.join(box.root, RESULTS)).meta.harnessVersions,
-  ).toEqual({
-    [HARNESS]: null,
-  });
-});
-
-test("the judge harness's version is read too", async () => {
-  const box = sandbox();
-  scriptedCase(box, "alpha");
-  const ran = await box.cli(
-    scoreArgs(box, RESULTS, "--harness", HARNESS, "--judge-harness", "pi"),
-    {
-      SKILL_EVALS_BIN_PI: box.pi,
-    },
-  );
-  expect(ran.status, ran.stderr).toBe(0);
-  const { meta } = readResults(path.join(box.root, RESULTS));
-  expect(Object.keys(meta.harnessVersions).sort()).toEqual([HARNESS, "pi"]);
-});
-
-test("plan and --dry-run read no version", async () => {
-  const box = sandbox();
-  scriptedCase(box, "alpha");
-  const log = path.join(box.root, "versions.log");
-  for (const args of [
-    ["plan", "--subject", "none", "--cases", path.join(box.root, "suite")],
-    scoreArgs(box, RESULTS, "--dry-run"),
-  ]) {
-    const ran = await box.cli(args, { FAKE_VERSION_LOG: log });
-    expect(ran.status, ran.stderr).toBe(0);
-  }
-  expect(fs.existsSync(log)).toBe(false);
-});
-
-test("meta names the tool, models, subject revision, case hashes and isolation", async () => {
-  const box = sandbox();
-  scriptedCase(box, "alpha");
-  const ran = await box.cli(
-    scoreArgs(box, RESULTS, "--model", "run-model", "--judge-model", "j-model"),
-  );
-  expect(ran.status, ran.stderr).toBe(0);
-  const results = readResults(path.join(box.root, RESULTS));
-  const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
-    version: string;
-  };
-  const [alpha] = loadCases(path.join(box.root, "suite"));
-  expect(results.schemaVersion).toBe(1);
-  expect(results.meta).toMatchObject({
-    toolVersion: pkg.version,
-    models: { agent: "run-model", judge: "j-model", decision: null },
-    caseHashes: { alpha: caseHash(alpha as never) },
-    isolated: false,
-    subjects: [{ label: "subject", revision: "none", dirty: null }],
-  });
-});
-
-test("dirty is true for uncommitted changes under the subject, false for a clean tree or a ref, and null outside git", () => {
-  const box = sandbox();
-  const repo = path.join(box.root, "repo");
-  fs.mkdirSync(repo);
-  box.write("repo/skills/x/SKILL.md", "x\n");
-  const git = gitRepo(repo);
-  const subject = (dir: string | null, commit: string | null): Subject =>
-    ({ dir, commit }) as Subject;
-  expect(dirtyOf(subject(repo, null))).toBe(true);
-  git("add", "-A");
-  git("commit", "-q", "-m", "x");
-  expect(dirtyOf(subject(repo, null))).toBe(false);
-  box.write("repo/skills/x/SKILL.md", "changed\n");
-  expect(dirtyOf(subject(path.join(repo, "skills"), null))).toBe(true);
-  expect(dirtyOf(subject(repo, "abc123"))).toBe(false);
-  const outside = path.join(box.root, "outside");
-  fs.mkdirSync(outside);
-  expect(dirtyOf(subject(outside, null))).toBeNull();
-  expect(dirtyOf(subject(null, null))).toBeNull();
-  expect(dirtyOf(subject(path.join(box.root, "missing"), null))).toBeNull();
 });

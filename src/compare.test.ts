@@ -89,6 +89,7 @@ test("run reports the difference between the two subjects and keeps each run's s
     result.stderr
       .trim()
       .split("\n")
+      .filter((line) => !line.startsWith("skill-evals: wrote "))
       .map((line) => line.replace(/ \[\d+\/\d+\] .*$/, "")),
   ).toEqual(
     ["a1", "b1", "a2", "b2"].map(

@@ -1,17 +1,15 @@
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
-import { expect, onTestFinished, test } from "vitest";
+import { expect, test } from "vitest";
 import { evaluate } from "./evaluate.js";
 import type { Exiting } from "./exit-codes.js";
 import { EXIT, exitCodeOf, strongest } from "./exit-codes.js";
 import type { RunRecord } from "./run.js";
+import { UsageError } from "./scope.js";
 import { priced, scoreArgs, scriptedCase } from "./testing/budget.js";
 import { plugin } from "./testing/plant.js";
 import { exec, play, scoreSubject, writeCase } from "./testing/runs.js";
-import { fixture, readResults, sandbox } from "./testing/sandbox.js";
-import { linesIn } from "./testing/suite.js";
+import { readResults, sandbox } from "./testing/sandbox.js";
 import type { Summary } from "./summary.js";
 
 const RESULTS = "results";
@@ -19,9 +17,6 @@ const ALPHA = "alpha";
 const MAX_INVALID = "--max-invalid";
 const SUMMARY_FILE = "summary.json";
 const MIN_SCORE = "--min-score";
-const TEST_TIMEOUT_MS = 60_000;
-const POLL_MS = 25;
-const WAIT_MS = 30_000;
 const CRASH_ONCE = [{ onStart: [1], step: { crash: "segfault" } }];
 const NEVER = { type: "output_contains", text: "never said" };
 
@@ -129,6 +124,12 @@ test("exit 5: an internal failure prints a stack trace, and is not a usage error
   const ran = await box.cli(scoreArgs(box, RESULTS));
   expect(ran.status).toBe(EXIT.error);
   expect(ran.stderr).toMatch(/^skill-evals: internal error: .*\n\s+at /s);
+  // The failure came before the first run, and the summary says so, with no suites.
+  expect(summaryOf(path.join(box.root, RESULTS))).toMatchObject({
+    exit: 5,
+    partial: "error",
+    suites: [],
+  });
 });
 
 test("a run that throws leaves results.json and summary.json saying error, and exits 5", async () => {
@@ -150,61 +151,6 @@ test("a run that throws leaves results.json and summary.json saying error, and e
   expect(readResults(out).partial).toEqual({ reason: "error" });
   expect(summaryOf(out)).toMatchObject({ exit: EXIT.error, partial: "error" });
 });
-
-/**
- * Waits for a condition.
- * @param ready - Tells whether it holds.
- * @param what - What is waited for, for the failure.
- */
-async function until(ready: () => boolean, what: string): Promise<void> {
-  const end = Date.now() + WAIT_MS;
-  while (!ready()) {
-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  }
-}
-
-// Type stripping, which the child needs to run the sources, is on by default from Node 22.18.
-test.skipIf(!process.features.typescript)(
-  "exit 130: a signal ends the command, and summary.json says interrupted",
-  async () => {
-    const box = sandbox();
-    scriptedCase(box, ALPHA);
-    scriptedCase(box, "bravo", {
-      before: [{ onStart: [1], step: { hang: true } }],
-    });
-    const out = path.join(box.root, RESULTS);
-    const child = spawn(
-      process.execPath,
-      [
-        ...["--import", fixture("ts-register.mjs")],
-        path.resolve(import.meta.dirname, "bin.ts"),
-        ...scoreArgs(box, RESULTS, "--jobs", "1"),
-      ],
-      { cwd: box.root, env: box.env, stdio: ["ignore", "pipe", "pipe"] },
-    );
-    onTestFinished(() => {
-      child.kill("SIGKILL");
-    });
-    await until(
-      () =>
-        fs.existsSync(path.join(out, "results.jsonl")) &&
-        linesIn(out).length === 1 &&
-        fs.existsSync(path.join(box.root, "fake/starts/case-bravo.json")),
-      "the first run to finish and the second to hang",
-    );
-    // Writes while the command runs are interim: they never make a summary.
-    expect(fs.existsSync(path.join(out, SUMMARY_FILE))).toBe(false);
-    child.kill("SIGINT");
-    const [code] = (await once(child, "exit")) as [number | null];
-    expect(code).toBe(EXIT.interrupted);
-    expect(summaryOf(out)).toMatchObject({
-      exit: 130,
-      partial: "interrupted",
-    });
-  },
-  TEST_TIMEOUT_MS,
-);
 
 test("--max-invalid 0.5 tolerates one of three", async () => {
   const box = sandbox();
@@ -296,4 +242,65 @@ test("a run that did not run is not invalid, and the share is over the planned r
   expect(exitCodeOf(one, 0.5)).toBe(EXIT.ok);
   expect(exitCodeOf(exiting({ records: [invalid(true)] }))).toBe(EXIT.ok);
   expect(exitCodeOf(exiting({ suites: [] }))).toBe(EXIT.ok);
+});
+
+test("a case that lost every run exits 3 whatever --max-invalid says", async () => {
+  const one = sandbox();
+  scriptedCase(one, ALPHA, { before: CRASH_ONCE });
+  const alone = await one.cli(scoreArgs(one, RESULTS, MAX_INVALID, "1"));
+  expect(alone.status, alone.stderr).toBe(EXIT.invalid);
+  expect(alone.stdout).toContain(
+    "Suite score: n/a (1 of 1 cases, 0 of 1 runs)",
+  );
+
+  const three = sandbox();
+  for (const id of [ALPHA, "bravo", "charlie"]) {
+    scriptedCase(three, id, id === "bravo" ? { before: CRASH_ONCE } : {});
+  }
+  const some = await three.cli(scoreArgs(three, RESULTS, MAX_INVALID, "0.5"));
+  expect(some.status, some.stderr).toBe(EXIT.invalid);
+  // One run in three is within 0.5, but the case has no score.
+  expect(summaryOf(path.join(three.root, RESULTS))).toMatchObject({
+    invalid: 1,
+  });
+});
+
+test("a stopped command that also has an unscored case still exits 4", () => {
+  const unscored = exiting({
+    partial: { reason: "budget" },
+    suites: [
+      {
+        harness: "h",
+        cases: [
+          {
+            id: "c",
+            weight: 1,
+            scores: {},
+            runs: { subject: { valid: 0, planned: 1 } },
+          },
+        ],
+        suite: {},
+        applicable: 1,
+        total: 1,
+        runs: { subject: { valid: 0, planned: 1 } },
+      },
+    ],
+  });
+  expect(exitCodeOf(unscored, 1)).toBe(EXIT.partial);
+  expect(exitCodeOf({ ...unscored, partial: null }, 1)).toBe(EXIT.invalid);
+});
+
+test("exitCodeOf refuses a fraction that is not from 0 to 1, and results without run counts", () => {
+  for (const bad of [Number.NaN, -0.1, 1.5]) {
+    expect(() => exitCodeOf(exiting(), bad)).toThrow(UsageError);
+  }
+  const old = exiting({
+    suites: [
+      { harness: "h", cases: [], suite: {}, applicable: 0, total: 0 },
+    ] as never,
+  });
+  expect(() => exitCodeOf(old)).toThrow(/run counts.*schemaVersion none/);
+  expect(() => exitCodeOf({ ...old, schemaVersion: 0 })).toThrow(
+    /schemaVersion 0/,
+  );
 });

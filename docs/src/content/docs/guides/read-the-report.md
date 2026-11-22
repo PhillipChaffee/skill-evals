@@ -30,12 +30,12 @@ skill-evals score --subject ./skills --out results --report json,junit,html
 <out>/summary.json   written by every command, whatever formats were asked for
 ```
 
-`summary.json` is written with the last write of a command, however it ended: it ran to the end, a budget stopped it, a signal interrupted it, or a run failed. It is not written while the command runs, and not for a usage error. `exit` is the code that the command exits with.
+`summary.json` is written with the last write of a command, however it ended, and after the reports, so that a report that cannot be written is an error that the summary says (exit 5): it ran to the end, a budget stopped it, a signal interrupted it, or a run failed. It is not written while the command runs, and not for a usage error. A command removes the `summary.json` and `report.*` of an earlier command in the same directory when it starts, so a file you find is this command's. A failure before the first run leaves a summary with `partial: "error"` and no suites. Each file that is written is named on standard error as `skill-evals: wrote <path>`. `exit` is the code that the command exits with.
 
 ```jsonc
 {
   "schemaVersion": 1,
-  "exit": 1,
+  "exit": 3,
   "suites": [
     {
       "harness": "claude-code",
@@ -74,9 +74,9 @@ skill-evals score --subject ./skills --out results --report json,junit,html
 }
 ```
 
-`status` is `pass`; `below`, when the subject under test is under the case's `minScore`; `invalid`, when any run of the case is invalid, whatever the score; `not-applicable`; or `not-run`, when a run of the plan did not run. `invalid` wins over `below`.
+`status` is `pass`; `below`, when the subject under test is under the case's `minScore`; `invalid`, when any run of the case is invalid, whatever the score, with `tolerated: true` when the case has a valid run and the invalid runs of the command are within `--max-invalid`; `not-applicable`; or `not-run`, when a run of the plan did not run. `invalid` wins over `below`.
 
-In `report.xml`, a case below its bar is a `failure`, a case with an invalid run an `error`, and a case that is not applicable, or did not run (`not run`), is `skipped`. A passing case has its score and run count in `system-out`.
+In `report.xml`, a case below its bar is a `failure`, a case with no valid run, or with invalid runs above `--max-invalid`, an `error`, and a case that is not applicable, or did not run (`not run`), is `skipped`. A case whose invalid runs are tolerated is filed by its score, and `system-err` names the invalid runs. A case with a score has it and its run count in `system-out`. Each testsuite also has a testcase `suite score`, a `failure` when the suite is under `--min-score` (its message gives the score and the run count), and, when the subject directory changed, a `subject unchanged` testcase that is an `error`.
 
 ## What `results.json` records about the command
 
@@ -90,12 +90,12 @@ In `report.xml`, a case below its bar is a `failure`, a case with an invalid run
   "subjects": [
     { "label": "subject", "revision": "<content hash>", "dirty": true },
   ],
-  "caseHashes": { "restate": "<sha256>" },
+  "caseHashes": { "claude-code": { "restate": "<sha256>" } },
   "isolated": false,
 }
 ```
 
-`harnessVersions` is the first line of `<executable> --version`, read once for each harness the command may start, the judge's included, with a limit of 10 seconds; it is `null` when that fails. `plan` and `--dry-run` start no harness and read none. `dirty` is `true` when the working tree has uncommitted changes under the subject's directory, `false` for a git ref or a clean tree, and `null` for `none` and for a directory outside git.
+`harnessVersions` is the first line of `<executable> --version`, read once for each harness that runs a case, and for the judge's harness when a judged check is selected and the judge is not the API. The reads go in parallel and the command waits for them; a harness that takes longer than 10 seconds has its process group killed and its version is `null`, as it is when the command fails. `caseHashes` is the hash that the run key uses, for each harness and case, so a check that a harness dropped with `ifUnsupported: "skip"` is not in it. `plan` and `--dry-run` start no harness and read none. `dirty` is `true` when the working tree has uncommitted changes under the subject's directory, `false` for a git ref or a clean tree, and `null` for `none` and for a directory outside git.
 
 ## The output directory
 

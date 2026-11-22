@@ -19,8 +19,8 @@ const RENDERERS: Record<Format, (evaluation: Evaluation) => string> = {
  * Writes the reports a command was asked for.
  * @param evaluation - What `evaluate` returned.
  * @param formats - The formats, from `reportFormats`.
- * @returns The paths of the files written, in the order of `formats`. The markdown report is printed to standard output
- *   instead, and only when `md` is in the list.
+ * @returns The paths of the files written, in the order of `formats`, each also named on standard error as `wrote <path>`.
+ *   The markdown report is printed to standard output instead, and only when `md` is in the list.
  */
 export function emitReports(
   evaluation: Evaluation,
@@ -37,6 +37,7 @@ export function emitReports(
     const target = path.join(evaluation.outDir, file);
     fs.writeFileSync(target, text);
     written.push(target);
+    console.error(`skill-evals: wrote ${target}`);
   }
   return written;
 }

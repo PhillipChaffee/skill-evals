@@ -9,6 +9,7 @@ import { FENCE, code, header, table } from "./markdown.js";
  */
 export function exitCodesPage(): ReferencePage {
   const names = Object.keys(EXIT) as (keyof typeof EXIT)[];
+  const n = (name: keyof typeof EXIT): string => code(String(EXIT[name]));
   const order = PRECEDENCE.map((value) => {
     const name = names.find((each) => EXIT[each] === value);
     return `${code(String(value))} (${name ?? ""})`;
@@ -33,14 +34,14 @@ ${table(
 
 ## When several apply
 
-The first of these wins: ${order.join(", ")}. A command that stopped at ${code("--max-cost")} and also has an invalid run exits 4, and one that has an invalid run and a missed bar exits 3. A usage error is raised before any run, so nothing else can apply with it.
+The first of these wins: ${order.join(", ")}. A command that stopped at ${code("--max-cost")} and also has an invalid run exits ${n("partial")}, and one that has an invalid run and a missed bar exits ${n("invalid")}. A usage error is raised before any run, so nothing else can apply with it.
 
 ## An invalid-run budget
 
-By default one invalid run is enough to exit 3. ${code("--max-invalid <fraction>")} allows some. The command exits 3 only when the invalid runs divided by the planned runs of the cases that apply is greater than the fraction. A run that did not run, because a limit stopped the command, is not invalid and is not counted.
+By default one invalid run is enough to exit ${n("invalid")}. ${code("--max-invalid <fraction>")} allows some. The command exits ${n("invalid")} only when the invalid runs divided by the planned runs of the cases that apply is greater than the fraction. A run that did not run, because a limit stopped the command, is not invalid and is not counted. A case that has no valid run at all has no score, and the command exits ${n("invalid")} whatever the fraction is, so a suite that scored nothing is never a pass.
 
 ${FENCE}sh
-# 3 runs are planned, 1 is invalid: 1/3 is not greater than 0.5, so the command exits 0 (or 1 if a bar is missed).
+# 3 runs are planned, 1 is invalid: 1/3 is not greater than 0.5, so the command exits ${String(EXIT.ok)} (or ${String(EXIT.bar)} if a bar is missed).
 skill-evals score --subject ./skills --reps 3 --max-invalid 0.5
 ${FENCE}
 

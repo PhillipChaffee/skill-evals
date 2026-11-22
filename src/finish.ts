@@ -1,21 +1,27 @@
 import { metaOf } from "./case-meta.js";
 import type { Case } from "./cases.js";
-import type { Results } from "./evaluate.js";
-import { exitCodeOf } from "./exit-codes.js";
+import fs from "node:fs";
+import path from "node:path";
+import type { Evaluation, Results } from "./evaluate.js";
+import type { ExitCode } from "./exit-codes.js";
+import { EXIT, exitCodeOf } from "./exit-codes.js";
+import { FORMATS } from "./report/formats.js";
 import type { Located } from "./harnesses/index.js";
 import type { JudgeApi } from "./judge-api.js";
 import type { RunMeta } from "./meta.js";
 import { harnessVersions, runMetaOf } from "./meta.js";
 import { notRunOf, plannedRuns } from "./not-run.js";
 import type { Context } from "./prepare.js";
+import { isJudged } from "./checks/index.js";
 import type { RunRecord } from "./run.js";
 import { invalidReason, modesOf } from "./run.js";
 import type { StopReason } from "./gate.js";
-import { onInterrupt } from "./scope.js";
+import { UsageError, onInterrupt } from "./scope.js";
 import { commonSet, failedBars, scoreSuites } from "./score.js";
 import type { Store } from "./store.js";
-import type { Subject } from "./subject.js";
+import type { Subject, SubjectSummary } from "./subject.js";
 import { changedAtSource } from "./subject.js";
+import type { Summary } from "./summary.js";
 import { summaryOf } from "./summary.js";
 import type { Partition } from "./applicability.js";
 
@@ -38,6 +44,20 @@ export interface Finished {
   sourceChanged: string[];
   partial: Results["partial"];
 }
+
+/**
+ * Takes the part of a subject that goes into `results.json`.
+ * @param subject - A resolved subject.
+ * @returns Its label, spec, kind, directory, skills and commit.
+ */
+const summaryOfSubject = (subject: Subject): SubjectSummary => ({
+  label: subject.label,
+  spec: subject.spec,
+  kind: subject.kind,
+  dir: subject.dir,
+  skills: subject.skills,
+  commit: subject.commit,
+});
 
 /**
  * Lists the runs that do not count.
@@ -79,14 +99,9 @@ export function summarize(finished: Finished): Results {
   return {
     schemaVersion: 1,
     meta: finished.meta,
-    subjects: subjects.map(({ label, spec, kind, dir, skills, commit }) => ({
-      label,
-      spec,
-      kind,
-      dir,
-      skills,
-      commit,
-    })),
+    minScore: finished.minScore ?? null,
+    maxInvalid: finished.maxInvalid,
+    subjects: subjects.map(summaryOfSubject),
     harnesses,
     harnessReason: selection.reason,
     model: model ?? null,
@@ -98,7 +113,14 @@ export function summarize(finished: Finished): Results {
     belowBar: failedBars(suites, labels.at(-1) ?? "", finished.minScore),
     notApplicable: parts.notApplicable,
     skippedChecks: parts.skippedChecks,
-    commonSet: commonSet({ harnesses, cases, records, labels, applicable }),
+    commonSet: commonSet({
+      harnesses,
+      cases,
+      records,
+      labels,
+      applicable,
+      reps: finished.reps,
+    }),
     invalid: invalidList(records),
     sourceChanged: finished.sourceChanged,
     partial: finished.partial,
@@ -116,16 +138,23 @@ export function summarize(finished: Finished): Results {
 }
 
 /**
- * Gathers what a command records about how its runs are made. It asks each harness that may start for its version.
+ * Gathers what a command records about how its runs are made. It asks each harness that will start for its version, all
+ * at once, and waits for the answers.
  * @param context - What `prepare` settled.
  * @param subjects - The resolved subjects.
  * @returns The `meta` of `results.json`.
  */
-export const metaOfCommand = (context: Context, subjects: Subject[]): RunMeta =>
-  runMetaOf({
-    versions: harnessVersions([
-      ...context.selection.chosen,
-      ...(context.judgeApi ? [] : [context.judgeHarness]),
+export async function metaOfCommand(
+  context: Context,
+  subjects: Subject[],
+): Promise<RunMeta> {
+  const runs = (located: Located): boolean =>
+    (context.parts.ran[located.harness.id]?.length ?? 0) > 0;
+  const judged = context.cases.some((one) => one.checks.some(isJudged));
+  return runMetaOf({
+    versions: await harnessVersions([
+      ...context.selection.chosen.filter(runs),
+      ...(judged && !context.judgeApi ? [context.judgeHarness] : []),
     ]),
     models: {
       agent: context.model,
@@ -133,9 +162,10 @@ export const metaOfCommand = (context: Context, subjects: Subject[]): RunMeta =>
       decision: context.decisionModel,
     },
     subjects,
-    cases: context.cases,
+    applied: context.parts.ran,
     isolated: modesOf(context.options).isolated,
   });
+}
 
 /**
  * Writes the last `results.json` and `summary.json` of a command.
@@ -154,21 +184,28 @@ export function writeLast(
 }
 
 /**
- * Writes the last `results.json` of a command that ran its runs. A signal while the subjects are checked still leaves
- * the file saying "interrupted", not "running".
+ * Writes the last `results.json` of a command that ran its runs, then lets the caller write its reports, then writes
+ * `summary.json`, so that a report that cannot be written is an error that the summary says. A signal before the end
+ * still leaves the files saying "interrupted", not "running".
  * @param store - Where the results go.
  * @param finished - What the results are summed up from, besides the records.
- * @param ran - What `runAll` returned.
+ * @param ran - What `runAll` returned, and what to do once `results.json` is written.
  * @param ran.records - The finished runs.
  * @param ran.stopped - Why the command stopped early, or null.
+ * @param ran.after - Called with the results and the exit code once `results.json` is written; it writes the reports.
+ *   When it throws, both files are written again saying "error" and the error goes on.
  * @returns The results that were written.
  */
 export function finalWrite(
   store: Store,
   finished: Omit<Finished, "records" | "sourceChanged" | "partial">,
-  ran: { records: RunRecord[]; stopped: StopReason | null },
+  ran: {
+    records: RunRecord[];
+    stopped: StopReason | null;
+    after: (results: Results, exit: ExitCode) => void;
+  },
 ): Results {
-  const { records, stopped } = ran;
+  const { records, stopped, after } = ran;
   const off = onInterrupt(() => {
     writeLast(
       store,
@@ -182,17 +219,83 @@ export function finalWrite(
     );
   });
   try {
-    return writeLast(
-      store,
-      summarize({
-        ...finished,
-        records,
-        sourceChanged: changedAtSource(finished.subjects),
-        partial: stopped === null ? null : { reason: stopped },
-      }),
-      finished.maxInvalid,
-    );
+    const results = summarize({
+      ...finished,
+      records,
+      sourceChanged: changedAtSource(finished.subjects),
+      partial: stopped === null ? null : { reason: stopped },
+    });
+    store.flush(results);
+    const exit = exitCodeOf(results, finished.maxInvalid);
+    try {
+      after(results, exit);
+    } catch (error) {
+      const failed = { ...results, partial: { reason: "error" as const } };
+      writeLast(store, failed, finished.maxInvalid);
+      throw error;
+    }
+    store.writeSummary(summaryOf(results, exit));
+    return results;
   } finally {
     off();
   }
 }
+
+/**
+ * Removes the `summary.json` and the reports that an earlier command left in the output directory, so that none of
+ * them is taken for this command's.
+ * @param outDir - The output directory.
+ */
+export function clearStale(outDir: string): void {
+  for (const file of ["summary.json", ...Object.values(FORMATS)]) {
+    if (file !== null) fs.rmSync(path.join(outDir, file), { force: true });
+  }
+}
+
+/**
+ * Leaves a summary for a command that failed before it could write one: exit 5, no suites. A command that stopped on a
+ * usage error, or already wrote its summary, is left alone.
+ * @param outDir - The output directory.
+ * @param error - What the command threw.
+ */
+export function noteFailure(outDir: string, error: unknown): void {
+  const file = path.join(outDir, "summary.json");
+  if (error instanceof UsageError || fs.existsSync(file)) return;
+  const summary: Summary = {
+    schemaVersion: 1,
+    exit: EXIT.error,
+    suites: [],
+    belowBar: [],
+    invalid: 0,
+    notApplicable: 0,
+    partial: "error",
+    costUsd: null,
+    durationMs: 0,
+  };
+  try {
+    fs.writeFileSync(file, JSON.stringify(summary, null, "\t"));
+  } catch {
+    // The directory cannot be written: the error that is thrown says so.
+  }
+}
+
+/**
+ * Makes what `evaluate` returns from the results.
+ * @param results - What was written to `results.json`.
+ * @param context - What `prepare` settled.
+ * @param where - The output directory, and the exit code from `exitCodeOf`.
+ * @param where.outDir - Where the files of the command are.
+ * @param where.exit - The code the command exits with.
+ * @returns What `evaluate` returns: the results, the exit code, the cases and where they ran.
+ */
+export const evaluationOf = (
+  results: Results,
+  context: Context,
+  where: { outDir: string; exit: ExitCode },
+): Evaluation => ({
+  ...results,
+  exit: where.exit,
+  cases: context.cases,
+  applied: context.parts.ran,
+  outDir: where.outDir,
+});

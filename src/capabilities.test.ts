@@ -222,9 +222,7 @@ test("two harnesses with different applicable sets get a common-set score", asyn
     },
   });
   expect(ran.stdout).toMatch(/Common set \(2 cases: half, plain\)/);
-  expect(ran.stdout).toMatch(
-    /Suite score: .* \(2 of 3 cases, \d+ of \d+ runs\)/,
-  );
+  expect(ran.stdout).toMatch(/Suite score: .* \(2 of 3 cases, 2 of 2 runs\)/);
 });
 
 test("a harness with no applicable case gets a report line and no score, and one harness alone has no common set", async () => {

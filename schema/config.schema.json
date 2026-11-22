@@ -115,7 +115,8 @@
       "title": "report",
       "description": "The report formats to write: md, json, junit or html. Repeat the flag or separate formats with commas. md goes to standard output, and only when it is listed. The others go to report.json, report.xml (JUnit) and report.html in the output directory. summary.json is always written there.",
       "type": "array",
-      "items": { "enum": ["md", "json", "junit", "html"] }
+      "items": { "enum": ["md", "json", "junit", "html"] },
+      "minItems": 1
     },
     "maxJudgedWeightShare": {
       "title": "maxJudgedWeightShare",

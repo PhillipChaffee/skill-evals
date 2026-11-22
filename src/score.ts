@@ -253,6 +253,7 @@ export interface CommonSet {
  * @param run.records - Every run.
  * @param run.labels - The subject labels to score.
  * @param run.applicable - For each harness id, the ids of the cases that apply to it.
+ * @param run.reps - The runs planned for each subject and case, as for `scoreSuites`.
  * @returns The common cases and each harness's suite score over them. Null unless two harnesses have an applicable
  *   case, because a harness with none is left out.
  */
@@ -262,6 +263,7 @@ export function commonSet(run: {
   records: ScoredRun[];
   labels: readonly string[];
   applicable: Record<string, string[]>;
+  reps?: number;
 }): CommonSet | null {
   const sets = run.harnesses.flatMap((id) => {
     const ids = run.applicable[id] ?? [];

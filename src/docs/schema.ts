@@ -334,6 +334,7 @@ export function configSchema(): Schema {
               maximum: 1,
             }),
             ...(key === "report" && {
+              minItems: 1,
               items: { enum: Object.keys(FORMATS) },
             }),
             ...(key === "env" && {

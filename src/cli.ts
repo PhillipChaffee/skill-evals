@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import type { ParseArgsOptionDescriptor } from "node:util";
 import { parseArgs } from "node:util";
 import type { Evaluation, EvaluateOptions } from "./evaluate.js";
@@ -19,6 +20,7 @@ import { coverageOf, loadSelection, selectionOf, splitList } from "./select.js";
 import { UsageError, requireSupportedPlatform } from "./scope.js";
 import { sourceChangedMessage } from "./subject.js";
 import { EXIT } from "./exit-codes.js";
+import { failed } from "./fatal.js";
 import type { Flag, FlagSpec } from "./flags.js";
 import { FLAGS } from "./flags.js";
 import type { CommandDoc, Options } from "./usage.js";
@@ -72,8 +74,15 @@ async function suite(
     );
   };
   const formats = reportFormats(withConfig(project, given));
-  const evaluation = await evaluate({ ...given, onRun });
-  emitReports(evaluation, formats);
+  const evaluation = await evaluate({
+    ...given,
+    onRun,
+    // Before summary.json, so that a report that cannot be written is an error that the summary says.
+    onFinal: (done) => emitReports(done, formats),
+  });
+  console.error(
+    `skill-evals: wrote ${path.join(evaluation.outDir, "summary.json")}`,
+  );
   if (evaluation.sourceChanged.length > 0) {
     console.error(
       `skill-evals: ${sourceChangedMessage(evaluation.sourceChanged)}`,
@@ -288,11 +297,6 @@ function readOptions(command: Command, args: string[]): Options {
   );
 }
 
-const isParseArgsError = (error: unknown): error is Error =>
-  error instanceof Error &&
-  "code" in error &&
-  String(error.code).startsWith("ERR_PARSE_ARGS");
-
 /**
  * Prints the help text for `--help`, `help`, and `help <command>`.
  * @param name - The command to describe; absent for the whole tool.
@@ -309,23 +313,6 @@ function help(name: string | undefined): number {
   }
   console.log(commandUsage(name, COMMANDS));
   return 0;
-}
-
-/**
- * Reports a failure of a command line.
- * @param error - What the command threw.
- * @returns 2 with one line on standard error for a usage error or a flag that `parseArgs` refused; else 5, with the
- *   stack trace on standard error.
- */
-function failed(error: unknown): number {
-  if (error instanceof UsageError || isParseArgsError(error)) {
-    console.error(`skill-evals: ${error.message}`);
-    return EXIT.usage;
-  }
-  console.error(
-    `skill-evals: internal error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
-  );
-  return EXIT.error;
 }
 
 /**

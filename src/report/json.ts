@@ -21,6 +21,7 @@ export interface JsonReport {
     | "validRuns"
     | "plannedRuns"
     | "status"
+    | "tolerated"
   >[];
 }
 
@@ -42,6 +43,7 @@ function jsonReport(evaluation: Evaluation): JsonReport {
         validRuns,
         plannedRuns,
         status,
+        tolerated,
       }) => ({
         harness,
         subject,
@@ -50,6 +52,7 @@ function jsonReport(evaluation: Evaluation): JsonReport {
         validRuns,
         plannedRuns,
         status,
+        tolerated,
       }),
     ),
   };

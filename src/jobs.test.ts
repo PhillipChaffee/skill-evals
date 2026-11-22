@@ -58,7 +58,10 @@ test(
     // Runs overlapped, and never more than eight were in flight.
     expect(Math.max(...flying)).toBeGreaterThan(1);
     expect(Math.max(...flying)).toBeLessThanOrEqual(8);
-    const lines = ran.stderr.trim().split("\n");
+    const lines = ran.stderr
+      .trim()
+      .split("\n")
+      .filter((line) => !line.startsWith("skill-evals: wrote "));
     expect(lines).toHaveLength(20);
     expect(lines).not.toEqual([...lines].sort());
     expect(linesIn(out)).toHaveLength(20);

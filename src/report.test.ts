@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { priced, scoreArgs, scriptedCase } from "./testing/budget.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 import type { Sandbox } from "./testing/sandbox.js";
-import { parseXml } from "./testing/xml.js";
+import { parseXml, testNamed } from "./testing/xml.js";
 import type { XmlElement } from "./testing/xml.js";
 import type { JsonReport } from "./report/json.js";
 import type { Summary } from "./summary.js";
@@ -47,39 +47,35 @@ async function scoredKinds(...extra: string[]) {
 
 const read = (out: string, file: string): string =>
   fs.readFileSync(path.join(out, file), "utf8");
-const byName = (root: XmlElement, name: string): XmlElement | undefined =>
-  root.children
-    .flatMap((suite) => suite.children)
-    .find((each) => each.attributes["name"] === name);
-
 test("junit marks a not-applicable case skipped", async () => {
   const { ran, out } = await scoredKinds();
-  expect(ran.status, ran.stderr).toBe(1);
+  // `broken` has no valid run, so --max-invalid 1 does not excuse it.
+  expect(ran.status, ran.stderr).toBe(3);
   const root = parseXml(read(out, "report.xml"));
   expect(root.name).toBe("testsuites");
   expect(root.children).toHaveLength(1);
   const suite = root.children[0] as XmlElement;
   expect(suite.attributes).toMatchObject({
     name: "claude-code subject",
-    tests: "4",
+    tests: "5",
     failures: "1",
     errors: "1",
     skipped: "1",
   });
   const kind = (name: string): string[] =>
-    (byName(root, name)?.children ?? []).map((child) => child.name);
+    (testNamed(root, name)?.children ?? []).map((child) => child.name);
   expect(kind("fine")).toEqual(["system-out"]);
   expect(kind("weak")).toEqual(["failure", "system-out"]);
   expect(kind("broken")).toEqual(["error"]);
   expect(kind("needs-mcp")).toEqual(["skipped"]);
-  const skipped = byName(root, "needs-mcp")?.children[0];
+  const skipped = testNamed(root, "needs-mcp")?.children[0];
   expect(skipped?.attributes["message"]).toContain("mcp");
-  expect(byName(root, "weak")?.children[0]?.attributes["message"]).toContain(
+  expect(testNamed(root, "weak")?.children[0]?.attributes["message"]).toContain(
     "0.9",
   );
-  expect(byName(root, "broken")?.children[0]?.attributes["message"]).toContain(
-    "run failed",
-  );
+  expect(
+    testNamed(root, "broken")?.children[0]?.attributes["message"],
+  ).toContain("run failed");
 });
 
 test("junit marks a run that did not run as skipped with the message not run", async () => {
@@ -90,7 +86,7 @@ test("junit marks a run that did not run as skipped with the message not run", a
   );
   expect(ran.status, ran.stderr).toBe(4);
   const root = parseXml(read(path.join(box.root, RESULTS), "report.xml"));
-  const charlie = byName(root, "charlie");
+  const charlie = testNamed(root, "charlie");
   expect(charlie?.children[0]?.name).toBe("skipped");
   expect(charlie?.children[0]?.attributes["message"]).toBe("not run");
 });
@@ -104,7 +100,7 @@ test("summary.json matches the report's suite score", async () => {
   expect(report.summary).toEqual(summary);
   expect(summary).toMatchObject({
     schemaVersion: 1,
-    exit: 1,
+    exit: 3,
     invalid: 1,
     notApplicable: 1,
     partial: null,
@@ -170,6 +166,35 @@ test("html has no external reference", async () => {
   expect(html).not.toMatch(/(src|href)="https?:/);
   expect(html).not.toContain("<script");
   expect(html).not.toMatch(/https?:\/\//);
+  // Nothing else can fetch either: a stylesheet import, a url(), a protocol-relative address.
+  expect(html).not.toMatch(/url\(|@import|\/\//);
   expect(html.match(/<html/g)).toHaveLength(1);
   expect(html).toContain("<table>");
+});
+
+test("the common set counts the planned runs, not only the finished ones", async () => {
+  const box = sandbox();
+  priced(box, ["alpha"], 0.4);
+  const ran = await box.cli(
+    scoreArgs(
+      box,
+      RESULTS,
+      "--reps",
+      "3",
+      "--max-cost",
+      "0.5",
+      "--harness",
+      "claude-code,pi",
+    ),
+    { SKILL_EVALS_BIN_PI: box.pi },
+  );
+  expect(ran.status, ran.stderr).toBe(4);
+  const { commonSet } = readResults(path.join(box.root, RESULTS));
+  // Two of the three planned runs finished before the budget stopped the command.
+  expect(commonSet?.runs["claude-code"]?.["subject"]).toEqual({
+    valid: 2,
+    planned: 3,
+  });
+  expect(commonSet?.runs["pi"]?.["subject"]).toEqual({ valid: 0, planned: 3 });
+  expect(ran.stdout).toContain("- claude-code: 1.00 (2 of 3 runs)");
 });

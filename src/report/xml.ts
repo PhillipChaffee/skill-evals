@@ -8,15 +8,19 @@ const ENTITIES: Record<string, string> = {
   ">": "&gt;",
   '"': "&quot;",
   "'": "&#39;",
+  // A reader normalises a literal line break in an attribute to a space, so each is written as a reference.
+  "\n": "&#10;",
+  "\r": "&#13;",
+  "\t": "&#9;",
 };
 
 /**
  * Makes text safe for an XML or HTML text node or attribute value.
  * @param text - Any text, such as a case id or an error message from a harness.
- * @returns The text with `&`, `<`, `>` and both quotes escaped, and every character that XML 1.0 does not allow removed:
+ * @returns The text with `&`, `<`, `>`, both quotes and line breaks and tabs escaped, and every character that XML 1.0 does not allow removed:
  *   control characters other than tab, line feed and carriage return, lone surrogates, and U+FFFE and U+FFFF.
  */
 export const escapeXml = (text: string): string =>
   text
     .replace(FORBIDDEN, "")
-    .replace(/[&<>"']/g, (char) => ENTITIES[char] ?? char);
+    .replace(/[&<>"'\n\r\t]/g, (char) => ENTITIES[char] ?? char);

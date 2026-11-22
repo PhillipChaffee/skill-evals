@@ -200,7 +200,10 @@ test("the progress line ends with [n/N], the spend and the time left", async () 
   priced(box, CASES.slice(0, 3), 0.25);
   const ran = await box.cli(scoreArgs(box, RESULTS));
   expect(ran.status, ran.stderr).toBe(0);
-  const lines = ran.stderr.trim().split("\n");
+  // The last line names the summary that was written; the rest are one line for each run.
+  const [wrote, ...lines] = ran.stderr.trim().split("\n").reverse();
+  lines.reverse();
+  expect(wrote).toMatch(/^skill-evals: wrote .*summary\.json$/);
   expect(lines).toHaveLength(3);
   expect(
     lines.map((line) => line.replace(/ETA \d\d:\d\d$/, "ETA <time>")),

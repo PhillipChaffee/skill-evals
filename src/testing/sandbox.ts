@@ -106,6 +106,8 @@ export interface Sandbox {
   pi: string;
   /** A file, outside the root, that the fake harness appends a line to each time it starts. Absent: none started. */
   started: string;
+  /** A file that the fake harness appends a line to each time it is asked for its version. Absent: none was asked. */
+  versions: string;
 }
 
 /**
@@ -168,16 +170,17 @@ export function sandbox(): Sandbox {
     fs.symlinkSync(found, path.join(tools, tool));
   }
   const started = path.join(tools, "started.log");
+  const versions = path.join(tools, "versions.log");
   // A launcher that tells the fake where this sandbox keeps its scripts and judge replies, so no variable of the
   // command line's environment has to carry them.
   const launcher = write(
     "bin/fake-agent.mjs",
-    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; process.env.FAKE_START_LOG = ${JSON.stringify(started)}; await import(${JSON.stringify(fakeHarness)});\n`,
+    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; process.env.FAKE_START_LOG = ${JSON.stringify(started)}; process.env.FAKE_VERSION_LOG = ${JSON.stringify(versions)}; await import(${JSON.stringify(fakeHarness)});\n`,
   );
   fs.chmodSync(launcher, EXECUTABLE);
   const pi = write(
     "bin/fake-pi.mjs",
-    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; process.env.FAKE_START_LOG = ${JSON.stringify(started)}; await import(${JSON.stringify(fakeHarness)});\n`,
+    `#!/usr/bin/env node\nprocess.env.FAKE_DIR = ${JSON.stringify(path.join(root, "fake"))}; process.env.FAKE_START_LOG = ${JSON.stringify(started)}; process.env.FAKE_VERSION_LOG = ${JSON.stringify(versions)}; await import(${JSON.stringify(fakeHarness)});\n`,
   );
   fs.chmodSync(pi, EXECUTABLE);
   const env = {
@@ -192,7 +195,7 @@ export function sandbox(): Sandbox {
     const ran = await asProcess(setting, () => main(args));
     return { status: ran.value, stdout: ran.stdout, stderr: ran.stderr };
   };
-  return { root, write, cli, env, pi, started };
+  return { root, write, cli, env, pi, started, versions };
 }
 
 /**

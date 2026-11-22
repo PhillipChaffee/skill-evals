@@ -12,7 +12,6 @@ const ENTITIES: Record<string, string> = {
   lt: "<",
   gt: ">",
   quot: '"',
-  "#39": "'",
 };
 
 // What XML 1.0 allows in text.
@@ -28,7 +27,9 @@ const ATTRIBUTE = /([\w-]+)="([^"]*)"/g;
  */
 const decode = (text: string): string =>
   text.replace(/&(#?\w+);/g, (whole, name: string) => {
-    const known = ENTITIES[name];
+    const code = /^#(\d+)$/.exec(name)?.[1];
+    const known =
+      code === undefined ? ENTITIES[name] : String.fromCodePoint(Number(code));
     if (known === undefined) throw new Error(`unknown entity ${whole}`);
     return known;
   });
@@ -97,3 +98,17 @@ export function parseXml(xml: string): XmlElement {
   }
   return only;
 }
+
+/**
+ * Finds a testcase of a JUnit report by its name.
+ * @param root - The `testsuites` element.
+ * @param name - The testcase's `name`.
+ * @returns The first testcase of that name in any testsuite, or undefined.
+ */
+export const testNamed = (
+  root: XmlElement,
+  name: string,
+): XmlElement | undefined =>
+  root.children
+    .flatMap((suite) => suite.children)
+    .find((each) => each.attributes["name"] === name);
