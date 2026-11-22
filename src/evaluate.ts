@@ -12,7 +12,7 @@ import type { Config } from "./project.js";
 import { findProject, withConfig } from "./project.js";
 import type { Judge, RunRecord } from "./run.js";
 import { requireEnvNames } from "./env.js";
-import { invalidReason, runOnce } from "./run.js";
+import { invalidReason, modesOf, runOnce } from "./run.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import { commonSet, failedBars, isUnitScore, scoreSuites } from "./score.js";
 import type { SelectionOptions } from "./select.js";
@@ -207,6 +207,7 @@ interface Plan {
   subjects: Subject[];
   model: string | undefined;
   isolated: boolean;
+  lenient: boolean;
   outDir: string;
   onRun: EvaluateOptions["onRun"];
 }
@@ -218,7 +219,7 @@ interface Plan {
  */
 async function runAll(plan: Plan): Promise<RunRecord[]> {
   const { reps, subjects, model, outDir, decision, pass } = plan;
-  const { isolated } = plan;
+  const { isolated, lenient } = plan;
   const records: RunRecord[] = [];
   for (const located of plan.chosen) {
     const judge = plan.judgeOf(located);
@@ -235,6 +236,7 @@ async function runAll(plan: Plan): Promise<RunRecord[]> {
             decision,
             pass,
             isolated,
+            lenient,
             outDir,
           };
           const record = await runOnce(run);
@@ -372,7 +374,7 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
       reps,
       subjects,
       model,
-      isolated: options.isolated ?? false,
+      ...modesOf(options),
       outDir,
       onRun,
     });

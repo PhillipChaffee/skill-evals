@@ -15,6 +15,7 @@ import {
   placeSkills,
   pluginDir,
   samePath,
+  stringArg,
   toolCall,
 } from "./shared.js";
 
@@ -97,6 +98,8 @@ const ISOLATION: NonNullable<Harness["isolation"]> = {
 const claudeCode: Harness = {
   id: "claude-code",
   bin: "claude",
+  // Claude Code's Read tool takes `file_path` (seen in test/fixtures/claude-code-tools.stream.jsonl).
+  pathOf: (call) => stringArg(call, ["file_path"]),
   authFiles: [".claude/.credentials.json"],
   authEnv: ANTHROPIC_ENV,
   capabilities: new Set([

@@ -1,5 +1,6 @@
 import type { Capability, Need } from "../capabilities.js";
-import type { ToolCall, ToolKind } from "../harnesses/shared.js";
+import type { Loaded, ToolCall, ToolKind } from "../harnesses/shared.js";
+import type { SkillEvent, SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
 import type { ChangedFiles, Snapshot } from "../snapshot.js";
@@ -18,6 +19,8 @@ import { TOOL_CHECKS } from "./tools.js";
 /** The fields a check may carry beside its type and weight; which ones it takes depends on the type. */
 interface CheckFields {
   skill?: string;
+  via?: SkillVia | SkillVia[];
+  resolved?: boolean;
   anyOf?: string[];
   min?: number;
   max?: number;
@@ -86,6 +89,12 @@ export interface Outcome {
   finalText: string;
   toolCalls: ToolCall[];
   skillsLoaded: string[];
+  /** Every call that gave the agent a skill or a file of one, with its mechanism and position. */
+  skillEvents: SkillEvent[];
+  /** What the harness said it loaded at startup; `skills` is null for a harness that lists none. */
+  loaded: Loaded;
+  /** True under `--lenient`: a `skill_loaded` or `skill_not_loaded` without `via` or `resolved` keeps the 0.0.1 rule. */
+  legacySkillLoads?: boolean;
   workspace: string;
   /** The workspace as it was before the harness started: the hash of each file. */
   seed: Snapshot;

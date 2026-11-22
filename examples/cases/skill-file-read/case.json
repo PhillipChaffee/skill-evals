@@ -1,0 +1,14 @@
+{
+  "description": "The skill is loaded through a real mechanism, and the agent opens its bug-fix playbook.",
+  "tags": ["skills", "routing"],
+  "targets": ["bug-fix"],
+  "checks": [
+    { "type": "skill_loaded", "skill": "bug-fix", "resolved": true },
+    {
+      "type": "skill_file_read",
+      "skill": "bug-fix",
+      "path": "references/bug-fix.md",
+      "via": ["file_read", "shell_read"]
+    }
+  ]
+}

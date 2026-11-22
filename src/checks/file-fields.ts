@@ -5,7 +5,7 @@ export const FILE_FIELDS: Record<string, FieldDef> = {
   path: {
     type: "path",
     meaning:
-      "A path relative to the root, which may not leave it. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
+      "A path relative to the root, which may not leave it. The root is the workspace or the home, and for `skill_file_read` the skill's own directory. A path with `*`, `?` or `{` is a glob: `*` and `?` stay within a directory, `**` crosses directories, and `{a,b}` matches either. A glob never follows a link, and a path through a link that leaves the root counts as absent.",
   },
   quantifier: {
     type: "enum",

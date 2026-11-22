@@ -6,6 +6,8 @@
 // - Given a script in `scripts/` of $FAKE_DIR that fits the run (see `FakeScript` in src/testing/plant.ts), it plays
 //   that transcript instead of the behaviour below. Turn n of the script answers the n-th prompt of a session.
 // - A script's `exec` command sees the plugin directory as $PLUGIN_DIR, and a `write` path may start with it.
+// - In a call's `input`, every string has `$PLUGIN_DIR` (the --plugin-dir) and `$CONFIG_DIR` (the run's config directory,
+//   where the adapter places skill copies) replaced before the call is announced, so a script can address them.
 // - Started with `--mode json` (the arguments of the Pi adapter) it is Pi-shaped instead: the prompt comes from standard
 //   input, the plugin directory from `-e`, and the stream is Pi's (`tool_execution_start`, `turn_end`). It plays the
 //   same scripts, for `text`, `final`, `call`, and `parallel` steps; it has no judge, no agents, and no hooks.
@@ -124,6 +126,28 @@ function turnIndex(file) {
 }
 
 /**
+ * Replaces the placeholders of a script's call input, at any depth.
+ * @param value - The input, or a part of it.
+ * @returns The same shape with `$PLUGIN_DIR` and `$CONFIG_DIR` filled in.
+ */
+function expand(value) {
+  if (typeof value === "string") {
+    const config =
+      process.env.CLAUDE_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR ?? "";
+    return value
+      .replaceAll("$PLUGIN_DIR", pluginDir ?? "")
+      .replaceAll("$CONFIG_DIR", config);
+  }
+  if (Array.isArray(value)) return value.map(expand);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, each]) => [key, expand(each)]),
+    );
+  }
+  return value;
+}
+
+/**
  * Does what a scripted call asks for in the workspace.
  * @param call - The call step's fields: its input, and what it executes or writes.
  * @returns What the tool reports: its output text, and whether it failed.
@@ -180,7 +204,8 @@ function play(steps, turn) {
       parent_tool_use_id: parent,
     });
   // Makes a call's tool_use block, and returns what to do once it has been announced: run it, and report the result.
-  const prepare = (call) => {
+  const prepare = (scripted) => {
+    const call = { ...scripted, input: expand(scripted.input) };
     const use = id("toolu");
     return {
       block: { type: "tool_use", id: use, name: call.name, input: call.input },
@@ -258,7 +283,8 @@ function play(steps, turn) {
  */
 function playPi(steps) {
   let final = "";
-  const call = (one) => {
+  const call = (scripted) => {
+    const one = { ...scripted, input: expand(scripted.input) };
     emit({
       type: "tool_execution_start",
       toolName: one.name,

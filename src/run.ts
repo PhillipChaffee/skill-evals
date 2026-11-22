@@ -7,7 +7,8 @@ import type { DecisionService } from "./decision.js";
 import { decide } from "./decision.js";
 import type { Harness, Loaded, Tokens, ToolCall } from "./harnesses/shared.js";
 import { sumTokens } from "./harnesses/shared.js";
-import { skillsLoaded } from "./skill-loads.js";
+import { skillEvents, skillsLoaded } from "./skill-events.js";
+import type { SkillEvent } from "./skill-events.js";
 import { judge } from "./judge.js";
 import { weightedMean } from "./score.js";
 import type { SessionResult } from "./session.js";
@@ -49,6 +50,8 @@ export interface RunRecord extends Usage {
   finalText: string;
   toolCalls: ToolCall[];
   skillsLoaded: string[];
+  /** Every call that gave the agent a skill or a file of one, with how and where. `skillsLoaded` is the names of its loads. */
+  skillEvents: SkillEvent[];
   /** Whether the harness reported the subject as loaded at startup; null when it reports nothing, or when there is nothing to load. */
   subjectLoaded: boolean | null;
   /** What the harness reported as loaded at startup; a kind it does not report is null. */
@@ -83,6 +86,21 @@ export interface Judge {
   model?: string | undefined;
 }
 
+/**
+ * Reads the two switches that change how a run is made and scored.
+ * @param options - Options that may set either.
+ * @param options.isolated - Start the harness with nothing loaded but the subject.
+ * @param options.lenient - Keep the 0.0.1 rule for skill loads.
+ * @returns `isolated` and `lenient`, each false when not set.
+ */
+export const modesOf = (options: {
+  isolated?: boolean | undefined;
+  lenient?: boolean | undefined;
+}): { isolated: boolean; lenient: boolean } => ({
+  isolated: options.isolated ?? false,
+  lenient: options.lenient ?? false,
+});
+
 /** One run to make: one case, one harness, one subject. */
 export interface RunPlan {
   harness: Harness;
@@ -94,6 +112,8 @@ export interface RunPlan {
   judge: Judge;
   /** Start the harness with nothing loaded but the subject, and invalidate a run that reports anything else. */
   isolated?: boolean | undefined;
+  /** Keep the 0.0.1 rule for `skill_loaded` and `skill_not_loaded` (`--lenient`). */
+  lenient?: boolean | undefined;
   /** Names of variables the harness gets besides the allowlist: the config's `env`. */
   pass?: string[] | undefined;
   /** The model that scores decision checks; null when no case has one. */
@@ -231,6 +251,46 @@ async function scoreChecks(
 }
 
 /**
+ * Writes the run's stream and final text under the output directory.
+ * @param plan - The run that was made.
+ * @param ran - What the session produced.
+ */
+function writeStreams(plan: RunPlan, ran: SessionResult): void {
+  const { harness, subject, caseDef, rep } = plan;
+  const stem = path.join(
+    plan.outDir,
+    harness.id,
+    caseDef.id,
+    `${subject.label}${String(rep)}`,
+  );
+  fs.mkdirSync(path.dirname(stem), { recursive: true });
+  fs.writeFileSync(`${stem}.stream.jsonl`, ran.stdout);
+  fs.writeFileSync(`${stem}.final.md`, ran.parsed.finalText);
+}
+
+/**
+ * Finds the skill events of a finished session.
+ * @param harness - The adapter, which says what path a read call targets.
+ * @param ran - What the session produced.
+ * @param copy - The run's copy of the subject; null for "none".
+ * @returns The events of the run's tool calls, against the copy and the skill copies the adapter placed.
+ */
+const skillEventsOf = (
+  harness: Harness,
+  ran: SessionResult,
+  copy: Copy | null,
+): SkillEvent[] =>
+  skillEvents(
+    ran.parsed.toolCalls,
+    {
+      dir: copy?.loaded.dir ?? null,
+      skillDirs: copy?.loaded.skillDirs ?? {},
+      placed: ran.placed,
+    },
+    { home: ran.home, workspace: ran.workspace, pathOf: harness.pathOf },
+  );
+
+/**
  * Turns a finished session into a run record: writes the run's files, then scores every check.
  * @param plan - The run that was made.
  * @param ran - What the session produced; its workspace still exists.
@@ -243,20 +303,12 @@ async function record(
   copy: Copy | null,
 ): Promise<RunRecord> {
   const { harness, subject, caseDef, rep } = plan;
-  const { stdout, parsed, error, durationMs } = ran;
+  const { parsed, error, durationMs } = ran;
   const { changes, observed } = observe(copy, ran);
-  const loaded = skillsLoaded(parsed.toolCalls);
+  const events = skillEventsOf(harness, ran, copy);
+  const loaded = skillsLoaded(events);
 
-  const stem = path.join(
-    plan.outDir,
-    harness.id,
-    caseDef.id,
-    `${subject.label}${String(rep)}`,
-  );
-  fs.mkdirSync(path.dirname(stem), { recursive: true });
-  fs.writeFileSync(`${stem}.stream.jsonl`, stdout);
-  fs.writeFileSync(`${stem}.final.md`, parsed.finalText);
-
+  writeStreams(plan, ran);
   const files = fileState(ran);
   const base = {
     harness: harness.id,
@@ -268,6 +320,7 @@ async function record(
     finalText: parsed.finalText,
     toolCalls: parsed.toolCalls,
     skillsLoaded: loaded,
+    skillEvents: events,
     ...startupRecord(plan, ran, copy),
     subjectMutated: changes !== null && allChanged(changes).length > 0,
     subjectChanges: changes,
@@ -281,6 +334,8 @@ async function record(
     {
       ...parsed,
       skillsLoaded: loaded,
+      skillEvents: events,
+      legacySkillLoads: plan.lenient ?? false,
       ...files,
       subject: {
         dir: copy?.loaded.dir ?? null,

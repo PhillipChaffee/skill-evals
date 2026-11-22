@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { NOT_REPORTED } from "../harnesses/shared.js";
 import { checkScore } from "./index.js";
 import { NO_FILES } from "../testing/outcome.js";
 
@@ -9,6 +10,8 @@ const score = (mutated: string[], observed?: boolean) =>
       finalText: "",
       toolCalls: [],
       skillsLoaded: [],
+      skillEvents: [],
+      loaded: NOT_REPORTED,
       workspace: "",
       ...NO_FILES,
       subject: {

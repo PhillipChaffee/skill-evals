@@ -12,6 +12,26 @@ const READ = { kind: "read" };
 // Each check that must not load, with the one message that says why.
 const BAD: [string, unknown, RegExp][] = [
   [
+    "a via that is no mechanism",
+    { type: SKILL, skill: "a", via: "telepathy" },
+    /"via" must be one of skill_tool, file_read, shell_read, injected, or a list of them/,
+  ],
+  [
+    "an empty list of vias",
+    { type: SKILL, skill: "a", via: [] },
+    /"via" must be one of/,
+  ],
+  [
+    "a resolved that is not a boolean",
+    { type: SKILL, skill: "a", resolved: "yes" },
+    /resolved must be true or false/,
+  ],
+  [
+    "a skill_file_read without its path",
+    { type: "skill_file_read", skill: "a" },
+    /skill_file_read needs a string "path"/,
+  ],
+  [
     "a matcher with a key that is not supported yet",
     { type: ORDER, before: { kind: "edit", by: {} }, after: READ },
     /"by" is not yet supported/,

@@ -78,6 +78,7 @@ interface InitEvent {
 type FakeCall = {
   call: {
     name: string;
+    /** Every string in it may hold `$PLUGIN_DIR` (the plugin directory the harness was given) and `$CONFIG_DIR` (the run's config directory, where skill copies are placed). */
     input: unknown;
     /** The tool result; empty when absent. */
     output?: string;

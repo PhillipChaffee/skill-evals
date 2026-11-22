@@ -1,6 +1,6 @@
 import { readNeeds } from "../capabilities.js";
 import { caseEnvProblem } from "../env.js";
-import { CALL_FIELDS } from "./call-fields.js";
+import { CALL_FIELDS, parseVias } from "./call-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
@@ -32,6 +32,7 @@ export type FieldType =
   | "needs"
   | "matcher"
   | "matchers"
+  | "vias"
   | "object";
 
 /** One field of a check, or one top-level key of a case file. */
@@ -315,6 +316,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
     return value;
   },
   needs: (value, at) => readNeeds(value, at.where),
+  vias: parseVias,
   matcher: (value, at) => PARSERS.object(value, at),
   matchers: (value, at) => objects(value, at),
   object: (value, at) => {

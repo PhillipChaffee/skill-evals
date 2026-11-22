@@ -142,6 +142,12 @@ export interface Harness {
   /** How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified). */
   status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
+  /**
+   * The file that a read-kind call targets, so that path extraction stays in the adapter.
+   * @returns The path as the agent wrote it, which may be relative to the workspace; null for a call that names none,
+   *   and for every call of a harness that has no read kind.
+   */
+  pathOf: (call: ToolCall) => string | null;
   /** May throw on a stream it does not understand; the caller reports that as a failed run. */
   parse: (stdout: string) => Parsed;
   /**
@@ -260,6 +266,21 @@ export const foreignOf = (
   loaded: Loaded,
   subject: LoadedSubject | null,
 ): string[] => (harness.foreign ?? foreignDefault)(loaded, subject);
+
+/**
+ * Reads one string argument of a call's input.
+ * @param call - A tool call.
+ * @param keys - The argument names the harness's tool may use, in order of preference.
+ * @returns The first of them that holds a non-empty string; null when the input is no object or holds none.
+ */
+export function stringArg(call: ToolCall, keys: string[]): string | null {
+  // Object() turns an input that is no object into one with none of the keys.
+  const given = Object(call.input) as Record<string, unknown>;
+  const value = keys
+    .map((key) => given[key])
+    .find((v) => typeof v === "string" && v !== "");
+  return typeof value === "string" ? value : null;
+}
 
 /**
  * Builds a ToolCall from an adapter's table of native tool name to kind.

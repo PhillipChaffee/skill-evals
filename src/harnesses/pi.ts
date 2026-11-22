@@ -9,6 +9,7 @@ import {
   placeSkills,
   pluginDir,
   sumTokens,
+  stringArg,
   toolCall,
 } from "./shared.js";
 
@@ -46,6 +47,8 @@ type Event =
 const pi: Harness = {
   id: "pi",
   bin: "pi",
+  // Pi's read tool takes `path` (seen in test/fixtures/pi.stream.jsonl).
+  pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".pi/agent/auth.json", ".pi/agent/models.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
   capabilities: new Set([]),

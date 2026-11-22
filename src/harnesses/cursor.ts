@@ -6,6 +6,7 @@ import {
   opt,
   placeSkills,
   pluginDir,
+  stringArg,
   toolCall,
 } from "./shared.js";
 
@@ -59,6 +60,8 @@ function nativeCall(call: Record<string, CallBody>): ToolCall {
 const cursor: Harness = {
   id: "cursor",
   bin: "cursor-agent",
+  // Cursor's read tool takes `path` (seen in test/fixtures/cursor.stream.jsonl).
+  pathOf: (call) => stringArg(call, ["path"]),
   authFiles: [".cursor/auth.json", ".config/cursor/auth.json"],
   authEnv: ["CURSOR_API_KEY"],
   capabilities: new Set(["subagents"]),

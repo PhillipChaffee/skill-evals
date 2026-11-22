@@ -4,6 +4,7 @@ import path from "node:path";
 import { onTestFinished } from "vitest";
 import type { Outcome, RuledCheck } from "../checks/index.js";
 import { checkScore } from "../checks/index.js";
+import { NOT_REPORTED } from "../harnesses/shared.js";
 import { fileState } from "../run-files.js";
 import { snapshot } from "../snapshot.js";
 
@@ -27,6 +28,8 @@ const bareOutcome = (more: Partial<Outcome> = {}): Outcome => ({
   finalText: "",
   toolCalls: [],
   skillsLoaded: [],
+  skillEvents: [],
+  loaded: NOT_REPORTED,
   workspace: "",
   subject: { dir: null, mutated: [] },
   ...NO_FILES,

@@ -105,11 +105,22 @@ function valueSchema(name: string, def: FieldDef): Schema {
   const base: Schema =
     def.type === "enum"
       ? { type: "string", enum: def.values }
-      : def.type === "matcher"
-        ? matcherSchema(def.extras)
-        : def.type === "matchers"
-          ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
-          : (BY_TYPE[def.type] ?? {});
+      : def.type === "vias"
+        ? {
+            anyOf: [
+              { type: "string", enum: def.values },
+              {
+                type: "array",
+                minItems: 1,
+                items: { type: "string", enum: def.values },
+              },
+            ],
+          }
+        : def.type === "matcher"
+          ? matcherSchema(def.extras)
+          : def.type === "matchers"
+            ? { type: "array", minItems: 1, items: matcherSchema(def.extras) }
+            : (BY_TYPE[def.type] ?? {});
   return { title: name, description: def.meaning, ...base };
 }
 

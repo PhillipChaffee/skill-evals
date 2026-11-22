@@ -14,7 +14,7 @@ A case asks one of two questions about a skill. Decide which one before you writ
 
 Do not ask both in one case. When a prompt leaves the skill out and the checks are about the result, a low score has two causes that look the same: the agent did not load the skill, or it loaded the skill and the skill did poor work. One case for each question tells you which.
 
-A case that invokes the skill does not need `skill_loaded`, and the check says little there. A prompt that names a skill can make the agent call the harness's skill tool with that name even when the skill is not installed, and that call counts as a load. One of two Claude Code runs with no skills did that on 2026-11-21.
+A case that invokes the skill does not need `skill_loaded`, and the check says little there. A prompt that names a skill can make the agent call the harness's skill tool with that name even when the skill is not installed, and that call counts as a load, as an unresolved one: add `"resolved": true` to count only loads of the subject's own skills. One of two Claude Code runs with no skills did that on 2026-11-21.
 
 ## The files of a case
 
@@ -167,7 +167,7 @@ A `sequence` is a list of matchers that must match calls in that order, with oth
 }
 ```
 
-`first_tool` checks the first tool call: `matches` is the matcher it must fit, and `ignoring` lists matchers for calls that may come before it, such as a read the agent is allowed to make first. `skill_loaded` takes `first: true` for "the first skill load is this skill, and no call outside `ignoring` came before it", and `anyOf`, a list of skills of which any is accepted, in place of `skill`. A skill load is a call of the harness's skill tool that names a skill, or a call whose input points at `skills/<name>/SKILL.md`. A `skill_loaded` with only `skill` scores as it always did.
+`first_tool` checks the first tool call: `matches` is the matcher it must fit, and `ignoring` lists matchers for calls that may come before it, such as a read the agent is allowed to make first. `skill_loaded` takes `first: true` for "the first skill load is this skill, and no call outside `ignoring` came before it", and `anyOf`, a list of skills of which any is accepted, in place of `skill`. A skill load is one of the events described in [How a skill load is detected](#how-a-skill-load-is-detected).
 
 ```json
 {
@@ -181,6 +181,30 @@ A `sequence` is a list of matchers that must match calls in that order, with oth
 Until checks can tell agents apart, every one of these sees all the calls of the run, those of a subagent included. Claude Code flattens a subagent's calls into the list. A failing check shows the calls around the one that failed, one line each: `#<index> t<turn> <agent> <kind> <name> <input>`. The full cases are in `examples/cases/tool-order` and `examples/cases/first-tool`.
 
 Harnesses do not split work the same way. One harness has a search tool, and another runs `grep` through its shell tool, so `tool_called` with `"kind": "search"` can score 0 for an agent that did search. Tool calls that a subagent made count in the harnesses whose stream includes them (seen in Claude Code).
+
+## How a skill load is detected
+
+Each skill event has a mechanism (`via`), a position in the run's call list, and whether the skill is one of the loaded subject (`resolved`). Three mechanisms are real:
+
+| `via`        | What counts                                                                                                                                                                                                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skill_tool` | A call of the harness's skill tool that names a skill, with any `plugin:` prefix dropped. It is `resolved` when the skill is one of the subject's.                                                                                                                                                    |
+| `file_read`  | A read-kind call whose path argument, followed through links and resolved against the workspace when it is relative, is the `SKILL.md` of one of the subject's skills, in the run's copy of the subject or in a copy that the adapter placed in the home. The adapter's `pathOf` says which argument. |
+| `shell_read` | A shell call with a command that starts with `cat`, `head`, `tail`, `less`, `bat`, `nl` or `sed -n` (after any `NAME=value` words) and names such a path. The command is split at `&&`, `\|\|`, `;` and `\|`, and at a `-c` script of `bash -lc '...'`, and quoted words are unquoted. No shell runs. |
+
+Nothing else is a load. A `grep`, `rg`, `ls`, `find` or `wc` that mentions the path is not one, and neither is a read of a path in the workspace, even when it looks like `skills/foo/SKILL.md`: a fixture cannot satisfy `skill_loaded`. A read of any other file under a subject skill's directory, such as `references/bug-fix.md`, is not a load. It is a `skill_file_read` event, which the check of that name scores. `skill_loaded` and `skill_not_loaded` take `via` (one mechanism or a list; default: the three) and `resolved`. `skill_available` and `skill_not_available` look at the harness's own list of the skills it loaded at startup, and apply only to a harness that reports one (the capability `skillListing`).
+
+```json
+{
+  "type": "skill_file_read",
+  "skill": "bug-fix",
+  "path": "references/*.md"
+}
+```
+
+The run record keeps the events as `skillEvents`, and `skillsLoaded` is the sorted names of its loads. A harness reads files in its own way: Codex has no read tool and reads through shell commands, so its loads are `shell_read`. `pathOf` is certain for Claude Code (`file_path`), Pi and Cursor (`path`), which the captured streams show; for OpenCode it takes `filePath`, `path` or `file_path`, from its documentation and not from a captured read call.
+
+**Migration.** 0.0.1 counted any tool input that mentioned `skills/<name>/SKILL.md`, so a `grep` across the skills, a listing, or a fixture could score a load. That is fixed, and it is the one change to what an existing suite scores. For one release, `--lenient` keeps the 0.0.1 rule for a `skill_loaded` or `skill_not_loaded` that has neither `via` nor `resolved`.
 
 ## File checks
 

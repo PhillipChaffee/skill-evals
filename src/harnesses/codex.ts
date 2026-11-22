@@ -71,6 +71,8 @@ function installPlugin(dir: string): string[][] {
 const codex: Harness = {
   id: "codex",
   bin: "codex",
+  // Codex has no read kind: it reads files through shell commands, which `shell_read` covers.
+  pathOf: () => null,
   authFiles: [".codex/auth.json"],
   authEnv: OPENAI_ENV,
   capabilities: new Set(["subagents"]),

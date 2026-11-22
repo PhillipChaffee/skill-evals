@@ -1,7 +1,8 @@
+import { globToRegExp } from "../glob.js";
 import { firstOutside, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
-import type { SkillLoad } from "../skill-loads.js";
-import { skillLoads } from "../skill-loads.js";
+import type { SkillLoad, SkillVia } from "../skill-events.js";
+import { REAL_VIAS, legacySkillLoads } from "../skill-events.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
 
@@ -13,6 +14,38 @@ const list = (words: string[]): string => words.join(", ");
 const namedBy = (check: RuledCheck): string[] =>
   check.anyOf ?? (check.skill === undefined ? [] : [check.skill]);
 
+// The mechanisms a check accepts.
+const viasOf = (check: RuledCheck): readonly SkillVia[] =>
+  check.via === undefined ? REAL_VIAS : [check.via].flat();
+
+/**
+ * Finds the loads a check counts, in the order of the calls.
+ * @param check - A `skill_loaded` or `skill_not_loaded` check.
+ * @param outcome - What the run left behind.
+ * @returns Under `--lenient`, and with neither `via` nor `resolved`, the loads of the 0.0.1 rule: any input that
+ *   mentions `skills/<name>/SKILL.md`. Otherwise the `load` events of the run, of the check's `via` and, with
+ *   `resolved`, of that kind.
+ */
+function loadsOf(check: RuledCheck, outcome: Outcome): SkillLoad[] {
+  if (
+    outcome.legacySkillLoads &&
+    check.via === undefined &&
+    check.resolved === undefined
+  ) {
+    return legacySkillLoads(outcome.toolCalls);
+  }
+  const vias = viasOf(check);
+  return outcome.skillEvents.filter(
+    (event) =>
+      event.type === "load" &&
+      vias.includes(event.via) &&
+      (check.resolved === undefined || event.resolved === check.resolved),
+  );
+}
+
+const loadedNames = (loads: SkillLoad[]): string =>
+  list([...new Set(loads.map(({ skill }) => skill))].sort()) || "none";
+
 /**
  * Scores `first`: the first skill load is a named skill, and no call outside `ignoring` comes before it.
  * @param check - A `skill_loaded` check with `first` set.
@@ -21,7 +54,7 @@ const namedBy = (check: RuledCheck): string[] =>
  */
 function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
   const all = outcome.toolCalls;
-  const [first] = skillLoads(all);
+  const [first] = loadsOf(check, outcome);
   if (!first) {
     return { score: 0, reason: `no skill was loaded\n${quoteCalls(all, [])}` };
   }
@@ -49,16 +82,55 @@ function loadedFirst(check: RuledCheck, outcome: Outcome): Verdict {
 function skillLoaded(check: RuledCheck, outcome: Outcome): Verdict {
   if (check.first) return loadedFirst(check, outcome);
   const names = namedBy(check);
-  if (names.some((name) => outcome.skillsLoaded.includes(name))) return PASS;
-  const loads = skillLoads(outcome.toolCalls);
+  const loads = loadsOf(check, outcome);
+  if (loads.some(({ skill }) => names.includes(skill))) return PASS;
   const what =
     check.anyOf === undefined
       ? `"${list(names)}" was not loaded`
       : `none of ${list(names)} was loaded`;
-  const loaded = list(outcome.skillsLoaded) || "none";
   return {
     score: 0,
-    reason: `${what} (loaded: ${loaded})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
+    reason: `${what} (loaded: ${loadedNames(loads)})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
+  };
+}
+
+/**
+ * Scores a `skill_not_loaded` check.
+ * @param check - A `skill_not_loaded` check.
+ * @param outcome - What the run left behind.
+ * @returns 1 when no counted load names the skill, and the call of the first one otherwise.
+ */
+function skillNotLoaded(check: RuledCheck, outcome: Outcome): Verdict {
+  const loads = loadsOf(check, outcome).filter(
+    ({ skill }) => skill === check.skill,
+  );
+  if (loads.length === 0) return PASS;
+  return {
+    score: 0,
+    reason: `"${String(check.skill)}" was loaded (call #${String(loads[0]?.index)})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
+  };
+}
+
+/**
+ * Scores a `skill_file_read` check.
+ * @param check - A `skill_file_read` check.
+ * @param outcome - What the run left behind.
+ * @returns 1 when the agent read a file of the skill that the glob `path` matches, relative to the skill's directory.
+ */
+function skillFileRead(check: RuledCheck, outcome: Outcome): Verdict {
+  const vias = viasOf(check);
+  const glob = globToRegExp(check.path ?? "");
+  const reads = outcome.skillEvents.filter(
+    (event) =>
+      event.type === "file_read" &&
+      event.skill === check.skill &&
+      vias.includes(event.via),
+  );
+  if (reads.some(({ file }) => glob.test(file ?? ""))) return PASS;
+  const seen = list(reads.map(({ file }) => String(file))) || "none";
+  return {
+    score: 0,
+    reason: `no file of "${String(check.skill)}" matching ${String(check.path)} was read (read: ${seen})\n${quoteCalls(outcome.toolCalls, positions(reads))}`,
   };
 }
 
@@ -84,30 +156,61 @@ function checkSkillFields(given: Record<string, unknown>, where: string): void {
   }
 }
 
+const LISTING_NOTE =
+  "It reads the skills the harness reported at startup, so it needs the capability `skillListing`; a harness without it makes the case not applicable.";
+
 // The checks of which skills the agent loaded.
 export const SKILL_CHECKS = {
   skill_loaded: {
     fields: [],
     forms: [["skill"], ["anyOf"]],
     together: { ignoring: ["first"] },
-    optional: ["skill", "anyOf", "first", "ignoring"],
-    scores: "The agent loaded that skill, or any of the skills in `anyOf`.",
-    note: "With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, because calls cannot yet be told apart by the agent that made them. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`.",
+    optional: ["skill", "anyOf", "first", "ignoring", "via", "resolved"],
+    scores:
+      "The agent loaded that skill, or any of the skills in `anyOf`, through the skill tool, a read of its `SKILL.md`, or a shell command that reads it.",
+    note: "A load is a real one: a skill-kind call that names the skill, or a read-kind or `cat`-style shell call of `SKILL.md` in the loaded subject's own copy of the skill. A `grep`, a listing, and a path in the workspace that merely looks like `skills/<name>/SKILL.md` are not loads. With `first: true` the first skill load must be a named skill, and no tool call that does not fit `ignoring` may come before it; every call of the run counts, a subagent's included, because calls cannot yet be told apart by the agent that made them. It takes exactly one of `skill` and `anyOf`, and `ignoring` only with `first`. Under `--lenient`, a check with neither `via` nor `resolved` keeps the 0.0.1 rule for one release: any tool input that mentions `skills/<name>/SKILL.md`, in any case.",
     validate: checkSkillFields,
     rule: skillLoaded,
   },
   skill_not_loaded: {
     fields: ["skill"],
+    optional: ["via", "resolved"],
     scores: "The agent did not load that skill.",
-    rule: (check, outcome) => {
-      if (!outcome.skillsLoaded.includes(check.skill as string)) return PASS;
-      const loads = skillLoads(outcome.toolCalls).filter(
-        ({ skill }) => skill === check.skill,
-      );
-      return {
-        score: 0,
-        reason: `"${String(check.skill)}" was loaded (call #${String(loads[0]?.index)})\n${quoteCalls(outcome.toolCalls, positions(loads))}`,
-      };
-    },
+    note: "It counts loads as `skill_loaded` does, including `via` and `resolved`, and keeps the 0.0.1 rule under `--lenient` in the same way.",
+    rule: skillNotLoaded,
+  },
+  skill_available: {
+    fields: ["skill"],
+    scores: "The harness listed that skill among the skills it loaded.",
+    note: LISTING_NOTE,
+    needs: () => ["skillListing"],
+    rule: (check, outcome) =>
+      (outcome.loaded.skills ?? []).includes(String(check.skill))
+        ? PASS
+        : {
+            score: 0,
+            reason: `"${String(check.skill)}" is not in the harness's listing (listed: ${list(outcome.loaded.skills ?? []) || "none"})`,
+          },
+  },
+  skill_not_available: {
+    fields: ["skill"],
+    scores: "The harness did not list that skill among the skills it loaded.",
+    note: LISTING_NOTE,
+    needs: () => ["skillListing"],
+    rule: (check, outcome) =>
+      (outcome.loaded.skills ?? []).includes(String(check.skill))
+        ? {
+            score: 0,
+            reason: `"${String(check.skill)}" is in the harness's listing`,
+          }
+        : PASS,
+  },
+  skill_file_read: {
+    fields: ["skill", "path"],
+    optional: ["via"],
+    scores:
+      "The agent read a file of that skill's directory other than `SKILL.md`, whose path relative to the directory matches the glob `path`.",
+    note: "Reads count through a read-kind call or a `cat`-style shell command, as for `skill_loaded`; `path` is relative to the skill's directory, not to the workspace, and may be a glob such as `references/*.md`.",
+    rule: skillFileRead,
   },
 } satisfies Record<string, Spec>;

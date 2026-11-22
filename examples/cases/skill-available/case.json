@@ -1,0 +1,9 @@
+{
+  "description": "The harness lists the skill at startup, and does not list a skill that only a user should reach.",
+  "tags": ["skills", "listing"],
+  "targets": ["commit-message"],
+  "checks": [
+    { "type": "skill_available", "skill": "commit-message" },
+    { "type": "skill_not_available", "skill": "release-notes" }
+  ]
+}

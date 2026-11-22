@@ -10,6 +10,7 @@ import {
   placeSkills,
   pluginDir,
   sumTokens,
+  stringArg,
   toolCall,
 } from "./shared.js";
 
@@ -49,6 +50,8 @@ type Event =
 const opencode: Harness = {
   id: "opencode",
   bin: "opencode",
+  // OpenCode's read tool is documented with `filePath`; no captured stream has a read call, so `path` and `file_path` are accepted too.
+  pathOf: (call) => stringArg(call, ["filePath", "path", "file_path"]),
   authFiles: [".local/share/opencode/auth.json"],
   authEnv: [...ANTHROPIC_ENV, ...OPENAI_ENV],
   capabilities: new Set(["subagents"]),

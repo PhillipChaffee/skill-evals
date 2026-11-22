@@ -1,9 +1,19 @@
 import { expect, test } from "vitest";
 import { HARNESSES } from "./harnesses/index.js";
 import { NOT_REPORTED } from "./harnesses/shared.js";
-import { skillsLoaded } from "./skill-loads.js";
+import { skillEvents, skillsLoaded } from "./skill-events.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 
+const harnessOf = (id: string) => {
+  const found = HARNESSES.find((harness) => harness.id === id);
+  if (!found) throw new Error(`no harness ${id}`);
+  return found;
+};
+const PI_BRO = "/work/kit-9fq1/skills/bro";
+// Where each captured stream reads the skill `bro` from, when not the pi stream's path.
+const BRO_DIRS: Record<string, string> = {
+  codex: "/tmp/home-4c1d/.codex/plugins/cache/magic-dev/magic/0.2.0/skills/bro",
+};
 const plainWords =
   /^In plain words: it keeps fixing things until they match\.$/;
 const CLAUDE_CODE = "claude-code";
@@ -119,7 +129,17 @@ test.each(STREAMS)("$id adapter normalizes a successful stream", (expected) => {
   expect(parsed.error).toBeNull();
   expect(parsed.finalText).toMatch(expected.finalText);
   expect(parsed.toolCalls).toEqual(expected.toolCalls);
-  expect(skillsLoaded(parsed.toolCalls)).toEqual(expected.skills);
+  // The subject's skill `bro` sits where the pi stream reads it.
+  const events = skillEvents(
+    parsed.toolCalls,
+    { dir: null, skillDirs: { bro: BRO_DIRS[expected.id] ?? PI_BRO } },
+    {
+      home: "/home",
+      workspace: "/work/proj",
+      pathOf: (call) => harnessOf(expected.id).pathOf(call),
+    },
+  );
+  expect(skillsLoaded(events)).toEqual(expected.skills);
   expect(parsed.tokens).toEqual(expected.tokens);
   expect(parsed.costUsd).toBe(expected.costUsd);
   expect(parsed.loaded).toEqual(expected.loaded);
@@ -266,4 +286,18 @@ test("only claude-code declares turnGrouping", () => {
       (h) => h.id,
     ),
   ).toEqual([CLAUDE_CODE]);
+});
+
+test.each([
+  [CLAUDE_CODE, "Read", { file_path: "/a/SKILL.md" }, "/a/SKILL.md"],
+  ["pi", "read", { path: "/b/SKILL.md" }, "/b/SKILL.md"],
+  ["cursor", "read", { path: "c/SKILL.md" }, "c/SKILL.md"],
+  ["opencode", "read", { filePath: "/d/SKILL.md" }, "/d/SKILL.md"],
+  ["opencode", "read", { path: "/e/SKILL.md" }, "/e/SKILL.md"],
+  [CLAUDE_CODE, "Read", { path: "/f/SKILL.md" }, null],
+  [CLAUDE_CODE, "Read", { file_path: "" }, null],
+  ["pi", "read", "/g/SKILL.md", null],
+  ["codex", "command_execution", { command: "cat /h/SKILL.md" }, null],
+])("%s pathOf reads the path of a %s call", (id, name, input, expected) => {
+  expect(harnessOf(id).pathOf({ name, kind: "read", input })).toBe(expected);
 });

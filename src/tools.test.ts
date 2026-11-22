@@ -1,14 +1,15 @@
 import { expect, test } from "vitest";
 import type { RuledCheck } from "./checks/index.js";
 import { checkScore } from "./checks/index.js";
-import { skillsLoaded } from "./skill-loads.js";
+import { NOT_REPORTED } from "./harnesses/shared.js";
+import { legacySkillLoads } from "./skill-events.js";
 import { lines, parse, parseText } from "./testing/streams.js";
 import { NO_FILES } from "./testing/outcome.js";
 
 const CODEX_STREAM = "codex.stream.jsonl";
 
-test("a skill counts as loaded through the harness's skill tool or a read of its SKILL.md, and through nothing else", () => {
-  const loaded = skillsLoaded([
+test("the 0.0.1 rule counts a skill through the harness's skill tool or any input that mentions its SKILL.md, and through nothing else", () => {
+  const loaded = legacySkillLoads([
     { name: "Skill", kind: "skill", input: { skill: "magic:bro" } },
     { name: "skill", kind: "skill", input: { id: "how" } },
     { name: "skill", kind: "skill", input: null },
@@ -33,7 +34,11 @@ test("a skill counts as loaded through the harness's skill tool or a read of its
       input: { path: "skill.md", name: "sharpen" },
     },
   ]);
-  expect(loaded).toEqual(["bro", "how", "why"]);
+  expect([...new Set(loaded.map(({ skill }) => skill))].sort()).toEqual([
+    "bro",
+    "how",
+    "why",
+  ]);
 });
 
 const TOOL_STREAMS: [string, string][] = [
@@ -48,6 +53,8 @@ const score = (id: string, name: string, check: Omit<RuledCheck, "weight">) =>
       toolCalls: parse(id, name).toolCalls,
       finalText: "",
       skillsLoaded: [],
+      skillEvents: [],
+      loaded: NOT_REPORTED,
       workspace: "",
       ...NO_FILES,
       subject: { dir: null, mutated: [] },

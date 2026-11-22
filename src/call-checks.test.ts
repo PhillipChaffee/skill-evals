@@ -4,6 +4,7 @@ import { loadCases } from "./cases.js";
 import type { RuledCheck } from "./checks/index.js";
 import { checkScore, describeCheck } from "./checks/index.js";
 import type { ToolCall } from "./harnesses/shared.js";
+import { NOT_REPORTED } from "./harnesses/shared.js";
 import { NO_FILES } from "./testing/outcome.js";
 
 const call = (name: string, input: unknown, turn?: number): ToolCall => ({
@@ -19,6 +20,8 @@ const score = (check: Omit<RuledCheck, "weight">, calls: ToolCall[]) =>
       toolCalls: calls.map((one, index) => ({ ...one, index })),
       finalText: "",
       skillsLoaded: [],
+      skillEvents: [],
+      loaded: NOT_REPORTED,
       workspace: "",
       ...NO_FILES,
       subject: { dir: null, mutated: [] },
