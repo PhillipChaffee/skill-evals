@@ -11,6 +11,9 @@ import { regex } from "./rules.js";
 import { readSteps } from "../setup-steps.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
 import { UsageError, isObject, messageOf } from "../scope.js";
+import type { FieldDefault } from "./field-default.js";
+
+export { WEIGHT } from "./field-default.js";
 
 /** What a field holds, which decides how loading a case parses it. */
 export type FieldType =
@@ -49,6 +52,8 @@ export interface FieldDef {
   type: FieldType;
   /** What the field holds, in one sentence for the docs. */
   meaning: string;
+  /** What the rules apply when the field is absent. Absent here: the field has no default, which `meaning` may explain. */
+  default?: FieldDefault;
   /** The allowed words of an `enum`. */
   values?: readonly string[];
   /** What an error message says the value must be, where the type's own wording is too general. */
@@ -126,12 +131,6 @@ export const FIELDS: Record<string, FieldDef> = {
       "An object of at least two answers, each with a number from 0 to 1 that says what the answer is worth.",
   },
   ...NEED_FIELDS,
-};
-
-/** The `weight` of a check or of a case, which every one of them may carry. */
-export const WEIGHT: FieldDef = {
-  type: "number",
-  meaning: "A positive number that says how much it counts. Default: 1.",
 };
 
 /** The fields whose value is a regular expression, in the order of `FIELDS`. */

@@ -1,9 +1,10 @@
 import { fitsBy } from "../agents.js";
+import { valueOf } from "./defaults.js";
 import { globToRegExp } from "../glob.js";
 import { firstOutside, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { SkillLoad, SkillVia } from "../skill-events.js";
-import { REAL_VIAS, legacySkillLoads } from "../skill-events.js";
+import { legacySkillLoads } from "../skill-events.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { byNeeds, unseenAgent } from "./by-needs.js";
 import { PASS } from "./rules.js";
@@ -18,7 +19,7 @@ const namedBy = (check: RuledCheck): string[] =>
 
 // The mechanisms a check accepts.
 const viasOf = (check: RuledCheck): readonly SkillVia[] =>
-  check.via === undefined ? REAL_VIAS : [check.via].flat();
+  [valueOf(check, "via") as SkillVia | readonly SkillVia[]].flat();
 
 /**
  * Finds the loads a check counts, in the order of the calls.

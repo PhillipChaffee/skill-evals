@@ -1,4 +1,5 @@
 import type { Capability } from "../capabilities.js";
+import { valueOf } from "./defaults.js";
 import { tester } from "../matchers.js";
 import { resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
@@ -15,6 +16,11 @@ const FIELDS_OF_TEXT = { optional: ["flags", "where", "scope", "by"] };
 const CAP_NOTE =
   'A pattern sees at most the first 1,000,000 characters of each event. `first_message` is the main agent\'s first non-empty text, which in a kit whose first action is a tool call is not the text before the first tool call. With `by`, only the events of those agents are tested, and `first_message` and `final_message` are those agents\' first and last non-empty text: `by: { "agent": "researcher" }` with `first_message` is the researcher\'s first line. With a `by` that no event of the chosen `where` fits, `transcript_lacks` scores 0 and not 1, as when the run has no such events at all. `by` needs `childText`.';
 
+const whereOf = (check: { type: string }): NonNullable<Check["where"]> =>
+  valueOf(check, "where") as NonNullable<Check["where"]>;
+const scopeOf = (check: { type: string }): NonNullable<Check["scope"]> =>
+  valueOf(check, "scope") as NonNullable<Check["scope"]>;
+
 /**
  * Lists what a check of text needs.
  * @param check - A `transcript_matches` or `transcript_lacks` check.
@@ -22,7 +28,7 @@ const CAP_NOTE =
  *   `tool_input`, which every adapter supplies.
  */
 function textNeeds(check: Check): Capability[] {
-  const where = check.where ?? "assistant_text";
+  const where = whereOf(check);
   if (where === "assistant_text") return ["assistantText"];
   return where === "tool_input" ? [] : ["toolOutputs"];
 }
@@ -67,8 +73,8 @@ function tested(
   outcome: Outcome,
 ): { all: Piece[]; hits: Piece[] } | { problem: string } {
   const cut = pieces(outcome.transcript, {
-    scope: check.scope ?? "any",
-    where: check.where ?? "assistant_text",
+    scope: scopeOf(check),
+    where: whereOf(check),
     by: check.by,
   });
   if ("problem" in cut) return cut;
@@ -88,7 +94,7 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
   if (found.hits.length > 0) return PASS;
   return {
     score: 0,
-    reason: `no ${check.where ?? "assistant_text"} text matches ${written(check)} in ${String(found.all.length)} tested ${found.all.length === 1 ? "event" : "events"}\n${quotePieces(found.all)}`,
+    reason: `no ${whereOf(check)} text matches ${written(check)} in ${String(found.all.length)} tested ${found.all.length === 1 ? "event" : "events"}\n${quotePieces(found.all)}`,
   };
 }
 
@@ -100,7 +106,7 @@ function textMatches(check: RuledCheck, outcome: Outcome): Verdict {
  */
 function silentCall(check: RuledCheck, outcome: Outcome): number {
   const cut = pieces(outcome.transcript, {
-    scope: check.scope ?? "any",
+    scope: scopeOf(check),
     where: "all",
     by: check.by,
   });
@@ -127,7 +133,7 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   if (unseen) return unseen;
   const found = tested(check, outcome);
   if ("problem" in found) return { score: 0, reason: found.problem };
-  const where = check.where ?? "assistant_text";
+  const where = whereOf(check);
   const anywhere = pieces(outcome.transcript, {
     scope: "any",
     where,
@@ -157,7 +163,7 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
   if (found.hits.length === 0) return PASS;
   return {
     score: 0,
-    reason: `${check.where ?? "assistant_text"} text matches ${written(check)} in ${String(found.hits.length)} of ${String(found.all.length)} tested events\n${quotePieces(found.hits)}`,
+    reason: `${whereOf(check)} text matches ${written(check)} in ${String(found.hits.length)} of ${String(found.all.length)} tested events\n${quotePieces(found.hits)}`,
   };
 }
 

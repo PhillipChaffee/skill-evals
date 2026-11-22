@@ -1,41 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EXIT } from "../exit-codes.js";
-import { hasReservedChar, isCaseDir, isSkippedName } from "../discover.js";
+import { idProblem } from "../case-id.js";
+import { isCaseDir } from "../discover.js";
+import type { Template } from "../init-templates.js";
 import { TEMPLATES } from "../init-templates.js";
 import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
-import { UsageError } from "../scope.js";
+import { UsageError, messageOf } from "../scope.js";
 import type { Options } from "../usage.js";
 
 const JSON_INDENT = 2;
 
 /** The kinds of case that `init` starts from. */
 const KINDS = Object.keys(TEMPLATES);
-
-/**
- * Says what is wrong with a case id, by the rules that discovery applies to a case's directory.
- * @param id - The id as typed: the case's path below the cases directory, with `/`.
- * @returns The problem, or null when the id is fine. An id is not fine when it is empty, has an empty part, `.` or
- *   `..`, holds `@` or `,` in a part, or has a part that starts with `_`, which discovery skips.
- */
-function idProblem(id: string): string | null {
-  const parts = id.split("/");
-  const bad = parts.find(
-    (part) =>
-      part === "" || part === "." || part === ".." || /[\\\s]/.test(part),
-  );
-  if (bad !== undefined) {
-    return `"${id}" has an empty part, "." or "..", a space or a backslash; an id is a path of folder names joined by "/"`;
-  }
-  if (parts.some(hasReservedChar)) {
-    return `"${id}": a directory name may not hold "@" or ","`;
-  }
-  if (parts.some(isSkippedName)) {
-    return `"${id}": a directory name that starts with "_" is never a case`;
-  }
-  return null;
-}
 
 /**
  * Finds a case that the new id would sit inside, because discovery never looks below a case.
@@ -49,6 +27,45 @@ function caseAbove(casesDir: string, id: string): string | null {
     .map((_, index) => parts.slice(0, index + 1))
     .find((names) => isCaseDir(path.join(casesDir, ...names)));
   return above?.join("/") ?? null;
+}
+
+/**
+ * Creates the case directory and its two files, or leaves nothing of it.
+ * @param dir - The case's directory.
+ * @param template - What to write.
+ * @throws {UsageError} When the directory exists (another `init` may have just made it), a folder on its path is a
+ *   file, or any file system call fails. A directory that this call made is removed when a later write fails.
+ */
+function writeCase(dir: string, template: Template): void {
+  try {
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+  } catch (error) {
+    throw new UsageError(`cannot create ${dir}: ${messageOf(error)}`);
+  }
+  try {
+    // Not recursive: an existing directory is an error here, and only one of two `init` calls can make it.
+    fs.mkdirSync(dir);
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    throw new UsageError(
+      code === "EEXIST"
+        ? `${dir} already exists; init never overwrites a case`
+        : `cannot create ${dir}: ${messageOf(error)}`,
+    );
+  }
+  try {
+    fs.writeFileSync(path.join(dir, "prompt.md"), template.prompt, {
+      flag: "wx",
+    });
+    fs.writeFileSync(
+      path.join(dir, "case.json"),
+      `${JSON.stringify(template.case, null, JSON_INDENT)}\n`,
+      { flag: "wx" },
+    );
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw new UsageError(`cannot write ${dir}: ${messageOf(error)}`);
+  }
 }
 
 /**
@@ -73,7 +90,7 @@ export function init(
       : undefined;
   if (!template) {
     throw new UsageError(
-      `init needs --kind ${KINDS.join("|")}${kind === undefined ? "" : `, not "${kind}"`}`,
+      `init needs --kind ${KINDS.join("|")}${kind === undefined ? "" : `, not ${JSON.stringify(kind)}`}`,
     );
   }
   const problem = idProblem(id);
@@ -82,19 +99,11 @@ export function init(
   const above = caseAbove(cases, id);
   if (above !== null) {
     throw new UsageError(
-      `${id} would sit inside the case ${above}, and nothing under a case is searched`,
+      `${JSON.stringify(id)} would sit inside the case ${above}, and nothing under a case is searched`,
     );
   }
   const dir = path.join(cases, ...id.split("/"));
-  if (fs.existsSync(dir)) {
-    throw new UsageError(`${dir} already exists; init never overwrites a case`);
-  }
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "prompt.md"), template.prompt);
-  fs.writeFileSync(
-    path.join(dir, "case.json"),
-    `${JSON.stringify(template.case, null, JSON_INDENT)}\n`,
-  );
+  writeCase(dir, template);
   console.log(
     [
       `wrote ${path.join(dir, "prompt.md")}`,

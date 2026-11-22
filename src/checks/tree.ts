@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { valueOf } from "./defaults.js";
 import path from "node:path";
 import {
   GLOB_LIMIT,
@@ -53,7 +54,7 @@ const SHOWN_PATHS = 10;
  * @returns The workspace or the home, with its seed and its changes.
  */
 export const treeOf = (check: RuledCheck, outcome: Outcome): Tree =>
-  check.root === "home"
+  valueOf(check, "root") === "home"
     ? {
         dir: outcome.home,
         seed: outcome.homeSeed,

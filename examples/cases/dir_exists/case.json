@@ -1,9 +1,23 @@
 {
-  "description": "A directory exists.",
+  "description": "Create the audit folder.",
+  "tags": ["files"],
   "checks": [
     {
       "type": "dir_exists",
-      "path": "docs"
+      "path": ".audit",
+      "root": "home"
+    },
+    {
+      "type": "file_matches",
+      "path": ".audit/*.log",
+      "pattern": "\\S",
+      "root": "home",
+      "quantifier": "all"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
     }
-  ]
+  ],
+  "timeoutSeconds": 300
 }

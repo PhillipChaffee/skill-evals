@@ -3,7 +3,8 @@ import { applicability, askedBy, hostCapabilities } from "../applicability.js";
 import type { Applicability } from "../applicability.js";
 import type { Case } from "../cases.js";
 import { loadWhere } from "../cases.js";
-import { withDefaults } from "../check-defaults.js";
+import { CHECKS } from "../checks/index.js";
+import { withDefaults } from "../checks/defaults.js";
 import { discover } from "../discover.js";
 import { EXIT } from "../exit-codes.js";
 import { installedOf } from "../harnesses/index.js";
@@ -81,7 +82,7 @@ function resolved(one: Case, casesDir: string): object {
       grader: orNull(one.graderDir),
     },
     requiredCapabilities: [...new Set(askedBy([one]))],
-    checks: one.checks.map(withDefaults),
+    checks: one.checks.map((check) => withDefaults(check, CHECKS[check.type])),
   };
 }
 

@@ -293,7 +293,7 @@
         "type": { "const": "skill_loaded" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -314,7 +314,7 @@
         },
         "first": {
           "title": "first",
-          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it.",
           "type": "boolean"
         },
         "ignoring": {
@@ -417,7 +417,7 @@
         },
         "via": {
           "title": "via",
-          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet. Default: the three real mechanisms.",
+          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet.",
           "anyOf": [
             {
               "type": "string",
@@ -462,7 +462,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -481,7 +481,7 @@
         "type": { "const": "skill_not_loaded" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -495,7 +495,7 @@
         },
         "via": {
           "title": "via",
-          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet. Default: the three real mechanisms.",
+          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet.",
           "anyOf": [
             {
               "type": "string",
@@ -540,7 +540,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -557,7 +557,7 @@
         "type": { "const": "skill_available" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -580,7 +580,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -597,7 +597,7 @@
         "type": { "const": "skill_not_available" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -620,7 +620,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -637,7 +637,7 @@
         "type": { "const": "skill_file_read" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -658,7 +658,7 @@
         },
         "via": {
           "title": "via",
-          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet. Default: the three real mechanisms.",
+          "description": "How the skill reached the agent: `\"skill_tool\"` (a call of the harness's skill tool), `\"file_read\"` (a read-kind call of a file in the skill's directory), `\"shell_read\"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `\"injected\"` is reserved: nothing produces it yet.",
           "anyOf": [
             {
               "type": "string",
@@ -685,7 +685,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -702,7 +702,7 @@
         "type": { "const": "output_matches" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -731,7 +731,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -748,7 +748,7 @@
         "type": { "const": "output_lacks" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -777,7 +777,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -794,7 +794,7 @@
         "type": { "const": "output_contains" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -817,7 +817,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -834,7 +834,7 @@
         "type": { "const": "output_not_contains" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -857,7 +857,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -874,7 +874,7 @@
         "type": { "const": "file_exists" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -889,12 +889,12 @@
         },
         "created": {
           "title": "created",
-          "description": "True to require that the agent created the file: no file at that path was in the root before the run. Default: false.",
+          "description": "True to require that the agent created the file: no file at that path was in the root before the run.",
           "type": "boolean"
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -909,7 +909,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -926,7 +926,7 @@
         "type": { "const": "file_matches" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -953,13 +953,13 @@
         },
         "quantifier": {
           "title": "quantifier",
-          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one. Default: \"any\" for `file_matches`, \"all\" for `file_lacks`.",
+          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one.",
           "type": "string",
           "enum": ["any", "all"]
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -974,7 +974,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -991,7 +991,7 @@
         "type": { "const": "file_lacks" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1018,13 +1018,13 @@
         },
         "quantifier": {
           "title": "quantifier",
-          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one. Default: \"any\" for `file_matches`, \"all\" for `file_lacks`.",
+          "description": "For a glob that matches several files: \"any\" needs one of them to pass, \"all\" needs every one.",
           "type": "string",
           "enum": ["any", "all"]
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1039,7 +1039,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1056,7 +1056,7 @@
         "type": { "const": "file_lines" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1071,7 +1071,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
@@ -1083,7 +1083,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1098,7 +1098,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1116,7 +1116,7 @@
         "type": { "const": "file_absent" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1131,7 +1131,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1146,7 +1146,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1163,7 +1163,7 @@
         "type": { "const": "file_unchanged" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1178,7 +1178,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1193,7 +1193,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1210,7 +1210,7 @@
         "type": { "const": "file_changed" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1225,7 +1225,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1240,7 +1240,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1257,7 +1257,7 @@
         "type": { "const": "files_changed_only" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1279,7 +1279,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1294,7 +1294,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1311,7 +1311,7 @@
         "type": { "const": "file_count" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1326,7 +1326,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
@@ -1338,7 +1338,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1353,7 +1353,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1370,7 +1370,7 @@
         "type": { "const": "dir_exists" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1385,7 +1385,7 @@
         },
         "root": {
           "title": "root",
-          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files. Default: \"workspace\".",
+          "description": "Where the path is looked up: the agent's \"workspace\", or the run's throwaway \"home\", for a skill that writes user-level files.",
           "type": "string",
           "enum": ["workspace", "home"]
         },
@@ -1400,7 +1400,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1417,7 +1417,7 @@
         "type": { "const": "tool_called" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1502,7 +1502,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
@@ -1514,12 +1514,12 @@
         },
         "sameTurn": {
           "title": "sameTurn",
-          "description": "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`. Default: false.",
+          "description": "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`.",
           "type": "boolean"
         },
         "first": {
           "title": "first",
-          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+          "description": "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it.",
           "type": "boolean"
         },
         "requires": {
@@ -1533,7 +1533,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1556,7 +1556,7 @@
         "type": { "const": "tool_not_called" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1650,7 +1650,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1673,7 +1673,7 @@
         "type": { "const": "first_tool" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1882,7 +1882,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1899,7 +1899,7 @@
         "type": { "const": "agent_dispatched" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -1913,7 +1913,7 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
@@ -1937,7 +1937,7 @@
         },
         "briefWindow": {
           "title": "briefWindow",
-          "description": "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one. Default: 400.",
+          "description": "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one.",
           "type": "integer",
           "minimum": 1
         },
@@ -1958,7 +1958,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -1975,7 +1975,7 @@
         "type": { "const": "tool_order" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -2067,7 +2067,7 @@
             },
             "which": {
               "title": "which",
-              "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
+              "description": "Which matching call counts: \"first\" or \"last\".",
               "type": "string",
               "enum": ["first", "last"]
             }
@@ -2167,7 +2167,7 @@
             },
             "which": {
               "title": "which",
-              "description": "Which matching call counts: \"first\" or \"last\". Default: \"first\".",
+              "description": "Which matching call counts: \"first\" or \"last\".",
               "type": "string",
               "enum": ["first", "last"]
             }
@@ -2281,7 +2281,7 @@
         },
         "strict": {
           "title": "strict",
-          "description": "True for a `sequence` to forbid a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match. Default: false.",
+          "description": "True for a `sequence` to forbid a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match.",
           "type": "boolean"
         },
         "requires": {
@@ -2295,7 +2295,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -2317,7 +2317,7 @@
         "type": { "const": "transcript_matches" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -2337,13 +2337,13 @@
         },
         "where": {
           "title": "where",
-          "description": "What the pattern tests: \"assistant_text\" (the default), \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
+          "description": "What the pattern tests: \"assistant_text\", \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
           "type": "string",
           "enum": ["assistant_text", "tool_input", "tool_output", "all"]
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
+          "description": "Which events are tested: \"any\", \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
           "anyOf": [
             {
               "type": "string",
@@ -2673,7 +2673,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -2690,7 +2690,7 @@
         "type": { "const": "transcript_lacks" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -2710,13 +2710,13 @@
         },
         "where": {
           "title": "where",
-          "description": "What the pattern tests: \"assistant_text\" (the default), \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
+          "description": "What the pattern tests: \"assistant_text\", \"tool_input\" (each call's input, written as JSON), \"tool_output\", or \"all\" of them. Each event's text is cut to its first 1,000,000 characters first. `tool_output` and `all` need a harness with `toolOutputs`; `assistant_text` needs `assistantText`.",
           "type": "string",
           "enum": ["assistant_text", "tool_input", "tool_output", "all"]
         },
         "scope": {
           "title": "scope",
-          "description": "Which events are tested: \"any\" (the default), \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
+          "description": "Which events are tested: \"any\", \"first_message\" (the main agent's first non-empty text, wherever it falls), \"final_message\" (its last non-empty text; with `by`, the first or last text of those agents instead), `{ \"before\": matcher }` or `{ \"after\": matcher }` (the events before or after the first call that fits the matcher; no such call scores 0), or `{ \"first_message\": true, \"before\": matcher }` (the first text, which scores 0 when it comes after the matcher's first call). ",
           "anyOf": [
             {
               "type": "string",
@@ -3046,7 +3046,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3063,7 +3063,7 @@
         "type": { "const": "tool_output_matches" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3177,7 +3177,7 @@
         },
         "which": {
           "title": "which",
-          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. Default: \"any\". A chosen call with no output scores 0.",
+          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. A chosen call with no output scores 0.",
           "type": "string",
           "enum": ["first", "last", "any"]
         },
@@ -3192,7 +3192,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3209,7 +3209,7 @@
         "type": { "const": "tool_output_lacks" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3323,7 +3323,7 @@
         },
         "which": {
           "title": "which",
-          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. Default: \"any\". A chosen call with no output scores 0.",
+          "description": "Which of the calls that fit `tool` count: \"first\", \"last\", or \"any\" of them. A chosen call with no output scores 0.",
           "type": "string",
           "enum": ["first", "last", "any"]
         },
@@ -3338,7 +3338,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3355,7 +3355,7 @@
         "type": { "const": "tool_output_size" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3472,7 +3472,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3489,7 +3489,7 @@
         "type": { "const": "subject_unchanged" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3506,7 +3506,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3523,7 +3523,7 @@
         "type": { "const": "command" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3537,7 +3537,7 @@
         },
         "expectExit": {
           "title": "expectExit",
-          "description": "The exit code that counts as success. Default: 0.",
+          "description": "The exit code that counts as success.",
           "type": "integer",
           "minimum": 0
         },
@@ -3561,13 +3561,13 @@
         },
         "timeoutSeconds": {
           "title": "timeoutSeconds",
-          "description": "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid. Default: 120.",
+          "description": "The seconds the command may take before its process group is killed. The check then scores 0 and the run stays valid.",
           "type": "integer",
           "minimum": 1
         },
         "scoreFrom": {
           "title": "scoreFrom",
-          "description": "How the check scores: \"exit\" gives 1 or 0, \"stdout\" reads a number from 0 to 1 on the last non-empty line of standard output, and anything else scores 0. The exit code and the patterns must hold either way. Default: \"exit\".",
+          "description": "How the check scores: \"exit\" gives 1 or 0, \"stdout\" reads a number from 0 to 1 on the last non-empty line of standard output, and anything else scores 0. The exit code and the patterns must hold either way.",
           "type": "string",
           "enum": ["exit", "stdout"]
         },
@@ -3582,7 +3582,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3599,7 +3599,7 @@
         "type": { "const": "judge" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3623,19 +3623,19 @@
         },
         "scale": {
           "title": "scale",
-          "description": "How the judge scores: \"binary\" (a pass is 1, a fail is 0) or \"0-1\" (a number from 0 to 1). Default: \"0-1\".",
+          "description": "How the judge scores: \"binary\" (a pass is 1, a fail is 0) or \"0-1\" (a number from 0 to 1).",
           "type": "string",
           "enum": ["binary", "0-1"]
         },
         "votes": {
           "title": "votes",
-          "description": "An odd number of judge calls for one check. Binary scores the majority, 0-1 the median. Default: 1.",
+          "description": "An odd number of judge calls for one check. Binary scores the majority, 0-1 the median.",
           "type": "integer",
           "minimum": 1
         },
         "sees": {
           "title": "sees",
-          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names). Default: `[\"final\"]`, which is what 0.0.1 sent.",
+          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names).",
           "type": "array",
           "minItems": 1,
           "items": { "enum": ["final", "transcript", "files"] }
@@ -3649,7 +3649,7 @@
         },
         "maxChars": {
           "title": "maxChars",
-          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`. Default: 60,000.",
+          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`.",
           "type": "integer",
           "minimum": 1
         },
@@ -3664,7 +3664,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }
@@ -3682,7 +3682,7 @@
         "type": { "const": "decision" },
         "weight": {
           "title": "weight",
-          "description": "A positive number that says how much it counts. Default: 1.",
+          "description": "A positive number that says how much it counts.",
           "anyOf": [
             { "type": "number", "exclusiveMinimum": 0 },
             { "type": "null" }
@@ -3713,7 +3713,7 @@
         },
         "sees": {
           "title": "sees",
-          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names). Default: `[\"final\"]`, which is what 0.0.1 sent.",
+          "description": "What the model is shown: a non-empty list of \"final\" (the final answer), \"transcript\" (a compact rendering of what the agent did) and \"files\" (the files that `files` names).",
           "type": "array",
           "minItems": 1,
           "items": { "enum": ["final", "transcript", "files"] }
@@ -3727,7 +3727,7 @@
         },
         "maxChars": {
           "title": "maxChars",
-          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`. Default: 60,000.",
+          "description": "The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs \"transcript\" in `sees`.",
           "type": "integer",
           "minimum": 1
         },
@@ -3742,7 +3742,7 @@
         },
         "ifUnsupported": {
           "title": "ifUnsupported",
-          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case. Default: \"not-applicable\".",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
           "type": "string",
           "enum": ["skip", "not-applicable"]
         }

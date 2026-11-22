@@ -89,7 +89,7 @@ The package ships `schema/case.schema.json`. Add `"$schema": "../../../node_modu
 
 `skill-evals explain <id>` prints a case as a run reads it, as JSON in Markdown: the prompt of each variant, the layers of files in the order a run lays them down, the setup steps, every check with its defaults written out (`min: 1` of a `tool_called`, `timeoutSeconds: 600` of the case), the capabilities the case needs, and whether each installed harness can run it. It finds the harnesses on `PATH` and starts none.
 
-`skill-evals show <out dir> <case> [--subject <label>] [--rep <n>]` prints what one run did: one line for each transcript event, with its agent, kind, name and input or output cut at 200 characters (the line says so where it cuts), and then each check with its score and reason. A check that quotes calls (`#0 t2 main shell Bash ...`) names them by the number that the transcript line gives as `call #0`. The subject defaults to the first label of the results, and the rep to 1. A missing transcript file is a line saying so, and the checks still print. `show` only reads, and takes no lock.
+`skill-evals show <out dir> <case> [--subject <label>] [--rep <n>]` prints what one run did: one line for each transcript event, with its agent, kind, name and input or output cut at 200 characters (the line says so where it cuts), and then each check with its score and reason. Two numbers appear. A reason of a call check quotes calls as `#0 t2 main shell Bash ...`, and `#0` is the position among the run's calls, which the transcript line shows as `call #0`. A reason of a transcript check quotes events as `#<index> <type> ...`, and `#<index>` is the number at the start of the transcript line, before the colon (`3:`). Every printed string is cleaned: a control character, a newline included, becomes `\xNN`, names are quoted, and a reason line is cut at 200 characters like an input. The subject defaults to the first label of the results, and the rep to 1. A missing transcript file is a line saying so, and the checks still print. `show` only reads, and takes no lock.
 
 ## The authoring loop
 
@@ -379,7 +379,7 @@ A plain path that names a directory, or ends in `/`, means every file under it f
 
 A link in a case's `workspace/` folder whose target is absolute, or leads outside the folder, is a load error that names it, because the copy keeps links as they are and the agent could write into the case through it. A link that stays inside the folder is kept as a relative link.
 
-The full cases are in `examples/cases/file-state`.
+The full cases are in `examples/cases/<check type>`, such as `file_changed`, `file_unchanged`, `file_absent` and `files_changed_only`.
 
 ## Setup, fixtures and home
 

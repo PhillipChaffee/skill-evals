@@ -204,6 +204,8 @@ export interface Spec {
   forms?: string[][];
   /** What a harness must be able to do for the check to apply, besides the check's own `requires`. */
   needs?: (check: Check) => Capability[];
+  /** Fields that the type fixes, which no check of it can set: `explain` shows them with the defaults. */
+  implied?: Record<string, unknown>;
   /** Looks at the fields together, once each is read, for a rule that depends on more than one. Throws a `UsageError`. */
   validate?: (given: Record<string, unknown>, where: string) => void;
 }

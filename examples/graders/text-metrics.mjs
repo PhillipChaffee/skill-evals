@@ -1,25 +1,30 @@
 #!/usr/bin/env node
 // Text-metrics: checks a text file for long sentences and banned phrases. Use it as a `command` check on prose.
 //
-//   node text-metrics.mjs <file> [--max-sentence-words <n>] [--percentile <p>] [--banned <file>] [--strip-code]
+//   node text-metrics.mjs <file> [--max-sentence-words <n>] [--percentile <p>] [--banned <file>] [--strip-code] [--allow-empty]
 //
 // Exit codes: 0 prints `ok`; 1 prints one violation per line; 2 is a usage error, with the reason on standard error.
 //
 // Sentences: the text is split after each `.`, `!` or `?` that is followed by whitespace or the end of the text.
+// A closing `)` `"` `'` `*` `_` or `]` after the mark goes with it: "(Done.)" ends at the `)`.
 // Nothing else ends a sentence, and abbreviations are not special-cased: "e.g. this" is two sentences, and "Dr. Who"
 // is two. A line break is whitespace, so a list item without a full stop runs into the next one.
 // Words: a sentence's words are its runs of characters that are not whitespace.
 //
 // --max-sentence-words n  Every sentence must have at most n words.
 // --percentile p          p is from 0 to 100. Only the p-th percentile of the sentence word counts (nearest rank:
-//                         the count at rank ceil(p / 100 * sentences) of the sorted counts, and the smallest count for
+//                         the count at rank ceil(p * sentences / 100) of the sorted counts, and the smallest count for
 //                         p of 0) must be at most the maximum, so a few long sentences may pass. Needs
 //                         --max-sentence-words.
 // --banned <file>         A file with one phrase on each line; blank lines are skipped. A phrase matches
 //                         case-insensitively and on whole words, and any run of whitespace in it matches any run of
-//                         whitespace in the text.
+//                         whitespace in the text. Text and phrases are normalized to NFC first, and a combining mark
+//                         counts as part of a word.
 // --strip-code            Removes fenced code blocks (``` or ~~~) and inline code (`...`) before anything is counted,
-//                         the banned phrases included.
+//                         the banned phrases included. A fence is closed by a line of the same character at least as
+//                         long as the opener; a fence that is never closed removes the rest of the text.
+// --allow-empty           Without it, a text with no sentence (empty, or empty once code is stripped) is a violation,
+//                         "no text", so that a missing answer cannot pass. With it, such a text is fine.
 import console from "node:console";
 import fs from "node:fs";
 import process from "node:process";
@@ -49,7 +54,7 @@ function usage(message) {
 function stripCode(text) {
   return text
     .replace(
-      /^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[ \t]*$|(?![\s\S]))/gm,
+      /^[ \t]*(([`~])\2{2,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1\2*[ \t]*$|(?![\s\S]))/gm,
       "",
     )
     .replace(/`[^`\n]*`/g, "");
@@ -63,7 +68,7 @@ function stripCode(text) {
  */
 function sentencesOf(text) {
   return text
-    .split(/(?<=[.!?])(?:\s+|$)/)
+    .split(/(?<=[.!?][)"'*_\]]*)(?:\s+|$)/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence !== "");
 }
@@ -79,11 +84,11 @@ const wordsIn = (sentence) => sentence.split(/\s+/).filter(Boolean).length;
  * Finds a percentile of a list of numbers, by nearest rank.
  * @param {number[]} counts - The numbers.
  * @param {number} percentile - From 0 to 100.
- * @returns {number} The number at rank ceil(percentile / 100 * length) of the sorted list, the smallest for 0.
+ * @returns {number} The number at rank ceil(percentile * length / 100) of the sorted list, the smallest for 0.
  */
 function percentileOf(counts, percentile) {
   const sorted = [...counts].sort((left, right) => left - right);
-  const rank = Math.max(1, Math.ceil((percentile / PERCENT) * sorted.length));
+  const rank = Math.max(1, Math.ceil((percentile * sorted.length) / PERCENT));
   return sorted[rank - 1];
 }
 
@@ -151,7 +156,7 @@ function lengthViolations(sentences, { max, percentile }) {
 function bannedViolations(text, file) {
   const phrases = readText(file, "the banned phrases file")
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line) => line.normalize("NFC").trim())
     .filter((line) => line !== "");
   return phrases.flatMap((phrase) => {
     const escaped = phrase
@@ -159,7 +164,7 @@ function bannedViolations(text, file) {
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("\\s+");
     const pattern = new RegExp(
-      `(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`,
+      `(?<![\\p{L}\\p{M}\\p{N}_])${escaped}(?![\\p{L}\\p{M}\\p{N}_])`,
       "giu",
     );
     const found = text.match(pattern)?.length ?? 0;
@@ -185,6 +190,7 @@ function main() {
         percentile: { type: "string" },
         banned: { type: "string" },
         "strip-code": { type: "boolean" },
+        "allow-empty": { type: "boolean" },
       },
     });
   } catch (error) {
@@ -204,9 +210,13 @@ function main() {
     usage("--percentile needs --max-sentence-words");
   }
   const raw = readText(positionals[0], "the text file");
-  const text = values["strip-code"] ? stripCode(raw) : raw;
+  const text = (values["strip-code"] ? stripCode(raw) : raw).normalize("NFC");
+  const sentences = sentencesOf(text);
+  const empty =
+    sentences.length === 0 && !values["allow-empty"] ? ["no text"] : [];
   const violations = [
-    ...lengthViolations(sentencesOf(text), { max, percentile }),
+    ...empty,
+    ...lengthViolations(sentences, { max, percentile }),
     ...(values.banned === undefined
       ? []
       : bannedViolations(text, values.banned)),
@@ -215,4 +225,8 @@ function main() {
   return violations.length === 0 ? OK : VIOLATION;
 }
 
-process.exitCode = main();
+try {
+  process.exitCode = main();
+} catch (error) {
+  usage(error.message);
+}

@@ -1,9 +1,19 @@
 {
-  "description": "A file the agent had no reason to touch is as it was.",
+  "description": "Leave the tests alone.",
+  "tags": ["files"],
   "checks": [
     {
       "type": "file_unchanged",
-      "path": "vendor/lib.js"
+      "path": "vendor/**"
+    },
+    {
+      "type": "file_changed",
+      "path": "src/parse.py"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
     }
-  ]
+  ],
+  "timeoutSeconds": 300
 }

@@ -1,13 +1,12 @@
 import fs from "node:fs";
 import type { Sees } from "./checks/judge-fields.js";
+import { TRANSCRIPT_CHARS } from "./checks/judge-fields.js";
 import { find } from "./checks/tree.js";
 import { GLOB_LIMIT } from "./glob.js";
 import type { TranscriptEvent } from "./harnesses/shared.js";
 import type { Attachment } from "./judge-api.js";
 import { forRecord } from "./transcript.js";
 
-/** The default size of a transcript rendering, in characters. */
-export const TRANSCRIPT_CHARS = 60_000;
 /** The size each tool output is cut to when a rendering does not fit. */
 const OUTPUT_CHARS = 400;
 /** The size each file is cut to. */

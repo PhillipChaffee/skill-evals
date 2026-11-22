@@ -1,9 +1,16 @@
 {
-  "description": "The agent changed only the files it was asked to.",
+  "description": "Stay inside src and docs.",
+  "tags": ["files"],
   "checks": [
     {
       "type": "files_changed_only",
-      "allow": ["src/cli.js"]
+      "allow": ["src/**", "docs/**"],
+      "ignore": ["**/*.log"]
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
     }
-  ]
+  ],
+  "timeoutSeconds": 300
 }

@@ -1,10 +1,11 @@
 import { GENERIC_AGENT, normalizeAgent } from "../agents.js";
+import { minOf, valueOf } from "./defaults.js";
 import type { ToolCall } from "../harnesses/shared.js";
 import { checkBounds } from "./bounds.js";
 import type { RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS, regex } from "./rules.js";
 import type { Rule } from "../dispatch-rule.js";
-import { DEFAULT_WINDOW, briefOf, ruleOf, typeOf } from "../dispatch-rule.js";
+import { briefOf, ruleOf, typeOf } from "../dispatch-rule.js";
 
 /** What a dispatch must be to count. */
 interface Wants {
@@ -44,7 +45,7 @@ function dispatched(check: RuledCheck, calls: ToolCall[]): Verdict {
     source ? regex(source, flags) : null;
   const wants = {
     agent: normalizeAgent(check.agent as string),
-    window: check.briefWindow ?? DEFAULT_WINDOW,
+    window: check.briefWindow ?? (valueOf(check, "briefWindow") as number),
     brief: pattern(check.briefMatches),
     model: pattern(check.modelMatches),
   };
@@ -55,7 +56,7 @@ function dispatched(check: RuledCheck, calls: ToolCall[]): Verdict {
   const count = judged.filter(
     (one) => one !== null && one !== "no model",
   ).length;
-  const min = check.min ?? (check.max === 0 ? 0 : 1);
+  const min = check.min ?? minOf(check);
   const max = check.max ?? Infinity;
   const noun = `${String(count)} matching ${count === 1 ? "dispatch" : "dispatches"} of ${wants.agent}`;
   if (count >= min && count <= max) {

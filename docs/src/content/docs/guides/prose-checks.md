@@ -39,16 +39,17 @@ The command check scores 1 when the script exits 0. When it exits 1, the check s
 
 ## What it checks
 
-| Flag                       | What it does                                                                                                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--max-sentence-words <n>` | Every sentence has at most `n` words.                                                                                                                                     |
-| `--percentile <p>`         | `p` is from 0 to 100. Only the `p`-th percentile of the sentence word counts must be at most the maximum, so a few long sentences may pass. Needs `--max-sentence-words`. |
-| `--banned <file>`          | A file with one phrase on each line. A phrase matches without regard to case and on whole words: `delve` does not match `delved`.                                         |
-| `--strip-code`             | Removes fenced code blocks and inline code before anything is counted, the banned phrases included.                                                                       |
+| Flag                       | What it does                                                                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--max-sentence-words <n>` | Every sentence has at most `n` words.                                                                                                                                                                                                       |
+| `--percentile <p>`         | `p` is from 0 to 100. Only the `p`-th percentile of the sentence word counts must be at most the maximum, so a few long sentences may pass. Needs `--max-sentence-words`.                                                                   |
+| `--banned <file>`          | A file with one phrase on each line. A phrase matches without regard to case and on whole words: `delve` does not match `delved`.                                                                                                           |
+| `--strip-code`             | Removes fenced code blocks and inline code before anything is counted, the banned phrases included. A fence ends at a line of the same character at least as long as the opener; a fence that is never closed removes the rest of the text. |
+| `--allow-empty`            | Accept a text with no sentence. Without it, an empty text, or one that is empty once code is stripped, is the violation `no text`, so that a missing answer cannot pass.                                                                    |
 
 A flag you leave out is not checked. With no flag, the script prints `ok`.
 
-The percentile is the nearest rank: the word counts of the sentences are sorted, and the count at rank `ceil(p / 100 * n)` is the percentile (the smallest count for 0). With 10 sentences and `--percentile 90`, the 9th shortest sentence must fit, and the longest may be as long as it likes.
+The percentile is the nearest rank: the word counts of the sentences are sorted, and the count at rank `ceil(p * n / 100)` is the percentile (the smallest count for 0). With 10 sentences and `--percentile 90`, the 9th shortest sentence must fit, and the longest may be as long as it likes.
 
 ## Exit codes
 
@@ -62,4 +63,4 @@ A usage error scores the check 0 like any other failure. Run the script by hand 
 
 ## How it counts
 
-A sentence ends at a `.`, `!` or `?` that is followed by whitespace or by the end of the text. Nothing else ends one. Abbreviations are not special-cased, so `e.g. this` is two sentences, and `Dr. Who` is two. A line break is whitespace: a bullet list with no full stops is one long sentence. A word is a run of characters that is not whitespace, so a path or a hyphenated word is one word. The count is crude on purpose: you set the limit with it in mind, and it counts the same on every run.
+A sentence ends at a `.`, `!` or `?` that is followed by whitespace or by the end of the text; a closing `)`, `"`, `'`, `*`, `_` or `]` after the mark goes with it. Nothing else ends one. Abbreviations are not special-cased, so `e.g. this` is two sentences, and `Dr. Who` is two. A line break is whitespace: a bullet list with no full stops is one long sentence. A word is a run of characters that is not whitespace, so a path or a hyphenated word is one word. Text and banned phrases are normalized to Unicode NFC first, and a combining mark is part of the word it follows. The count is crude on purpose: you set the limit with it in mind, and it counts the same on every run.

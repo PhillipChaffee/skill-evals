@@ -1,4 +1,5 @@
 import type { By } from "../agents.js";
+import { minOf } from "./defaults.js";
 import { describeBy, fitsBy } from "../agents.js";
 import type { ToolCall } from "../harnesses/shared.js";
 import type { ToolMatcher } from "../matchers.js";
@@ -172,6 +173,9 @@ function counted(
   };
 }
 
+// What `tool_not_called` fixes: no matching call at all.
+const NOT_CALLED = { min: 0, max: 0 };
+
 // The checks of the tool calls the agent made.
 export const TOOL_CHECKS = {
   tool_called: {
@@ -192,7 +196,7 @@ export const TOOL_CHECKS = {
     },
     rule: (check, outcome) =>
       counted(check, outcome, {
-        min: check.min ?? (check.max === 0 ? 0 : 1),
+        min: check.min ?? minOf(check),
         max: check.max ?? Infinity,
       }),
   },
@@ -202,7 +206,8 @@ export const TOOL_CHECKS = {
     validate: checkLineBounds,
     needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
     scores: "The agent made no tool call that fits every given field.",
-    rule: (check, outcome) => counted(check, outcome, { min: 0, max: 0 }),
+    implied: NOT_CALLED,
+    rule: (check, outcome) => counted(check, outcome, NOT_CALLED),
   },
   first_tool: {
     fields: ["matches"],

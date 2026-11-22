@@ -5,7 +5,7 @@ import type { Results } from "../evaluate.js";
 import { plantCase, script, skillsFolder } from "../testing/plant.js";
 import { readResults, sandbox } from "../testing/sandbox.js";
 import type { Sandbox } from "../testing/sandbox.js";
-import { SHOW_CUT } from "./show.js";
+import { SHOW_CUT, clean, shown } from "../show-text.js";
 
 const USAGE_ERROR = 2;
 const LONG = "x".repeat(SHOW_CUT + 50);
@@ -60,10 +60,10 @@ test("show prints a failing check's reason beside the calls it quotes", async ()
   const shown = await box.cli(["show", out, "restate"]);
   expect(shown.status, shown.stderr).toBe(0);
   const lines = shown.stdout.split("\n");
-  expect(shown.stdout).toMatch(/^claude-code restate .*1$/m);
+  expect(shown.stdout).toMatch(/^claude-code restate subject, rep 1$/m);
   // The call is a line of the transcript, with its agent, kind and name.
   const call = lines.find((line) =>
-    /^\d+: main shell Bash call #\d+ input /.test(line),
+    /^\d+: "main" "shell" "Bash" call #\d+ input /.test(line),
   );
   expect(call).toBeDefined();
   const index = /call #(\d+)/.exec(call ?? "")?.[1];
@@ -84,7 +84,7 @@ test("show cuts a long input and output at 200 characters, and says so where it 
   const { box, out } = await scored();
   const shown = await box.cli(["show", out, "restate"]);
   expect(shown.stdout).toContain(
-    "each input, output and text is cut at 200 characters",
+    "each input, output, text and line of a reason is cut at 200 characters",
   );
   const cuts = shown.stdout
     .split("\n")
@@ -93,7 +93,7 @@ test("show cuts a long input and output at 200 characters, and says so where it 
   for (const line of cuts) expect(line).not.toContain(LONG);
   expect(shown.stdout).toContain("looking");
   expect(shown.stdout).toMatch(
-    /^\d+: main shell Bash result of call #0 output /m,
+    /^\d+: "main" "shell" "Bash" result of call #0 output /m,
   );
 });
 
@@ -164,4 +164,60 @@ test("show reads a directory without results as a usage error", async () => {
   const box = sandbox();
   const shown = await box.cli(["show", box.root, "restate"]);
   expect(shown.status).toBe(USAGE_ERROR);
+});
+
+test("show escapes control characters in what it prints and quotes names", async () => {
+  const { box, out } = await scored();
+  rewrite(out, ({ records }) => {
+    const [record] = records;
+    if (!record) return;
+    Object.assign(record, { harness: "h\u001b[31m" });
+    record.checks[0] = {
+      ...record.checks[0],
+      reason: `bad \u001b[2J\u0007 ${"é".repeat(300)}\nsecond \u007f`,
+    } as never;
+  });
+  const shown1 = await box.cli(["show", out, "restate"]);
+  // eslint-disable-next-line no-control-regex
+  expect(shown1.stdout).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f]/);
+  expect(shown1.stdout).toContain("h\\x1b[31m restate");
+  expect(shown1.stdout).toContain("   bad \\x1b[2J\\x07 ");
+  expect(shown1.stdout).toContain("   second \\x7f");
+  expect(shown1.stdout).toMatch(/é+ \[cut at 200 of \d+ characters\]/);
+  const unknown = await box.cli(["show", out, "a\u001bb"]);
+  expect(unknown.stderr).toContain('no case "a\\x1bb"');
+});
+
+test("show prints ? for an event with no agent and goes on with the others", async () => {
+  const { box, out } = await scored();
+  const file = fs
+    .readdirSync(out, { recursive: true, encoding: "utf8" })
+    .find((name) => name.endsWith(".transcript.json"));
+  const path1 = path.join(out, file ?? "");
+  const events = JSON.parse(fs.readFileSync(path1, "utf8")) as Record<
+    string,
+    unknown
+  >[];
+  delete events[0]?.["agent"];
+  fs.writeFileSync(path1, JSON.stringify(events));
+  const printed = await box.cli(["show", out, "restate"]);
+  expect(printed.status, printed.stderr).toBe(0);
+  expect(printed.stdout).toMatch(/^0: \? "text" - text "looking"$/m);
+  expect(printed.stdout).toMatch(/^1: "main" "shell" "Bash"/m);
+});
+
+test("a cut never splits an escape or a surrogate pair, and clean escapes every control character", () => {
+  const pair = "\u{1F600}";
+  for (const filler of ["a", "\u001b", "\n", pair]) {
+    for (let offset = 0; offset < 8; offset += 1) {
+      const out = shown(
+        "x".repeat(SHOW_CUT - offset) + filler.repeat(4) + "tail",
+      );
+      const body = out.replace(/ \[cut at .*$/, "");
+      expect(body.length).toBeLessThanOrEqual(SHOW_CUT);
+      expect(body).not.toMatch(/[\ud800-\udbff]$|\\(x[0-9a-f]?)?$/);
+    }
+  }
+  expect(clean("a\u0000b\u001fc\u007fd")).toBe("a\\x00b\\x1fc\\x7fd");
+  expect(shown("short")).toBe("short");
 });

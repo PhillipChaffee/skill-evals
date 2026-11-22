@@ -1,6 +1,9 @@
 import { UsageError, isObject } from "../scope.js";
 import type { FieldDef, FieldParser, FieldType } from "./fields.js";
 
+/** The most characters of the transcript rendering that a judge or decision model is shown, when `maxChars` is not set. */
+export const TRANSCRIPT_CHARS = 60_000;
+
 /** What a judge or decision model may be shown besides the task. */
 const SEES_VALUES = ["final", "transcript", "files"] as const;
 /** One thing a judge or decision model sees. */
@@ -18,7 +21,8 @@ const SEES_FIELDS: Record<string, FieldDef> = {
     type: "texts",
     values: SEES_VALUES,
     meaning:
-      'What the model is shown: a non-empty list of "final" (the final answer), "transcript" (a compact rendering of what the agent did) and "files" (the files that `files` names). Default: `["final"]`, which is what 0.0.1 sent.',
+      'What the model is shown: a non-empty list of "final" (the final answer), "transcript" (a compact rendering of what the agent did) and "files" (the files that `files` names).',
+    default: { value: { "*": ["final"] }, note: "what 0.0.1 sent" },
   },
   files: {
     type: "texts",
@@ -28,7 +32,16 @@ const SEES_FIELDS: Record<string, FieldDef> = {
   maxChars: {
     type: "int",
     meaning:
-      'The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs "transcript" in `sees`. Default: 60,000.',
+      'The most characters of the transcript rendering. Tool outputs are cut to 400 characters first, then the oldest are dropped. Needs "transcript" in `sees`.',
+    default: {
+      value: {
+        "*": (check: { sees?: string[] }) =>
+          check.sees?.includes("transcript") === true
+            ? TRANSCRIPT_CHARS
+            : undefined,
+      },
+      note: 'when `sees` includes "transcript"',
+    },
   },
 };
 
@@ -43,12 +56,14 @@ export const JUDGE_FIELDS: Record<string, FieldDef> = {
     type: "enum",
     values: SCALES,
     meaning:
-      'How the judge scores: "binary" (a pass is 1, a fail is 0) or "0-1" (a number from 0 to 1). Default: "0-1".',
+      'How the judge scores: "binary" (a pass is 1, a fail is 0) or "0-1" (a number from 0 to 1).',
+    default: { value: { "*": "0-1" } },
   },
   votes: {
     type: "int",
     meaning:
-      "An odd number of judge calls for one check. Binary scores the majority, 0-1 the median. Default: 1.",
+      "An odd number of judge calls for one check. Binary scores the majority, 0-1 the median.",
+    default: { value: { "*": 1 } },
   },
   ...SEES_FIELDS,
 };

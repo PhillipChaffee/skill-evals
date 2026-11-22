@@ -1,4 +1,4 @@
-import { SKILL_VIAS } from "../skill-events.js";
+import { REAL_VIAS, SKILL_VIAS } from "../skill-events.js";
 import { UsageError } from "../scope.js";
 import type { FieldDef, FieldParser } from "./fields.js";
 
@@ -30,7 +30,8 @@ export const SKILL_FIELDS: Record<string, FieldDef> = {
     values: SKILL_VIAS,
     expected: "a mechanism, or a list of them",
     meaning:
-      'How the skill reached the agent: `"skill_tool"` (a call of the harness\'s skill tool), `"file_read"` (a read-kind call of a file in the skill\'s directory), `"shell_read"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `"injected"` is reserved: nothing produces it yet. Default: the three real mechanisms.',
+      'How the skill reached the agent: `"skill_tool"` (a call of the harness\'s skill tool), `"file_read"` (a read-kind call of a file in the skill\'s directory), `"shell_read"` (a shell command that `cat`s, `head`s, `tail`s, `less`es, `bat`s, `nl`s or `sed -n`s such a file), or a list of them. `"injected"` is reserved: nothing produces it yet.',
+    default: { value: { "*": REAL_VIAS }, note: "the three real mechanisms" },
   },
   resolved: {
     type: "bool",

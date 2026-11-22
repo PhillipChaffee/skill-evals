@@ -2,17 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { describeCheck } from "../checks/index.js";
 import { EXIT } from "../exit-codes.js";
-import type { TranscriptEvent } from "../harnesses/shared.js";
+import type { AgentRef, TranscriptEvent } from "../harnesses/shared.js";
 import type { Project } from "../project.js";
 import { readResultsFile } from "../results-file.js";
 import { within } from "../rescore.js";
 import type { RunRecord } from "../run.js";
 import { resultsByCall } from "../transcript.js";
 import { UsageError, messageOf } from "../scope.js";
+import { SHOW_CUT, clean, quoted, shown } from "../show-text.js";
 import type { Options } from "../usage.js";
-
-/** The most characters of one event's input, output or text that `show` prints. */
-export const SHOW_CUT = 200;
 
 const DEFAULT_REP = 1;
 const SCORE_DIGITS = 2;
@@ -20,8 +18,8 @@ const SCORE_DIGITS = 2;
 /**
  * Writes the payload of one event on one line, cut where it is long.
  * @param event - The transcript event.
- * @returns What the event carried, as JSON on one line, such as `input {"command":"ls"}`; a cut payload ends with
- *   the words `[cut at 200 of <n> characters]`. A lifecycle or hook event that carries no text is empty.
+ * @returns What the event carried, as JSON on one line, such as `input {"command":"ls"}`, cleaned and cut at 200
+ *   characters with a note. A lifecycle or hook event that carries no text is empty.
  */
 function payload(event: TranscriptEvent): string {
   const [label, value] =
@@ -30,13 +28,7 @@ function payload(event: TranscriptEvent): string {
       : event.output !== undefined
         ? ["output", event.output]
         : ["text", event.text];
-  if (value === undefined) return "";
-  const written = JSON.stringify(value);
-  const shown =
-    written.length > SHOW_CUT
-      ? `${written.slice(0, SHOW_CUT)} [cut at ${String(SHOW_CUT)} of ${String(written.length)} characters]`
-      : written;
-  return `${label} ${shown}`;
+  return value === undefined ? "" : `${label} ${shown(JSON.stringify(value))}`;
 }
 
 /**
@@ -44,15 +36,16 @@ function payload(event: TranscriptEvent): string {
  * @param event - The transcript event to write.
  * @param call - The number that the checks give the call, as in `#0`: the call's own for a call, the call it answers
  *   for a result, and absent for any other event.
- * @returns `<index>: <agent> <kind or type> <name> [call #<n>] <payload>`. The first number is the event's place in
- *   the transcript; `call #<n>` is the number that a check's reason quotes.
+ * @returns `<index>: <agent> <kind or type> <name> [call #<n>] <payload>`, with the agent, kind and name quoted. The
+ *   first number is the event's place in the transcript; `call #<n>` is the number that a check's reason quotes. An
+ *   event with no agent prints `?`, so that one malformed event does not hide the rest.
  */
 const eventLine = (event: TranscriptEvent, call?: number): string =>
   [
     `${String(event.index)}:`,
-    event.agent.id,
-    event.kind ?? event.type,
-    event.name ?? "-",
+    quoted((event.agent as Partial<AgentRef> | undefined)?.id, "?"),
+    quoted(event.kind ?? event.type, "?"),
+    quoted(event.name, "-"),
     ...(call === undefined
       ? []
       : [
@@ -95,11 +88,13 @@ function transcriptLines(record: RunRecord, dir: string): string[] {
     ) as TranscriptEvent[];
     const numbers = callNumbers(events);
     return [
-      `transcript: ${named}, ${String(events.length)} events; each input, output and text is cut at ${String(SHOW_CUT)} characters`,
+      `transcript: ${clean(named)}, ${String(events.length)} events; each input, output, text and line of a reason is cut at ${String(SHOW_CUT)} characters`,
       ...events.map((one) => eventLine(one, numbers.get(one.index))),
     ];
   } catch (error) {
-    return [`transcript: ${named} cannot be read (${messageOf(error)})`];
+    return [
+      `transcript: ${clean(named)} cannot be read (${clean(messageOf(error))})`,
+    ];
   }
 }
 
@@ -110,12 +105,12 @@ function transcriptLines(record: RunRecord, dir: string): string[] {
  */
 function checkLines(record: RunRecord): string[] {
   return [
-    `checks${record.ok ? "" : ` (run invalid: ${String(record.error)})`}`,
+    `checks${record.ok ? "" : ` (run invalid: ${clean(String(record.error))})`}`,
     ...record.checks.flatMap((check, index) => [
-      `${String(index + 1)}. ${describeCheck(check)}: ${check.score === null ? "no score" : check.score.toFixed(SCORE_DIGITS)}`,
+      `${String(index + 1)}. ${clean(describeCheck(check))}: ${check.score === null ? "no score" : check.score.toFixed(SCORE_DIGITS)}`,
       ...(check.reason === undefined
         ? []
-        : check.reason.split("\n").map((row) => `   ${row}`)),
+        : check.reason.split("\n").map((row) => `   ${shown(row)}`)),
     ]),
   ];
 }
@@ -140,7 +135,7 @@ function chosen(
   if (ofCase.length === 0) {
     const ids = [...new Set(records.map(({ caseId }) => caseId))].sort();
     throw new UsageError(
-      `no case "${wanted.caseId}" in the results; cases: ${ids.join(", ") || "none"}`,
+      `no case "${clean(wanted.caseId)}" in the results; cases: ${clean(ids.join(", ")) || "none"}`,
     );
   }
   const subject = wanted.subject ?? labels[0];
@@ -148,7 +143,7 @@ function chosen(
   if (ofSubject.length === 0) {
     const held = [...new Set(ofCase.map((record) => record.subject))];
     throw new UsageError(
-      `no subject "${String(subject)}" for ${wanted.caseId}; subjects: ${held.join(", ")}`,
+      `no subject "${clean(String(subject))}" for ${clean(wanted.caseId)}; subjects: ${clean(held.join(", "))}`,
     );
   }
   const found = ofSubject.filter(({ rep }) => rep === wanted.rep);
@@ -157,7 +152,7 @@ function chosen(
       (x, y) => x - y,
     );
     throw new UsageError(
-      `no rep ${String(wanted.rep)} of ${wanted.caseId} for ${String(subject)}; reps: ${reps.join(", ")}`,
+      `no rep ${String(wanted.rep)} of ${clean(wanted.caseId)} for ${clean(String(subject))}; reps: ${reps.join(", ")}`,
     );
   }
   return found;
@@ -193,7 +188,7 @@ export function show(
   console.log(
     records
       .flatMap((record) => [
-        `${record.harness} ${record.caseId} ${record.subject}${String(record.rep)}`,
+        `${clean(record.harness)} ${clean(record.caseId)} ${clean(record.subject)}, rep ${String(record.rep)}`,
         ...transcriptLines(record, dir),
         ...checkLines(record),
         "",

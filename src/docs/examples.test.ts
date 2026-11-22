@@ -79,7 +79,6 @@ test("an example the tool would reject fails the same validation", () => {
 // A case that shows a feature and not one check type: it may have any name. A new one is added here on purpose.
 const FEATURE_EXAMPLES = [
   "by-agent",
-  "file-state",
   "judge-transcript",
   "requires",
   "routing",
@@ -89,6 +88,16 @@ const FEATURE_EXAMPLES = [
   "variants",
 ];
 const examplesDir = path.join(root, "examples/cases");
+
+test("every feature example exists, so that the list cannot go stale", () => {
+  for (const name of FEATURE_EXAMPLES) {
+    expect(
+      fs.existsSync(path.join(examplesDir, name, "case.json")) ||
+        fs.readdirSync(path.join(examplesDir, name)).length > 0,
+      name,
+    ).toBe(true);
+  }
+});
 
 test("one example per check type", async () => {
   // A later task that adds a check type to CHECKS must add examples/cases/<check type>/ with it: this test fails until

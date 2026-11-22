@@ -120,11 +120,8 @@ test("the tarball holds the examples, the schemas and the docs", () => {
     expect(files).toContain(wanted);
   }
   expect(files.some((file) => file.startsWith("docs/design/"))).toBe(true);
-  expect(
-    files.filter(
-      (file) =>
-        file.startsWith("docs/") &&
-        !/^docs\/(design|src\/content\/docs)\//.test(file),
-    ),
-  ).toEqual([]);
+  // Nothing else ships: every path starts with an allowed prefix, or is one of the named root files.
+  const allowed =
+    /^(dist\/|examples\/|schema\/|docs\/design\/|docs\/src\/content\/docs\/|README\.md$|LICENSE$|CHANGELOG\.md$|package\.json$)/;
+  expect(files.filter((file) => !allowed.test(file))).toEqual([]);
 });

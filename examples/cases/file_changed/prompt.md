@@ -1,1 +1,4 @@
-Rename the function parse to parseLine in src/parse.js.
+# Edit the parser
+
+Make `src/parse.py` accept an empty string. End your answer with the word
+done.

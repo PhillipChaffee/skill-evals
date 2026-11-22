@@ -1,2 +1,1 @@
-// TODO: remove
-export const a = 1;
+export const value = JSON.parse(text) as any;

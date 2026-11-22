@@ -1,9 +1,19 @@
 {
-  "description": "A file is gone.",
+  "description": "Remove the legacy price formatter.",
+  "tags": ["files"],
   "checks": [
     {
       "type": "file_absent",
-      "path": "legacy.js"
+      "path": "src/legacy/formatPrice.ts"
+    },
+    {
+      "type": "file_unchanged",
+      "path": "vendor/**"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
     }
-  ]
+  ],
+  "timeoutSeconds": 300
 }

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { valueOf } from "./defaults.js";
 import { countLines } from "../lines.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { PASS, regex } from "./rules.js";
@@ -133,7 +134,7 @@ const MATCHES: TextRule = {
   cover: false,
   closed: false,
   none: absent,
-  quantifier: (check) => check.quantifier ?? "any",
+  quantifier: (check) => valueOf(check, "quantifier") as "any" | "all",
   test: (check) => {
     const matched = patternTest(check);
     return (text) => ({ pass: matched(text) });
@@ -148,7 +149,7 @@ const LACKS: TextRule = {
   cover: true,
   closed: true,
   none: () => PASS,
-  quantifier: (check) => check.quantifier ?? "all",
+  quantifier: (check) => valueOf(check, "quantifier") as "any" | "all",
   test: (check) => {
     const matched = patternTest(check);
     return (text) => ({ pass: !matched(text) });

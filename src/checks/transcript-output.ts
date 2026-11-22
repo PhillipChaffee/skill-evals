@@ -1,4 +1,5 @@
 import type { ToolCall, TranscriptEvent } from "../harnesses/shared.js";
+import { valueOf } from "./defaults.js";
 import type { ToolMatcher } from "../matchers.js";
 import { describeMatcher, hitsOf, quoteCalls, tester } from "../matchers.js";
 import { callsOf, resultsByCall } from "../transcript.js";
@@ -61,6 +62,9 @@ interface Picked {
   fits: (text: string) => boolean;
 }
 
+const whichOf = (check: { type: string }): "first" | "last" | "any" =>
+  valueOf(check, "which") as "first" | "last" | "any";
+
 /**
  * Finds the calls a `tool_output_matches` or `tool_output_lacks` check looks at.
  * @param check - The check, whose `tool`, `which`, `pattern` and `flags` are read.
@@ -72,7 +76,7 @@ function pick(check: RuledCheck, outcome: Outcome): Picked | Verdict {
   const runs = runsOf(outcome.transcript, tool);
   if (runs.length === 0) return noCall(outcome, tool);
   return {
-    picked: chosen(runs, check.which),
+    picked: chosen(runs, whichOf(check)),
     fits: tester(check.pattern, check.flags),
   };
 }
@@ -103,7 +107,7 @@ export function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
   if ("score" in found) return found;
   if (hitsIn(found).length > 0) return PASS;
   const silent =
-    check.which === undefined || check.which === "any"
+    whichOf(check) === "any"
       ? undefined
       : found.picked.find(({ result }) => result?.output === undefined);
   if (silent) {
@@ -115,9 +119,9 @@ export function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
       : [{ event: result, text: result.output }],
   );
   const which =
-    check.which === undefined || check.which === "any"
+    whichOf(check) === "any"
       ? "any of the matching calls"
-      : `the ${check.which} matching call`;
+      : `the ${whichOf(check)} matching call`;
   return {
     score: 0,
     reason: `no output of ${which} matches ${written(check)}${shown.length === 0 ? ": none has an output" : `\n${quotePieces(shown)}`}`,

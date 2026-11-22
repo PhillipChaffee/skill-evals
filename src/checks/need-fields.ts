@@ -11,6 +11,7 @@ export const NEED_FIELDS: Record<string, FieldDef> = {
     type: "enum",
     values: ["skip", "not-applicable"],
     meaning:
-      'What a harness that lacks what the check needs does: "skip" drops this check and re-normalizes the weights, "not-applicable" excludes the whole case. Default: "not-applicable".',
+      'What a harness that lacks what the check needs does: "skip" drops this check and re-normalizes the weights, "not-applicable" excludes the whole case.',
+    default: { value: { "*": "not-applicable" } },
   },
 };

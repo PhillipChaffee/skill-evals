@@ -1,3 +1,5 @@
+import { DEFAULT_WINDOW } from "../dispatch-rule.js";
+import { minOf } from "./min-of.js";
 import type { FieldDef } from "./fields.js";
 import { SKILL_FIELDS } from "./skill-fields.js";
 
@@ -10,7 +12,8 @@ const WHICH: Record<string, FieldDef> = {
   which: {
     type: "enum",
     values: ["first", "last"],
-    meaning: 'Which matching call counts: "first" or "last". Default: "first".',
+    meaning: 'Which matching call counts: "first" or "last".',
+    default: { value: { "*": "first" } },
   },
 };
 
@@ -59,7 +62,8 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   briefWindow: {
     type: "int",
     meaning:
-      "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one. Default: 400.",
+      "How many characters of the brief the bare agent name may appear in, for a dispatch that names no agent type or `general-purpose`. The first `name: <x>` line anywhere in the brief decides the agent alone; the bare name is looked for only without one.",
+    default: { value: { "*": DEFAULT_WINDOW } },
   },
   modelMatches: {
     type: "regex",
@@ -74,7 +78,11 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   min: {
     type: "count",
     meaning:
-      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: 1 for `tool_called`, `agent_dispatched` and `file_count`; 0 for a `tool_called` or `agent_dispatched` whose `max` is 0.",
+      "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+    default: {
+      value: { tool_called: minOf, agent_dispatched: minOf, file_count: 1 },
+      note: "0 for `tool_called` and `agent_dispatched` when `max` is 0",
+    },
   },
   max: {
     type: "count",
@@ -84,12 +92,14 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   sameTurn: {
     type: "bool",
     meaning:
-      "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`. Default: false.",
+      "True to require every matching call to be issued in one assistant turn, so that `min` and `max` count calls that were launched together. A matching call with no turn fails it, unless it is the only match. Needs a harness with `turnGrouping`.",
+    default: { value: { "*": false } },
   },
   first: {
     type: "bool",
     meaning:
-      "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it. Default: false.",
+      "True to require the first thing the agent did to be what the check names: for `tool_called`, the run's first tool call fits the matcher fields, or with `by`, the first call made by that agent does; for `skill_loaded`, the first skill load is the skill, and no tool call outside `ignoring` comes before it.",
+    default: { value: { "*": false } },
   },
   before: {
     type: "matcher",
@@ -111,7 +121,8 @@ export const CALL_FIELDS: Record<string, FieldDef> = {
   strict: {
     type: "bool",
     meaning:
-      "True for a `sequence` to forbid a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match. Default: false.",
+      "True for a `sequence` to forbid a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match.",
+    default: { value: { "*": false } },
   },
   matches: {
     type: "matcher",

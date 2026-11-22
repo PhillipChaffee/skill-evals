@@ -1,3 +1,5 @@
+import { DEFAULT_TIMEOUT_SECONDS } from "./command-fields.js";
+import { valueOf } from "./defaults.js";
 import fs from "node:fs";
 import type { CommandResult } from "../command.js";
 import { runCommand } from "../command.js";
@@ -6,7 +8,6 @@ import type { Outcome, Rule, Spec, Verdict, With } from "./index.js";
 import { regex } from "./rules.js";
 
 const KEPT_BYTES = 2000;
-export const DEFAULT_TIMEOUT_SECONDS = 120;
 const SHOWN_LINE_LENGTH = 80;
 const SHOWN_PATHS = 10;
 const UTF8_CONTINUATION = 0b1000_0000;
@@ -69,7 +70,7 @@ function ratioOf(
  * @returns The first thing that fails, or null when it passes.
  */
 function shortfall(check: With<"run">, result: CommandResult): string | null {
-  const expected = check.expectExit ?? 0;
+  const expected = valueOf(check, "expectExit") as number;
   if (result.exit !== expected) return `expected exit ${String(expected)}`;
   const { stdoutMatches, stdoutLacks, flags } = check;
   if (stdoutMatches && !regex(stdoutMatches, flags).test(result.stdout)) {

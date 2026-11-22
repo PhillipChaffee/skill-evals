@@ -11,18 +11,21 @@ export const FILE_FIELDS: Record<string, FieldDef> = {
     type: "enum",
     values: ["any", "all"],
     meaning:
-      'For a glob that matches several files: "any" needs one of them to pass, "all" needs every one. Default: "any" for `file_matches`, "all" for `file_lacks`.',
+      'For a glob that matches several files: "any" needs one of them to pass, "all" needs every one.',
+    default: { value: { file_matches: "any", file_lacks: "all" } },
   },
   root: {
     type: "enum",
     values: ["workspace", "home"],
     meaning:
-      'Where the path is looked up: the agent\'s "workspace", or the run\'s throwaway "home", for a skill that writes user-level files. Default: "workspace".',
+      'Where the path is looked up: the agent\'s "workspace", or the run\'s throwaway "home", for a skill that writes user-level files.',
+    default: { value: { "*": "workspace" } },
   },
   created: {
     type: "bool",
     meaning:
-      "True to require that the agent created the file: no file at that path was in the root before the run. Default: false.",
+      "True to require that the agent created the file: no file at that path was in the root before the run.",
+    default: { value: { "*": false } },
   },
   allow: {
     type: "texts",

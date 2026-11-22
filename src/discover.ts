@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { nameProblem } from "./case-id.js";
 import { UsageError } from "./scope.js";
 
 /** One case directory that discovery found. */
@@ -27,13 +28,6 @@ export const isCaseDir = (dir: string): boolean =>
 export const isSkippedName = (name: string): boolean => name.startsWith("_");
 
 /**
- * Tells whether a directory name holds a character that case ids and selections give a meaning to.
- * @param name - The directory's name.
- * @returns True for a name that holds `@` (a variant) or `,` (a list of selectors).
- */
-export const hasReservedChar = (name: string): boolean => /[@,]/.test(name);
-
-/**
  * Finds the case directories under a directory, at any depth. A directory is a case when it holds `prompt.md` or
  * `case.json`. Nothing under a case is searched, and a directory whose name starts with `_` is skipped with all it holds.
  * @param dir - The directory to search.
@@ -41,7 +35,7 @@ export const hasReservedChar = (name: string): boolean => /[@,]/.test(name);
  * @param onError - Collecting mode: hears of each fault with the case's id, or the directory when it has none, and
  *   discovery goes on without that directory. Absent: the first fault throws.
  * @returns The cases, unsorted.
- * @throws {UsageError} When a directory cannot be read, or the name of a case's directory holds `@` or `,`, and
+ * @throws {UsageError} When a directory cannot be read, or the name of a case's directory holds `@`, `,` or a control character, or is over 255 bytes, and
  *   `onError` is absent.
  */
 export function discover(
@@ -68,8 +62,9 @@ export function discover(
     const names = [...prefix, entry.name];
     if (!isCaseDir(where)) return discover(where, names, onError);
     const id = names.join("/");
-    if (names.some(hasReservedChar)) {
-      const message = `case ${id}: a directory name may not hold "@" or ","`;
+    const [problem] = names.flatMap((name) => nameProblem(name) ?? []);
+    if (problem !== undefined) {
+      const message = `case ${id}: ${problem}`;
       if (!onError) throw new UsageError(message);
       onError(id, message);
       return [];

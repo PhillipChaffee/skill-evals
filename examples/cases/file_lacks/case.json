@@ -1,10 +1,16 @@
 {
-  "description": "No file under src holds a TODO.",
+  "description": "No loose typing.",
+  "tags": ["files"],
   "checks": [
     {
       "type": "file_lacks",
       "path": "src/**/*.ts",
-      "pattern": "TODO"
+      "pattern": "\\bas any\\b"
+    },
+    {
+      "type": "output_contains",
+      "text": "done"
     }
-  ]
+  ],
+  "timeoutSeconds": 300
 }

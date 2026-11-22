@@ -1,4 +1,5 @@
 import { CASE_KEYS } from "../cases.js";
+import { describeDefault } from "../checks/defaults.js";
 import { FIELDS } from "../checks/fields.js";
 import type { Spec } from "../checks/index.js";
 import { CHECKS } from "../checks/index.js";
@@ -40,6 +41,20 @@ function fieldsCell(spec: Spec): string {
   return [parts.join(", "), ...(spec.note ? [spec.note] : [])].join(". ");
 }
 
+/**
+ * Lists the rows of the Fields table of the checks page.
+ * @returns One row for each field: its name, type, default (generated from the field's `default`) and meaning.
+ */
+const fieldRows = (): string[][] =>
+  Object.entries(FIELDS).map(
+    ([field, { type, meaning, default: fallback }]) => [
+      code(field),
+      code(type),
+      fallback === undefined ? "none" : describeDefault(fallback),
+      meaning,
+    ],
+  );
+
 const checksPage = (): ReferencePage => ({
   file: "reference/checks.md",
   markdown: `${header(
@@ -66,14 +81,7 @@ ${table(
 
 ## Fields
 
-${table(
-  ["Field", "Type", "Holds"],
-  Object.entries(FIELDS).map(([field, { type, meaning }]) => [
-    code(field),
-    code(type),
-    meaning,
-  ]),
-)}
+${table(["Field", "Type", "Default", "Holds"], fieldRows())}
 
 ## Case file keys
 

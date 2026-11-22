@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { valueOf } from "./defaults.js";
 import { isGlob } from "../glob.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { CHANGE_CHECKS } from "./file-changes.js";
@@ -103,7 +104,8 @@ const fileCount = (check: RuledCheck, outcome: Outcome): Verdict => {
   const { found } = lookup(check, outcome, true);
   if (found.capped !== null) return { score: 0, reason: found.capped };
   const files = pathsOf(found, "file");
-  const { min = 1, max = Infinity } = check;
+  const { max = Infinity } = check;
+  const min = valueOf(check, "min") as number;
   if (files.length >= min && files.length <= max) {
     const unsure = found.unreadable.length > 0 && max !== Infinity;
     return unsure

@@ -1,3 +1,4 @@
+import { valueOf } from "./checks/defaults.js";
 import type { Rubric, Scale } from "./checks/judge-fields.js";
 import type { Attachment } from "./judge-api.js";
 import type { Seen } from "./judge-render.js";
@@ -227,8 +228,10 @@ export async function judge<
   memo?: Memo<Reply>,
 ): Promise<Judged<Reply>> {
   const prompt = judgePrompt(question);
-  const scale = question.scale ?? "0-1";
-  const count = question.votes ?? 1;
+  const scale =
+    question.scale ?? (valueOf({ type: "judge" }, "scale") as Scale);
+  const count =
+    question.votes ?? (valueOf({ type: "judge" }, "votes") as number);
   const attachments = question.attachments ?? [];
   const cast: Judged<Reply>[] = [];
   while (cast.length < count) {
