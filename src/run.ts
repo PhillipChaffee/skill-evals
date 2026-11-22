@@ -92,7 +92,9 @@ export function invalidReason(
     return `loaded outside the subject: ${record.unexpected.join(", ")}`;
   }
   if (record.isolated && record.judgeProblem) return record.judgeProblem;
-  const unscored = record.checks.find((check) => check.score === null);
+  const unscored = record.checks.find(
+    (check) => check.score === null && check.notScored === undefined,
+  );
   if (unscored) {
     return `a ${checkKind(unscored)} check has no score: ${String(unscored.reason)}`;
   }
@@ -225,7 +227,9 @@ export function assemble(
   return {
     record: {
       ...judged,
-      score: invalidReason(judged) ? null : weightedMean(checks),
+      score: invalidReason(judged)
+        ? null
+        : weightedMean(checks.filter((check) => check.notScored === undefined)),
       judge: judgeUsage(replies, hits),
       decision: requests.length ? totalUsage(requests) : null,
       ...(skippedGraders ? { skippedGraders } : {}),
@@ -281,6 +285,7 @@ async function record(
     transcriptFile: transcript.relative,
     inputHash: inputHash(caseDef, { harness: harness.id, model: plan.model }),
     ...turned,
+    ...(parsed.askedUser === true ? { askedUser: true as const } : {}),
     ...startupRecord(plan, ran, copy),
     ...limitFields(harness, caseDef, ran),
     subjectMutated: changes !== null && allChanged(changes).length > 0,

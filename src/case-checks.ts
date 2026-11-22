@@ -48,8 +48,8 @@ export function dropChecks(caseDef: Case, drop: number[]): Case {
 }
 
 /**
- * Lists what a case needs because of its turns: a second turn needs `multiTurn`, an `invoke` needs `userInvoke`, and an
- * event needs the capability of its name.
+ * Lists what a case needs because of its turns: a second turn needs `multiTurn`, an `invoke` needs `userInvoke`, a
+ * `reply` needs `askUser` (it is a second turn, so `multiTurn` too), and an event needs the capability of its name.
  * @param caseDef - The case whose turns are read.
  * @returns The needs, without repeats; none for a single prompt.
  */
@@ -60,6 +60,7 @@ export function turnNeeds(caseDef: Pick<Case, "turns">): Need[] {
     ...(turns.some((turn) => "invoke" in turn)
       ? (["userInvoke"] as const)
       : []),
+    ...(turns.some((turn) => "reply" in turn) ? (["askUser"] as const) : []),
     ...LIFECYCLE_EVENTS.filter((event) =>
       turns.some((turn) => "event" in turn && turn.event === event),
     ),

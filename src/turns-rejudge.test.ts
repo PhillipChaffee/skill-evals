@@ -12,6 +12,8 @@ const EDIT = {
     write: { path: "src/a.txt", content: "b\n" },
   },
 };
+const CASE_FILE = "cases/talk/case.json";
+const FIRST = "do talk, first\n";
 const CHANGED = { type: "file_changed", path: "src" };
 
 /**
@@ -21,10 +23,10 @@ const CHANGED = { type: "file_changed", path: "src" };
  */
 async function scoredTurns(turns: unknown[]) {
   const box = sandbox();
-  box.write("cases/talk/one.md", "do talk, first\n");
+  box.write("cases/talk/one.md", FIRST);
   box.write("cases/talk/two.md", "the follow-up\n");
   box.write("cases/talk/workspace/src/a.txt", "a\n");
-  box.write("cases/talk/case.json", {
+  box.write(CASE_FILE, {
     checks: [{ type: "tool_called", kind: "edit" }],
     turns,
   });
@@ -57,7 +59,7 @@ test("rejudge scores the checks of each turn again, from the stored slices and c
     1, 1, 0, 0,
   ]);
   // Turn 2's checks change; turn 1's stay as they were.
-  box.write("cases/talk/case.json", {
+  box.write(CASE_FILE, {
     checks: [{ type: "tool_called", kind: "edit" }],
     turns: [
       { prompt: "one.md", checks: [CHANGED] },
@@ -80,4 +82,45 @@ test("rejudge scores the checks of each turn again, from the stored slices and c
     [1, 2],
   ]);
   expect(again.userTurns).toHaveLength(2);
+});
+
+test("rejudge keeps a reply turn that was not asked out of the score, and reads the adapter's stop for input", async () => {
+  const box = sandbox();
+  box.write("cases/talk/one.md", FIRST);
+  box.write("cases/talk/answer.md", "use postgres\n");
+  const file = {
+    checks: [{ type: "ended_awaiting_user" }],
+    turns: [
+      { prompt: "one.md" },
+      {
+        reply: { whenAsked: "database", prompt: "answer.md" },
+        checks: [{ type: "output_contains", text: "x" }],
+      },
+    ],
+  };
+  box.write(CASE_FILE, file);
+  // The harness says it stopped for input, but no question call shows what was asked: the reply is not asked.
+  script(box, "talk", {
+    match: { prompt: "do talk" },
+    turns: [[{ text: "need input" }, { deny: "AskUserQuestion" }]],
+  });
+  const cases = path.join(box.root, "cases");
+  const out = path.join(box.root, "results");
+  const ran = await box.cli([
+    ...["score", "--subject", "none", "--cases", cases, "--out", out],
+  ]);
+  expect(ran.status, ran.stderr).toBe(0);
+  const first = onlyRecord(out);
+  expect(first.askedUser).toBe(true);
+  expect(first.userTurns?.[1]?.skipped).toBe("not asked");
+  const again = await box.cli(["rejudge", out, "--cases", cases]);
+  expect(again.status, again.stderr).toBe(0);
+  const record = onlyRecord(out, REJUDGED);
+  expect(
+    record.checks.map(({ score, notScored }) => [score, notScored]),
+  ).toEqual([
+    [1, undefined],
+    [null, true],
+  ]);
+  expect(record.score).toBe(1);
 });

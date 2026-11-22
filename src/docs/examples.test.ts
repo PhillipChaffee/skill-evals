@@ -51,12 +51,12 @@ test.each(cases)(
       : example.value;
     // A case with turns names its prompt files, and has no `prompt.md`.
     const turns = Array.isArray(caseFile["turns"])
-      ? (caseFile["turns"] as { prompt?: string }[])
+      ? (caseFile["turns"] as { prompt?: string; reply?: { prompt: string } }[])
       : [];
     const files =
       turns.length === 0
         ? ["prompt.md"]
-        : turns.flatMap(({ prompt }) => prompt ?? []);
+        : turns.flatMap(({ prompt, reply }) => prompt ?? reply?.prompt ?? []);
     for (const file of files) box.write(`cases/documented/${file}`, HELLO);
     box.write("cases/documented/case.json", caseFile);
     const [loaded] = loadCases(path.join(box.root, "cases"));

@@ -30,3 +30,11 @@ export const firstTurn = (
   turn: { index: 0, message, invoke: null, event: null },
   session: null,
 });
+
+/** What the runner keeps while it counts the turns of a stream. */
+export interface TurnState {
+  /** The main-thread turns begun so far. */
+  turns: number;
+  /** Scratch for an adapter that has to tell one turn's events from the next's, such as message ids already seen. */
+  seen: Set<string>;
+}

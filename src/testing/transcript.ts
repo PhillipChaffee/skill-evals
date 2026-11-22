@@ -8,11 +8,12 @@ const KINDS: Record<string, ToolKind> = {
   Edit: "edit",
   Read: "read",
   Skill: "skill",
+  AskUserQuestion: "question",
 };
 
 /**
  * States a tool call of a hand-built transcript.
- * @param name - `Bash`, `Edit`, `Read` or `Skill`.
+ * @param name - `Bash`, `Edit`, `Read`, `Skill` or `AskUserQuestion`.
  * @param input - The arguments of the call.
  * @param id - The id that joins the call to its result.
  * @returns The event, to give to `played`.

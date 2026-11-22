@@ -16,15 +16,15 @@ export interface TurnParts {
   turnChanges: ChangedFiles[];
 }
 
-/** Why a turn was not sent. A later task adds the reason of a conditional reply that was not asked for. */
-type SkipReason = "stopped";
+/** Why a turn was not sent: the run was stopped before it, or it is a reply to a question that was not asked. */
+type SkipReason = "stopped" | "not asked";
 
 /** What one turn of a case with `turns` was, and how it went. */
 export interface TurnRecord {
   /** The turn's number, counted from 1. */
   turn: number;
-  /** What the turn was: a message, a user invocation of a skill, or a lifecycle event. */
-  kind: "prompt" | "invoke" | "event";
+  /** What the turn was: a message, a user invocation of a skill, a conditional reply, or a lifecycle event. */
+  kind: "prompt" | "invoke" | "reply" | "event";
   /** The event, for a turn of kind `event`. */
   event?: LifecycleEvent;
   /** Why the turn was not sent; null for a turn that ran. */
@@ -37,6 +37,8 @@ export interface TurnRecord {
   loaded: Loaded | null;
   /** The session id this turn's process stated; null when it stated none or ran no process. */
   sessionId: string | null;
+  /** What this turn's process reported of stopping for the user's answer (`Parsed.askedUser`); absent or null: nothing. */
+  askedUser?: boolean | null;
 }
 
 const NONE: ChangedFiles = { created: [], modified: [], deleted: [] };
@@ -47,9 +49,19 @@ const NONE: ChangedFiles = { created: [], modified: [], deleted: [] };
  * @returns The reason a check of the turn reports; null for a turn that ran.
  */
 const skippedFor = (record: TurnRecord): string | null =>
-  record.skipped === null
+  record.skipped !== "stopped"
     ? null
     : `turn ${String(record.turn)} was not run: ${record.why || "the run was stopped before it"}`;
+
+/**
+ * Says why the checks of a reply turn that was not sent are not scored.
+ * @param record - The turn's record.
+ * @returns `not scored: turn N was not asked`; null for any other turn.
+ */
+const notAskedFor = (record: TurnRecord): string | null =>
+  record.skipped === "not asked"
+    ? `not scored: turn ${String(record.turn)} was not asked`
+    : null;
 
 /**
  * Cuts the run into the slice of each turn.
@@ -73,6 +85,8 @@ export function slicesOf(parts: TurnParts): TurnSlice[] {
       changed: parts.turnChanges[place] ?? NONE,
       callBase: Math.max(first, 0),
       skipped: skippedFor(record),
+      notAsked: notAskedFor(record),
+      askedUser: record.askedUser ?? null,
     };
   });
 }
@@ -96,9 +110,22 @@ export function viewFor(check: Check, outcome: Outcome): Outcome | string {
     toolCalls: slice.toolCalls,
     transcript: slice.transcript,
     skillEvents: slice.skillEvents,
+    askedUser: slice.askedUser ?? null,
     turn: { changed: slice.changed, callBase: slice.callBase },
   };
 }
+
+/**
+ * Tells whether a check belongs to a reply turn that was not sent.
+ * @param check - Any check of a case.
+ * @param outcome - What the run left behind.
+ * @returns The reason the check is left out of the score; null for a check that is scored, which is every check but
+ *   those of a reply turn that was not asked.
+ */
+export const notScoredFor = (check: Check, outcome: Outcome): string | null =>
+  check.turn === undefined
+    ? null
+    : (outcome.turns?.[check.turn - 1]?.notAsked ?? null);
 
 /**
  * Cuts a stored run into the slices of its turns, for a check that is scored again.

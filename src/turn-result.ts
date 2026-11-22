@@ -47,6 +47,12 @@ export interface TurnsRun {
   turnChanges: ChangedFiles[];
 }
 
+/** The last turn that was sent to the agent: its number, from 1, and what its process wrote. */
+export interface Sent {
+  turn: number;
+  parsed: Parsed;
+}
+
 /** Where a run stands between turns. */
 export interface State {
   /** The id to continue, when a turn has given one. */
@@ -66,6 +72,8 @@ export interface State {
   prior: Prior | null;
   /** Why the first process cannot start, such as a failed setup step of the case; null otherwise. */
   failure: string | null;
+  /** The last prompt, invocation or reply that was sent; a conditional reply asks whether it ended awaiting the user. */
+  sent: Sent;
   /** The workspace after the last turn. */
   workspace: Snapshot;
   /** The seconds all turns may take together. */

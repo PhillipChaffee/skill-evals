@@ -7,13 +7,14 @@ One prompt and one turn cannot say "the agent still runs the checks when the use
 
 ## Write the turns
 
-A case has a `prompt.md` or a `turns` list, never both. A case needs one check at least, and all of them may be in its turns: `checks` may then be left out. Each turn is one of three things:
+A case has a `prompt.md` or a `turns` list, never both. A case needs one check at least, and all of them may be in its turns: `checks` may then be left out. Each turn is one of four things:
 
-| Turn                                             | What the user does                                                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `{ "prompt": "<file>" }`                         | Sends a message. The file is in the case's directory, such as `fix.md`.                                 |
-| `{ "invoke": { "skill": "<name>", "args": "…" }` | Types the harness's own command for a skill, such as `/release-notes v2.1` in Claude Code.              |
-| `{ "event": "compact" }`                         | A lifecycle event between messages: `compact`, `clear` or `resume`. The first turn may not be an event. |
+| Turn                                                    | What the user does                                                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ "prompt": "<file>" }`                                | Sends a message. The file is in the case's directory, such as `fix.md`.                                                                     |
+| `{ "invoke": { "skill": "<name>", "args": "…" }`        | Types the harness's own command for a skill, such as `/release-notes v2.1` in Claude Code.                                                  |
+| `{ "reply": { "whenAsked": "…", "prompt": "<file>" } }` | Answers a question of the agent, if it asked one: see [Ask the user and reply](#ask-the-user-and-reply). The first turn may not be a reply. |
+| `{ "event": "compact" }`                                | A lifecycle event between messages: `compact`, `clear` or `resume`. The first turn may not be an event.                                     |
 
 Every turn may also have `checks`, except a `clear` or `resume` turn, which sends nothing to look at. This is a complete case, in two turns:
 
@@ -75,6 +76,8 @@ A reason in a turn names a call by its number in the whole run, the number `show
 
 The report names the checks of a turn as `turn N`, and each result in `results.json` has `turn`.
 
+The record's top-level `loaded` is the union of what every turn's process reported, so something that only a later turn loaded is in it too; each turn's own report is in `userTurns`.
+
 ## Invoke a skill as the user
 
 An `invoke` turn sends the harness's own user syntax. A skill whose frontmatter says `disable-model-invocation: true` is for this: the user types the command, and the model never starts the skill itself. To test one, use two cases. One invokes it and grades its output. The other asks for the same work in plain words and passes only if the agent did not start the skill through its own skill tool:
@@ -84,6 +87,30 @@ An `invoke` turn sends the harness's own user syntax. A skill whose frontmatter 
 ```
 
 The repository has both in `test/target/cases/user-only-skill` and `user-only-skill-natural`.
+
+## Ask the user and reply
+
+Some harnesses have a tool that asks the user a question and waits (Claude Code's `AskUserQuestion`). Its adapter maps the tool to the tool kind `question` and declares the capability `askUser`. Only a question tool counts as asking: a final message that ends with a question mark never does, in any harness.
+
+- `asked_user` counts the question calls: `min` (default 1), `max`, `pattern` (a regular expression for the question text) and `by`. The question text is the `questions[].question` texts of the call joined with newlines in Claude Code, and the call's whole input as JSON in a harness whose question tool has another shape.
+- `ended_awaiting_user` passes when the last event of the main agent is a question call, or the adapter reported that the harness stopped for the user's input. In a turn's `checks` it looks at that turn; at case level, at the whole run. The results of question calls are left out, because a print-mode process answers a question with a refusal.
+- A `reply` turn is sent only when the previous turn that was sent ended awaiting the user and one of its questions matches `whenAsked`. Otherwise it is recorded as skipped `"not asked"`, and nothing is sent. Later turns still run, and the session goes on from the last turn that was sent. The checks of a turn that was not asked are not scored: they do not count in the run's score, they do not make the run invalid, and the report says `not scored: turn N was not asked`. A turn that was not run because the run stopped is different: its checks score 0.
+
+```json
+{
+  "description": "The agent asks which database to migrate, and the user answers; if it does not ask, the answer is not sent.",
+  "turns": [
+    { "prompt": "migrate.md", "checks": [{ "type": "ended_awaiting_user" }] },
+    {
+      "reply": { "whenAsked": "which database", "prompt": "answer.md" },
+      "checks": [{ "type": "file_exists", "path": "migration.sql" }]
+    }
+  ],
+  "checks": [{ "type": "asked_user", "pattern": "which database", "max": 1 }]
+}
+```
+
+`examples/cases/asked_user` and `examples/cases/ended_awaiting_user` show the two checks on one prompt. Only Claude Code declares `askUser`, from the tool's name in the CLI binary. The signal that the process stopped for input is read from the result's `permission_denials`, and is unconfirmed against a real run until Task 29, which will also decide `askUser` for Pi, OpenCode, Codex and Cursor. A harness without it makes `asked_user`, `ended_awaiting_user` and a `reply` turn not applicable.
 
 ## Lifecycle events
 
@@ -103,6 +130,7 @@ A case that needs more than a harness declares is not applicable there, and neve
 | -------------------------------------- | ------------------------------ |
 | More than one turn                     | `multiTurn`                    |
 | An `invoke` turn                       | `userInvoke`                   |
+| A `reply` turn                         | `askUser`                      |
 | A `compact`, `clear` or `resume` event | `compact`, `clear` or `resume` |
 
 Only Claude Code declares `multiTurn`, `clear` and `resume`, because its `--help` confirms the continuation flag (`-r, --resume`). No harness declares `userInvoke` yet: the `/skill` syntax is in the help text, but whether a `/skill` prompt in a print-mode process loads the skill needs a real model to confirm. No harness declares `compact`: `claude --help` has no way to ask for a compaction in a print-mode process, and no other CLI was installed to read. [Harnesses](../agents/harnesses.md) lists what each adapter declares and [Capabilities](../concepts/capabilities.md) says what each means.

@@ -56,7 +56,7 @@ test("a turn is strict: one source, known keys, a first turn that is not an even
   const box = () => sandbox();
   expect(failure(box(), { turns: [] })).toContain('"turns" must not be empty');
   expect(failure(box(), { turns: [{}] })).toBe(
-    `${where}: a turn needs exactly one of "prompt", "invoke" and "event"`,
+    `${where}: a turn needs exactly one of "prompt", "invoke", "reply" and "event"`,
   );
   expect(
     failure(box(), { turns: [{ prompt: "one.md", event: "clear" }] }),
@@ -65,7 +65,7 @@ test("a turn is strict: one source, known keys, a first turn that is not an even
     `${where}: unknown key "color" for a turn`,
   );
   expect(failure(box(), { turns: [{ event: "compact" }] })).toBe(
-    `${where.replace("turns[0]", "turns[0]")}: the first turn must be a "prompt" or an "invoke"; an event acts on a session that exists`,
+    `${where.replace("turns[0]", "turns[0]")}: the first turn must be a "prompt" or an "invoke"; an event or a reply acts on a session that exists`,
   );
   expect(
     failure(box(), { turns: [{ prompt: "one.md" }, { event: "x" }] }),

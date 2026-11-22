@@ -31,6 +31,8 @@ const KINDS: Record<string, ToolKind> = {
   WebFetch: "web",
   WebSearch: "web",
   Skill: "skill",
+  // Confirmed from the CLI binary's strings: the tool is named `AskUserQuestion`, and its input holds `questions`.
+  AskUserQuestion: "question",
   Agent: "subagent",
   Task: "subagent",
 };
@@ -53,6 +55,8 @@ type Event =
       result?: string;
       is_error?: boolean;
       total_cost_usd?: number;
+      /** The tool calls that a `-p` process could not carry out; an `AskUserQuestion` among them is the agent asking. */
+      permission_denials?: { tool_name?: string }[];
       usage?: {
         input_tokens: number;
         output_tokens: number;
@@ -110,6 +114,8 @@ const claudeCode: Harness = {
     "isolated",
     "toolOutputs",
     "assistantText",
+    // Confirmed from the CLI binary's strings, not from a stream: `AskUserQuestion` is the question tool.
+    "askUser",
     // Confirmed from `claude --help` (2.1.330): `-r, --resume [value]` "Resume a conversation by session ID or name"
     // continues a session in a new `-p` process, and a `-p` process without it starts a new conversation.
     "multiTurn",
@@ -180,6 +186,12 @@ const claudeCode: Harness = {
           }
         : null,
       agentTokens: agentTokens(raw as MessageEvent[]),
+      // Unconfirmed against a real run: a `-p` process denies the question tool, and the result lists the denial.
+      askedUser: result
+        ? (result.permission_denials ?? []).some(
+            (denied) => denied.tool_name === "AskUserQuestion",
+          )
+        : null,
       costUsd: result?.total_cost_usd ?? null,
       loaded: {
         paths: init?.plugins ? init.plugins.map((plugin) => plugin.path) : null,

@@ -97,13 +97,13 @@ const turnsSchema = (meaning: string | undefined): Schema => ({
 
 /**
  * Makes the schema of a turn.
- * @returns An object with exactly one of `prompt`, `invoke` and `event`, and optional `checks`, which may be any check
+ * @returns An object with exactly one of `prompt`, `invoke`, `reply` and `event`, and optional `checks`, which may be any check
  *   but `judge` and `decision`; `x-` keys are allowed, and nothing else.
  */
 const turnSchema = (): Schema => ({
   title: "turn",
   description:
-    "One step of a case with turns: a user message, a user invocation of a skill, or a lifecycle event.",
+    "One step of a case with turns: a user message, a user invocation of a skill, a conditional reply to a question, or a lifecycle event.",
   type: "object",
   properties: {
     prompt: valueSchema("prompt", TURN_KEYS["prompt"] as FieldDef),
@@ -113,6 +113,18 @@ const turnSchema = (): Schema => ({
       type: "object",
       required: ["skill"],
       properties: { skill: PLAIN_TEXT, args: PLAIN_TEXT },
+      patternProperties: X_KEYS,
+      additionalProperties: false,
+    },
+    reply: {
+      title: "reply",
+      description: TURN_KEYS["reply"]?.meaning,
+      type: "object",
+      required: ["whenAsked", "prompt"],
+      properties: {
+        whenAsked: { title: "whenAsked", type: "string", minLength: 1 },
+        prompt: PLAIN_TEXT,
+      },
       patternProperties: X_KEYS,
       additionalProperties: false,
     },
@@ -137,6 +149,7 @@ const turnSchema = (): Schema => ({
   oneOf: [
     { required: ["prompt"] },
     { required: ["invoke"] },
+    { required: ["reply"] },
     { required: ["event"] },
   ],
   patternProperties: X_KEYS,

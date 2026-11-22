@@ -143,6 +143,7 @@ test("the adapters declare what their parsers and fixtures show today", () => {
         "isolated",
         "toolOutputs",
         "assistantText",
+        "askUser",
         "multiTurn",
         "resume",
         "clear",

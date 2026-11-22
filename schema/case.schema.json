@@ -231,6 +231,8 @@
           { "$ref": "#/$defs/check-tool_not_called" },
           { "$ref": "#/$defs/check-first_tool" },
           { "$ref": "#/$defs/check-agent_dispatched" },
+          { "$ref": "#/$defs/check-asked_user" },
+          { "$ref": "#/$defs/check-ended_awaiting_user" },
           { "$ref": "#/$defs/check-tool_order" },
           { "$ref": "#/$defs/check-transcript_matches" },
           { "$ref": "#/$defs/check-transcript_lacks" },
@@ -314,12 +316,12 @@
     },
     "turn": {
       "title": "turn",
-      "description": "One step of a case with turns: a user message, a user invocation of a skill, or a lifecycle event.",
+      "description": "One step of a case with turns: a user message, a user invocation of a skill, a conditional reply to a question, or a lifecycle event.",
       "type": "object",
       "properties": {
         "prompt": {
           "title": "prompt",
-          "description": "A message from the user: a file of the case's directory, such as `turn-2.md`, whose text is sent. It stays inside the case and outside `grader/`. Give exactly one of `prompt`, `invoke` and `event`.",
+          "description": "A message from the user: a file of the case's directory, such as `turn-2.md`, whose text is sent. It stays inside the case and outside `grader/`. Give exactly one of `prompt`, `invoke`, `reply` and `event`.",
           "type": "string",
           "minLength": 1
         },
@@ -331,6 +333,22 @@
           "properties": {
             "skill": { "type": "string", "minLength": 1 },
             "args": { "type": "string", "minLength": 1 }
+          },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false
+        },
+        "reply": {
+          "title": "reply",
+          "description": "A conditional reply to the agent's question: `{ \"whenAsked\": \"<regex>\", \"prompt\": \"<file>\" }`. The prompt file is sent only when the previous sent turn ended awaiting the user (see `ended_awaiting_user`) and one of its questions matches `whenAsked`; otherwise the turn is skipped as \"not asked\", and its checks are not scored. It needs the harness capabilities `multiTurn` and `askUser`, and may not be the first turn. Give exactly one of `prompt`, `invoke`, `reply` and `event`.",
+          "type": "object",
+          "required": ["whenAsked", "prompt"],
+          "properties": {
+            "whenAsked": {
+              "title": "whenAsked",
+              "type": "string",
+              "minLength": 1
+            },
+            "prompt": { "type": "string", "minLength": 1 }
           },
           "patternProperties": { "^x-": {} },
           "additionalProperties": false
@@ -371,6 +389,8 @@
               { "$ref": "#/$defs/check-tool_not_called" },
               { "$ref": "#/$defs/check-first_tool" },
               { "$ref": "#/$defs/check-agent_dispatched" },
+              { "$ref": "#/$defs/check-asked_user" },
+              { "$ref": "#/$defs/check-ended_awaiting_user" },
               { "$ref": "#/$defs/check-tool_order" },
               { "$ref": "#/$defs/check-transcript_matches" },
               { "$ref": "#/$defs/check-transcript_lacks" },
@@ -386,6 +406,7 @@
       "oneOf": [
         { "required": ["prompt"] },
         { "required": ["invoke"] },
+        { "required": ["reply"] },
         { "required": ["event"] }
       ],
       "patternProperties": { "^x-": {} },
@@ -445,6 +466,7 @@
                   "web",
                   "skill",
                   "subagent",
+                  "question",
                   "other"
                 ]
               },
@@ -1178,13 +1200,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1433,13 +1455,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1543,6 +1565,7 @@
             "web",
             "skill",
             "subagent",
+            "question",
             "other"
           ]
         },
@@ -1609,13 +1632,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -1682,6 +1705,7 @@
             "web",
             "skill",
             "subagent",
+            "question",
             "other"
           ]
         },
@@ -1804,6 +1828,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },
@@ -1901,6 +1926,7 @@
                   "web",
                   "skill",
                   "subagent",
+                  "question",
                   "other"
                 ]
               },
@@ -2020,13 +2046,13 @@
         },
         "min": {
           "title": "min",
-          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
           "type": "integer",
           "minimum": 0
         },
         "max": {
           "title": "max",
-          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
           "type": "integer",
           "minimum": 0
         },
@@ -2053,6 +2079,105 @@
           "description": "A regular expression for the model a dispatch chose. A dispatch that carries no model does not match.",
           "type": "string",
           "minLength": 1
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-asked_user": {
+      "title": "asked_user",
+      "description": "The number of question calls the agent made, of those whose question fits `pattern`, is from `min` to `max`. It counts calls of the tool kind `question` (`AskUserQuestion` in Claude Code), and nothing else: an answer that ends with a question mark is not asking. The question is the call's `questions[].question` texts joined with newlines, or the call's whole input as JSON for a harness whose question tool has another shape. `pattern` is a regular expression for that text, case-sensitive. `min` defaults to 1, and to 0 when `max` is 0. `by` counts the calls of those agents. Needs a harness with `askUser`.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "asked_user" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
+        },
+        "min": {
+          "title": "min",
+          "description": "The fewest that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "max": {
+          "title": "max",
+          "description": "The most that pass, a whole number, 0 or more: matching calls for `tool_called`, matching questions for `asked_user`, matching dispatches for `agent_dispatched`, matching files for `file_count`, lines for `file_lines`. Default: no limit.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "title": "pattern",
+          "description": "A regular expression.",
+          "type": "string",
+          "minLength": 1
+        },
+        "by": {
+          "title": "by",
+          "description": "Whose calls, skill loads or text count: `\"main\"` (the main thread), `\"subagent\"` (any subagent, at any depth), or `{ \"agent\": \"<name>\" }` (agents of that type; a plugin prefix is dropped, so `magic:comment-sicko:comment-sicko` and `comment-sicko` are the same). Absent: every agent. Needs a harness with `childCalls`; on `transcript_matches` and `transcript_lacks`, `childText`.",
+          "oneOf": [
+            { "enum": ["main", "subagent"] },
+            {
+              "type": "object",
+              "required": ["agent"],
+              "properties": { "agent": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "requires": {
+          "title": "requires",
+          "description": "A list of capabilities the check needs, such as `\"mcp\"`, or `\"bin:<name>\"` for an executable on the host's `PATH`. A harness that lacks one cannot run the check.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(subagents|multiTurn|userInvoke|toolOutputs|assistantText|turnGrouping|childCalls|childText|rules|hooks|history|historyNative|askUser|toolDurations|sessionStore|compact|clear|resume|mcp|skillListing|loadedReport|isolated|sandbox|bin:[A-Za-z0-9._+-]+)$"
+          }
+        },
+        "ifUnsupported": {
+          "title": "ifUnsupported",
+          "description": "What a harness that lacks what the check needs does: \"skip\" drops this check and re-normalizes the weights, \"not-applicable\" excludes the whole case.",
+          "type": "string",
+          "enum": ["skip", "not-applicable"]
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+    "check-ended_awaiting_user": {
+      "title": "ended_awaiting_user",
+      "description": "The last event of the main agent is a question call, or the harness reported that the agent stopped for the user's answer. In a turn's `checks` it looks at that turn's last event; at case level, at the run's. The results of question calls are not counted as events, since a headless process answers a question with a refusal. A final message that ends with a question mark is not asking. Needs a harness with `askUser`.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "ended_awaiting_user" },
+        "weight": {
+          "title": "weight",
+          "description": "A positive number that says how much it counts.",
+          "anyOf": [
+            { "type": "number", "exclusiveMinimum": 0 },
+            { "type": "null" }
+          ]
         },
         "requires": {
           "title": "requires",
@@ -2106,6 +2231,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },
@@ -2206,6 +2332,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },
@@ -2309,6 +2436,7 @@
                   "web",
                   "skill",
                   "subagent",
+                  "question",
                   "other"
                 ]
               },
@@ -2475,6 +2603,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -2574,6 +2703,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -2674,6 +2804,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -2848,6 +2979,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -2947,6 +3079,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -3047,6 +3180,7 @@
                         "web",
                         "skill",
                         "subagent",
+                        "question",
                         "other"
                       ]
                     },
@@ -3194,6 +3328,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },
@@ -3340,6 +3475,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },
@@ -3492,6 +3628,7 @@
                 "web",
                 "skill",
                 "subagent",
+                "question",
                 "other"
               ]
             },

@@ -1,0 +1,9 @@
+{
+  "description": "The agent is told to stop and ask before it starts: the run ends on its question, not on an answer.",
+  "tags": ["behaviour", "asking"],
+  "checks": [
+    { "type": "ended_awaiting_user" },
+    { "type": "file_unchanged", "path": "plan.md" }
+  ],
+  "timeoutSeconds": 300
+}

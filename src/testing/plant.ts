@@ -116,6 +116,8 @@ type FakeStep =
   | { fail: string }
   /** Sets the final text of the run. */
   | { final: string }
+  /** Lists a call of this tool among the result's `permission_denials`, as a `-p` process does for a question it cannot ask. */
+  | { deny: string }
   /** Ends the run as Claude Code does at its own `--max-turns`: an `error_max_turns` result with no text, exit code 1. */
   | { limit: true }
   /** Writes the text to standard error and exits 1 with no result event, as a harness that dies does. */

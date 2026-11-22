@@ -48,6 +48,8 @@ const SCENARIOS: Record<string, Scenario> = {
   tool_not_called: [{ name: "Bash" }, twoOutputs],
   first_tool: [{ matches: { name: "Bash" } }, twoOutputs],
   agent_dispatched: [{ agent: "x", max: 0 }, () => bareOutcome()],
+  asked_user: [{ max: 0 }, () => bareOutcome()],
+  ended_awaiting_user: [{}, () => bareOutcome()],
   tool_order: [
     { before: { name: "Bash" }, after: { name: "Bash" } },
     twoOutputs,

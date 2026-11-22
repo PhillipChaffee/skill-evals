@@ -1,4 +1,9 @@
-import type { Parsed, Tokens, TranscriptEvent } from "./harnesses/shared.js";
+import type {
+  Loaded,
+  Parsed,
+  Tokens,
+  TranscriptEvent,
+} from "./harnesses/shared.js";
 import { NOT_REPORTED, sumTokens, withIndexes } from "./harnesses/shared.js";
 import { callsOf } from "./transcript.js";
 
@@ -50,6 +55,45 @@ const sumCosts = (costs: (number | null)[]): number | null =>
     : null;
 
 /**
+ * Joins what several processes reported of one kind of thing.
+ * @param lists - Each process's list; null where it does not report that kind.
+ * @returns Every name that any process reported, first seen first, without repeats; null when none reports the kind.
+ */
+function union<T>(lists: (T[] | null | undefined)[]): T[] | null {
+  const stated = lists.filter((list) => list != null);
+  return stated.length === 0 ? null : [...new Set(stated.flat())];
+}
+
+/**
+ * Joins the startup reports of the processes of a run, so that something that only a later turn's process loaded is
+ * in the record too.
+ * @param reports - What each process reported as loaded, in order.
+ * @returns For each kind, the union over the processes; a kind that no process reports stays null. A plugin is kept
+ *   once, by its path.
+ */
+export function unionLoaded(reports: Loaded[]): Loaded {
+  const plugins = union(reports.map((one) => one.plugins));
+  const raw = union(reports.map((one) => one.rawSkills));
+  return {
+    paths: union(reports.map((one) => one.paths)),
+    skills: union(reports.map((one) => one.skills)),
+    agents: union(reports.map((one) => one.agents)),
+    rules: union(reports.map((one) => one.rules)),
+    hooks: union(reports.map((one) => one.hooks)),
+    mcpServers: union(reports.map((one) => one.mcpServers)),
+    // An adapter that reports neither leaves the keys out, as it does itself.
+    ...(raw === null ? {} : { rawSkills: raw }),
+    ...(plugins === null
+      ? {}
+      : {
+          plugins: [
+            ...new Map(plugins.map((plugin) => [plugin.path, plugin])).values(),
+          ],
+        }),
+  };
+}
+
+/**
  * Renumbers the events of each turn into one run: every event gets the number of its turn as `userTurn`, from 1; the
  * positions of events run on without a break; and the assistant turns are counted on from the turns before.
  * @param parts - The parse of each turn, in order.
@@ -77,7 +121,7 @@ function eventsOf(parts: Parsed[]): TranscriptEvent[] {
  * @param ran - Which of them came from a harness process.
  * @returns One parse: the events of every turn with their `userTurn`, tool calls renumbered across turns and each
  *   marked with its `userTurn`, the final text of the last turn that ran a process, the tokens and the cost summed
- *   (the cost is null when any process turn stated none), `loaded` from the first process, and the session id of the
+ *   (the cost is null when any process turn stated none), `loaded` the union over every process (`unionLoaded`), and the session id of the
  *   last process. `error` is the first error of a turn.
  */
 export function mergeTurns(parts: Parsed[], ran: boolean[]): Parsed {
@@ -99,7 +143,8 @@ export function mergeTurns(parts: Parsed[], ran: boolean[]): Parsed {
     tokens: sumTokens(processes.flatMap((part) => part.tokens ?? [])),
     agentTokens: sumAgents(processes.map((part) => part.agentTokens)),
     costUsd: sumCosts(processes.map((part) => part.costUsd)),
-    loaded: processes[0]?.loaded ?? NOT_REPORTED,
+    loaded: unionLoaded(processes.map((part) => part.loaded)),
+    askedUser: last?.askedUser ?? null,
     error: parts.find((part) => part.error !== null)?.error ?? null,
     ...(last?.hitMaxTurns === undefined
       ? {}

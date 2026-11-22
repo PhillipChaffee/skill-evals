@@ -1,4 +1,5 @@
 import type {
+  Check,
   JudgedCheck,
   Outcome,
   RuledCheck,
@@ -13,7 +14,7 @@ import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
 import { apiAsker } from "./judge-api.js";
-import { viewFor } from "./turn-outcome.js";
+import { notScoredFor, viewFor } from "./turn-outcome.js";
 
 // A decision check that no request was sent for: only a valid run is decided, and a suite with decision checks
 // does not start without a decision model.
@@ -66,7 +67,7 @@ async function runCommands(
       ? removeLogin(plan.harness.authFiles, run.outcome.home)
       : null;
   for (const [index, check] of checks.entries()) {
-    if (check.type !== "command") continue;
+    if (check.type !== "command" || slots[index] !== undefined) continue;
     const refused = {
       score: 0,
       reason: `the login could not be removed from the home: ${String(stuck)}`,
@@ -165,6 +166,25 @@ function skippedFor(plan: ScoringPlan): string | null {
   return reached === null ? null : `skipped: ${reached} reached`;
 }
 
+/**
+ * Starts the results of a case: a check of a reply turn that was not asked is left out of the score, whatever its type.
+ * @param checks - Every check of the case.
+ * @param outcome - What the run left behind.
+ * @returns One slot for each check: its result without a score for a check that was not asked, and undefined for the
+ *   others, which the scoring fills in.
+ */
+function unaskedSlots(
+  checks: Check[],
+  outcome: Outcome,
+): (CheckResult | undefined)[] {
+  return checks.map((check) => {
+    const reason = notScoredFor(check, outcome);
+    return reason === null
+      ? undefined
+      : { ...check, score: null, reason, notScored: true };
+  });
+}
+
 /** What the checks of a run besides its commands got. */
 interface Scored {
   replies: Usage[];
@@ -217,11 +237,11 @@ export async function scoreChecks(
           decisions,
         )
       : null;
-  const slots: (CheckResult | undefined)[] = asked.map(() => undefined);
+  const slots = unaskedSlots(asked, outcome);
   // Commands run last: they may change the files that the other checks read, and a login must not be readable by
   // them. The record keeps the case's order.
   for (const [index, check] of asked.entries()) {
-    if (check.type === "command") continue;
+    if (check.type === "command" || slots[index] !== undefined) continue;
     if (isDecision(check)) {
       const result = decided?.results.get(check);
       const left = result ?? (early === null ? NOT_DECIDED : skipped(early));

@@ -86,15 +86,25 @@ export function checkRate(
   index: number,
   runs: { valid: RunRecord[]; planned: number },
 ): string {
-  const { valid: records, planned } = runs;
-  if (records.length === 0) return "n/a";
+  const { valid, planned } = runs;
+  if (valid.length === 0) return "n/a";
+  // A check of a reply turn that was not asked has no score and is left out of the rate.
+  const records = valid.filter(
+    (record) => record.checks[index]?.notScored === undefined,
+  );
+  const unasked = `not scored: turn ${String(check.turn)} was not asked`;
+  if (records.length === 0) return unasked;
   const total = records.reduce(
     (sum, record) => sum + (record.checks[index]?.score ?? 0),
     0,
   );
-  return isJudged(check) || isDecision(check)
-    ? `${formatScore(total / records.length)} (${String(records.length)} of ${String(planned)} runs)`
-    : `${String(total)}/${String(records.length)}`;
+  const rate =
+    isJudged(check) || isDecision(check)
+      ? `${formatScore(total / records.length)} (${String(records.length)} of ${String(planned)} runs)`
+      : `${String(total)}/${String(records.length)}`;
+  return records.length < valid.length
+    ? `${rate} (${unasked} in ${String(valid.length - records.length)} of ${String(valid.length)} runs)`
+    : rate;
 }
 
 /**

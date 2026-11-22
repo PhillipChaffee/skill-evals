@@ -32,6 +32,11 @@ export type CheckResult = Check & {
   probabilities?: Record<string, number>;
   /** For a command check: what the command did, each stream cut to its last 2,000 bytes. */
   command?: Verdict["command"];
+  /**
+   * True for a check of a conditional reply turn that was not sent because the agent did not ask: its score is null,
+   * and the run's score and validity leave it out. Absent otherwise.
+   */
+  notScored?: true;
 };
 
 /** The harness and model that score judged checks. */
@@ -128,6 +133,8 @@ export interface RunRecord extends Usage, LimitFields {
   transcriptFile?: string | null;
   /** The sha256 of what the agent saw: the prompt, files, setup, harness, model, `maxTurns` and env names; not the checks. Absent from earlier records. */
   inputHash?: string;
+  /** True when the harness reported that the agent stopped for the user's answer (`Parsed.askedUser`), for `ended_awaiting_user` at case level. Absent otherwise. */
+  askedUser?: true;
   /** Each turn of a case with `turns`, in order, with what it said and whether it was sent. Absent for a single prompt. */
   userTurns?: TurnRecord[];
   /** What each turn created, modified and deleted in the workspace, from a hash taken after it (no files are copied); the order of `userTurns`. Absent for a single prompt. */

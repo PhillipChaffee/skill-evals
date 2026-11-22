@@ -73,6 +73,14 @@ Each adapter declares a continuation, user syntax or lifecycle capability only w
 
 For Task 29 (the other adapters): none of `pi`, `opencode`, `codex` or `cursor-agent` is installed in this environment, so none declares `multiTurn`, `userInvoke`, `compact`, `clear` or `resume`. Each needs its own `--help` read for the continuation flag, its user syntax for a skill, and a compaction command, before it declares them.
 
+## Asking the user (Task 24b)
+
+| Capability | Claude Code                                                                                                                                                                                                                                                                                                                    | Evidence                                                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `askUser`  | Declared. `AskUserQuestion` maps to the tool kind `question`. Its input is `{ questions: [{ question, options, ... }] }`, so the question text is the `questions[].question` texts joined with newlines. `Parsed.askedUser` is true when the result's `permission_denials` lists `AskUserQuestion`: a `-p` process cannot ask. | `grep -aoE` on `/opt/claude-code/bin/claude` shows the tool named `AskUserQuestion` and its schema `questions: A(...).min(1).max(4).describe("Questions to ask the user ...")` with a `question` field, and `permission_denials` in the result with `tool_name` entries. No run was made. |
+
+The `permission_denials` signal is read from strings in the binary and is unconfirmed against a real stream until Task 29, which also decides `askUser` for `pi`, `opencode`, `codex` and `cursor-agent` (none installed here, so none declares it and none maps a question tool). Until a stream shows it, the `question` kind is never produced there.
+
 ## What it costs
 
 - Each CLI's continuation flag, session store layout and lifecycle commands must be confirmed from that CLI. Until then the capability stays undeclared.

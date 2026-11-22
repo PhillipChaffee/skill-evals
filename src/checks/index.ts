@@ -5,6 +5,7 @@ import type { SkillVia } from "../skill-events.js";
 import type { EndMatcher, ToolMatcher } from "../matchers.js";
 import { isUnitScore } from "../score.js";
 import { UsageError } from "../scope.js";
+import { ASKED_CHECKS } from "./asked.js";
 import { COMMAND_CHECKS } from "./command.js";
 import { DISPATCH_CHECKS } from "./dispatch.js";
 import { FILE_CHECKS } from "./files.js";
@@ -188,6 +189,7 @@ const RULED = {
   ...FILE_CHECKS,
   ...TOOL_CHECKS,
   ...DISPATCH_CHECKS,
+  ...ASKED_CHECKS,
   ...ORDER_CHECKS,
   ...TRANSCRIPT_CHECKS,
   ...OBSERVED_CHECKS,

@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Capability } from "../capabilities.js";
 import type { Subject } from "../subject.js";
-import type { Invoke, TurnInput } from "./turn-input.js";
+import type { Invoke, TurnInput, TurnState } from "./turn-input.js";
 
-export type { Invoke, LifecycleEvent } from "./turn-input.js";
+export type { Invoke, LifecycleEvent, TurnState } from "./turn-input.js";
 export { firstTurn } from "./turn-input.js";
 
 // Every tool kind with what it means. The docs list the kinds from this table.
@@ -17,6 +17,8 @@ export const TOOL_KIND_MEANINGS = {
   web: "Fetched a page or searched the web.",
   skill: "Called the harness's skill tool.",
   subagent: "Started another agent.",
+  question:
+    "Asked the user a question, as Claude Code's `AskUserQuestion` does.",
   other: "Any tool the harness's adapter has no kind for, such as an MCP tool.",
 } as const;
 
@@ -145,6 +147,12 @@ export interface Parsed {
   /** What the harness says it loaded at startup: its plugin directories, skills, agents, rules, hooks and MCP servers. */
   loaded: Loaded;
   error: string | null;
+  /**
+   * True when the harness itself says the agent asked the user and stopped for the answer, which an adapter reads from
+   * its own stream. Null or absent: it says nothing. Only an adapter with the `askUser` capability sets it; the
+   * signals are unconfirmed against a real run until Task 29.
+   */
+  askedUser?: boolean | null;
   /** True when the harness's own result says it stopped at its turn limit. Such a stop is no error. Absent: false. */
   hitMaxTurns?: boolean;
   /**
@@ -153,14 +161,6 @@ export interface Parsed {
    * false. Absent: false.
    */
   unfinished?: boolean;
-}
-
-/** What the runner keeps while it counts the turns of a stream. */
-export interface TurnState {
-  /** The main-thread turns begun so far. */
-  turns: number;
-  /** Scratch for an adapter that has to tell one turn's events from the next's, such as message ids already seen. */
-  seen: Set<string>;
 }
 
 /** How to start a harness for one prompt. */

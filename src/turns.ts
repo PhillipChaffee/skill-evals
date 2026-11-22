@@ -8,6 +8,7 @@ import type { Snapshot } from "./snapshot.js";
 import { diffSnapshots, snapshot } from "./snapshot.js";
 import { lifecyclePart, numbered } from "./transcript.js";
 import { emptyParse } from "./turn-merge.js";
+import { unasked } from "./turn-reply.js";
 import type { Ran, State, Step, TurnsRun } from "./turn-result.js";
 import { NO_CHANGES, assemble } from "./turn-result.js";
 import type { TurnRecord } from "./turn-outcome.js";
@@ -41,6 +42,7 @@ function recordOf(turn: Turn, index: number): TurnRecord {
   };
   if ("prompt" in turn) return { ...base, kind: "prompt" };
   if ("invoke" in turn) return { ...base, kind: "invoke" };
+  if ("reply" in turn) return { ...base, kind: "reply" };
   return { ...base, kind: "event", event: turn.event };
 }
 
@@ -53,6 +55,7 @@ function recordOf(turn: Turn, index: number): TurnRecord {
  */
 function sentText(turn: Turn, run: SessionInput): string | null {
   if ("prompt" in turn) return turn.prompt;
+  if ("reply" in turn) return turn.reply.prompt;
   if ("event" in turn) return null;
   const text = run.harness.userInvocation?.(turn.invoke);
   if (text === undefined) {
@@ -121,6 +124,19 @@ async function runProcess(
  */
 const skippedStep = (record: TurnRecord, why: string): Step => ({
   record: { ...record, skipped: "stopped", why },
+  parsed: emptyParse(),
+  ran: null,
+  changes: NO_CHANGES,
+});
+
+/**
+ * Makes the step of a conditional reply that is not sent because the agent did not ask.
+ * @param record - The turn's record, of kind `reply`.
+ * @param why - What the agent did instead, in words.
+ * @returns The step, with the turn marked as skipped "not asked". The run goes on: later turns are sent.
+ */
+const unaskedStep = (record: TurnRecord, why: string): Step => ({
+  record: { ...record, skipped: "not asked", why },
   parsed: emptyParse(),
   ran: null,
   changes: NO_CHANGES,
@@ -287,6 +303,8 @@ async function runTurn(run: SessionInput, place: Place): Promise<Step> {
   if (record.kind === "event" && record.event !== "compact") {
     return runnerEvent(record, state);
   }
+  const why = "reply" in turn ? unasked(turn.reply, state.sent) : null;
+  if (why !== null) return unaskedStep(record, why);
   const seconds = secondsLeft(run, state);
   const made = await runProcess(
     { ...run, timeoutSeconds: seconds },
@@ -304,12 +322,16 @@ async function runTurn(run: SessionInput, place: Place): Promise<Step> {
   };
   settle(ran, state, record.turn);
   const { parsed } = ran.end;
+  if (record.kind !== "event") {
+    state.sent = { turn: record.turn, parsed };
+  }
   return {
     record: {
       ...record,
       finalText: parsed.finalText,
       loaded: parsed.loaded,
       sessionId: parsed.sessionId,
+      askedUser: parsed.askedUser ?? null,
     },
     parsed: ran.end.parsed,
     ran,
@@ -358,6 +380,7 @@ export async function runTurns(
     stop: null,
     prior: null,
     failure: start.failure,
+    sent: { turn: 0, parsed: emptyParse() },
     workspace: start.seed,
     cap: run.totalTimeoutSeconds ?? run.timeoutSeconds * turns.length,
     spent: 0,
