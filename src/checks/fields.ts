@@ -1,15 +1,15 @@
 import { readNeeds } from "../capabilities.js";
 import { caseEnvProblem } from "../env.js";
-import { CALL_FIELDS, parseVias } from "./call-fields.js";
+import { CALL_FIELDS, parseBy, parseVias } from "./call-fields.js";
 import { COMMAND_FIELDS } from "./command-fields.js";
 import { NEED_FIELDS } from "./need-fields.js";
 import { FILE_FIELDS } from "./file-fields.js";
 import { TRANSCRIPT_FIELDS } from "./transcript-fields.js";
 import { pathProblem } from "./path-problem.js";
 import { regex } from "./rules.js";
-import { isObject, readSteps } from "../setup-steps.js";
+import { readSteps } from "../setup-steps.js";
 import { TOOL_KINDS } from "../harnesses/shared.js";
-import { UsageError, messageOf } from "../scope.js";
+import { UsageError, isObject, messageOf } from "../scope.js";
 
 /** What a field holds, which decides how loading a case parses it. */
 export type FieldType =
@@ -314,7 +314,7 @@ const PARSERS: Record<FieldType, FieldParser> = {
   needs: (value, at) => readNeeds(value, at.where),
   steps: (value, at) => readSteps(value, at.where),
   vias: parseVias,
-  by: (value, at) => PARSERS.object(value, at),
+  by: (value, at) => parseBy(value, at.where),
   scope: (value, at) => PARSERS.object(value, at),
   matcher: (value, at) => PARSERS.object(value, at),
   matchers: (value, at) => objects(value, at),

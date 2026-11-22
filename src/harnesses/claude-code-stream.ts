@@ -56,6 +56,28 @@ function agentOf(
 }
 
 /**
+ * Finds the agent that an event belongs to.
+ * @param parent - The event's `parent_tool_use_id`.
+ * @param agents - The agents that earlier dispatch calls started, by the id of the call.
+ * @returns The main thread for no parent; the agent that the call of that id started; an agent of type `unknown` one
+ *   level below the main thread for an id no earlier call started.
+ */
+function ownerOf(
+  parent: string | null | undefined,
+  agents: Map<string, AgentRef>,
+): AgentRef {
+  if (!parent) return MAIN_AGENT;
+  return (
+    agents.get(parent) ?? {
+      id: parent,
+      type: "unknown",
+      parent: MAIN_AGENT.id,
+      depth: 1,
+    }
+  );
+}
+
+/**
  * Reads what a tool result holds.
  * @param content - A string, or a list of blocks of which the text ones count.
  * @returns The text; empty for a result with none.
@@ -81,17 +103,14 @@ export function transcriptParts(
 ): EventInput[] {
   const turns = new Map<string, number>();
   const agents = new Map<string, AgentRef>();
+  const callAgents = new Map<string, AgentRef>();
   let turn = 0;
   return events.flatMap((one): EventInput[] => {
     const parent = one.parent_tool_use_id;
-    const agent: AgentRef = parent
-      ? (agents.get(parent) ?? {
-          id: parent,
-          type: "unknown",
-          parent: MAIN_AGENT.id,
-          depth: 1,
-        })
-      : MAIN_AGENT;
+    const agent = ownerOf(parent, agents);
+    // A result with no parent id belongs to the agent that made its call, which is the main thread for a dispatch's.
+    const ofResult = (use: string | undefined): AgentRef =>
+      parent || use === undefined ? agent : (callAgents.get(use) ?? agent);
     const blocks = Array.isArray(one.message?.content)
       ? one.message.content
       : [];
@@ -103,7 +122,7 @@ export function transcriptParts(
             block.tool_use_id,
             block.content === undefined ? undefined : resultText(block.content),
             {
-              agent,
+              agent: ofResult(block.tool_use_id),
               ...(block.is_error === undefined
                 ? {}
                 : { isError: block.is_error }),
@@ -124,6 +143,7 @@ export function transcriptParts(
           { name, input, callId },
           { turn: current, agent },
         );
+        if (callId !== undefined) callAgents.set(callId, agent);
         if (part.kind === "subagent" && callId !== undefined) {
           agents.set(callId, agentOf({ id: callId, input }, agent));
         }

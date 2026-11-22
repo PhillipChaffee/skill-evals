@@ -1,5 +1,7 @@
+import { normalizeAgent } from "../agents.js";
 import type { Capability } from "../capabilities.js";
-import type { Check } from "./index.js";
+import type { ToolMatcher } from "../matchers.js";
+import type { Check, Outcome, Verdict } from "./index.js";
 
 const TEXT_CHECKS = ["transcript_matches", "transcript_lacks"];
 
@@ -9,7 +11,7 @@ const TEXT_CHECKS = ["transcript_matches", "transcript_lacks"];
  * @returns The matchers of `matches`, `before`, `after`, `ignoring`, `sequence` and `tool`, and of the `before` or
  *   `after` of a `scope` object.
  */
-function matchersOf(check: Check): { by?: unknown }[] {
+function matchersOf(check: Check): ToolMatcher[] {
   const { scope } = check;
   const inScope =
     scope !== undefined && typeof scope === "object"
@@ -29,6 +31,19 @@ function matchersOf(check: Check): { by?: unknown }[] {
 }
 
 /**
+ * Lists what a check on tool calls needs for its duration keys.
+ * @param check - A check of tool calls.
+ * @returns `toolDurations` when the check, or any matcher in it, sets `minDurationMs` or `maxDurationMs`; none otherwise.
+ */
+export function durationNeeds(check: Check): Capability[] {
+  return [check, ...matchersOf(check)].some(
+    (one) => one.minDurationMs !== undefined || one.maxDurationMs !== undefined,
+  )
+    ? ["toolDurations"]
+    : [];
+}
+
+/**
  * Lists what a check needs for its `by` keys.
  * @param check - Any check.
  * @returns `childText` when a `transcript_matches` or `transcript_lacks` check has a `by`; `childCalls` when any other
@@ -44,4 +59,34 @@ export function byNeeds(check: Check): Capability[] {
     ...(text ? (["childText"] as const) : []),
     ...(calls ? (["childCalls"] as const) : []),
   ];
+}
+
+/**
+ * Applies the rule for a claim of absence about a named agent: it must have run.
+ * @param check - A check that says an agent did not do something.
+ * @param outcome - What the run left behind.
+ * @returns A score of 0 with `no agent of type <name> ran` when the check's `by` or its `tool` matcher's `by` names an
+ *   agent of which no event, call or skill load of the run is, since a typo or an agent that was never dispatched
+ *   cannot be shown not to have done anything; undefined otherwise. `"main"` and `"subagent"` keep their plain
+ *   meaning.
+ */
+export function unseenAgent(
+  check: Check,
+  outcome: Outcome,
+): Verdict | undefined {
+  const seen = new Set(
+    [
+      ...outcome.transcript.map((one) => one.agent),
+      ...outcome.toolCalls.map((one) => one.agent),
+      ...outcome.skillEvents.map((one) => one.agent),
+    ].map((agent) => agent?.type ?? "main"),
+  );
+  for (const by of [check.by, check.tool?.by]) {
+    if (typeof by !== "object") continue;
+    const type = normalizeAgent(by.agent);
+    if (!seen.has(type)) {
+      return { score: 0, reason: `no agent of type ${type} ran` };
+    }
+  }
+  return undefined;
 }

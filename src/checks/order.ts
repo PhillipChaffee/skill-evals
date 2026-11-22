@@ -4,8 +4,7 @@ import { describeMatcher, hitsOf, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
-import { byNeeds } from "./by-needs.js";
-import { durationNeeds } from "./tools.js";
+import { byNeeds, durationNeeds } from "./by-needs.js";
 
 /**
  * Scores the pair form: one end of the `before` calls comes before one end of the `after` calls.

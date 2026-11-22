@@ -3,7 +3,7 @@ import { FIELDS, readField, registerParser } from "./checks/fields.js";
 import { checkLineBounds } from "./checks/bounds.js";
 import { regex } from "./checks/rules.js";
 import type { By } from "./agents.js";
-import { fitsBy, parseBy } from "./agents.js";
+import { fitsBy } from "./agents.js";
 import type { ToolCall, ToolKind } from "./harnesses/shared.js";
 import { countLines, longestString } from "./lines.js";
 import { UsageError } from "./scope.js";
@@ -100,7 +100,6 @@ const parseMatchers: FieldParser = (value, at) => {
   );
 };
 
-registerParser("by", (value, at) => parseBy(value, at.where));
 registerParser("matcher", (value, at) =>
   parseMatcher(value, `${at.where}.${at.name}`, at.def.extras),
 );
@@ -214,12 +213,19 @@ export const describeMatcher = (matcher: ToolMatcher): string =>
 const INPUT_WIDTH = 80;
 const NEIGHBOURS = 1;
 
+const ID_TAIL = 6;
+// The agent's type, and the tail of its id when it is not the main thread, so two agents of one type tell apart.
+const agentWords = ({ agent }: ToolCall): string =>
+  agent === undefined || agent.id === "main"
+    ? "main"
+    : `${agent.type}@${agent.id.slice(-ID_TAIL)}`;
+
 // One line of a quote: `#<index> t<turn> <agent type> <kind> <name> <first 80 chars of the input as JSON>`.
 const quoteLine = (call: ToolCall, position: number): string =>
   [
     `#${String(call.index ?? position)}`,
     `t${call.turn === undefined ? "?" : String(call.turn)}`,
-    call.agent?.type ?? "main",
+    agentWords(call),
     call.kind,
     call.name,
     JSON.stringify(call.input ?? null).slice(0, INPUT_WIDTH),

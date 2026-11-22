@@ -3,6 +3,7 @@ import type { ToolMatcher } from "../matchers.js";
 import { describeMatcher, hitsOf, quoteCalls, tester } from "../matchers.js";
 import { callsOf, resultsByCall } from "../transcript.js";
 import type { Outcome, RuledCheck, Verdict } from "./index.js";
+import { unseenAgent } from "./by-needs.js";
 import { PASS } from "./rules.js";
 import type { Piece } from "./transcript-slice.js";
 import { quoteEvent, quotePieces } from "./transcript-slice.js";
@@ -131,6 +132,8 @@ export function outputMatches(check: RuledCheck, outcome: Outcome): Verdict {
  *   no call that fits the matcher fails too.
  */
 export function outputLacks(check: RuledCheck, outcome: Outcome): Verdict {
+  const unseen = unseenAgent(check, outcome);
+  if (unseen) return unseen;
   const found = pick(check, outcome);
   if ("score" in found) return found;
   const hit = hitsIn(found);

@@ -9,11 +9,10 @@ import {
   matches,
   quoteCalls,
 } from "../matchers.js";
-import type { Capability } from "../capabilities.js";
-import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
+import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { checkBounds, checkLineBounds } from "./bounds.js";
 import { PASS } from "./rules.js";
-import { byNeeds } from "./by-needs.js";
+import { byNeeds, durationNeeds, unseenAgent } from "./by-needs.js";
 
 const TOOL_FIELDS = {
   optional: [
@@ -57,54 +56,53 @@ const ownMatcher = ({
 });
 
 /**
- * Lists what a check on tool calls needs for its duration keys.
- * @param check - A check of tool calls.
- * @returns `toolDurations` when the check, or any matcher in it, sets `minDurationMs` or `maxDurationMs`; none otherwise.
+ * Judges the call at a position against a matcher.
+ * @param all - Every tool call of the run.
+ * @param at - The position of the call to judge.
+ * @param matcher - What that call must be.
+ * @returns 1 when the call fits the matcher, and the reason it does not otherwise.
  */
-export function durationNeeds(check: Check): Capability[] {
-  const matchers = [
-    check,
-    ...[check.matches, check.before, check.after].flatMap((one) => one ?? []),
-    ...(check.ignoring ?? []),
-    ...(check.sequence ?? []),
-  ];
-  return matchers.some(
-    (one) => one.minDurationMs !== undefined || one.maxDurationMs !== undefined,
-  )
-    ? ["toolDurations"]
-    : [];
+function callFits(all: ToolCall[], at: number, matcher: ToolMatcher): Verdict {
+  if (matches(matcher, all[at] as ToolCall)) return PASS;
+  return {
+    score: 0,
+    reason: `the first tool call #${String(at)} does not match ${describeMatcher(matcher)}\n${quoteCalls(all, [at])}`,
+  };
 }
 
 /**
  * Judges the first call that is left after dropping the ignored ones.
  * @param all - Every tool call of the run.
  * @param matcher - What that call must be.
- * @param drop - The calls to leave out, or the agent whose first call it is.
- * @param drop.ignoring - Calls to drop first.
- * @param drop.by - Whose first call it is: the first call made by that agent, with nothing ignored. Absent: the run's.
+ * @param ignoring - Calls to drop first.
  * @returns 1 when the first call left fits the matcher, and the reason it does not otherwise.
  */
 function firstCallFits(
   all: ToolCall[],
   matcher: ToolMatcher,
-  drop: { ignoring: ToolMatcher[]; by?: By | undefined },
+  ignoring: ToolMatcher[],
 ): Verdict {
-  const { ignoring, by } = drop;
-  const at =
-    by === undefined
-      ? firstOutside(all, ignoring)
-      : all.findIndex((call) => fitsBy(by, call.agent));
-  if (at < 0) {
-    const who = by === undefined ? "the run" : describeBy(by);
-    return {
-      score: 0,
-      reason: `${all.length === 0 || by !== undefined ? `${who} made no tool calls` : "no tool call is left after ignoring"}\n${quoteCalls(all, [])}`,
-    };
-  }
-  if (matches(matcher, all[at] as ToolCall)) return PASS;
+  const at = firstOutside(all, ignoring);
+  if (at >= 0) return callFits(all, at, matcher);
   return {
     score: 0,
-    reason: `the first tool call #${String(at)} does not match ${describeMatcher(matcher)}\n${quoteCalls(all, [at])}`,
+    reason: `${all.length === 0 ? "the run made no tool calls" : "no tool call is left after ignoring"}\n${quoteCalls(all, [])}`,
+  };
+}
+
+/**
+ * Judges the first call that an agent made.
+ * @param all - Every tool call of the run.
+ * @param matcher - What that call must be.
+ * @param by - Whose first call it is.
+ * @returns 1 when the agent's first call fits the matcher, and the reason it does not, or that it made none.
+ */
+function firstCallBy(all: ToolCall[], matcher: ToolMatcher, by: By): Verdict {
+  const at = all.findIndex((call) => fitsBy(by, call.agent));
+  if (at >= 0) return callFits(all, at, matcher);
+  return {
+    score: 0,
+    reason: `${describeBy(by)} made no tool calls\n${quoteCalls(all, [])}`,
   };
 }
 
@@ -140,11 +138,16 @@ function counted(
   bounds: { min: number; max: number },
 ): Verdict {
   const { min, max } = bounds;
+  const unseen = min === 0 ? unseenAgent(check, outcome) : undefined;
+  if (unseen) return unseen;
   const matcher = ownMatcher(check);
   const all = outcome.toolCalls;
   if (check.first) {
     const { by, ...own } = matcher;
-    const first = firstCallFits(all, own, { ignoring: [], by });
+    const first =
+      by === undefined
+        ? firstCallFits(all, own, [])
+        : firstCallBy(all, own, by);
     if (first.score === 0) return first;
   }
   const hits = hitsOf(all, matcher);
@@ -206,8 +209,10 @@ export const TOOL_CHECKS = {
       "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`.",
     note: "A subagent's calls are in the list too, unless `matches` or an `ignoring` matcher says `by`: `matches` with `by: \"main\"` fails when a subagent's call comes first.",
     rule: (check, outcome) =>
-      firstCallFits(outcome.toolCalls, check.matches as ToolMatcher, {
-        ignoring: check.ignoring ?? [],
-      }),
+      firstCallFits(
+        outcome.toolCalls,
+        check.matches as ToolMatcher,
+        check.ignoring ?? [],
+      ),
   },
 } satisfies Record<string, Spec>;

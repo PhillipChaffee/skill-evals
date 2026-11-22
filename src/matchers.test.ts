@@ -124,7 +124,7 @@ test("a quote shows one line per call, around the calls that matter", () => {
   const lines = quoteCalls(calls, [2]).split("\n");
   expect(lines).toEqual([
     `#1 t1 main shell Bash {"command":"${"x".repeat(80 - 12)}`,
-    '#2 t2 researcher subagent Agent {"subagent_type":"r"}',
+    '#2 t2 researcher@a1 subagent Agent {"subagent_type":"r"}',
     '#3 t3 main edit Edit {"file_path":"b"}',
   ]);
   expect(quoteCalls(calls, [4]).split("\n")).toEqual([

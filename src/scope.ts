@@ -16,6 +16,14 @@ export const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 /**
+ * Tells whether a value is a plain object, and not a list or null.
+ * @param value - Any parsed value.
+ * @returns True for an object that is neither an array nor null.
+ */
+export const isObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+/**
  * Stops a command before it does any work on a platform the harness runs do not support.
  * @throws {UsageError} On Windows, where process groups and the harness homes work differently.
  */

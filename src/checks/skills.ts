@@ -5,7 +5,7 @@ import { UsageError } from "../scope.js";
 import type { SkillLoad, SkillVia } from "../skill-events.js";
 import { REAL_VIAS, legacySkillLoads } from "../skill-events.js";
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
-import { byNeeds } from "./by-needs.js";
+import { byNeeds, unseenAgent } from "./by-needs.js";
 import { PASS } from "./rules.js";
 
 const positions = (loads: SkillLoad[]): number[] =>
@@ -112,9 +112,12 @@ function skillLoaded(check: RuledCheck, outcome: Outcome): Verdict {
  * Scores a `skill_not_loaded` check.
  * @param check - A `skill_not_loaded` check.
  * @param outcome - What the run left behind.
- * @returns 1 when no counted load names the skill, and the call of the first one otherwise.
+ * @returns 1 when no counted load names the skill, and the call of the first one otherwise. With `by` naming an agent
+ *   that never ran, 0.
  */
 function skillNotLoaded(check: RuledCheck, outcome: Outcome): Verdict {
+  const unseen = unseenAgent(check, outcome);
+  if (unseen) return unseen;
   const loads = loadsOf(check, outcome).filter(
     ({ skill }) => skill === check.skill,
   );

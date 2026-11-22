@@ -41,7 +41,7 @@ Each event has `index`, `turn` (null where the harness does not group calls; a t
 - `bytes` is the size in UTF-8 of the `text` or `output` as decoded, before any cut.
 - `durationMs` is how long a tool call took, where the stream says.
 
-Every event is attributed to the main agent for now: `{ "id": "main", "type": "main", "parent": null, "depth": 0 }`. A run record keeps `toolCalls` with their inputs and never their outputs.
+Every event carries the agent that produced it: `agent` is `{ id, type, parent, depth }`, and the main thread is `{ "id": "main", "type": "main", "parent": null, "depth": 0 }`. Claude Code attributes child events: an event with a `parent_tool_use_id` belongs to the agent that the call of that id started, and it declares `childCalls` and `childText`. Every other adapter attributes every event to the main agent and declares neither capability, so a check with `by` is not applicable there. A run record keeps `toolCalls` with their inputs and never their outputs.
 
 ## What each harness puts in it
 

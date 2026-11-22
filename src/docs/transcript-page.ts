@@ -78,7 +78,7 @@ Each event has ${code("index")}, ${code("turn")} (null where the harness does no
 - ${code("bytes")} is the size in UTF-8 of the ${code("text")} or ${code("output")} as decoded, before any cut.
 - ${code("durationMs")} is how long a tool call took, where the stream says.
 
-Every event is attributed to the main agent for now: ${code('{ "id": "main", "type": "main", "parent": null, "depth": 0 }')}. A run record keeps ${code("toolCalls")} with their inputs and never their outputs.
+Every event carries the agent that produced it: ${code("agent")} is ${code("{ id, type, parent, depth }")}, and the main thread is ${code('{ "id": "main", "type": "main", "parent": null, "depth": 0 }')}. Claude Code attributes child events: an event with a ${code("parent_tool_use_id")} belongs to the agent that the call of that id started, and it declares ${code("childCalls")} and ${code("childText")}. Every other adapter attributes every event to the main agent and declares neither capability, so a check with ${code("by")} is not applicable there. A run record keeps ${code("toolCalls")} with their inputs and never their outputs.
 
 ## What each harness puts in it
 

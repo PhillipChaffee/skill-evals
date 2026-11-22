@@ -273,7 +273,7 @@ test("a by inside a scope needs childCalls, and a lacks check by an agent that w
     by: { agent: "grunt" },
   });
   expect(none.score).toBe(0);
-  expect(none.reason).toContain("by agent grunt");
+  expect(none.reason).toBe("no agent of type grunt ran");
   expect(
     check({
       type: "transcript_matches",

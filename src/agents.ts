@@ -54,7 +54,9 @@ const EXPECTED =
  * @param value - The parsed value.
  * @param where - Names the file, the check and the key in an error message.
  * @returns The value, as a `By`.
- * @throws {UsageError} For any value but "main", "subagent", or an object whose only key is a non-empty string `agent`.
+ * @throws {UsageError} For any value but "main", "subagent", or an object whose only key is a string `agent` that
+ *   normalizes to a name; `{ agent: "main" }` is an error that says to use `by: "main"`. `{ agent: "unknown" }` is
+ *   allowed: it names the orphan child events whose dispatch the stream never showed.
  */
 export function parseBy(value: unknown, where: string): By {
   if (value === "main" || value === "subagent") return value;
@@ -65,7 +67,12 @@ export function parseBy(value: unknown, where: string): By {
     Object.keys(value).join() === "agent"
   ) {
     const { agent } = value as { agent: unknown };
-    if (typeof agent === "string" && agent !== "") return { agent };
+    if (typeof agent === "string" && normalizeAgent(agent) === "main") {
+      throw new UsageError(`${where}: use by: "main" for the main thread`);
+    }
+    if (typeof agent === "string" && normalizeAgent(agent) !== "") {
+      return { agent };
+    }
   }
   throw new UsageError(`${where}: "by" must be ${EXPECTED}`);
 }

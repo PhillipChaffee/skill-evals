@@ -3,6 +3,7 @@ import { SKILL_FIELDS } from "./skill-fields.js";
 
 // The skill fields and their parser belong to skill-fields.ts; fields.ts reads them through this table of fields.
 export { parseVias } from "./skill-fields.js";
+export { parseBy } from "../agents.js";
 
 // The key that `before` and `after` take besides the matcher keys.
 const WHICH: Record<string, FieldDef> = {

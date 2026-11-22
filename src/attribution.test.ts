@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 import { normalizeAgent } from "./agents.js";
 import type { AgentRef, ToolCall } from "./harnesses/shared.js";
+import { quoteCalls } from "./matchers.js";
 import { UsageError } from "./scope.js";
 import { readCheck } from "./checks/index.js";
+import { event } from "./transcript.js";
 import type { Given } from "./testing/outcome.js";
 import { bareOutcome, scored } from "./testing/outcome.js";
 import {
@@ -102,9 +104,14 @@ test("a read-only agent that edits fails tool_not_called by agent", () => {
       .score,
   ).toBe(0);
   expect(check({ ...edit, by: "main" }).score).toBe(1);
-  expect(check({ ...edit, by: { agent: "grunt" } }).score).toBe(1);
+  // An agent that never ran cannot be shown not to have edited: a typo must not pass.
+  for (const name of ["grunt", "researcher-mdi"]) {
+    const none = check({ ...edit, by: { agent: name } });
+    expect(none.score).toBe(0);
+    expect(none.reason).toBe(`no agent of type ${name} ran`);
+  }
   expect(check({ ...edit, by: { agent: RESEARCHER } }).reason).toContain(
-    `${RESEARCHER} edit Edit`,
+    `${RESEARCHER}@atch_a edit Edit`,
   );
 });
 
@@ -153,9 +160,20 @@ test("the planner made zero tool calls", () => {
     by: { agent: "research-planner" },
     max: 0,
   };
+  const said = event({
+    role: "assistant",
+    type: "text",
+    text: "A plan.",
+    agent: planner,
+  });
+  const ran = bareOutcome({
+    toolCalls: [call("Read", main)],
+    transcript: [said],
+  });
+  expect(scored(zero, ran).score).toBe(1);
   expect(
-    scored(zero, bareOutcome({ toolCalls: [call("Read", main)] })).score,
-  ).toBe(1);
+    scored(zero, bareOutcome({ toolCalls: [call("Read", main)] })).reason,
+  ).toBe("no agent of type research-planner ran");
   expect(
     scored(
       zero,
@@ -169,9 +187,19 @@ test("by alone is a valid tool_called, and a bad by is a load error", () => {
     readCheck({ type: "tool_called", by }, "c", { lenient: false });
   expect(load("main")).toMatchObject({ by: "main" });
   expect(load({ agent: "x" })).toMatchObject({ by: { agent: "x" } });
-  for (const bad of ["child", { agent: "" }, { agent: "x", y: 1 }, [], 3]) {
+  const bads = ["child", { agent: "" }, { agent: "x", y: 1 }, [], 3];
+  for (const bad of [
+    ...bads,
+    { agent: "main" },
+    { agent: ":" },
+    { agent: "m:" },
+  ]) {
     expect(() => load(bad)).toThrow(UsageError);
   }
+  expect(() => load({ agent: "magic:main" })).toThrow(/use by: "main"/);
+  expect(load({ agent: "unknown" })).toMatchObject({
+    by: { agent: "unknown" },
+  });
   expect(() =>
     readCheck({ type: "tool_called", kind: "read", by: "child" }, "c", {
       lenient: false,
@@ -206,4 +234,63 @@ test("tool_order and first_tool matchers take by", () => {
       matches: { kind: "skill", by: "subagent" },
     }).score,
   ).toBe(0);
+});
+
+test("tool_not_called by main fails when the main thread edits", () => {
+  const main = { id: "main", type: "main", parent: null, depth: 0 };
+  const edit = { name: "Edit", kind: "edit", input: {}, agent: main } as const;
+  const given: Given = { type: "tool_not_called", kind: "edit", by: "main" };
+  expect(scored(given, bareOutcome({ toolCalls: [edit] })).score).toBe(0);
+  expect(scored(given, bareOutcome({ toolCalls: [] })).score).toBe(1);
+});
+
+test("a child's result without a parent id takes its call's agent, and interleaved children stay apart", () => {
+  const dispatch = (id: string, type: string) => ({
+    type: "assistant",
+    message: {
+      id: `m_${id}`,
+      content: [
+        { type: "tool_use", id, name: "Agent", input: { subagent_type: type } },
+      ],
+    },
+    parent_tool_use_id: null,
+  });
+  const child = (parent: string, use: string, name: string) => ({
+    type: "assistant",
+    message: {
+      id: `m_${use}`,
+      content: [{ type: "tool_use", id: use, name, input: {} }],
+    },
+    parent_tool_use_id: parent,
+  });
+  const result = (use: string, parent: string | null = null) => ({
+    type: "user",
+    message: {
+      content: [{ type: "tool_result", tool_use_id: use, content: "ok" }],
+    },
+    parent_tool_use_id: parent,
+  });
+  const { transcript, toolCalls } = parseText(
+    CLAUDE_CODE,
+    lines(
+      dispatch("d1", "alpha"),
+      dispatch("d2", "beta"),
+      child("d1", "c1", "Read"),
+      child("d2", "c2", "Edit"),
+      result("c2"),
+      result("c1", "d1"),
+    ),
+  );
+  const agentOf = (id: string) =>
+    transcript.find((one) => one.callId === id && one.type === "tool_result")
+      ?.agent.type;
+  expect(agentOf("c2")).toBe("beta");
+  expect(agentOf("c1")).toBe("alpha");
+  expect(toolCalls.map((one) => one.agent?.type)).toEqual([
+    "main",
+    "main",
+    "alpha",
+    "beta",
+  ]);
+  expect(quoteCalls(toolCalls, [2])).toContain("alpha@");
 });
