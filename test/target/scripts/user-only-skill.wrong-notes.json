@@ -1,0 +1,12 @@
+{
+  "match": {
+    "prompt": "/release-notes v2.1"
+  },
+  "turns": [
+    [
+      {
+        "final": "Changes since the last release: fixed the timeout fallback."
+      }
+    ]
+  ]
+}

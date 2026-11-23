@@ -1,0 +1,65 @@
+{
+  "turns": [
+    [
+      {
+        "text": "Tier: complex. Two researchers first, then one synthesizer."
+      },
+      {
+        "parallel": [
+          {
+            "agent": {
+              "type": "researcher",
+              "prompt": "Research in-process caching for the records service. Read only.",
+              "steps": [
+                {
+                  "call": {
+                    "name": "Read",
+                    "input": {
+                      "file_path": "src/store.js"
+                    }
+                  }
+                },
+                {
+                  "text": "Findings on in-process caching."
+                }
+              ]
+            }
+          },
+          {
+            "agent": {
+              "type": "researcher",
+              "prompt": "Research shared caching for the records service. Read only.",
+              "steps": [
+                {
+                  "call": {
+                    "name": "Read",
+                    "input": {
+                      "file_path": "src/store.js"
+                    }
+                  }
+                },
+                {
+                  "text": "Findings on shared caching."
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "agent": {
+          "type": "research-synthesizer",
+          "prompt": "Combine the two reports into one recommendation.",
+          "steps": [
+            {
+              "text": "Combined."
+            }
+          ]
+        }
+      },
+      {
+        "final": "The recommendation is in this message, not in a file."
+      }
+    ]
+  ]
+}

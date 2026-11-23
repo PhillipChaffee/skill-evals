@@ -6,11 +6,12 @@ import type { RunPlan } from "./run-plan.js";
 import { sandbox } from "./testing/sandbox.js";
 
 // Pinned from the code before turns existed (fe759f0): a single-prompt case keeps its case hash and run key, so that
-// `diff` and `--resume` still know the results of earlier versions.
+// `diff` and `--resume` still know the results of earlier versions. The run key holds the package version, so it is
+// pinned again at each release: the 0.1.0 value below differs from the 0.0.1 value only by that version.
 const PINNED_CASE_HASH =
   "6fbfa37ca8f98b81dff3fe91276250b03ca8c5bca5ca88bb58d11faef9546f5c";
 const PINNED_RUN_KEY =
-  "ea01e856af86bbf7853a80f4cb236010058d1e7145a6db4bc5f7f878adda0222";
+  "e5fb24fd048fc983e3b1f6afb348f19d548b70847e0ae2b549c2fbdaf336e00e";
 
 test("a single-prompt case keeps the case hash and run key it had before turns", () => {
   const box = sandbox();

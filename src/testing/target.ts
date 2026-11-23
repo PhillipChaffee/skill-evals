@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { expect } from "vitest";
+import { expect, onTestFinished } from "vitest";
 import { scoreSubject } from "./runs.js";
 import { sandbox } from "./sandbox.js";
 
@@ -94,3 +95,23 @@ export async function play(
  */
 export const scores = (record: { checks: { score: number | null }[] }) =>
   record.checks.map(({ score }) => score);
+
+/**
+ * Copies the case into a temp cases directory with a build that takes two seconds. The case the agent gets takes
+ * eighty and has no way to shorten it; only this copy, which no agent-facing run reads, is quick.
+ * @param name - The case's directory name.
+ * @returns The temp cases directory.
+ */
+export function quickCases(name: string): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "quick-"));
+  onTestFinished(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  fs.cpSync(path.join(CASES, name), path.join(root, name), { recursive: true });
+  const build = path.join(root, name, "workspace/build.sh");
+  fs.writeFileSync(
+    build,
+    fs.readFileSync(build, "utf8").replace("seconds=80", "seconds=2"),
+  );
+  return root;
+}

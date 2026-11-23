@@ -1,0 +1,33 @@
+{
+  "turns": [
+    [
+      {
+        "call": {
+          "name": "Read",
+          "input": {
+            "file_path": "$CONFIG_DIR/skills/bug-fix/references/harness-adapter.md"
+          }
+        }
+      },
+      {
+        "call": {
+          "name": "Skill",
+          "input": {
+            "skill": "bug-fix"
+          }
+        }
+      },
+      {
+        "call": {
+          "name": "Read",
+          "input": {
+            "file_path": "src/config.js"
+          }
+        }
+      },
+      {
+        "final": "Looked at the timeout fallback and left it as it is."
+      }
+    ]
+  ]
+}

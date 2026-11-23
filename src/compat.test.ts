@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { plugin } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 
-// The 0.0.1 cases of test/compat/cases, and what 0.0.1 scored them. The literals were captured from the code before
+// The 0.0.1-style cases of test/compat/cases, and what they scored on main at 182afab. The literals were captured there, before
 // any of the extension work began, and a change to them is a change to what users' existing suites score.
 const CASES = path.resolve(import.meta.dirname, "../test/compat/cases");
 
