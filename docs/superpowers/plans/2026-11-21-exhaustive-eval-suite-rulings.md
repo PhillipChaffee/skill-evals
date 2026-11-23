@@ -1,5 +1,7 @@
 # Rulings made during execution
 
+<!-- markdownlint-disable MD052 -- entries quote regular expressions such as [a-z0-9-], which read as link references -->
+
 Every decision the controller took on the operator's behalf while executing [the plan](2026-11-21-exhaustive-eval-suite.md), in the order made, copied from the execution ledger. Each entry is a decision the brief or plan left open, or a correction a review forced. If one is wrong, the cost is named in the summary of the hand-off message; the entries here are the full record.
 
 - | 1 → 33 | Task 33 step 2 needs 0.0.1 scores captured "before Task 2" | DEFECT: nothing captures them. Ruling: Task 1 also freezes five 0.0.1-style cases and their scores from the unchanged runner into test/compat/ — spec requires compat proof — costs little if wrong |
