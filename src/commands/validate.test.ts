@@ -285,3 +285,27 @@ test("validate warns about a file_unchanged that matches nothing in the case's w
   expect(warnings.join("\n")).toMatch(/"missing.txt"/);
   expect(result.status).toBe(0);
 });
+
+test("validate warns about a matcher whose kind rules out every call that dispatches names", async () => {
+  const box = sandbox();
+  plant(box, "mixed", {
+    checks: [
+      { type: "tool_called", kind: "shell", dispatches: "planner" },
+      { type: "tool_called", kind: "subagent", dispatches: "planner" },
+      {
+        type: "tool_order",
+        before: { kind: "read", dispatches: "planner" },
+        after: { kind: "shell" },
+      },
+    ],
+  });
+  const result = await box.cli(["validate", ...flags(box)]);
+  expect(result.status, result.stdout).toBe(0);
+  const warned = result.stdout
+    .split("\n")
+    .filter((line) => line.includes("can never match: dispatches"));
+  expect(warned).toEqual([
+    'warning mixed: a tool_called check has a matcher with kind "shell" and dispatches "planner", which can never match: dispatches fits only a call of kind "subagent"',
+    'warning mixed: a tool_order check has a matcher with kind "read" and dispatches "planner", which can never match: dispatches fits only a call of kind "subagent"',
+  ]);
+});

@@ -5,7 +5,7 @@ import { resultsByCall } from "../transcript.js";
 import type { Check, Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { UsageError } from "../scope.js";
 import { PASS } from "./rules.js";
-import { byNeeds, durationNeeds, unseenAgent } from "./by-needs.js";
+import { callNeeds, unseenAgent } from "./by-needs.js";
 import { describeBy } from "../agents.js";
 import type { Piece } from "./transcript-slice.js";
 import { pieces, quotePieces } from "./transcript-slice.js";
@@ -172,11 +172,7 @@ function textLacks(check: RuledCheck, outcome: Outcome): Verdict {
 const OUTPUT_FIELDS = {
   fields: ["tool", "pattern"],
   optional: ["flags", "which"],
-  needs: (check: Check): Capability[] => [
-    "toolOutputs",
-    ...byNeeds(check),
-    ...durationNeeds(check),
-  ],
+  needs: (check: Check): Capability[] => ["toolOutputs", ...callNeeds(check)],
 } satisfies Partial<Spec>;
 
 // The checks of what the agent said and what its tools returned.
@@ -185,11 +181,7 @@ export const TRANSCRIPT_CHECKS = {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
     validate: checkMessageWhere,
-    needs: (check) => [
-      ...textNeeds(check),
-      ...byNeeds(check),
-      ...durationNeeds(check),
-    ],
+    needs: (check) => [...textNeeds(check), ...callNeeds(check)],
     scores:
       "At least one of the tested texts matches the regular expression: the assistant's text by default, or the tool inputs, tool outputs or all of them with `where`, in the events that `scope` names.",
     note: CAP_NOTE,
@@ -199,11 +191,7 @@ export const TRANSCRIPT_CHECKS = {
     fields: ["pattern"],
     ...FIELDS_OF_TEXT,
     validate: checkMessageWhere,
-    needs: (check) => [
-      ...textNeeds(check),
-      ...byNeeds(check),
-      ...durationNeeds(check),
-    ],
+    needs: (check) => [...textNeeds(check), ...callNeeds(check)],
     scores:
       "None of the tested texts matches the regular expression. A run with no events of the chosen `where` at all (no assistant text, no tool results or no calls, as `where` says) scores 0, since that usually means the capture is broken. With `tool_output` or `all`, a call in the window with no result also scores 0, as for `tool_output_lacks`. An empty window after a found `before` or `after` cut passes, and a cut whose matcher matches no call scores 0.",
     note: CAP_NOTE,
@@ -226,11 +214,7 @@ export const TRANSCRIPT_CHECKS = {
   tool_output_size: {
     fields: ["maxBytes"],
     optional: ["tool"],
-    needs: (check: Check): Capability[] => [
-      "toolOutputs",
-      ...byNeeds(check),
-      ...durationNeeds(check),
-    ],
+    needs: (check: Check): Capability[] => ["toolOutputs", ...callNeeds(check)],
     scores:
       "No tool output, or none of the calls that fit `tool`, is over `maxBytes` bytes. A call with no result is ignored.",
     rule: outputSize,

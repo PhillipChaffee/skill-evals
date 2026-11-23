@@ -14,7 +14,7 @@ import {
 import type { Outcome, RuledCheck, Spec, Verdict } from "./index.js";
 import { checkBounds, checkLineBounds, checkOpenMin } from "./bounds.js";
 import { PASS } from "./rules.js";
-import { byNeeds, durationNeeds, unseenAgent } from "./by-needs.js";
+import { callNeeds, unseenAgent } from "./by-needs.js";
 
 const TOOL_FIELDS = {
   optional: [
@@ -188,8 +188,7 @@ export const TOOL_CHECKS = {
     note: "A count sees every call of the run, a subagent's included, unless `by` names the agent. With `by` alone (no `kind` or `name`) it counts every call of that agent, so `{ by: { agent: \"research-planner\" }, max: 0 }` says the planner made no tool call; `min` then defaults to 0 when `max` is 0. With `first` and `by`, the first call that agent made must fit, and with no `by` the run's first call. `sameTurn` needs a harness with `turnGrouping`; elsewhere the case is not applicable. `by` needs `childCalls`.",
     needs: (check) => [
       ...(check.sameTurn ? (["turnGrouping"] as const) : []),
-      ...durationNeeds(check),
-      ...byNeeds(check),
+      ...callNeeds(check),
     ],
     validate: (given, where) => {
       checkBounds(given, where);
@@ -206,7 +205,7 @@ export const TOOL_CHECKS = {
     fields: [],
     ...TOOL_FIELDS,
     validate: checkLineBounds,
-    needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
+    needs: callNeeds,
     scores: "The agent made no tool call that fits every given field.",
     implied: NOT_CALLED,
     rule: (check, outcome) => counted(check, outcome, NOT_CALLED),
@@ -214,7 +213,7 @@ export const TOOL_CHECKS = {
   first_tool: {
     fields: ["matches"],
     optional: ["ignoring"],
-    needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
+    needs: callNeeds,
     scores:
       "The first tool call, once the calls that fit `ignoring` are dropped, fits `matches`.",
     note: "A subagent's calls are in the list too, unless `matches` or an `ignoring` matcher says `by`: `matches` with `by: \"main\"` fails when a subagent's call comes first.",

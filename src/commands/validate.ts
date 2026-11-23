@@ -21,6 +21,7 @@ import { UsageError } from "../scope.js";
 import { snapshot } from "../snapshot.js";
 import { resolveSubject } from "../subject.js";
 import { rulesClashes } from "../rules-clash.js";
+import { dispatchKinds } from "./validate-matchers.js";
 import type { Subject } from "../subject.js";
 import type { Options } from "../usage.js";
 
@@ -274,6 +275,7 @@ export const LINTS: LintRule[] = [
   filesOutside,
   rulesClash,
   blinding,
+  dispatchKinds,
 ];
 
 const line = ({ level, caseId, text }: Lint): string =>

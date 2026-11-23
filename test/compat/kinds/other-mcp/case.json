@@ -1,0 +1,11 @@
+{
+  "checks": [
+    { "type": "tool_called", "kind": "other" },
+    { "type": "tool_not_called", "kind": "other" },
+    {
+      "type": "tool_called",
+      "kind": "other",
+      "name": "^mcp__tracker__get_issue$"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "checks": [
+    { "type": "tool_called", "kind": "other" },
+    { "type": "tool_not_called", "kind": "other" },
+    { "type": "tool_called", "kind": "other", "inputMatches": "colour" }
+  ]
+}

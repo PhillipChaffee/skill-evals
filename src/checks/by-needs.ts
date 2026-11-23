@@ -1,5 +1,6 @@
 import { normalizeAgent } from "../agents.js";
 import type { Capability } from "../capabilities.js";
+import type { ToolKind } from "../harnesses/tool-kinds.js";
 import type { ToolMatcher } from "../matchers.js";
 import type { Check, Outcome, Verdict } from "./index.js";
 
@@ -35,7 +36,7 @@ export function matchersOf(check: Check): ToolMatcher[] {
  * @param check - A check of tool calls.
  * @returns `toolDurations` when the check, or any matcher in it, sets `minDurationMs` or `maxDurationMs`; none otherwise.
  */
-export function durationNeeds(check: Check): Capability[] {
+function durationNeeds(check: Check): Capability[] {
   return [check, ...matchersOf(check)].some(
     (one) => one.minDurationMs !== undefined || one.maxDurationMs !== undefined,
   )
@@ -64,6 +65,44 @@ export function byNeeds(check: Check): Capability[] {
     ...(dispatches ? (["subagents"] as const) : []),
   ];
 }
+
+// The matcher kinds that only a harness with a capability can report. A harness without it never shows a call of the
+// kind, so a check that says there was none, such as `tool_not_called` or `max: 0`, would pass without proof. The `skill`
+// kind needs nothing: no capability says a harness has a skill tool, and a harness whose adapter maps none loads its
+// skills by reading their files, which `skill_loaded` and `skill_not_loaded` see on every harness; a skill-kind matcher
+// counts the skill-tool calls only, and there are none to miss.
+const KIND_NEEDS: Partial<Record<ToolKind, Capability>> = {
+  question: "askUser",
+  mcp: "mcp",
+  subagent: "subagents",
+};
+
+/**
+ * Lists what a check on tool calls needs for the kinds it names.
+ * @param check - Any check.
+ * @returns `askUser` for the kind `question`, `mcp` for `mcp` and `subagents` for `subagent`, named by the check's own
+ *   `kind` or by any matcher in it, once each; none for every other kind.
+ */
+function kindNeeds(check: Check): Capability[] {
+  const kinds = [check, ...matchersOf(check)].map((one) => one.kind);
+  return [
+    ...new Set(
+      kinds.flatMap((kind) => {
+        const need = kind === undefined ? undefined : KIND_NEEDS[kind];
+        return need === undefined ? [] : [need];
+      }),
+    ),
+  ];
+}
+
+/**
+ * Lists what a check on tool calls needs for its matcher keys: its durations, its `by` and `dispatches`, and its kinds.
+ * @param check - Any check.
+ * @returns The needs of `durationNeeds`, `byNeeds` and `kindNeeds`, once each.
+ */
+export const callNeeds = (check: Check): Capability[] => [
+  ...new Set([...durationNeeds(check), ...byNeeds(check), ...kindNeeds(check)]),
+];
 
 /**
  * Applies the rule for a claim of absence about a named agent: it must have run.

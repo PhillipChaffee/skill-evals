@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { plugin } from "./testing/plant.js";
+import { plugin, script } from "./testing/plant.js";
 import { readResults, sandbox } from "./testing/sandbox.js";
 
 // The 0.0.1-style cases of test/compat/cases, and what they scored on main at 182afab. The literals were captured there, before
@@ -120,4 +120,53 @@ test("run gives both subjects of every frozen case, and the suites, the scores 0
   expect(result.status, result.stderr).toBe(1);
   expectScores(outDir, { label: "a", cases: PLAIN, suite: PLAIN_SUITE });
   expectScores(outDir, { label: "b", cases: LOADED, suite: LOADED_SUITE });
+});
+
+// Two cases in the 0.0.1 style whose agent asks a question or calls an MCP tool. In 0.0.1 both tools had kind `other`,
+// so a matcher of kind `other` with no `name` counted them, and one that named the native MCP name did too.
+const KINDS = path.resolve(import.meta.dirname, "../test/compat/kinds");
+
+test("a matcher of kind other still counts a question call and an mcp call, as 0.0.1 did", async () => {
+  const box = sandbox();
+  const cases = path.join(box.root, "cases");
+  fs.cpSync(KINDS, cases, { recursive: true });
+  script(box, "question", {
+    match: { prompt: "Pick a colour" },
+    turns: [
+      [
+        {
+          call: {
+            name: "AskUserQuestion",
+            input: { questions: [{ question: "Which colour?" }] },
+          },
+        },
+        { final: "blue" },
+      ],
+    ],
+  });
+  script(box, "mcp", {
+    match: { prompt: "Look up" },
+    turns: [
+      [
+        { call: { name: "mcp__tracker__get_issue", input: { id: 7 } } },
+        { final: "issue 7 is open" },
+      ],
+    ],
+  });
+  const outDir = path.join(box.root, "results");
+  const result = await box.cli([
+    ...["score", "--subject", "none", "--cases", cases],
+    ...["--reps", "1", "--out", outDir],
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  const scores = Object.fromEntries(
+    readResults(outDir).records.map((record) => [
+      record.caseId,
+      record.checks.map((check) => check.score),
+    ]),
+  );
+  expect(scores).toEqual({
+    "other-question": [1, 0, 1],
+    "other-mcp": [1, 0, 1],
+  });
 });

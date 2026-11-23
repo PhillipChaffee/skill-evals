@@ -4,7 +4,7 @@ import { callNo, describeMatcher, hitsOf, quoteCalls } from "../matchers.js";
 import { UsageError } from "../scope.js";
 import type { Spec, Verdict } from "./index.js";
 import { PASS } from "./rules.js";
-import { byNeeds, durationNeeds } from "./by-needs.js";
+import { callNeeds } from "./by-needs.js";
 
 /**
  * Scores the pair form: one end of the `before` calls comes before one end of the `after` calls.
@@ -158,7 +158,7 @@ export const ORDER_CHECKS = {
     forms: [["before", "after"], ["sequence"]],
     together: { strict: ["sequence"] },
     optional: ["before", "after", "sequence", "strict"],
-    needs: (check) => [...durationNeeds(check), ...byNeeds(check)],
+    needs: callNeeds,
     scores:
       "The calls come in the order given: with `before` and `after`, the chosen `before` call is earlier than the chosen `after` call; with `sequence`, the matchers match calls in that order.",
     note: "It takes exactly one of the pair `before` and `after`, and `sequence`. With `strict: true` a sequence also forbids a later matcher's call before an earlier matcher's first match, and an earlier matcher's call after a later matcher's first match: `[researcher, synthesizer]` allows two researchers, then the synthesizer, and no researcher after it. The check sees every call of the run, a subagent's included, unless a matcher says `by`: `before: { kind: \"read\", by: { agent: \"delegate\" } }` is the delegate's read.",
