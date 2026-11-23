@@ -16,7 +16,7 @@ import {
 } from "./delta.js";
 import { discriminationLines } from "./discrimination-table.js";
 import { noteSections } from "./notes.js";
-import { triggerTable } from "./trigger.js";
+import { triggerHeading, triggerTable } from "./trigger.js";
 import type { RunRecord } from "../run.js";
 import { invalidReason } from "../run.js";
 import type { SuiteScore } from "../score.js";
@@ -272,7 +272,7 @@ function triggerSection(evaluation: Evaluation): string[] {
     `| ${cells.map((each) => cell(each)).join(" | ")} |`;
   return [
     "",
-    "## Trigger recall by target skill",
+    `## ${triggerHeading(evaluation)}`,
     "",
     line(table.head),
     line(table.head.map(() => "---")),

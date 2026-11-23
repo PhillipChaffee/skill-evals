@@ -58,11 +58,20 @@ const emptyTally = (): Tally => ({
  * Names the skills a check counts for.
  * @param check - A `skill_loaded` or `skill_not_loaded` result.
  * @param check.skill - The skill the check names, if any.
+ * @param check.anyOf - The skills the check names as a list, if any.
  * @param caseDef - The case the check is in.
- * @returns The check's own skill; without one, the targets of the case.
+ * @returns The check's own skill; for a list, each named skill that the case also targets, and never a target the
+ *   list leaves out; for a check that names none, the targets of the case.
  */
-const skillsOf = (check: { skill?: string }, caseDef: Case): string[] =>
-  check.skill === undefined ? caseDef.targets : [check.skill];
+function skillsOf(
+  check: { skill?: string; anyOf?: string[] },
+  caseDef: Case,
+): string[] {
+  if (check.anyOf !== undefined) {
+    return check.anyOf.filter((name) => caseDef.targets.includes(name));
+  }
+  return check.skill === undefined ? caseDef.targets : [check.skill];
+}
 
 /**
  * Adds the checks of one valid run to the tallies.
@@ -203,3 +212,13 @@ export function triggerTable(evaluation: Evaluation): TriggerTable | null {
     ]),
   };
 }
+
+/**
+ * Words the heading of the trigger table.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The heading; with more than one subject it names the one whose runs the table shows.
+ */
+export const triggerHeading = (evaluation: Evaluation): string =>
+  evaluation.subjects.length > ONE_HARNESS
+    ? `Trigger recall by target skill (subject ${evaluation.barSubject})`
+    : "Trigger recall by target skill";

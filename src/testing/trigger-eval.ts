@@ -8,6 +8,7 @@ const SUBJECT = "subject";
 export interface Result {
   type: string;
   skill?: string;
+  anyOf?: string[];
   score: number | null;
 }
 

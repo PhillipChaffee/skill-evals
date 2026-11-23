@@ -31,3 +31,22 @@ export function resumeDir(
   }
   return dir;
 }
+
+/**
+ * Warns once when the earlier command's runs name cases that this command does not select, which happens when a
+ * second cases directory gives every id a prefix.
+ * @param recorded - The runs of the earlier command.
+ * @param selected - The ids of the cases this command selects.
+ */
+export function warnUnselected(
+  recorded: Iterable<{ caseId: string }>,
+  selected: string[],
+): void {
+  const known = new Set(selected);
+  const missing = [...recorded].filter(({ caseId }) => !known.has(caseId));
+  const [first] = missing;
+  if (first === undefined) return;
+  console.error(
+    `skill-evals: warning: ${String(missing.length)} recorded runs name cases not selected, such as ${first.caseId}; ids gain a root prefix when there is more than one cases directory`,
+  );
+}

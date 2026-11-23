@@ -1,5 +1,6 @@
 import { allChecks } from "../case-checks.js";
 import fs from "node:fs";
+import { UsageError } from "../scope.js";
 import { dirsOf, rootsOf } from "../case-roots.js";
 import { HARNESSES, findBin } from "../harnesses/index.js";
 import type { Project } from "../project.js";
@@ -23,13 +24,22 @@ export function list(given: Options, project: Project): number {
   }));
   const first = installed.find((entry) => entry.bin);
   const roots = rootsOf(options);
-  const chosen = roots.every(({ dir }) => fs.existsSync(dir))
-    ? loadSelection(roots, selectionOf(options), {
-        lenient: options.lenient ?? false,
-      })
-    : null;
+  const missing = roots.filter(({ dir }) => !fs.existsSync(dir));
+  const chosen =
+    missing.length === roots.length
+      ? null
+      : loadSelection(roots, selectionOf(options), {
+          lenient: options.lenient ?? false,
+          // A directory that is not there is a line of the listing; any other fault still ends the command.
+          onError: (caseId, message) => {
+            if (!missing.some(({ dir }) => dir === caseId)) {
+              throw new UsageError(message);
+            }
+          },
+        });
   const cases = chosen
     ? [
+        ...missing.map(({ dir }) => `- ${dir}: the directory does not exist`),
         ...chosen.flatMap((caseDef) => [
           `- ${caseDef.id}: ${String(allChecks(caseDef).length)} checks`,
           ...(options.showPrompts ? promptLines(caseDef) : []),

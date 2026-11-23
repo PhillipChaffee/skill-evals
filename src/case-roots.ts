@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import path from "node:path";
+import { nameProblem } from "./case-id.js";
 import { UsageError } from "./scope.js";
 
 const ONE = 1;
@@ -28,10 +30,37 @@ export const listOf = (value: string | string[] | undefined): string[] =>
   value === undefined ? [] : [value].flat();
 
 /**
+ * Resolves a directory's links, if it exists.
+ * @param dir - A path that may not exist.
+ * @returns Its real path, or its absolute path when it cannot be resolved.
+ */
+function realOf(dir: string): string {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return path.resolve(dir);
+  }
+}
+
+/**
+ * Tells whether a directory is the same as another or holds it.
+ * @param outer - A real path.
+ * @param inner - Another real path.
+ * @returns True when `inner` is `outer` or is below it.
+ */
+function holds(outer: string, inner: string): boolean {
+  const down = path.relative(outer, inner);
+  return down === "" || !(down.startsWith("..") || path.isAbsolute(down));
+}
+
+/**
  * Names the roots of a command.
  * @param options - The cases directories and the held-out ones.
  * @returns The roots, the held-out ones last.
- * @throws {UsageError} When two roots have the same basename, because their ids would clash; the message names both.
+ * @throws {UsageError} When one root is, or holds, another (compared by real path, links included), because a case
+ *   would be listed twice or a held-out case would be taken for a dev case; when two roots have the same basename,
+ *   because their ids would clash; or, with more than one root, when a basename could not be a part of a case id.
+ *   Each message names the directories.
  */
 export function rootsOf(options: RootOptions): CaseRoot[] {
   const roots = [
@@ -40,12 +69,29 @@ export function rootsOf(options: RootOptions): CaseRoot[] {
   ];
   if (roots.length <= ONE) return roots;
   const seen = new Map<string, string>();
+  roots.forEach(({ dir }, index) => {
+    const real = realOf(dir);
+    for (const other of roots.slice(index + ONE)) {
+      const there = realOf(other.dir);
+      if (holds(real, there) || holds(there, real)) {
+        throw new UsageError(
+          `the cases directories ${dir} and ${other.dir} overlap: one is, or holds, the other, so a case would be found twice or a held-out case taken for a dev case; name directories that are apart`,
+        );
+      }
+    }
+  });
   for (const { dir } of roots) {
     const name = path.basename(dir);
     const first = seen.get(name);
     if (first !== undefined) {
       throw new UsageError(
-        `the cases directories ${first} and ${dir} have the same name "${name}", so their case ids would clash; rename one`,
+        `the cases directories ${first} and ${dir} have the same name "${name}", so their case ids would clash; rename the directory`,
+      );
+    }
+    const problem = nameProblem(name);
+    if (problem !== null) {
+      throw new UsageError(
+        `the cases directory ${dir} would start every case id with its name, and ${problem}; rename the directory`,
       );
     }
     seen.set(name, dir);

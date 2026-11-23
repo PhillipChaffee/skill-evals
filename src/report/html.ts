@@ -12,7 +12,7 @@ import {
   verdictCell,
 } from "./delta.js";
 import { caseRows } from "./rows.js";
-import { triggerTable } from "./trigger.js";
+import { triggerHeading, triggerTable } from "./trigger.js";
 import { escapeXml } from "./xml.js";
 
 const STYLE = `body{font:14px/1.5 system-ui,sans-serif;margin:2rem auto;max-width:60rem;padding:0 1rem;color:#1b1b1b;background:#fff}
@@ -185,7 +185,7 @@ ${table(["Harness", "Subject", "Case", "Score", ...verdict(["Verdict"]), "Runs",
 function triggerHtml(evaluation: Evaluation): string {
   const found = triggerTable(evaluation);
   if (found === null) return "";
-  return `<h2>Trigger recall by target skill</h2>
+  return `<h2>${e(triggerHeading(evaluation))}</h2>
 ${table(
   found.head.map((title) => title.charAt(0).toUpperCase() + title.slice(1)),
   found.body.map((cells) => ({ cells })),

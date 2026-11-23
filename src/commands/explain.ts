@@ -74,7 +74,10 @@ const REWRITTEN = new Set([
  *   the capabilities the case and its checks need.
  */
 function resolved(one: Case, casesDirs: string[]): object {
-  const casesDir = casesDirs.find((dir) => one.dir?.startsWith(dir)) ?? "";
+  const casesDir =
+    casesDirs.find(
+      (dir) => !path.relative(dir, one.dir ?? "").startsWith(".."),
+    ) ?? "";
   const shown = (dir: string): string =>
     path.relative(casesDir, dir).split(path.sep).join("/");
   const orNull = (dir: string | null): string | null =>

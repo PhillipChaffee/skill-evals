@@ -177,7 +177,8 @@ function directoriesOnPath(
  * Checks the config's `sandboxExpose`.
  * @param paths - The entries.
  * @param casesDirs - The cases directories.
- * @throws {UsageError} For an entry that is not absolute, does not exist, or is your real home or the cases directory.
+ * @throws {UsageError} For an entry that is not absolute, does not exist, is your real home or a cases directory, or
+ *   holds one or is inside one.
  */
 export function requireExposable(paths: string[], casesDirs: string[]): void {
   const never = [os.homedir(), ...casesDirs].map(realOrNull);
@@ -191,6 +192,12 @@ export function requireExposable(paths: string[], casesDirs: string[]): void {
     if (never.includes(real)) {
       throw new UsageError(
         `sandboxExpose: "${one}" is your home or the cases directory, which the sandbox exists to hide`,
+      );
+    }
+    const roots = casesDirs.flatMap((dir) => realOrNull(dir) ?? []);
+    if (roots.some((dir) => within(real, dir) || within(dir, real))) {
+      throw new UsageError(
+        `sandboxExpose: "${one}" holds a cases directory, or is inside one, so it would show cases to the agent`,
       );
     }
   }

@@ -334,11 +334,8 @@ export async function validate(
   const problem = (caseId: string, text: string): void => {
     found.push({ level: "problem", caseId, text });
   };
-  // A held-out root is checked whether or not --heldout is given: a broken case in it would otherwise stay hidden.
-  const selection = selectionOf({
-    ...options,
-    heldout: options.heldout === true || roots.some((root) => root.heldout),
-  });
+  // Held-out roots and variants are always checked: a broken held-out case is a defect, found now and not on the day it runs.
+  const selection = { ...selectionOf(options), heldout: true };
   const cases = loadSelection(roots, selection, {
     lenient: options.lenient ?? false,
     onError: problem,

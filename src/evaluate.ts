@@ -23,6 +23,7 @@ import type { Progress } from "./progress.js";
 import type { RunRecord } from "./run.js";
 import { runAll } from "./run-loop.js";
 import { warnOptionsChanged } from "./resume-options.js";
+import { warnUnselected } from "./resume.js";
 import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import type { SelectionOptions } from "./select.js";
@@ -275,7 +276,13 @@ async function runLocked(
   // Every check that can refuse the command comes before the files of the earlier command are removed.
   const reused =
     resumed === undefined ? new Map<string, RunRecord>() : store.load();
-  if (resumed !== undefined) warnOptionsChanged(outDir, subjects);
+  if (resumed !== undefined) {
+    warnOptionsChanged(outDir, subjects);
+    warnUnselected(
+      reused.values(),
+      context.cases.map(({ id }) => id),
+    );
+  }
   const finished = {
     ...context,
     subjects,

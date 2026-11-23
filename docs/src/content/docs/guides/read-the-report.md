@@ -12,7 +12,7 @@ The report has one section per harness and one row per case. `run` shows each va
 - **Judge** is one line under the suite score with the number of judge calls and their total duration, tokens, and cost. These are not part of the table's numbers.
 - **Decision model** is one more line of the same kind, with the number of requests to the decision model and their total duration and tokens.
 - The first lines name each subject, the harness that ran, and why that harness was chosen.
-- **Trigger recall by target skill** is a table under the coverage table: recall on the development and the held-out prompts, their gap, and the false-trigger rate, each with its run count. See [Held-out prompts](held-out.md).
+- **Trigger recall by target skill** is a table under the coverage table: recall on the development and the held-out prompts, their gap, and the false-trigger rate, each with its run count; `report.json` carries it as `trigger`. See [Held-out prompts](held-out.md).
 
 ## Verdicts, flake and discrimination
 
