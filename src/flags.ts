@@ -252,7 +252,8 @@ export const FLAGS = {
     value: "dir",
     description:
       "Where results go. A fresh run starts an empty results.jsonl there.",
-    default: "a new temp directory",
+    default:
+      "a new directory runs/<time>-<random> in the state directory ($SKILL_EVALS_STATE_DIR, else $XDG_STATE_HOME/skill-evals, else ~/.local/state/skill-evals)",
     defaultIn: { rejudge: "results.rejudged.json beside the earlier results" },
   },
   resume: {

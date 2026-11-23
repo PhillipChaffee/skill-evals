@@ -192,6 +192,8 @@ export interface RunInput {
   isolated?: boolean | undefined;
   /** The run's mock MCP directory, where `registerMcp` wrote the adapter's config; absent for a case with no `mcp/`. */
   mcpDir?: string | undefined;
+  /** Start with no tools at all: the judge only answers. Only an adapter whose `noTools` is true is given true. */
+  noTools?: boolean | undefined;
 }
 
 /** The variables that log in to Anthropic's API, to Bedrock and to Vertex. Names are exact, never a prefix. */
@@ -241,6 +243,12 @@ export interface Harness extends HistoryAdapter {
   /** How far the adapter is proven: a real model ran, a scripted endpoint ran, or neither (see agents/verified). */
   status: "real-model" | "scripted" | "unverified";
   invocation: (input: RunInput) => Invocation;
+  /**
+   * True when `invocation` starts the harness with no tools at all when it is given `noTools`, which the judge session
+   * asks for, since the judge reads text that the agent wrote. Absent: the harness has no such switch, and a judge on it
+   * keeps its tools; the command warns.
+   */
+  noTools?: boolean;
   /**
    * The text that a user types to invoke a skill: the harness's own syntax, such as `/skill args`. Present exactly for
    * an adapter with the `userInvoke` capability, which declares it only once the syntax is confirmed from the CLI.

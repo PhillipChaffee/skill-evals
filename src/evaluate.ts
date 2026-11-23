@@ -27,7 +27,7 @@ import { warnUnselected } from "./resume.js";
 import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import type { SelectionOptions } from "./select.js";
-import { outputDir } from "./scope.js";
+import { outputDir } from "./output-dir.js";
 import type { Subject, SubjectSummary } from "./subject.js";
 import type { Partition } from "./applicability.js";
 import type { NotRun } from "./not-run.js";

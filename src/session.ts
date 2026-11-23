@@ -169,27 +169,29 @@ function resultOf(run: SessionInput, made: Made): SessionResult {
 }
 
 /**
- * Gives a sandboxed session the directories that only it knows: its own temp directory, the run's fixture remotes, and
- * the mock log, which are writable although the directories around them are not.
+ * Gives a session the directories that only it knows: its own temp directory, which the harness gets as `TMPDIR`, and,
+ * under the sandbox, the run's fixture remotes and the mock log, which are writable although the directories around
+ * them are not.
  * @param input - The session's input.
  * @param made - What the session made.
  * @param made.tmp - The run's temp directory.
  * @param made.remote - The run's directory of bare remotes.
  * @param made.log - The mock servers' log file.
- * @returns The input, with the sandbox filled in; the input itself when there is no sandbox.
+ * @returns The input with its `tmp`, and with the sandbox filled in when there is one.
  */
 function confined(
   input: SessionInput,
   made: {
-    tmp: string | undefined;
+    tmp: string;
     remote: string | undefined;
     log: string | undefined;
   },
 ): SessionInput {
   const { sandbox } = input;
-  if (!sandbox) return input;
+  if (!sandbox) return { ...input, tmp: made.tmp };
   return {
     ...input,
+    tmp: made.tmp,
     sandbox: {
       ...sandbox,
       tmp: made.tmp,
@@ -212,8 +214,9 @@ export async function session<T>(
   const { harness } = input;
   const home = tempDir("home-");
   const workspace = tempDir("proj-");
-  // Under the sandbox the harness gets a temp directory of its own, the only one it may write to besides the two above.
-  const tmp = input.sandbox ? tempDir("tmp-") : null;
+  // Every run gets a temp directory of its own as TMPDIR, sandboxed or not, so that the agent finds no other run's files
+  // and none of this tool's there. Under the sandbox it is the only one it may write to besides the two above.
+  const tmp = tempDir("tmp-");
   let prepared: PreparedRun | null = null;
   let mcp: McpStarted | null = null;
   try {
@@ -232,7 +235,7 @@ export async function session<T>(
         : null;
     const dirs = { ...place, ...(mcp && { mcp: mcp.staged.dir }) };
     const run = confined(input, {
-      tmp: tmp?.dir,
+      tmp: tmp.dir,
       remote: prepared?.remoteDir,
       log: mcp?.staged.log,
     });
@@ -249,8 +252,9 @@ export async function session<T>(
       ? await runTurns(run, { dirs, seed, failure, seeded })
       : await single(run, { dirs, failure, seeded });
     const canaryChanges = watched?.() ?? null;
-    // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach.
-    const graderDir = prepared?.copies?.copyGrader() ?? null;
+    // Only now, with the agent gone, does the held-out directory exist anywhere the agent's tools could reach: in this
+    // run's own temp directory, never in the shared one that a sibling run's agent can list.
+    const graderDir = prepared?.copies?.copyGrader(tmp.dir) ?? null;
     const read = withMockLog(harness, done.end.parsed, mcp);
     return await use(
       resultOf(run, {
@@ -260,7 +264,7 @@ export async function session<T>(
     );
   } finally {
     mcp?.staged.dispose();
-    tmp?.dispose();
+    tmp.dispose();
     prepared?.dispose();
     home.dispose();
     workspace.dispose();

@@ -2,12 +2,15 @@ import type { Harness, Loaded, LoadedSubject } from "./harnesses/shared.js";
 import { foreignOf, reportMissing, samePath } from "./harnesses/shared.js";
 import { mcpProblems } from "./mcp/problems.js";
 import type { Stripped } from "./subject-options.js";
+import type { Confinement } from "./os-sandbox.js";
 import type { Copy } from "./run-copy.js";
 import type { SessionResult } from "./session.js";
 import { session } from "./session.js";
 
-// A judge answers in one message. The second turn is room for one stray tool call before the answer.
-const JUDGE_LIMITS = { maxTurns: 2, timeoutSeconds: 300 };
+// A judge answers in one message, with no tools: it reads text that the agent wrote, which may ask it to run something.
+const JUDGE_LIMITS = { maxTurns: 1, timeoutSeconds: 300, noTools: true };
+// The judge harnesses already warned about, once each for the process.
+const warnedTools = new Set<string>();
 
 // Subject kind -> whether the harness reported the subject as loaded, or null when it does not report that.
 // A plugin is found by its directory and a skills folder by the name of every skill in it.
@@ -137,8 +140,10 @@ interface JudgeHarness {
  * @param options.isolated - Whether the run is isolated.
  * @param options.withhold - Variables the judge must not get.
  * @param options.pass - Names of variables the config passes on.
+ * @param options.sandbox - Under `--sandbox`, the sandbox that the judge process runs in too.
  * @param problems - Receives why a judge session does not prove it loaded nothing.
- * @returns A function that sends one prompt to the judge.
+ * @returns A function that sends one prompt to the judge, which is started with no tools and one turn. A harness that
+ *   cannot be started with no tools gets one warning.
  */
 export function judgeAsker(
   judge: JudgeHarness,
@@ -146,11 +151,18 @@ export function judgeAsker(
     isolated: boolean;
     withhold: string[];
     pass: string[] | undefined;
+    sandbox?: Confinement | undefined;
   },
   problems: string[],
 ) {
   const { harness } = judge;
   const isolated = options.isolated && harness.capabilities.has("isolated");
+  if (harness.noTools !== true && !warnedTools.has(harness.id)) {
+    warnedTools.add(harness.id);
+    console.error(
+      `skill-evals: warning: the judge harness ${harness.id} cannot be started with no tools, so the judge, which reads text the agent wrote, keeps its tools; use --sandbox, or a judge harness or judgeApi that has none`,
+    );
+  }
   return (judgePrompt: string) =>
     session(
       {
@@ -161,6 +173,7 @@ export function judgeAsker(
         isolated,
         withhold: options.withhold,
         pass: options.pass,
+        sandbox: options.sandbox,
       },
       ({ parsed, error, durationMs, home, placed, stoppedBy }) => {
         const foreign = [

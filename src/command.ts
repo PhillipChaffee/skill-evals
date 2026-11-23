@@ -158,8 +158,11 @@ export async function runCommand(
 export interface CommandCopies {
   /** A read-only copy of the workspace as the copy of the case left it. */
   seedDir: string;
-  /** Copies the held-out directory into a temp directory; null when the case has none. Call it after the agent exits. */
-  copyGrader: () => string | null;
+  /**
+   * Copies the held-out directory into a new directory inside `parent`, the run's own temp directory, never the shared
+   * one; null when the case has none. Call it after the agent exits.
+   */
+  copyGrader: (parent: string) => string | null;
   /** Removes both copies. */
   dispose: () => void;
 }
@@ -220,9 +223,9 @@ export function copiesForCommands(
   let grader: ReturnType<typeof tempDir> | null = null;
   return {
     seedDir: seed.dir,
-    copyGrader: () => {
+    copyGrader: (parent) => {
       if (graderDir === null) return null;
-      grader = tempDir(COPY_PREFIX);
+      grader = tempDir(COPY_PREFIX, undefined, parent);
       fs.cpSync(graderDir, grader.dir, {
         recursive: true,
         verbatimSymlinks: true,

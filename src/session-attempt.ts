@@ -58,6 +58,8 @@ export interface SessionInput {
   onTimeout?: OnTimeout | undefined;
   /** Start the harness with nothing loaded but the subject. */
   isolated?: boolean | undefined;
+  /** Start the harness with no tools, for the judge, where its adapter can (`Harness.noTools`). */
+  noTools?: boolean | undefined;
   /** The seconds each process may take; with `turns`, each turn's. */
   timeoutSeconds: number;
   /** The seconds all turns together may take. Absent: `timeoutSeconds` times the number of turns. */
@@ -76,6 +78,8 @@ export interface SessionInput {
   rules?: RulesFile[] | null | undefined;
   /** The case's mock MCP servers; absent for a case with no `mcp/`. */
   mcp?: McpSource | undefined;
+  /** The run's own temp directory, which the harness gets as `TMPDIR`; set by the session. */
+  tmp?: string | undefined;
   /** Run the harness process in the sandbox. The session adds `tmp`. Setup steps and checks run outside it. */
   sandbox?: Confinement | undefined;
   /** What `no_writes_outside_workspace` watches before and after the harness runs; absent for a case without that check. */
@@ -205,7 +209,11 @@ const environmentOf =
       pass: session.pass ?? [],
       withhold: session.withhold ?? [],
       needs: ["node", session.bin],
-      caseEnv,
+      // The run's own TMPDIR wins over the case's, as the sandbox's does.
+      caseEnv: {
+        ...caseEnv,
+        ...(session.tmp !== undefined && { TMPDIR: session.tmp }),
+      },
     });
 
 /**
@@ -431,5 +439,7 @@ export const inputOf = (
     maxTurns: run.maxTurns,
     isolated: run.isolated,
     mcpDir: where.dirs.mcp,
+    ...(run.noTools === true &&
+      run.harness.noTools === true && { noTools: true }),
   };
 };

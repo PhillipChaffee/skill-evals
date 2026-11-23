@@ -111,19 +111,6 @@ export function onDispose(cleanup: () => void): () => void {
 }
 
 /**
- * Where a command's results go.
- * @param requested - The directory the user asked for, created when missing. Absent means a new temp directory.
- * @param cwd - What a relative `requested` resolves against.
- * @returns An absolute path to a directory that exists and that nothing removes afterwards.
- */
-export function outputDir(requested: string | undefined, cwd: string): string {
-  if (!requested) return fs.mkdtempSync(path.join(os.tmpdir(), "runs-"));
-  const dir = path.resolve(cwd, requested);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-/**
  * The start of the name of every temp directory this tool makes. The agent may see them in a path, so none may hold a
  * blinding word, and a test checks that. A new prefix goes here first: `tempDir` takes nothing else.
  */
@@ -150,13 +137,15 @@ export type TempPrefix = (typeof TEMP_PREFIXES)[number];
  * Makes a temp directory whose name gives the agent no hint about why it exists.
  * @param prefix - The start of the directory name, one of `TEMP_PREFIXES`; random characters follow it.
  * @param beforeRemove - Runs just before the directory is removed, at the end of the run and at process exit.
+ * @param parent - Where to make it. Default: the system's temp directory.
  * @returns The real path of the directory, and a `dispose` that removes it and also runs at process exit.
  */
 export function tempDir(
   prefix: TempPrefix,
   beforeRemove?: (dir: string) => void,
+  parent: string = os.tmpdir(),
 ): { dir: string; dispose: () => void } {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(parent, prefix)));
   return {
     dir,
     dispose: onDispose(() => {

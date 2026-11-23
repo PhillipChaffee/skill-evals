@@ -66,7 +66,13 @@ test("score with no flags uses <root>/evals/cases and the working tree", async (
   expect(records.map((r) => `${r.caseId} ${String(r.score)}`)).toEqual([
     "hello 1",
   ]);
-  expect(path.basename(outDir)).toMatch(/^runs-/);
+  // The default output directory is in the state directory, never in the temp directory that the agent's tools list.
+  expect(path.dirname(outDir)).toBe(
+    path.join(String(box.env["SKILL_EVALS_STATE_DIR"]), "runs"),
+  );
+  expect(path.basename(outDir)).toMatch(
+    /^\d{4}-\d\d-\d\dT[\d-]+Z-[0-9a-f]{8}$/,
+  );
 });
 
 test("list shows the harnesses in preference order, the default one, and the cases", async () => {

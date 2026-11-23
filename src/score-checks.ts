@@ -15,6 +15,8 @@ import type { CheckResult, ScoringPlan, Usage } from "./run-plan.js";
 import { withheld } from "./run-plan.js";
 import { messageOf } from "./scope.js";
 import { judgeAsker } from "./startup.js";
+import type { Confinement } from "./os-sandbox.js";
+import { maskingOf } from "./sandbox-masks.js";
 import { apiAsker } from "./judge-api.js";
 import { notScoredFor, viewFor } from "./turn-outcome.js";
 import { scorePreconditions } from "./score-preconditions.js";
@@ -97,6 +99,27 @@ async function runCommands(
 }
 
 /**
+ * Confines the judge's process as the agent's is, under `--sandbox`: the same masks, and the network open, since the
+ * judge must reach its model.
+ * @param plan - The run.
+ * @returns The sandbox; undefined without `--sandbox`.
+ */
+function judgeSandbox(plan: ScoringPlan): Confinement | undefined {
+  const { sandbox, outDir } = plan;
+  if (sandbox === undefined || outDir === undefined) return undefined;
+  return {
+    backend: sandbox.backend,
+    network: "open",
+    ...maskingOf({
+      ...plan,
+      outDir,
+      bin: plan.judge.bin,
+      expose: plan.sandboxExpose,
+    }),
+  };
+}
+
+/**
  * Chooses how the judge is reached for a run.
  * @param plan - The run: its judge API or its judge harness, its cache, and the case's own `judgeModel`.
  * @param problems - Receives why a judge session does not prove it loaded nothing.
@@ -113,6 +136,7 @@ function judgeOf(plan: ScoringPlan, problems: string[]) {
           isolated: plan.isolated ?? false,
           withhold: withheld(plan),
           pass: plan.pass,
+          sandbox: judgeSandbox(plan),
         },
         problems,
       );

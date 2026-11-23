@@ -14,7 +14,7 @@ The harness also gets only an allowlist of your environment variables, so a secr
 
 ## Code that runs on your machine
 
-Three parts of a suite run code that the case author wrote: command checks, setup scripts and mock MCP servers. All of them run as you. The mock servers run inside the sandbox, with the harness. Command checks and setup scripts do not; neither does the harness's own setup nor the judge.
+Three parts of a suite run code that the case author wrote: command checks, setup scripts and mock MCP servers. All of them run as you. The mock servers run inside the sandbox, with the harness, and under `--sandbox` so does the judge's harness process. Command checks and setup scripts do not; neither does the harness's own setup.
 
 ### Command checks
 
@@ -22,7 +22,11 @@ A `command` check runs the shell command a case file gives it, after the agent e
 
 The command does not get your shell's environment. It gets `PATH`, `TMPDIR` and `LANG` from it, the variables the tool sets (`HOME` is the run's throwaway home, and the `SKILL_EVALS_*` names say where the workspace and the held-out files are), fixed git identity variables, and the `env` of the case. It never gets a provider key. The agent cannot change the command: it only reaches it through the files it leaves in the workspace, so a command that runs code from the workspace, such as `npm test`, runs code the agent wrote. That code runs as you, outside the sandbox, and after the canary window has closed, so neither `--sandbox` nor `no_writes_outside_workspace` sees it. A suite whose command checks run what the agent wrote is as safe as that code, whatever flags you pass.
 
-A held-out `grader/` folder is copied out only after the agent has exited, so the agent cannot read it from the workspace or from the temp directories of the run. It is still in the case's own folder on your disk, which an agent that runs with full permissions can search, read and change: that includes the `grader/` folder and `case.json`, so an agent can in principle edit its own grader. A background process the agent leaves can outlive the run, and a command can leave one that escapes its process group.
+A held-out `grader/` folder is copied out only after the agent has exited, into the run's own temp directory, so the agent cannot read it from the workspace, and the agent of another run does not find it in its `TMPDIR`. Each run gets a temp directory of its own as `TMPDIR`, with or without `--sandbox`, and the default output directory is in the state directory, not in the system's temp directory. That only keeps this tool's own files out of the agent's `TMPDIR`. Without `--sandbox` the agent runs as you and can read what you can, the system's temp directory and the output directory included. Use `--sandbox` to confine it. The `grader/` folder is still in the case's own folder on your disk, which an agent that runs with full permissions can search, read and change: that includes the `grader/` folder and `case.json`, so an agent can in principle edit its own grader. A background process the agent leaves can outlive the run, and a command can leave one that escapes its process group.
+
+### The judge
+
+A `judge` check sends a prompt to a harness, which then reads text that the agent wrote: its final answer, and the files and transcript the check lists. That text can hold instructions for the judge. The judge session is started with no tools and one turn, so it can only answer: Claude Code gets `--tools ""` and `--max-turns 1`. A harness whose adapter has no switch for its tools keeps them, and the command warns once; use `--sandbox`, Claude Code or `judgeApi` for the judge. Under `--sandbox` the judge's harness process runs in the same sandbox as the agent's, with the network open so that it can reach its model. A judge through `judgeApi` starts no process.
 
 ### Setup scripts
 
@@ -60,7 +64,7 @@ The filesystem is bound read-only, in this order, and then these parts are put b
 
 ### What the sandbox does not cover
 
-- **Graders run outside it.** The sandbox wraps the harness process and nothing else. Setup steps, the harness's own setup (such as installing a plugin), `command` checks and the judge run as you, because they are code that you or the suite's author chose. A `command` check can run code the agent wrote, after the run, outside the sandbox and outside the canary window.
+- **Graders run outside it.** The sandbox wraps the harness processes, the agent's and the judge's, and nothing else. Setup steps, the harness's own setup (such as installing a plugin) and `command` checks run as you, because they are code that you or the suite's author chose. A `command` check can run code the agent wrote, after the run, outside the sandbox and outside the canary window.
 - **It hides only what is listed.** Your system directories, `/etc`, and everything outside the hidden directories stay readable. The login of the harness is in the throwaway home, so the agent has it. With the network open, the agent can use it.
 - **`provider-only` is unsupported.** Neither backend can allow one set of hosts and deny the rest, so a case with `"network": "provider-only"` is not applicable under `--sandbox`, with the reason `the sandbox cannot enforce provider-only`.
 - **macOS hides nothing.** The `sandbox-exec` profile only denies writes outside the writable set and, for `off`, the network. Your home, the cases and the sockets stay readable. The profile allows `/dev/null`, `/dev/tty`, `/dev/ptmx` and the terminal devices; a harness that needs XPC or mach helpers to start may fail under it, and Apple deprecates `sandbox-exec`. Test your suite on the machine that runs it.

@@ -208,6 +208,7 @@ const claudeCode: Harness = {
   status: "real-model",
   reportsCost: true,
   isRateLimit: looksRateLimited,
+  noTools: true,
 
   invocation({
     subject,
@@ -218,6 +219,7 @@ const claudeCode: Harness = {
     isolated,
     session,
     mcpDir,
+    noTools,
   }) {
     const configDir = path.join(home, ".claude");
     const placed = placeSkills(subject, path.join(configDir, "skills"));
@@ -235,6 +237,8 @@ const claudeCode: Harness = {
         "bypassPermissions",
         ...opt("--model", model),
         ...opt("--max-turns", maxTurns),
+        // `claude --help`: `--tools <tools...>`, "Built-in tools to make available: \"\" for none".
+        ...(noTools === true ? ["--tools", ""] : []),
         ...opt("--resume", session),
         // `--mcp-config` takes a list, so it comes before another flag and never last before `--`.
         ...mcpArgs(mcpDir),

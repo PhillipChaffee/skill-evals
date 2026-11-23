@@ -112,7 +112,14 @@ export type ScoringPlan = Pick<
   | "pass"
   | "cache"
   | "breached"
->;
+> &
+  // What the judge's sandbox is made from, under `--sandbox`; a rescore has none.
+  Partial<
+    Pick<
+      RunPlan,
+      "sandbox" | "casesDirs" | "sandboxExpose" | "projectRoot" | "outDir"
+    >
+  >;
 
 /**
  * Names what no harness process of a run may get.

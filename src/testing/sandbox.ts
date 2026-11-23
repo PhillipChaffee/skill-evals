@@ -157,16 +157,35 @@ function startOver(
   }
 }
 
+// The sandbox directories that are not removed yet. A worker that exits before a test's end hooks run removes them.
+const unremoved = new Set<string>();
+process.on("exit", () => {
+  for (const dir of unremoved) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * Makes a temp directory that is removed when the test ends, and also when the worker exits first, as it does when a
+ * test is cut short.
+ * @param prefix - The start of its name.
+ * @returns Its real path.
+ */
+function scratch(prefix: "runs-" | "runs-bin-"): string {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  unremoved.add(dir);
+  onTestFinished(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+    unremoved.delete(dir);
+  });
+  return dir;
+}
+
 /**
  * Makes a temp directory, removed when the test ends, with a `cli` that sees no installed harness but the fake one,
  * behind the Claude Code adapter.
  * @returns The sandbox. Its root is also the home directory of the command line.
  */
 export function sandbox(): Sandbox {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "runs-")));
-  onTestFinished(() => {
-    fs.rmSync(root, { recursive: true, force: true });
-  });
+  const root = scratch("runs-");
   const write = (relative: string, content: unknown): string => {
     const file = path.join(root, relative);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -178,12 +197,7 @@ export function sandbox(): Sandbox {
   };
   // A PATH that holds node, git and tar and nothing else, so no harness installed on this machine can be picked up.
   // It lies outside the root, which a run copies as a subject, and a link out of a subject is a load error.
-  const tools = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), "runs-bin-")),
-  );
-  onTestFinished(() => {
-    fs.rmSync(tools, { recursive: true, force: true });
-  });
+  const tools = scratch("runs-bin-");
   fs.symlinkSync(process.execPath, path.join(tools, "node"));
   for (const tool of ["git", "tar"]) {
     const found = execFileSync("which", [tool], { encoding: "utf8" }).trim();
