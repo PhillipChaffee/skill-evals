@@ -5,6 +5,7 @@ import { runCommand } from "../command.js";
 import { allChanged, diffSnapshots, snapshot } from "../snapshot.js";
 import type { Outcome, Rule, Spec, Verdict, With } from "./index.js";
 import { regex } from "./rules.js";
+import { budgeted } from "./big-match.js";
 
 const KEPT_BYTES = 2000;
 const SHOWN_LINE_LENGTH = 80;
@@ -162,7 +163,8 @@ const commandRule: Rule = async (check, outcome) => {
   const timeout =
     given.timeoutSeconds ?? (valueOf(given, "timeoutSeconds") as number);
   const result = await runCommand(given.run, outcome.command, timeout);
-  return verdictOf(given, result, timeout);
+  // The stdout patterns of a large output are tested in a worker thread, as the other checks' are.
+  return budgeted(() => verdictOf(given, result, timeout));
 };
 
 // The check that runs a command after the agent exits.

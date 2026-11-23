@@ -4,6 +4,7 @@ import type { Loaded, ToolCall, TranscriptEvent } from "../harnesses/shared.js";
 import type { SkillEvent } from "../skill-events.js";
 import type { ChangedFiles, Snapshot } from "../snapshot.js";
 import type { Field, Rule, Spec, Test, Verdict, With } from "./index.js";
+import { CheckPattern } from "./big-match.js";
 
 /** The verdict of a check that holds. */
 export const PASS: Verdict = { score: 1 };
@@ -12,11 +13,11 @@ export const PASS: Verdict = { score: 1 };
  * Compiles a pattern of a check.
  * @param pattern - The source of a regular expression.
  * @param flags - Its flags; none when absent.
- * @returns The expression.
+ * @returns The expression. While a rule runs under `budgeted`, its test of a text over 64 KB is made in a worker thread.
  * @throws {SyntaxError} When the pattern or the flags are not valid.
  */
 export const regex = (pattern: string, flags = ""): RegExp =>
-  new RegExp(pattern, flags);
+  new CheckPattern(pattern, flags);
 
 /**
  * Makes a check type whose rule scores 1 when a test holds, 0 when it does not.

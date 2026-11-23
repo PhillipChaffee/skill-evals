@@ -8,6 +8,7 @@ import type {
 } from "./checks/index.js";
 import { checkScore, isDecision, isJudged } from "./checks/index.js";
 import { mockLogVerdict } from "./checks/mock-log.js";
+import { OverBudget, budgeted } from "./checks/big-match.js";
 import { removeLogin } from "./command.js";
 import type { Via } from "./score-models.js";
 import { decideAll, judgedResult } from "./score-models.js";
@@ -35,17 +36,25 @@ const notRun = (because: string) => ({
 });
 /**
  * Scores a check by its rule. A rule that throws, such as a user's regular expression that overflows the stack, scores
- * its check 0 and leaves the run valid.
+ * its check 0 and leaves the run valid. A pattern's test of a text over 64 KB runs in a worker thread, so that it
+ * cannot block the other runs; one that takes longer than its budget leaves the check unscored, and the run invalid.
  * @param check - A check that a rule scores.
  * @param outcome - What the run left behind. A check of a turn reads that turn's slice of it.
- * @returns The rule's verdict, or 0 with the message that the rule threw, or 0 with the reason a turn did not run.
+ * @returns The rule's verdict, or 0 with the message that the rule threw, or 0 with the reason a turn did not run, or
+ *   no score with the reason the pattern ran out of time.
  */
-async function ruled(check: RuledCheck, outcome: Outcome): Promise<Verdict> {
+async function ruled(
+  check: RuledCheck,
+  outcome: Outcome,
+): Promise<Verdict | { score: null; reason: string }> {
   const view = viewFor(check, outcome);
   if (typeof view === "string") return { score: 0, reason: view };
   try {
-    return await checkScore(check, view);
+    return await budgeted(() => checkScore(check, view));
   } catch (error) {
+    if (error instanceof OverBudget) {
+      return { score: null, reason: error.message };
+    }
     return {
       score: 0,
       reason: `the check could not be scored: ${messageOf(error)}`,

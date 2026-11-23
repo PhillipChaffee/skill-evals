@@ -8,14 +8,16 @@ const INVALID = "the run is invalid";
 /**
  * Scores the preconditions of a case, before any other check that a model or a command scores.
  * @param checks - The case's `preconditions`.
- * @param score - Scores one rule check, as the case's own checks are scored.
+ * @param score - Scores one rule check, as the case's own checks are scored; a check with no score is not met.
  * @param valid - False when the run is already invalid, whose first reason stays the run's.
  * @returns Each precondition with its score, in the case's order; whether the judged, decision and command checks may
  *   be run; and why they may not. A precondition that scores 0, or has no score, is not met.
  */
 export async function scorePreconditions(
   checks: Check[],
-  score: (check: RuledCheck) => Promise<Verdict>,
+  score: (
+    check: RuledCheck,
+  ) => Promise<Verdict | { score: null; reason: string }>,
   valid: boolean,
 ): Promise<{ results: CheckResult[]; judgeable: boolean; because: string }> {
   const results: CheckResult[] = [];
