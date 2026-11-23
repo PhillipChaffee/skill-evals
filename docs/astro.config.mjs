@@ -84,6 +84,7 @@ export default defineConfig({
         {
           label: "Guides",
           items: [
+            "guides/migrate-from-0-0-1",
             "guides/write-a-case",
             "guides/organise-a-suite",
             "guides/held-out",

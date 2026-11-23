@@ -67,6 +67,22 @@ From here:
 - `skill-evals score` scores one set of skills with no comparison.
 - `--min-score 0.8` makes the command exit 1 when the suite score is under 0.8, so it can gate a pull request. See [Scores](docs/src/content/docs/guides/pass-bars.md).
 
+## Commands
+
+| Command                     | What it does                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `run`, `score`              | Run every case against two subjects and compare them, or against one subject.                                           |
+| `calibrate`                 | Run a subject against itself and write `noise.json`: how much scores move when nothing changed. `run --noise` reads it. |
+| `plan`                      | Print what a `run` or `score` would do, and an estimate of its cost, without starting an agent.                         |
+| `rejudge <out dir>`         | Score the stored runs of an earlier command again after you change a check, without starting the agent.                 |
+| `diff <a> <b>`              | Compare two sets of results: the score change of each case and the checks that started or stopped failing.              |
+| `init <id>`                 | Write a new case from a template of one kind.                                                                           |
+| `explain <id>`              | Print one case as a run reads it, with every default written out.                                                       |
+| `show <out dir> <case>`     | Print what one run did, event by event, and each check with its score and reason.                                       |
+| `check`, `validate`, `list` | Probe the installed harnesses, check a suite without running it, and list the cases.                                    |
+
+[Commands and flags](docs/src/content/docs/reference/commands.md) has every flag. Coming from 0.0.1? Read [Migrate from 0.0.1](docs/src/content/docs/guides/migrate-from-0-0-1.md) first: some scores and exit codes change.
+
 ## How it works
 
 1. **You write a case.** A case is a folder under `evals/cases/` with a `prompt.md`, which holds the prompt exactly as a user would type it, and a `case.json`, which holds the checks. An optional `workspace/` folder holds files the agent finds in its working directory.
