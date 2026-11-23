@@ -46,3 +46,11 @@ The decision model:
 | Baseten System One client | Written from the [System One API reference](https://docs.baseten.co/reference/inference-api/system-one) and the [decision models guide](https://docs.baseten.co/inference/model-apis/decision-models) as they were on 2026-11-21. The tests run the client against a local HTTP server that answers in the documented response shape: the request body, the `Authorization` header, the scoring, the retry, and every unusable reply. The client was also run against bison-1, self-hosted on Modal with the runtime that Baseten publishes for its sibling models. Yes, no, and options checks scored, the options with labels that hold spaces. The reply reported token usage. A warm request took about 1.2 seconds. Repeated gradings of a fixed answer gave identical scores. | Baseten's hosted API itself, including its auth scheme. No request from this client has reached it. |
 
 Two limits apply across harnesses. A login stored in the operating system's keychain may not follow the new home. If `check` reports a login error, set the harness's API key variable. Only Claude Code reports what it loaded, as [What one run does](../concepts/one-run.md) says.
+
+## Not verified
+
+Three things were never run against the real thing. Treat them as unproven until someone does.
+
+- **The OS sandbox.** No test ran the real `bwrap` or the real `sandbox-exec`. The tests use a stand-in `bwrap` that logs its arguments and runs the command unconfined, so they show how a run is wrapped, not that the wrap confines it. Run `--sandbox` on your own machine and check what the agent can reach before you rely on it.
+- **The `todo` tool kind.** The design brief asks for a `todo` kind, for checks such as "a todo list was opened". It is not built: no adapter maps a todo tool, and a check cannot name the kind. It waits for Task 29, which reads each harness's tools from real streams.
+- **The unfinished-stream excuses.** When the runner stops a run at its turn limit or its time limit, the stream has no ending event, and each adapter reports only that error (`Parsed.unfinished`), which the runner then excuses so that the run is scored. Which events a real harness writes when it is stopped mid-stream was never seen: the tests use the fake harness's streams. A real stream that ends in another way can make such a run invalid instead.

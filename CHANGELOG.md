@@ -54,6 +54,7 @@
 - One `costOf` counts cost for `summary.json`, `diff` and `plan`, and it includes failed attempts: `diff` used to report a lower cost for a retried run, and `plan` now estimates a run with its retries and with a judge's cost when the agent's is not reported. One `median` and one `isObject` replace the copies.
 - `noise.json` records the subject that `calibrate` ran (`subject: { label, options }`), and `run --noise` warns when the command runs no such subject. A file without `subject` still loads.
 - An account skill that reaches the run's `skills` or `synced` directory through a symbolic link counts among the strays of the `--isolated` proof; so does a skill whose `SKILL.md` is a link.
+- The safety page and What was verified say what was never run: the real `bwrap` and `sandbox-exec`, the brief's `todo` kind (not built), and the unfinished-stream excuses on real streams.
 
 ## 0.0.1
 

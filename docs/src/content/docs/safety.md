@@ -70,6 +70,10 @@ The filesystem is bound read-only, in this order, and then these parts are put b
 - **macOS hides nothing.** The `sandbox-exec` profile only denies writes outside the writable set and, for `off`, the network. Your home, the cases and the sockets stay readable. The profile allows `/dev/null`, `/dev/tty`, `/dev/ptmx` and the terminal devices; a harness that needs XPC or mach helpers to start may fail under it, and Apple deprecates `sandbox-exec`. Test your suite on the machine that runs it.
 - **What is bound back stays visible.** A harness installed in a hidden directory has its install and its `PATH` directories readable. For a layout the sandbox does not know, list absolute paths in `sandboxExpose` in the config file: each is bound back read-only, and none may be your real home or the cases directory.
 
+### What was never run
+
+No test ran the real `bwrap` or `sandbox-exec`: the tests use a stand-in that logs the arguments it was given and runs the command unconfined. The lists above say what the wrap asks of the backend, not what the backend did. The brief's `todo` tool kind is not built (Task 29), and the excuse that lets a run stopped at its limits be scored, although its stream has no ending, is unconfirmed on real streams. [What was verified](agents/verified.md#not-verified) has the details.
+
 ### Network policy
 
 A case may say `"network": "off" | "provider-only" | "open"`. The default is `open`, and a case that does not set it hashes as it always did.
