@@ -122,18 +122,16 @@ export interface ChildEnvInput {
   needs?: string[];
   /** What a case sets in its `env`: values given outright, which win over what `base` holds. Default: none. */
   caseEnv?: Record<string, string>;
+  /** The adapter's `scrubEnv`: names its harness never gets, whatever the config's `env` says. Default: none. */
+  scrubEnv?: string[] | undefined;
 }
-
-// Variables that no run gets, whatever the config's `env` says. Claude Code names its project directory after this one
-// when it is set, so a planted session would not be where the run looks for it.
-const NEVER_PASSED = ["CLAUDE_CODE_PROJECT_DIR_NAME"];
 
 /**
  * Builds the environment of a harness process.
  * @param input - Where the home is, what to take from the base, and what to withhold.
  * @returns The allowlisted variables of `base`, the adapter's login variables and the config's `env` names that `base`
  *   has, `HOME` and the XDG directories under the home, the adapter's own variables, and the case's `env` values,
- *   without the withheld names.
+ *   without the withheld names and the adapter's scrubbed ones.
  */
 export function childEnv(input: ChildEnvInput): Record<string, string> {
   const { home, base, harnessEnv, authEnv, pass, withhold } = input;
@@ -156,7 +154,8 @@ export function childEnv(input: ChildEnvInput): Record<string, string> {
   };
   const kept = Object.fromEntries(
     Object.entries(env).filter(
-      ([name]) => !withhold.includes(name) && !NEVER_PASSED.includes(name),
+      ([name]) =>
+        !withhold.includes(name) && !(input.scrubEnv ?? []).includes(name),
     ),
   );
   const searched = kept["PATH"];

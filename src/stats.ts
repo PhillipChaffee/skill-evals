@@ -96,6 +96,20 @@ export const mean = (values: number[]): number =>
   values.reduce((sum, value) => sum + value, 0) / values.length;
 
 /**
+ * Finds the middle of a set of numbers. Every median of the tool is this one.
+ * @param values - The numbers, in any order.
+ * @returns The middle value, or the mean of the two middle values for an even count; NaN for none.
+ */
+export function median(values: number[]): number {
+  const sorted = [...values].sort((x, y) => x - y);
+  const middle = sorted.slice(
+    (sorted.length - 1) >> 1,
+    (sorted.length >> 1) + 1,
+  );
+  return middle.reduce((sum, value) => sum + value, 0) / middle.length;
+}
+
+/**
  * Takes the pooled standard deviation of several groups, each around its own mean.
  * @param groups - The groups of numbers; a group of one has no spread of its own.
  * @returns The square root of the summed squared deviations over the summed degrees of freedom; 0 when no group has

@@ -1,3 +1,4 @@
+import { median } from "./stats.js";
 import type { Scale } from "./checks/judge-fields.js";
 
 /** What one judge call gave: a score, or null with the reason there is none. */
@@ -10,19 +11,6 @@ const PAIR = 2;
 
 const plural = (count: number, word: string): string =>
   `${String(count)} ${word}${count === 1 ? "" : "s"}`;
-
-/**
- * Takes the middle of some scores.
- * @param scores - At least one score.
- * @returns The middle one, or the mean of the middle two when there is an even number.
- */
-function median(scores: number[]): number {
-  const sorted = [...scores].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / PAIR);
-  return sorted.length % PAIR === 1
-    ? (sorted[middle] as number)
-    : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / PAIR;
-}
 
 /**
  * Settles one check from several votes.

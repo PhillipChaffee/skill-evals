@@ -1,7 +1,7 @@
 import type { ExitCode } from "./exit-codes.js";
 import { invalidShare } from "./exit-codes.js";
 import type { Results } from "./evaluate.js";
-import type { RunRecord } from "./run.js";
+import { costOf } from "./run-cost.js";
 
 /** One harness and subject: the score and how many runs stand behind it. */
 export interface SummarySuite {
@@ -36,24 +36,6 @@ export interface Summary {
   costUsd: number | null;
   /** The time of every run and failed attempt, added up. Runs in parallel overlap, so it is not wall time. */
   durationMs: number;
-}
-
-/**
- * Adds up what the records cost.
- * @param records - The finished runs.
- * @returns The sum of every reported cost, the scorers' and the failed attempts' included; null when none was reported.
- */
-function costOf(records: RunRecord[]): number | null {
-  const costs = records.flatMap((record) => [
-    record.costUsd,
-    record.judge?.costUsd ?? null,
-    record.decision?.costUsd ?? null,
-    ...(record.attempts ?? []).map((attempt) => attempt.costUsd),
-  ]);
-  const reported = costs.filter((cost) => cost !== null);
-  return reported.length === 0
-    ? null
-    : reported.reduce((sum, cost) => sum + cost, 0);
 }
 
 /**

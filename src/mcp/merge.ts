@@ -1,4 +1,9 @@
-import type { AgentRef, Parsed, TranscriptEvent } from "../harnesses/shared.js";
+import type {
+  AgentRef,
+  Harness,
+  Parsed,
+  TranscriptEvent,
+} from "../harnesses/shared.js";
 import { withIndexes } from "../harnesses/shared.js";
 import { callsOf, event } from "../transcript.js";
 import type { McpCall } from "./types.js";
@@ -18,14 +23,20 @@ const UNKNOWN_AGENT: AgentRef = {
  * Makes the two events of a logged call.
  * @param call - The call the mock server answered.
  * @param at - The call's number, which makes its id.
- * @param after - The event the call goes after, which gives its user turn; absent at the start.
+ * @param place - Where the call goes, and what names it.
+ * @param place.after - The event the call goes after, which gives its user turn; absent at the start.
+ * @param place.nativeOf - The adapter's `mcpToolName`; absent: the call has no native name.
  * @returns A `tool_call` of kind `mcp` and the `tool_result` that answers it, both marked `source: "mock-log"`.
  */
 function eventsOf(
   call: McpCall,
   at: number,
-  after: TranscriptEvent | undefined,
+  place: {
+    after: TranscriptEvent | undefined;
+    nativeOf: Harness["mcpToolName"];
+  },
 ): TranscriptEvent[] {
+  const { after, nativeOf } = place;
   const shared = {
     callId: `mock-log-${String(at)}`,
     agent: UNKNOWN_AGENT,
@@ -34,7 +45,7 @@ function eventsOf(
     at: call.at,
   };
   const name = `${call.server}.${call.tool}`;
-  const native = `mcp__${call.server}__${call.tool}`;
+  const native = nativeOf?.(call.server, call.tool);
   return [
     event({
       ...shared,
@@ -42,7 +53,7 @@ function eventsOf(
       type: "tool_call",
       kind: "mcp",
       name,
-      native,
+      ...(native !== undefined && { native }),
       input: call.input,
     }),
     event({
@@ -51,7 +62,7 @@ function eventsOf(
       type: "tool_result",
       kind: "mcp",
       name,
-      native,
+      ...(native !== undefined && { native }),
       output: call.response.text,
       isError: call.response.isError,
     }),
@@ -78,13 +89,18 @@ function positionOf(events: TranscriptEvent[], at: string): number {
  * Adds the calls of the mock log to a run whose stream shows none of them.
  * @param parsed - What the adapter read.
  * @param calls - The calls the mock servers logged, in time order.
+ * @param nativeOf - The adapter's `mcpToolName`, which gives each logged call the harness's own name; absent: none.
  * @returns `parsed` itself when the log is empty or the stream already has MCP calls. Otherwise the transcript with each
  *   logged call as a `tool_call` and a `tool_result` marked `source: "mock-log"`, placed by time among the events that
  *   state one and last when none do, and the calls list rebuilt. Their agent is of type `unknown` at depth -1: the log
  *   cannot say who made them, so only a `by` of `{ agent: "unknown" }` fits them. Only an adapter whose `mcpCalls` is
  *   `log` has its transcript merged; for any other the log is a cross-check.
  */
-export function mergeMockLog(parsed: Parsed, calls: McpCall[]): Parsed {
+export function mergeMockLog(
+  parsed: Parsed,
+  calls: McpCall[],
+  nativeOf?: Harness["mcpToolName"],
+): Parsed {
   if (
     calls.length === 0 ||
     parsed.transcript.some((one) => one.kind === "mcp")
@@ -96,7 +112,10 @@ export function mergeMockLog(parsed: Parsed, calls: McpCall[]): Parsed {
     const position = positionOf(events, call.at);
     events = [
       ...events.slice(0, position),
-      ...eventsOf(call, number, events[position - 1]),
+      ...eventsOf(call, number, {
+        after: events[position - 1],
+        nativeOf,
+      }),
       ...events.slice(position),
     ];
   });

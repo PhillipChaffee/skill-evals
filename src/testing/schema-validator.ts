@@ -1,3 +1,5 @@
+import { isObject } from "../scope.js";
+
 export type Json = Record<string, unknown>;
 
 // "#/$defs/name" split at slashes: the first two parts say where to look.
@@ -11,8 +13,6 @@ const KEYWORDS = new Set([
     /\s+/,
   ),
 ]);
-const isObject = (v: unknown): v is Json =>
-  v !== null && typeof v === "object" && !Array.isArray(v);
 const TYPES: Record<string, (value: unknown) => boolean> = {
   object: isObject,
   array: Array.isArray,

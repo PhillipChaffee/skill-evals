@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { clockText, etaOf, median, progressText } from "./progress.js";
+import { clockText, etaOf, progressText } from "./progress.js";
+import { median } from "./stats.js";
 
 const HOUR_MS = 3_600_000;
 

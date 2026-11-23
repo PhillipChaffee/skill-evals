@@ -1,6 +1,6 @@
+import { median } from "../stats.js";
 import type { RunRecord } from "../run.js";
-
-const PAIR = 2;
+import { costOf } from "../run-cost.js";
 
 /** A run of the plan, by the pair that the estimate is made for. */
 interface Pair {
@@ -22,31 +22,6 @@ export interface Estimate {
 }
 
 /**
- * Takes the median of numbers.
- * @param values - At least one number.
- * @returns The middle value, or the mean of the two middle ones.
- */
-export function median(values: number[]): number {
-  const sorted = [...values].sort((x, y) => x - y);
-  const middle = Math.floor(sorted.length / PAIR);
-  return sorted.length % PAIR === 1
-    ? (sorted[middle] as number)
-    : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / PAIR;
-}
-
-/**
- * Sums what a run cost: the agent, the judge and the decision model.
- * @param record - The run.
- * @returns The cost; null when the harness reported none for the agent.
- */
-const costOf = (record: RunRecord): number | null =>
-  record.costUsd === null
-    ? null
-    : record.costUsd +
-      (record.judge?.costUsd ?? 0) +
-      (record.decision?.costUsd ?? 0);
-
-/**
  * Estimates what a plan costs and how long it takes from the runs of an earlier command.
  * @param earlier - The records of the earlier command.
  * @param planned - The pair of harness and case of each run of the plan.
@@ -66,7 +41,7 @@ export function estimateOf(
   const medians = planned.flatMap(({ harness, caseId }) => {
     const records = byPair.get(`${harness}\n${caseId}`);
     if (records === undefined) return [];
-    const costs = records.flatMap((record) => costOf(record) ?? []);
+    const costs = records.flatMap((record) => costOf([record]) ?? []);
     return [
       {
         durationMs: median(records.map((record) => record.durationMs)),

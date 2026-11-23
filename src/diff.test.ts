@@ -213,3 +213,14 @@ test("a diff with a case on one side only and no cost renders absent and n/a", (
   expect(text).toContain("| d | absent | 0.50 (1/1) | n/a | n/a | n/a |");
   expect(text).toContain("| Cost | n/a | n/a | n/a |");
 });
+
+test("diff counts a run's failed attempts in its cost, as summary.json does", () => {
+  const retried = record([1], {
+    costUsd: 0.5,
+    attempts: [{ error: "rate limited", costUsd: 0.25, durationMs: 10 }],
+  });
+  const plain = results([record([1])]);
+  const found = diffResults(plain, results([retried]));
+  expect(found.sections[0]?.totals.a.costUsd).toBe(0.5);
+  expect(found.sections[0]?.totals.b.costUsd).toBe(0.75);
+});

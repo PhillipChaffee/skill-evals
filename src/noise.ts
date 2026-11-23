@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import type { RunRecord } from "./run.js";
 import { isUnitScore } from "./score.js";
-import { UsageError, messageOf } from "./scope.js";
+import { UsageError, isObject, messageOf } from "./scope.js";
 import type { Stratum } from "./stats.js";
+import type { NoiseSubject } from "./noise-subject.js";
+import { readNoiseSubject } from "./noise-subject.js";
 import {
   RESAMPLES,
   mean,
@@ -39,6 +41,8 @@ export interface NoiseFile {
   schemaVersion: 1;
   /** The harness that was calibrated. The file is applied to that harness only. */
   harness: string;
+  /** The subject that was calibrated. A comparison that runs no such subject warns. Absent from a file written before it. */
+  subject?: NoiseSubject;
   /** The reps of each subject in the calibration. A comparison at other reps gets a note. */
   reps: number;
   /** The seed of the calibration's bootstrap. */
@@ -55,14 +59,6 @@ export interface NoiseFile {
   /** `sd` is the spread of the suite delta over the A/A bootstrap, `p95AbsDelta` the 95th percentile of its absolute value. */
   suite: Spread & { p95AbsDelta: number };
 }
-
-/**
- * Checks that a value is a plain object.
- * @param value - Anything.
- * @returns True for an object that is not null and not an array.
- */
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Where in a noise file a value was read, for a message. */
 interface Where {
@@ -93,7 +89,7 @@ function requireUnit(where: Where, value: unknown): void {
  * @throws {UsageError} When it is not an object, lacks a field, has another, or holds a bad number.
  */
 function requireFields(where: Where, entry: unknown, fields: string[]): void {
-  if (!isRecord(entry)) {
+  if (!isObject(entry)) {
     throw new UsageError(`${where.file}: "${where.at}" must be an object`);
   }
   for (const field of Object.keys(entry)) {
@@ -116,7 +112,7 @@ function requireFields(where: Where, entry: unknown, fields: string[]): void {
  * @throws {UsageError} When it is not an object, or an entry is wrong.
  */
 function requireEntries(where: Where, value: unknown, fields: string[]): void {
-  if (!isRecord(value)) {
+  if (!isObject(value)) {
     throw new UsageError(`${where.file}: "${where.at}" must be an object`);
   }
   for (const [key, entry] of Object.entries(value)) {
@@ -140,10 +136,10 @@ export function readNoise(file: string): NoiseFile {
       `${file}: cannot read the noise file: ${messageOf(error)}`,
     );
   }
-  if (!isRecord(parsed))
+  if (!isObject(parsed))
     throw new UsageError(`${file}: must hold one JSON object`);
   for (const key of Object.keys(parsed)) {
-    if (!NOISE_KEYS.includes(key)) {
+    if (!NOISE_KEYS.includes(key) && key !== "subject") {
       throw new UsageError(
         `${file}: unknown key "${key}"; a noise file has ${NOISE_KEYS.join(", ")}`,
       );
@@ -183,6 +179,8 @@ export function readNoise(file: string): NoiseFile {
   ]);
   requireEntries(at("perCheckType"), parsed["perCheckType"], ["sd"]);
   requireFields(at("suite"), parsed["suite"], ["sd", "p95AbsDelta"]);
+  if (Object.hasOwn(parsed, "subject"))
+    readNoiseSubject(file, parsed["subject"]);
   return parsed as unknown as NoiseFile;
 }
 

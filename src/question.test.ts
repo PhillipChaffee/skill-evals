@@ -2,7 +2,12 @@ import { expect, test } from "vitest";
 import { checkScore } from "./checks/index.js";
 import type { Check, RuledCheck } from "./checks/index.js";
 import { HARNESSES } from "./harnesses/index.js";
-import { endsAwaiting, questionText, questionsIn } from "./question.js";
+import {
+  endsAwaiting,
+  questionText,
+  questionsIn,
+  withQuestions,
+} from "./question.js";
 import { lines, parseText } from "./testing/streams.js";
 import { call, played, result } from "./testing/transcript.js";
 import { checkRate } from "./report/metrics.js";
@@ -67,16 +72,23 @@ test("only Claude Code declares askUser, and no other adapter maps a question to
   expect(declared).toEqual([CLAUDE]);
 });
 
-test("the question text is the questions joined, else the input as JSON", () => {
-  expect(
-    questionText({
-      input: { questions: [{ question: "A?" }, { question: "B?" }, 3] },
-    }),
-  ).toBe("A?\nB?");
+test("the question text is what the adapter read, else the input as JSON", () => {
+  const claude = HARNESSES.find(({ id }) => id === CLAUDE);
+  const read = (input: unknown) => claude?.questionText?.(input) ?? null;
+  expect(read({ questions: [{ question: "A?" }, { question: "B?" }, 3] })).toBe(
+    "A?\nB?",
+  );
+  expect(read({ prompt: "Which?" })).toBeNull();
+  expect(read({ questions: [] })).toBeNull();
+  expect(questionText({ input: { prompt: "Which?" }, question: "A?" })).toBe(
+    "A?",
+  );
   expect(questionText({ input: { prompt: "Which?" } })).toBe(
     '{"prompt":"Which?"}',
   );
-  expect(questionText({ input: { questions: [] } })).toBe('{"questions":[]}');
+  // A parse through an adapter with no question reader leaves the stream as it is.
+  const parsed = parseText(CLAUDE, "");
+  expect(withQuestions({}, parsed)).toBe(parsed);
 });
 
 test("asked_user counts question calls with min, max and pattern", async () => {

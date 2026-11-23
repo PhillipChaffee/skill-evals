@@ -10,6 +10,7 @@ import {
   resultPart,
 } from "../transcript.js";
 import { bareOutcome } from "./outcome.js";
+import { claudeQuestionText } from "../harnesses/claude-code-question.js";
 
 const KINDS: Record<string, ToolKind> = {
   Bash: "shell",
@@ -52,9 +53,14 @@ export const hook = (
 /**
  * Makes an outcome from the events of a hand-built transcript.
  * @param parts - The events, in order.
- * @returns An outcome that holds them as its transcript and the calls among them as its tool calls.
+ * @returns An outcome that holds them as its transcript and the calls among them as its tool calls. A question call
+ *   gets the text that Claude Code's adapter reads from it, as a run's parse gives it.
  */
 export function played(...parts: EventInput[]) {
-  const transcript = numbered(parts);
+  const transcript = numbered(parts).map((one) => {
+    const question =
+      one.kind === "question" ? claudeQuestionText(one.input) : null;
+    return question === null ? one : { ...one, question };
+  });
   return { ...bareOutcome(), transcript, toolCalls: callsOf(transcript) };
 }

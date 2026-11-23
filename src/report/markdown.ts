@@ -3,7 +3,7 @@ import type { Case } from "../cases.js";
 import type { HarnessDelta } from "../comparison.js";
 import { describeCheck, isJudged } from "../checks/index.js";
 import type { Evaluation } from "../evaluate.js";
-import { METRICS, checkRate, median, scorerLine, versus } from "./metrics.js";
+import { METRICS, checkRate, medianOf, scorerLine, versus } from "./metrics.js";
 import { isPair, runsText } from "./counts.js";
 import type { DiscriminationRow } from "./delta.js";
 import {
@@ -96,7 +96,7 @@ function caseRow(caseDef: Case, section: Section): string {
     ...METRICS.map((metric) =>
       versus(
         valid.map(({ runs }) =>
-          median(runs.flatMap((run) => metric.value(run) ?? [])),
+          medianOf(runs.flatMap((run) => metric.value(run) ?? [])),
         ),
         metric.format,
         isPair(labels),

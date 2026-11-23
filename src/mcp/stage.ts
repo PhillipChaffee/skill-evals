@@ -227,7 +227,7 @@ export interface MockLogRead {
  * @returns The log's text, the stream (merged or not), and the problems.
  */
 export function withMockLog(
-  harness: Pick<Harness, "capabilities" | "mcpCalls">,
+  harness: Pick<Harness, "capabilities" | "mcpCalls" | "mcpToolName">,
   parsed: Parsed,
   started: McpStarted | null,
 ): MockLogRead {
@@ -243,7 +243,7 @@ export function withMockLog(
     return { parsed, mcpLog, mcpProblems: changed };
   }
   if (harness.mcpCalls === "log") {
-    const merged = mergeMockLog(parsed, calls);
+    const merged = mergeMockLog(parsed, calls, harness.mcpToolName);
     return { parsed: merged, mcpLog, mcpProblems: changed };
   }
   const servers = started.staged.servers.map((server) => server.name);

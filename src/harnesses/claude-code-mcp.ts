@@ -62,3 +62,27 @@ export const mcpArgs = (mcpDir: string | undefined): string[] =>
  */
 export const mcpEnv = (mcpDir: string | undefined): Record<string, string> =>
   mcpDir ? { ENABLE_CLAUDEAI_MCP_SERVERS: "false" } : {};
+
+/**
+ * Splits the name that Claude Code gives an MCP tool.
+ * @param native - A tool name as the stream states it, such as `mcp__tracker__get_issue`.
+ * @returns The server and the tool; null for a name that is not `mcp__<server>__<tool>`. The server is the part up to
+ *   the next `__`, and the tool is everything after it, as the CLI splits it.
+ */
+export function mcpToolOf(
+  native: string,
+): { server: string; tool: string } | null {
+  if (!native.startsWith("mcp__")) return null;
+  const [, server = "", ...rest] = native.split("__");
+  const tool = rest.join("__");
+  return server === "" || tool === "" ? null : { server, tool };
+}
+
+/**
+ * Names an MCP tool as Claude Code does, for a call that only the mock log shows.
+ * @param server - The MCP server, as the case's `mcp/` directory names it.
+ * @param tool - The tool of that server, as its spec file names it.
+ * @returns `mcp__<server>__<tool>`.
+ */
+export const mcpToolName = (server: string, tool: string): string =>
+  `mcp__${server}__${tool}`;

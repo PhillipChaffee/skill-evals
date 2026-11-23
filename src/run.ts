@@ -328,8 +328,8 @@ export interface Attempted {
 }
 
 /**
- * Makes one attempt at a run: one prompt, one harness, one subject. It runs the prompt, normalizes the output, scores
- * every check, and cleans up.
+ * Makes one attempt at a run: the case's prompt or its turns, in one harness, with one subject. It runs them,
+ * normalizes the output, scores every check, and cleans up.
  * @param plan - What to run and where to write its files.
  * @returns The record of the attempt, and whether to try again. A failed run is a record with an error, never a
  *   rejection.
@@ -383,9 +383,11 @@ export async function runAttempt(plan: RunPlan): Promise<Attempted> {
 }
 
 /**
- * Makes one run once: one prompt, one harness, one subject.
+ * Makes one attempt at a run and keeps its record, for a caller with no retry loop (the probe): the case's prompt or
+ * its turns, in one harness, with one subject, scored. It never retries, whatever `--retries` says, and drops what
+ * `runAttempt` says of retrying and of the spend.
  * @param plan - What to run and where to write its files.
- * @returns The record of the run. A failed run is a record with an error, never a rejection.
+ * @returns The record of the attempt. A failed run is a record with an error, never a rejection.
  */
 export async function runOnce(plan: RunPlan): Promise<RunRecord> {
   return (await runAttempt(plan)).record;

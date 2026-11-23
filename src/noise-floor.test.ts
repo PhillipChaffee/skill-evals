@@ -43,6 +43,7 @@ test("A/A calibrate writes a noise file with zero spread for a deterministic fak
     perCase: { restate: { sd: 0, maxAbsDelta: 0, p95AbsDelta: 0 } },
     perCheckType: { file_exists: { sd: 0 }, skill_loaded: { sd: 0 } },
     suite: { sd: 0, p95AbsDelta: 0 },
+    subject: { label: same, options: null },
   });
   expect(ran.stderr).toContain(`wrote ${path.join(out, NOISE_JSON)}`);
   // One export, two labels, and the other files `run` writes.
@@ -262,4 +263,48 @@ test("a noise file that is not JSON, or does not exist, is a usage error", async
     expect(ran.status).toBe(EXIT.usage);
     expect(ran.stderr).toContain(`${file}: cannot read the noise file`);
   }
+});
+
+test("a run whose subjects are not the one the noise file was calibrated on warns, and one that runs it does not", async () => {
+  const box = sandbox();
+  const same = plugin(box, SAME, { skill: "bro" });
+  const calibration = await compared(box, {
+    checks: WEIGHTED,
+    a: same,
+    command: "calibrate",
+    reps: 2,
+    out: "calibrated",
+  });
+  expect(calibration.ran.status, calibration.ran.stderr).toBe(0);
+  const file = path.join(calibration.out, NOISE_JSON);
+  const others = await compared(box, {
+    checks: WEIGHTED,
+    reps: 2,
+    flags: ["--noise", file],
+  });
+  expect(others.ran.stderr).toContain(
+    `skill-evals: warning: ${file} was calibrated on the subject ${same}, which this command does not run, so its noise may not fit`,
+  );
+  const variant = await compared(box, {
+    checks: WEIGHTED,
+    reps: 2,
+    a: same,
+    b: `${same}:hooks=off`,
+    flags: ["--noise", file],
+    out: "variant",
+  });
+  expect(variant.ran.stderr).not.toContain("was calibrated on the subject");
+  // A file whose subject is not of the shape calibrate writes does not load.
+  const bad = readJson(calibration.out, NOISE_JSON) as Record<string, unknown>;
+  fs.writeFileSync(file, JSON.stringify({ ...bad, subject: { label: 1 } }));
+  const refused = await compared(box, {
+    checks: WEIGHTED,
+    reps: 2,
+    flags: ["--noise", file],
+    out: "refused",
+  });
+  expect(refused.ran.status).toBe(EXIT.usage);
+  expect(refused.ran.stderr).toContain(
+    '"subject" must be an object with a string "label" and a string or null "options"',
+  );
 });

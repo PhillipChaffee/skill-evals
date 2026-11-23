@@ -2131,7 +2131,7 @@
     },
     "check-asked_user": {
       "title": "asked_user",
-      "description": "The number of question calls the agent made, of those whose question fits `pattern`, is from `min` to `max`. It counts calls of the tool kind `question` (`AskUserQuestion` in Claude Code), and nothing else: an answer that ends with a question mark is not asking. The question is the call's `questions[].question` texts joined with newlines, or the call's whole input as JSON for a harness whose question tool has another shape. `pattern` is a regular expression for that text, case-sensitive. `min` defaults to 1, and to 0 when `max` is 0. `by` counts the calls of those agents. Needs a harness with `askUser`.",
+      "description": "The number of question calls the agent made, of those whose question fits `pattern`, is from `min` to `max`. It counts calls of the tool kind `question` (`AskUserQuestion` in Claude Code), and nothing else: an answer that ends with a question mark is not asking. The question is what the harness's adapter reads from the call (for Claude Code, the `questions[].question` texts joined with newlines), or the call's whole input as JSON where the adapter reads none. `pattern` is a regular expression for that text, case-sensitive. `min` defaults to 1, and to 0 when `max` is 0. `by` counts the calls of those agents. Needs a harness with `askUser`.",
       "type": "object",
       "required": ["type"],
       "properties": {

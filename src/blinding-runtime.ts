@@ -62,6 +62,7 @@ export function requireBlindRun(input: {
     harnesses: input.chosen.map(({ harness, bin }) => ({
       authEnv: harness.authEnv,
       withhold: input.withheldBy(harness),
+      scrubEnv: harness.scrubEnv,
       bin,
     })),
   });
@@ -73,7 +74,12 @@ interface RuntimeView {
   /** What the harnesses get from the user's environment. */
   env: Pick<ChildEnvInput, "base" | "pass" | "caseEnv">;
   /** Each harness's login variables, the names it is never given, and its executable. */
-  harnesses: { authEnv: string[]; withhold: string[]; bin: string }[];
+  harnesses: {
+    authEnv: string[];
+    withhold: string[];
+    scrubEnv?: string[] | undefined;
+    bin: string;
+  }[];
 }
 
 /**

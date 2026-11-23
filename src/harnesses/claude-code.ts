@@ -26,11 +26,13 @@ import {
 } from "./shared.js";
 import {
   mcpArgs,
+  mcpToolName,
   mcpEnv,
   statusOfServers,
   writeMcpConfig,
 } from "./claude-code-mcp.js";
 import { claudeCanaries } from "./claude-code-canaries.js";
+import { claudeQuestionText } from "./claude-code-question.js";
 import { strayskills } from "./claude-code-strays.js";
 import { stripClaudeCode } from "./claude-code-strip.js";
 import { looksRateLimited } from "./rate-limit.js";
@@ -160,6 +162,7 @@ const claudeCode: Harness = {
   pathOf: (call) => stringArg(call, ["file_path"]),
   // Claude Code's Skill tool takes `skill`, as `plugin:skill` for a plugin's skill.
   skillOf: (call) => stringArg(call, ["skill"]),
+  questionText: claudeQuestionText,
   authFiles: [".claude/.credentials.json"],
   canaries: claudeCanaries,
   authEnv: ANTHROPIC_ENV,
@@ -209,6 +212,9 @@ const claudeCode: Harness = {
   reportsCost: true,
   isRateLimit: looksRateLimited,
   noTools: true,
+  // Claude Code names its project directory after this variable when it is set, so a planted session would not be where
+  // the run looks for it.
+  scrubEnv: ["CLAUDE_CODE_PROJECT_DIR_NAME"],
 
   invocation({
     subject,
@@ -256,6 +262,7 @@ const claudeCode: Harness = {
   },
 
   registerMcp: writeMcpConfig,
+  mcpToolName,
 
   rulesTargets,
   installRules: (files, input) => placeRules(files, rulesTargets(files), input),

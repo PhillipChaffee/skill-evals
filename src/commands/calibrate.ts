@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { selectHarnesses } from "../harnesses/index.js";
 import { NOISE_FILE, noiseOf } from "../noise.js";
+import { noiseSubjectOf } from "../noise-subject.js";
+import type { SubjectSummary } from "../subject.js";
 import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
 import { UsageError } from "../scope.js";
@@ -59,8 +61,11 @@ export async function calibrate(
     );
     return evaluation.exit;
   }
+  // `execute` resolved the one subject, twice.
+  const calibrated = evaluation.subjects[0] as SubjectSummary;
+  const recorded = { ...noise, subject: noiseSubjectOf(calibrated) };
   const file = path.join(evaluation.outDir, NOISE_FILE);
-  fs.writeFileSync(file, `${JSON.stringify(noise, null, INDENT)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify(recorded, null, INDENT)}\n`);
   console.error(`skill-evals: wrote ${file}`);
   return evaluation.exit;
 }

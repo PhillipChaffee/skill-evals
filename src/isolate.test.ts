@@ -194,6 +194,19 @@ test("a link chain that leaves the subject is a load error", () => {
   );
 });
 
+test("a dangling link that leaves the subject through another link is a load error", () => {
+  const box = sandbox();
+  box.write("src/sub/deep/keep.txt", "k");
+  const deep = path.join(box.root, "src/sub/deep");
+  // L stays inside the subject; through it, `a` leads to a file outside it that does not exist.
+  fs.symlinkSync("../..", path.join(deep, "L"));
+  fs.symlinkSync("L/../missing.txt", path.join(deep, "a"));
+  expect(fs.existsSync(path.join(deep, "a"))).toBe(false);
+  expect(() => exportDir(path.join(box.root, "src"))).toThrow(
+    /sub\/deep\/a is a link to L\/\.\.\/missing\.txt; links outside the subject/,
+  );
+});
+
 test("a link that dangles inside the subject is kept", () => {
   const box = sandbox();
   box.write("src/a.txt", "a");

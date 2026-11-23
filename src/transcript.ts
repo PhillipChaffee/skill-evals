@@ -148,6 +148,7 @@ export function callsOf(events: TranscriptEvent[]): ToolCall[] {
           : {}),
         ...(e.source === undefined ? {} : { source: e.source }),
         ...(e.native === undefined ? {} : { native: e.native }),
+        ...(e.question === undefined ? {} : { question: e.question }),
         ...(e.turn === null ? {} : { turn: e.turn }),
         ...(durationMs === undefined ? {} : { durationMs }),
       };

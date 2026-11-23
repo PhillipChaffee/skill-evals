@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { childEnv } from "./env.js";
+import { HARNESSES } from "./harnesses/index.js";
 import {
   installClaudeHistory,
   installClaudeSessions,
@@ -167,8 +168,11 @@ test("planting refuses a link on its path", () => {
   });
 });
 
-test("CLAUDE_CODE_PROJECT_DIR_NAME is never passed to a harness", () => {
+test("CLAUDE_CODE_PROJECT_DIR_NAME is never passed to Claude Code, whose adapter scrubs it", () => {
+  const claude = HARNESSES.find(({ id }) => id === "claude-code");
+  expect(claude?.scrubEnv).toEqual(["CLAUDE_CODE_PROJECT_DIR_NAME"]);
   const env = childEnv({
+    scrubEnv: claude?.scrubEnv,
     home: "/h",
     base: { CLAUDE_CODE_PROJECT_DIR_NAME: "x", PATH: "/bin" },
     harnessEnv: {},

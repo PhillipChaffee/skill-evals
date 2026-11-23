@@ -1,22 +1,47 @@
-import type { TranscriptEvent } from "./harnesses/shared.js";
+import type {
+  Harness,
+  Parsed,
+  ToolCall,
+  TranscriptEvent,
+} from "./harnesses/shared.js";
 
 /**
- * Reads what a question call asks. Claude Code's `AskUserQuestion` takes `{ questions: [{ question, ... }] }`; a call of
- * that shape gives its question texts, one to a line. The adapters of other harnesses have no question tool yet, so for
- * any other input the text is the whole input as JSON.
+ * Reads what a question call asks.
  * @param call - A call of kind `question`.
  * @param call.input - The call's input, as the harness gave it.
- * @returns The question text that `asked_user` and a reply turn's `whenAsked` match against.
+ * @param call.question - What its adapter read the call to ask, when it read anything.
+ * @returns The question text that `asked_user` and a reply turn's `whenAsked` match against: what the adapter's
+ *   `questionText` read, else the whole input as JSON.
  */
-export function questionText(call: { input?: unknown }): string {
-  const { questions } = Object(call.input) as { questions?: unknown };
-  const texts = Array.isArray(questions)
-    ? questions.flatMap((one: unknown) => {
-        const { question } = Object(one) as { question?: unknown };
-        return typeof question === "string" ? [question] : [];
-      })
-    : [];
-  return texts.length > 0 ? texts.join("\n") : JSON.stringify(call.input);
+export const questionText = (call: {
+  input?: unknown;
+  question?: string;
+}): string => call.question ?? JSON.stringify(call.input);
+
+/**
+ * Gives each question call of a parsed stream the text its adapter reads from it.
+ * @param harness - The adapter, whose `questionText` knows the shape of its question tool's input.
+ * @param parsed - What the adapter read.
+ * @returns `parsed` itself for an adapter with no `questionText`; else the transcript and the calls with `question` set
+ *   on each question call whose input the adapter could read.
+ */
+export function withQuestions(
+  harness: Pick<Harness, "questionText">,
+  parsed: Parsed,
+): Parsed {
+  const read = harness.questionText;
+  if (read === undefined) return parsed;
+  const asked = <T extends { kind?: string; input?: unknown }>(one: T): T => {
+    const question = one.kind === "question" ? read(one.input) : null;
+    return question === null ? one : { ...one, question };
+  };
+  return {
+    ...parsed,
+    transcript: parsed.transcript.map((one) =>
+      one.type === "tool_call" ? asked(one) : one,
+    ),
+    toolCalls: parsed.toolCalls.map((one: ToolCall) => asked(one)),
+  };
 }
 
 /**

@@ -1,8 +1,7 @@
+import { isObject } from "./scope.js";
 /** One field of a run record that the report, the command line or a resume reads, and what it may hold. */
 type Shape = (value: unknown) => boolean;
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 const text: Shape = (value) => typeof value === "string";
 const count: Shape = (value) => typeof value === "number";
 const flag: Shape = (value) => typeof value === "boolean";

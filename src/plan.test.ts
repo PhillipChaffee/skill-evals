@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { median } from "./commands/plan-estimate.js";
+import { median } from "./stats.js";
 import { plugin } from "./testing/plant.js";
 import { gitRepo, sandbox } from "./testing/sandbox.js";
 import { SUMMARY, plantSuite, startsOf } from "./testing/suite.js";

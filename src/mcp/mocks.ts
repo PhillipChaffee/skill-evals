@@ -1,20 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { UsageError } from "../scope.js";
+import { UsageError, isObject } from "../scope.js";
 import type { McpResponse, McpSource, McpTool } from "./types.js";
 import { MCP_NAME } from "./types.js";
 
 const JSON_FILE = ".json";
 const TOOL_KEYS = ["description", "inputSchema", "responses"];
 const RESPONSE_KEYS = ["when", "text", "isError"];
-
-/**
- * Tells whether a value is a plain object.
- * @param value - Any parsed JSON value.
- * @returns True for an object that is neither null nor a list.
- */
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**
  * Checks that an object has no key besides the known ones.

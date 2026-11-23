@@ -3,12 +3,13 @@ import { checkChanges } from "./diff-checks.js";
 import { labelPairs, subjectWarnings, warningsOf } from "./diff-warnings.js";
 import type { Results } from "./evaluate.js";
 import type { RunRecord } from "./run.js";
+import { costOf } from "./run-cost.js";
 
 /** What one side of a diff says of a case. */
 export interface SideCase {
   score: number | null;
   runs: { valid: number; planned: number };
-  /** The cost of the case's runs, judge and decision included; null when none reported one. */
+  /** The cost of the case's runs, judge, decision and failed attempts included; null when none reported one. */
   costUsd: number | null;
   durationMs: number;
 }
@@ -47,20 +48,6 @@ export interface Totals {
   runs: number;
   costUsd: number | null;
   durationMs: number;
-}
-
-/**
- * Adds up what runs cost.
- * @param records - Run records.
- * @returns The cost of each run with its judge and decision calls; null when no run reported one.
- */
-function costOf(records: RunRecord[]): number | null {
-  const costs = records.flatMap((record) =>
-    [record.costUsd, record.judge?.costUsd, record.decision?.costUsd].filter(
-      (cost) => cost !== null && cost !== undefined,
-    ),
-  );
-  return costs.length === 0 ? null : costs.reduce((sum, cost) => sum + cost, 0);
 }
 
 /**

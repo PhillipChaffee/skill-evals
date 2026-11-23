@@ -17,6 +17,7 @@ import type { History, HistoryMode } from "./history-types.js";
 import { watchDirs } from "./isolate.js";
 import type { Confinement } from "./os-sandbox.js";
 import { confine } from "./os-sandbox.js";
+import { withQuestions } from "./question.js";
 import { messageOf } from "./scope.js";
 import type { ChangedFiles, Snapshot } from "./snapshot.js";
 import { mergeChanges, snapshot } from "./snapshot.js";
@@ -206,6 +207,7 @@ const environmentOf =
       base: process.env,
       harnessEnv,
       authEnv: session.harness.authEnv,
+      scrubEnv: session.harness.scrubEnv,
       pass: session.pass ?? [],
       withhold: session.withhold ?? [],
       needs: ["node", session.bin],
@@ -399,7 +401,7 @@ export async function attempt(
  */
 export function parseStream(harness: Harness, stdout: string): Parsed {
   try {
-    const parsed = harness.parse(stdout);
+    const parsed = withQuestions(harness, harness.parse(stdout));
     return { ...parsed, toolCalls: withIndexes(parsed.toolCalls) };
   } catch (error) {
     return {

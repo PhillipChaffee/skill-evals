@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { matches } from "./matchers.js";
-import { mcpToolOf } from "./mcp/names.js";
+import { mcpToolOf } from "./harnesses/claude-code-mcp.js";
 import type { AgentRef, ToolCall } from "./harnesses/shared.js";
 import type { Given } from "./testing/outcome.js";
 import { bareOutcome, scored } from "./testing/outcome.js";

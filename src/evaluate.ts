@@ -28,6 +28,7 @@ import { openStore, requireFresh } from "./store.js";
 import type { CommonSet, SuiteScore } from "./score.js";
 import type { SelectionOptions } from "./select.js";
 import { outputDir } from "./output-dir.js";
+import { warnNoiseSubject } from "./noise-subject.js";
 import type { Subject, SubjectSummary } from "./subject.js";
 import type { Partition } from "./applicability.js";
 import type { NotRun } from "./not-run.js";
@@ -344,6 +345,7 @@ async function runSuite(
       "skill-evals: warning: --resume without --model: reused runs may come from a different default model",
     );
   }
+  warnNoiseSubject(context.delta.noise, subjects);
   const release = lockDir(outDir);
   try {
     return {

@@ -2,6 +2,7 @@ import type { Check } from "../checks/index.js";
 import { isDecision, isJudged } from "../checks/index.js";
 import type { RunRecord, Usage } from "../run.js";
 import { formatScore } from "../score.js";
+import { median } from "../stats.js";
 
 const MS_PER_SECOND = 1000;
 const COST_DECIMALS = 4;
@@ -37,19 +38,12 @@ export const METRICS: Metric[] = [
 ];
 
 /**
- * Finds the middle of a set of numbers.
+ * Finds the middle of the values of a metric.
  * @param values - The numbers, in any order.
- * @returns The middle value, the mean of the two middle values for an even count, or null for no values.
+ * @returns Their median; null for no values.
  */
-export function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((x, y) => x - y);
-  const middle = sorted.slice(
-    (sorted.length - 1) >> 1,
-    (sorted.length >> 1) + 1,
-  );
-  return middle.reduce((sum, value) => sum + value, 0) / middle.length;
-}
+export const medianOf = (values: number[]): number | null =>
+  values.length === 0 ? null : median(values);
 
 /**
  * Shows one value for each subject, and the change from the first to the second when there are two.

@@ -1,5 +1,5 @@
 import { GENERIC_AGENT, MAIN_AGENT, normalizeAgent } from "../agents.js";
-import { mcpToolOf } from "../mcp/names.js";
+import { mcpToolOf } from "./claude-code-mcp.js";
 import type { EventInput } from "../transcript.js";
 import {
   callPart,

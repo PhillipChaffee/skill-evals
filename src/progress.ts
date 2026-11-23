@@ -1,5 +1,5 @@
+import { median } from "./stats.js";
 const MS_PER_SECOND = 1000;
-const HALF = 2;
 const DIGITS = 2;
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -18,19 +18,6 @@ export interface Progress {
   unreported: number;
   /** The time left in milliseconds; null until a run of this command has finished. */
   etaMs: number | null;
-}
-
-/**
- * Finds the middle of some durations.
- * @param values - At least one number.
- * @returns The median; the mean of the two middle ones for an even count.
- */
-export function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / HALF);
-  return sorted.length % HALF === 1
-    ? (sorted[middle] as number)
-    : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / HALF;
 }
 
 /**
