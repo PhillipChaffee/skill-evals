@@ -1,5 +1,6 @@
 import { allChecks } from "../case-checks.js";
 import fs from "node:fs";
+import { dirsOf, rootsOf } from "../case-roots.js";
 import { HARNESSES, findBin } from "../harnesses/index.js";
 import type { Project } from "../project.js";
 import { withConfig } from "../project.js";
@@ -21,8 +22,9 @@ export function list(given: Options, project: Project): number {
     bin: findBin(harness),
   }));
   const first = installed.find((entry) => entry.bin);
-  const chosen = fs.existsSync(options.cases)
-    ? loadSelection(options.cases, selectionOf(options), {
+  const roots = rootsOf(options);
+  const chosen = roots.every(({ dir }) => fs.existsSync(dir))
+    ? loadSelection(roots, selectionOf(options), {
         lenient: options.lenient ?? false,
       })
     : null;
@@ -46,7 +48,7 @@ export function list(given: Options, project: Project): number {
       ),
       `Default harness: ${first ? first.harness.id : "none installed"}`,
       "",
-      `Cases in ${options.cases}:`,
+      `Cases in ${dirsOf(roots).join(", ")}:`,
       ...cases,
     ].join("\n"),
   );

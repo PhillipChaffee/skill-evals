@@ -235,7 +235,7 @@ ${table(
   ]),
 )}
 
-Every key is optional. ${code("cases")} resolves against the project root. ${code("harness")} narrows ${code("check")} too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
+Every key is optional. ${code("cases")} and ${code("heldoutCases")} take one path or a list of paths, and resolve against the project root. ${code("harness")} narrows ${code("check")} too. An unknown key, a value of the wrong type, or invalid JSON is an error with exit code 2.
 
 A file that sets every key. It shows each key's type, and is not a file to run with: ${code("maxCost")} is a usage error when a selected case has a decision check, which reports no cost, and when the judge is the API (${code("judgeApi")}). The decision model alone is fine: it is only used when a case has a decision check.
 

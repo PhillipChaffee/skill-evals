@@ -6,6 +6,8 @@ import type { Summary } from "../summary.js";
 import { summaryOf } from "../summary.js";
 import type { CaseRow } from "./rows.js";
 import { caseRows } from "./rows.js";
+import type { TriggerRow } from "./trigger.js";
+import { triggerRows } from "./trigger.js";
 
 const INDENT = "\t";
 
@@ -31,6 +33,12 @@ export interface JsonReport {
     } | null;
     footnote: string;
   } | null;
+  /**
+   * One entry for each harness and target skill: recall on the development and the held-out trigger cases, their gap
+   * (development minus held-out), and the false-trigger rate. Each cell holds its value, null without a valid run, and
+   * the number of runs behind it. Empty when no case names a target skill.
+   */
+  trigger: TriggerRow[];
   /**
    * One entry for each harness, subject and case. `delta`, `low`, `high`, `verdict` and `discrimination` are the
    * case's, so the entries of A and of B hold the same values; all are null with one subject.
@@ -90,6 +98,7 @@ function jsonReport(evaluation: Evaluation): JsonReport {
     schemaVersion: 1,
     summary: summaryOf(evaluation, evaluation.exit),
     method: methodOf(evaluation),
+    trigger: triggerRows(evaluation),
     cases: caseRows(evaluation).map(
       ({
         harness,

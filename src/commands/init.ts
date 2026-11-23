@@ -129,7 +129,10 @@ export function init(
   }
   const problem = idProblem(id);
   if (problem !== null) throw new UsageError(problem);
-  const { cases } = withConfig(project, options);
+  const [cases = path.join(project.root, "evals", "cases")] = withConfig(
+    project,
+    options,
+  ).cases;
   const above = caseAbove(cases, id);
   if (above !== null) {
     throw new UsageError(

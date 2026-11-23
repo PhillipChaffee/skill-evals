@@ -8,27 +8,29 @@ import { UsageError } from "./scope.js";
 export interface Exclusions {
   /** Globs relative to the root of the subject, from the config key `subjectExclude`. */
   globs: string[];
-  /** The cases directory. It may not be, or contain, a subject. Null when no command has one. */
-  cases: string | null;
+  /** The cases directories, held-out ones included. None may be, or contain, a subject. Empty when no command has one. */
+  cases: string[];
   /** The output directory. It may not be a subject. Null when it is a temp directory, which is never inside one. */
   out: string | null;
 }
 
 /** No exclusion beyond the built-in ones. */
-export const NO_EXCLUSIONS: Exclusions = { globs: [], cases: null, out: null };
+export const NO_EXCLUSIONS: Exclusions = { globs: [], cases: [], out: null };
 
 /**
  * Gathers what the export of every subject of a command leaves out.
  * @param options - The command's options after the config file was applied.
- * @param options.cases - The absolute path of the cases directory.
+ * @param options.cases - The absolute paths of the cases directories.
+ * @param options.heldoutCases - The absolute paths of the held-out cases directories.
  * @param options.subjectExclude - The config key of the same name.
  * @param options.outDir - The output directory as the user gave it; absent for a temp directory.
  * @param cwd - What a relative output directory resolves against.
- * @returns The globs of the config, the cases directory, and the output directory.
+ * @returns The globs of the config, every cases directory, and the output directory.
  */
 export function exclusionsOf(
   options: {
-    cases: string;
+    cases: string[];
+    heldoutCases?: string[];
     subjectExclude?: string[] | undefined;
     outDir?: string | undefined;
   },
@@ -36,7 +38,7 @@ export function exclusionsOf(
 ): Exclusions {
   return {
     globs: options.subjectExclude ?? [],
-    cases: options.cases,
+    cases: [...options.cases, ...(options.heldoutCases ?? [])],
     out: options.outDir ? path.resolve(cwd, options.outDir) : null,
   };
 }
@@ -89,7 +91,7 @@ function placeOf(root: string, dir: string): { place: Place; glob: string } {
  * @param named.project - The project root, whose config file is never part of a subject.
  * @param left - What the command leaves out.
  * @returns Globs relative to the subject's root.
- * @throws {UsageError} When the cases directory is or contains the subject, or the output directory is the subject.
+ * @throws {UsageError} When a cases directory is or contains the subject, or the output directory is the subject.
  */
 export function globsFor(
   named: { flag: string; root: string; project: string },
@@ -100,11 +102,11 @@ export function globsFor(
     const { place, glob } = placeOf(root, dir);
     return place === "inside" ? [glob] : [];
   };
-  if (left.cases !== null) {
-    const { place } = placeOf(root, left.cases);
+  for (const dir of left.cases) {
+    const { place } = placeOf(root, dir);
     if (place === "same" || place === "contains") {
       throw new UsageError(
-        `${flag}: the cases directory ${left.cases} is, or contains, the subject directory ${root}, so the agent would read every case; keep the cases outside the subject`,
+        `${flag}: the cases directory ${dir} is, or contains, the subject directory ${root}, so the agent would read every case; keep the cases outside the subject`,
       );
     }
   }
@@ -116,7 +118,7 @@ export function globsFor(
   return [
     ...left.globs,
     ...inside(path.join(named.project, CONFIG_FILE)),
-    ...(left.cases === null ? [] : inside(left.cases)),
+    ...left.cases.flatMap(inside),
     ...(left.out === null ? [] : inside(left.out)),
   ];
 }

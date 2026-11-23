@@ -90,21 +90,23 @@ test("the config page has every key with its flag, and its example file is accep
   expect(config).toContain("| `reps` | number | `--reps <n>` |");
   expect(Object.keys(EXAMPLE_CONFIG)).toEqual(Object.keys(CONFIG_KEYS));
   for (const [key, type] of Object.entries(CONFIG_KEYS))
-    expect(
+    expect(type.split(" | ")).toContain(
       Array.isArray(EXAMPLE_CONFIG[key])
         ? "string[]"
         : typeof EXAMPLE_CONFIG[key],
-    ).toBe(type);
+    );
 
   const box = sandbox();
   box.write("skill-evals.config.json", EXAMPLE_CONFIG);
+  box.write("evals/heldout/_notes.md", "no cases yet\n");
   box.write("evals/cases/hello/prompt.md", "say hello\n");
   box.write("evals/cases/hello/case.json", {
     checks: [{ type: "output_contains", text: "hello" }],
   });
   const listed = await box.cli(["list"]);
   expect(listed.status, listed.stderr).toBe(0);
-  expect(listed.stdout).toContain("- hello: 1 checks");
+  // The example config names two roots, so the ids start with the name of their directory.
+  expect(listed.stdout).toContain("- cases/hello: 1 checks");
 
   box.write("skill-evals.config.json", { ...EXAMPLE_CONFIG, colour: "red" });
   expect((await box.cli(["list"])).status).toBe(USAGE_ERROR);

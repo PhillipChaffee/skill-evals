@@ -12,6 +12,7 @@ import {
   verdictCell,
 } from "./delta.js";
 import { caseRows } from "./rows.js";
+import { triggerTable } from "./trigger.js";
 import { escapeXml } from "./xml.js";
 
 const STYLE = `body{font:14px/1.5 system-ui,sans-serif;margin:2rem auto;max-width:60rem;padding:0 1rem;color:#1b1b1b;background:#fff}
@@ -176,6 +177,23 @@ ${table(["Harness", "Subject", "Case", "Score", ...verdict(["Verdict"]), "Runs",
 }
 
 /**
+ * Writes the trigger table: for each target skill, recall on the development and the held-out prompts, the gap, and the
+ * false-trigger rate.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The HTML of the section; nothing when no case names a target.
+ */
+function triggerHtml(evaluation: Evaluation): string {
+  const found = triggerTable(evaluation);
+  if (found === null) return "";
+  return `<h2>Trigger recall by target skill</h2>
+${table(
+  found.head.map((title) => title.charAt(0).toUpperCase() + title.slice(1)),
+  found.body.map((cells) => ({ cells })),
+)}
+`;
+}
+
+/**
  * Renders an evaluation as one self-contained HTML page: inline style, tables only, no script and no reference to
  * anything else. Every value is escaped.
  * @param evaluation - What `evaluate` returned.
@@ -201,7 +219,7 @@ export function renderHtml(evaluation: Evaluation): string {
 <ul>${subjects}</ul>
 <p>Exit code ${String(evaluation.exit)}. Output: ${e(evaluation.outDir)}</p>${stopped}
 ${tablesHtml(evaluation)}
-${comparisonHtml(evaluation)}${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
+${triggerHtml(evaluation)}${comparisonHtml(evaluation)}${bars === "" ? "" : `<h2>Below the pass bar</h2><ul>${bars}</ul>`}
 </body></html>
 `;
 }

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { dirsOf, rootsOf } from "./case-roots.js";
 import { CONFIG_FILE } from "./project.js";
 import type { CaseMeta } from "./case-meta.js";
 import type { Comparison, SubjectComparison } from "./comparison.js";
@@ -42,8 +43,10 @@ export interface EvaluateOptions extends SelectionOptions {
   barSubject?: string | undefined;
   /** Comma-separated harness ids, or "all". Default: the first installed harness. */
   harness?: string | undefined;
-  /** The directory that holds the cases. Default: `evals/cases` in the project. */
-  cases?: string | undefined;
+  /** The directories that hold the cases, one path or a list. With more than one, ids start with the directory's name. Default: `evals/cases` in the project. */
+  cases?: string | string[] | undefined;
+  /** Directories whose every case is held out: they load only with `heldout`. */
+  heldoutCases?: string | string[] | undefined;
   /** Names of variables the harness gets besides the allowlist. Default: `env` of the config file. */
   env?: string[] | undefined;
   /** Globs, relative to the subject, of what a run never gets. Default: `subjectExclude` of the config file. */
@@ -86,10 +89,11 @@ export interface EvaluateOptions extends SelectionOptions {
   sandbox?: boolean | undefined;
   /** `--yes`: run a cases directory that was not approved, without asking. `evaluate` itself never asks; the command line does, through `approve`. */
   yes?: boolean | undefined;
-  /** Where the cases directory is asked about before a run. Called once, after the options are checked and before any harness starts; a rejection ends the command. `--yes` is handled by the caller. */
+  /** Where the cases directories are asked about before a run. Called once, after the options are checked and before any harness starts; a rejection ends the command. `--yes` is handled by the caller. */
   approve?:
     | ((what: {
-        casesDir: string;
+        casesDirs: string[];
+        heldoutDirs: string[];
         count: number;
         configFile: string;
       }) => Promise<void>)
@@ -360,8 +364,10 @@ export async function evaluate(given: EvaluateOptions): Promise<Evaluation> {
   const began = Date.now();
   const { onRun, onFinal, approve, ...rest } = given;
   const prepared = prepare(rest);
+  const roots = rootsOf(prepared.context.options);
   await approve?.({
-    casesDir: prepared.context.options.cases,
+    casesDirs: dirsOf(roots),
+    heldoutDirs: dirsOf(roots.filter(({ heldout }) => heldout)),
     count: prepared.context.cases.length,
     configFile: path.join(prepared.context.projectRoot, CONFIG_FILE),
   });

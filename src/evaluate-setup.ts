@@ -1,5 +1,7 @@
 import { connect } from "./baseten.js";
 import type { Case } from "./cases.js";
+import type { RootOptions } from "./case-roots.js";
+import { rootsOf } from "./case-roots.js";
 import type { EvaluateOptions } from "./evaluate.js";
 import type { SelectionOptions } from "./select.js";
 import { loadSelection, selectionOf } from "./select.js";
@@ -192,9 +194,10 @@ export function labelled(
  */
 export const casesOf = (
   options: SelectionOptions &
-    Pick<EvaluateOptions, "lenient" | "onWarning"> & { cases: string },
+    Pick<EvaluateOptions, "lenient" | "onWarning"> &
+    RootOptions,
 ): Case[] =>
-  loadSelection(options.cases, selectionOf(options), {
+  loadSelection(rootsOf(options), selectionOf(options), {
     lenient: options.lenient ?? false,
     ...(options.onWarning && { onWarning: options.onWarning }),
   });

@@ -223,7 +223,7 @@ test("the revision is the content hash of the export for a directory and a ref a
   const revisionOf = (spec: string, globs: string[] = []): string => {
     const subject = resolveSubject("subject", spec, {
       ...project,
-      left: { globs, cases: null, out: null },
+      left: { globs, cases: [], out: null },
     });
     onTestFinished(subject.dispose);
     return subject.revision;

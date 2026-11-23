@@ -1,6 +1,7 @@
 import { readDecimal } from "./decimal.js";
 import type { Options } from "./usage.js";
 import { SAFETY_FLAGS } from "./flags-safety.js";
+import { SELECT_FLAGS } from "./flags-select.js";
 import { SUBJECT_FLAGS } from "./flags-subjects.js";
 
 /** One flag: how its text becomes an option, and what the help text and the docs say about it. */
@@ -33,49 +34,7 @@ export const FLAGS = {
     default: "the first installed one",
     defaultIn: { check: "all" },
   },
-  case: {
-    as: "caseGlob",
-    kind: "list",
-    value: "globs",
-    description:
-      "Which case ids to run. A glob: * stays within one directory, ** crosses directories, ? is one character, {a,b} is either. Repeat the flag or separate globs with commas.",
-    default: "every case",
-  },
-  "not-case": {
-    as: "notCase",
-    kind: "list",
-    value: "globs",
-    description: "Case ids to leave out, as globs like those of --case.",
-    default: "none",
-  },
-  tag: {
-    kind: "list",
-    value: "tags",
-    description:
-      "Run the cases that have any of these tags. Repeat the flag or separate tags with commas.",
-    default: "no tag filter",
-  },
-  "tag-all": {
-    as: "tagAll",
-    kind: "list",
-    value: "tags",
-    description: "Run the cases that have all of these tags.",
-    default: "no tag filter",
-  },
-  "not-tag": {
-    as: "notTag",
-    kind: "list",
-    value: "tags",
-    description: "Leave out the cases that have any of these tags.",
-    default: "none",
-  },
-  heldout: {
-    kind: "switch",
-    value: "",
-    description:
-      "Also run the held-out variants, the ones a case marks with heldout: true. Without it they are left out.",
-    default: "off",
-  },
+  ...SELECT_FLAGS,
   json: {
     kind: "switch",
     value: "",
@@ -91,9 +50,19 @@ export const FLAGS = {
     default: "off",
   },
   cases: {
-    value: "dir",
-    description: "The directory that holds the cases.",
+    kind: "list",
+    value: "dirs",
+    description:
+      "The directories that hold the cases. Repeat the flag or separate directories with commas. With more than one, each case id starts with the name of its directory and a slash, and two directories may not have the same name.",
     default: "evals/cases in the project",
+  },
+  "heldout-cases": {
+    as: "heldoutCases",
+    kind: "list",
+    value: "dirs",
+    description:
+      "Directories whose every case is held out: its cases load only with --heldout, and the agent never sees the directory. Repeat the flag or separate directories with commas. When more than one directory is in use in all, ids are prefixed as for --cases.",
+    default: "none",
   },
   reps: {
     read: readDecimal,

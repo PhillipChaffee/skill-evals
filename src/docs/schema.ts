@@ -4,7 +4,12 @@ import { FIELDS, WEIGHT } from "../checks/fields.js";
 import { preconditionTypes } from "../case-preconditions.js";
 import { CHECKS } from "../checks/index.js";
 import { ENV_NAME_PATTERN } from "../env.js";
-import { CONFIG_FILE, CONFIG_KEYS, MAX_SEED } from "../project.js";
+import {
+  CONFIG_FILE,
+  CONFIG_KEYS,
+  MAX_SEED,
+  TEXT_OR_LIST,
+} from "../project.js";
 import { FORMATS } from "../report/formats.js";
 import { SCHEMA_KEY } from "../schema-key.js";
 import { LIFECYCLE_EVENTS, TURN_KEYS } from "../turn-spec.js";
@@ -261,6 +266,12 @@ export function configSchema(): Schema {
     number: { type: "number" },
     boolean: { type: "boolean" },
     "string[]": { type: "array", items: { type: "string", minLength: 1 } },
+    [TEXT_OR_LIST]: {
+      anyOf: [
+        { type: "string", minLength: 1 },
+        { type: "array", items: { type: "string", minLength: 1 } },
+      ],
+    },
   };
   return {
     $schema: DRAFT,

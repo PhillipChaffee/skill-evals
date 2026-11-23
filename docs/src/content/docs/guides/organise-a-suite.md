@@ -152,4 +152,6 @@ skill-evals run                 # tuning: the dev variants only
 skill-evals run --heldout       # the check you do not tune against
 ```
 
+To hold out a whole directory of cases, and to read how far a skill does worse on held-out prompts, see [Held-out prompts](held-out.md).
+
 A case whose variants are all held out is neither listed nor run without `--heldout`. If you select only such a case, the command fails with the usual "no case matches" error, and says that held-out variants need the flag. The coverage table counts the held-out variants that are not guards in its `held-out` column. A held-out variant of a `guard: true` case counts under `guards`, because a guard is a guard first, and every other variant that is not a guard counts in `dev`.

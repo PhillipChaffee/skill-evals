@@ -25,7 +25,7 @@ export function confinementOf(
     | "harness"
     | "bin"
     | "projectRoot"
-    | "casesDir"
+    | "casesDirs"
     | "pass"
     | "sandboxExpose"
     | "outDir"

@@ -7,6 +7,7 @@ import type { ExitCode } from "../exit-codes.js";
 import type { Format } from "../report/formats.js";
 import { lockDir } from "../lock.js";
 import type { Project } from "../project.js";
+import { rootsOf } from "../case-roots.js";
 import { withConfig } from "../project.js";
 import { planRejudge } from "../rejudge-plan.js";
 import { rejudged } from "../rejudge-results.js";
@@ -94,7 +95,7 @@ async function rejudgeIn(
   const { options } = given;
   const source = readSource(dir);
   const all = loadSelection(
-    options.cases,
+    rootsOf(options),
     { heldout: true },
     { lenient: options.lenient ?? source.results.meta.lenient ?? false },
   );

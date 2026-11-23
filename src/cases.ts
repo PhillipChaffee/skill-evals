@@ -365,13 +365,17 @@ export interface LoadOptions {
   onWarning?: (text: string, caseId: string) => void;
   /** Collecting mode: hears of a fault (case id or directory, message), skips that case and goes on. Absent: throws. */
   onError?: (caseId: string, message: string) => void;
+  /** Starts every id with this name and `/`; the root's basename, when more than one root is loaded. Default: none. */
+  prefix?: string | null | undefined;
+  /** Hold out every case of the directory, as a root from `--heldout-cases` does. Default: false. */
+  heldout?: boolean | undefined;
 }
 
 /**
  * Loads the cases whose ids a test accepts. A case that the test rejects is never read, so a fault in it is no error.
  * @param casesDir - The directory to search at any depth.
  * @param keep - Decides from a case's id and directory whether to load it.
- * @param options - How to treat unknown keys.
+ * @param options - How to treat unknown keys, how to name the ids, and whether to hold every case out.
  * @returns The cases, sorted by id.
  * @throws {UsageError} When the directory cannot be read, or a case is invalid.
  */
@@ -385,7 +389,12 @@ export function loadWhere(
     ((text: string) => {
       console.error(`skill-evals: warning: ${text}`);
     });
-  return discover(casesDir, [], options.onError)
+  const held = options.heldout === true;
+  return discover(
+    casesDir,
+    options.prefix ? [options.prefix] : [],
+    options.onError,
+  )
     .filter(({ id, dir }) => keep(id, dir))
     .flatMap((found) => {
       const mode: Mode = {
@@ -395,7 +404,9 @@ export function loadWhere(
         },
       };
       try {
-        return loadCase(found, mode, casesDir);
+        return loadCase(found, mode, casesDir).map((one) =>
+          held ? { ...one, heldout: true } : one,
+        );
       } catch (error) {
         if (!options.onError || !(error instanceof UsageError)) throw error;
         options.onError(found.id, error.message);

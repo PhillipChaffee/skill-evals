@@ -145,7 +145,7 @@ test("a reply turn with nothing that checks the question is a warning", () => {
   };
   const lint = (cases: ReturnType<typeof planted>) =>
     LINTS.flatMap((one) =>
-      one(cases, { subject: null, casesDir: "c", harnesses: [] } as never),
+      one(cases, { subject: null, casesDirs: ["c"], harnesses: [] } as never),
     ).filter(({ text }) => text.includes("is a reply"));
   const any = { type: "output_matches", pattern: "." };
   const bare = planted({

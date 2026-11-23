@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
+import { listOf } from "./case-roots.js";
 import { UsageError } from "./scope.js";
 import { canonical, hashTree, sha256 } from "./tree-hash.js";
 
@@ -47,23 +48,28 @@ function textOf(file: string): string | null {
 }
 
 /**
- * Hashes a cases directory as the approval knows it.
- * @param casesDir - The directory.
+ * Hashes cases directories as the approval knows them.
+ * @param casesDirs - One directory, or every directory that holds cases, held-out ones included.
  * @param configFile - The project's config file, whose `env`, `judgeUrl` and `rules` change what a run does; absent: none.
- * @returns The sha256 of the directory's real path and content and the config file's content, so that moving it or
- *   changing a file makes it a new directory.
+ * @returns The sha256 of the directories' real paths and content and the config file's content, so that moving one
+ *   or changing a file makes it a new set. For one directory the digest is what it was before there could be more.
  */
 export const digestOf = (
-  casesDir: string,
+  casesDirs: string | string[],
   configFile?: string | null,
 ): string => {
   const config = configFile ? textOf(configFile) : null;
+  const dirs = listOf(casesDirs);
+  const [only] = dirs;
+  const where =
+    dirs.length === 1 && only !== undefined
+      ? { path: fs.realpathSync(only), content: hashTree(only) }
+      : {
+          paths: dirs.map((dir) => fs.realpathSync(dir)),
+          contents: dirs.map((dir) => hashTree(dir)),
+        };
   return sha256(
-    canonical({
-      path: fs.realpathSync(casesDir),
-      content: hashTree(casesDir),
-      config: config === null ? null : sha256(config),
-    }),
+    canonical({ ...where, config: config === null ? null : sha256(config) }),
   );
 };
 
@@ -110,8 +116,9 @@ export function processTerminal(
 /**
  * Makes sure that someone has agreed to run the prompts of a cases directory. The prompts run unattended with full
  * permissions, so a directory that this machine has not seen is asked about first.
- * @param what - The cases directory and how many of its cases are about to run.
- * @param what.casesDir - The directory.
+ * @param what - The cases directories and how many of their cases are about to run.
+ * @param what.casesDirs - Every directory that holds cases, held-out ones included.
+ * @param what.heldoutDirs - The ones that are held out, for the command that shows their prompts. Default: none.
  * @param what.count - The number of selected cases.
  * @param what.configFile - The project's config file, which is part of what is approved.
  * @param how - How to ask.
@@ -121,7 +128,12 @@ export function processTerminal(
  * @throws {UsageError} When the directory is new or changed and there is no terminal and no `--yes`, or the answer is no.
  */
 export async function requireApproved(
-  what: { casesDir: string; count: number; configFile?: string | null },
+  what: {
+    casesDirs: string[];
+    heldoutDirs?: string[] | undefined;
+    count: number;
+    configFile?: string | null;
+  },
   how: {
     yes?: boolean | undefined;
     terminal?: Terminal | undefined;
@@ -130,24 +142,33 @@ export async function requireApproved(
 ): Promise<void> {
   if (how.yes) return;
   const file = path.join(stateDir(how.env), APPROVED_FILE);
-  const digest = digestOf(what.casesDir, what.configFile);
+  const digest = digestOf(what.casesDirs, what.configFile);
+  const named = what.casesDirs.join(", ");
+  const held = what.heldoutDirs ?? [];
+  const show = `skill-evals list ${[
+    ...what.casesDirs
+      .filter((dir) => !held.includes(dir))
+      .map((dir) => `--cases ${dir}`),
+    ...held.map((dir) => `--heldout-cases ${dir}`),
+    ...(held.length > 0 ? ["--heldout"] : []),
+  ].join(" ")} --show-prompts`;
   if (Object.hasOwn(approvals(file), digest)) return;
   const terminal = how.terminal ?? processTerminal();
   if (!terminal.interactive) {
     throw new UsageError(
-      `${what.casesDir} has not been approved: its prompts run unattended with full permissions. Read them with "skill-evals list --cases ${what.casesDir} --show-prompts", then run again with --yes`,
+      `${named} has not been approved: its prompts run unattended with full permissions. Read them with "${show}", then run again with --yes`,
     );
   }
   const cases = `${String(what.count)} ${what.count === 1 ? "case" : "cases"}`;
   const answer = await terminal.ask(
-    `${what.casesDir} has not been approved (see them with "skill-evals list --cases ${what.casesDir} --show-prompts"). Run these ${cases}? [y/N] `,
+    `${named} has not been approved (see them with "${show}"). Run these ${cases}? [y/N] `,
   );
   if (!YES.test(answer)) throw new UsageError("not approved; nothing was run");
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
       file,
-      `${JSON.stringify({ ...approvals(file), [digest]: fs.realpathSync(what.casesDir) }, null, INDENT)}\n`,
+      `${JSON.stringify({ ...approvals(file), [digest]: what.casesDirs.map((dir) => fs.realpathSync(dir)).join(", ") }, null, INDENT)}\n`,
     );
   } catch (error) {
     console.error(

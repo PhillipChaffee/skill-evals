@@ -6,6 +6,7 @@ import { requireEnvNames } from "./env.js";
 import { reportFormats } from "./report/formats.js";
 import { globToRegExp } from "./glob.js";
 import { SCHEMA_KEY, checkSchemaKey } from "./schema-key.js";
+import { listOf } from "./case-roots.js";
 import { UsageError, messageOf } from "./scope.js";
 
 /** The project a command works on. Relative paths on a command line resolve against cwd. */
@@ -45,12 +46,15 @@ export const isSeed = (value: number): boolean =>
   Number.isInteger(value) && value >= 1 && value <= MAX_SEED;
 
 export const CONFIG_FILE = "skill-evals.config.json";
+/** The type of a config key that takes one text or a list of texts. */
+export const TEXT_OR_LIST = "string | string[]";
 // Config key -> the type of its value. Each key is the default of the option with the same name.
 export const CONFIG_KEYS: Record<
   string,
-  "string" | "number" | "boolean" | "string[]"
+  "string" | "number" | "boolean" | "string[]" | typeof TEXT_OR_LIST
 > = {
-  cases: "string",
+  cases: TEXT_OR_LIST,
+  heldoutCases: TEXT_OR_LIST,
   harness: "string",
   reps: "number",
   jobs: "number",
@@ -90,7 +94,10 @@ export const CONFIG_KEYS: Record<
 
 /** The project's optional config file. */
 export interface Config {
-  cases?: string;
+  /** The directories that hold the cases, one path or a list. Default: `evals/cases`. */
+  cases?: string | string[];
+  /** The directories whose every case is held out, one path or a list. */
+  heldoutCases?: string | string[];
   harness?: string;
   reps?: number;
   /** How many runs may be in flight at once, a positive integer. Default: 1. */
@@ -193,6 +200,48 @@ function checkPaths(file: string, key: string, list: string[]): void {
 }
 
 /**
+ * Checks the value of a key that takes a single text, a number or a boolean.
+ * @param file - The config file, for the message.
+ * @param key - A known key.
+ * @param value - What the file holds.
+ * @throws {UsageError} When the value has the wrong type or is out of its range.
+ */
+function checkScalar(file: string, key: string, value: unknown): void {
+  if (typeof value !== CONFIG_KEYS[key]) {
+    throw new UsageError(
+      `${file}: "${key}" must be a ${String(CONFIG_KEYS[key])}`,
+    );
+  }
+  checkRange(file, key, value as number);
+  if (
+    (key === "maxJudgedWeightShare" || key === "maxInvalid") &&
+    !((value as number) >= 0 && (value as number) <= 1)
+  ) {
+    throw new UsageError(`${file}: "${key}" must be a number from 0 to 1`);
+  }
+}
+
+/**
+ * Checks the entries of a list that the key's meaning gives rules to.
+ * @param file - The config file, for the message.
+ * @param key - A list key.
+ * @param list - The entries, which are all texts.
+ * @throws {UsageError} When an entry breaks the key's rule.
+ */
+function checkEntries(file: string, key: string, list: string[]): void {
+  const at = `${file}: "${key}"`;
+  if (key === "subjectExclude" || key === "sandboxExpose") {
+    checkPaths(file, key, list);
+  } else if (key === "report") {
+    reportFormats({ report: list }, at);
+  } else if (key === "blindingWords") {
+    requireBlindingWords(list, at);
+  } else if (key !== "cases" && key !== "heldoutCases") {
+    requireEnvNames(list, at);
+  }
+}
+
+/**
  * Checks the value of one config key.
  * @param file - The config file, for the message.
  * @param key - A known key.
@@ -201,35 +250,17 @@ function checkPaths(file: string, key: string, list: string[]): void {
  */
 function checkValue(file: string, key: string, value: unknown): void {
   const type = CONFIG_KEYS[key] ?? "string";
-  if (type !== "string[]") {
-    if (typeof value !== type) {
-      throw new UsageError(`${file}: "${key}" must be a ${type}`);
-    }
-    checkRange(file, key, value as number);
-    if (
-      (key === "maxJudgedWeightShare" || key === "maxInvalid") &&
-      !((value as number) >= 0 && (value as number) <= 1)
-    ) {
-      throw new UsageError(`${file}: "${key}" must be a number from 0 to 1`);
-    }
+  if (type === TEXT_OR_LIST && typeof value === "string") return;
+  if (type !== "string[]" && type !== TEXT_OR_LIST) {
+    checkScalar(file, key, value);
     return;
   }
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new UsageError(`${file}: "${key}" must be a list of strings`);
+    throw new UsageError(
+      `${file}: "${key}" must be ${type === "string[]" ? "a list of strings" : "a string or a list of strings"}`,
+    );
   }
-  if (key === "subjectExclude" || key === "sandboxExpose") {
-    checkPaths(file, key, value as string[]);
-    return;
-  }
-  if (key === "report") {
-    reportFormats({ report: value as string[] }, `${file}: "${key}"`);
-    return;
-  }
-  if (key === "blindingWords") {
-    requireBlindingWords(value as string[], `${file}: "${key}"`);
-    return;
-  }
-  requireEnvNames(value as string[], `${file}: "${key}"`);
+  checkEntries(file, key, value as string[]);
 }
 
 /**
@@ -270,7 +301,14 @@ function loadConfig(root: string): Config {
     ...config,
     ...(config.cases === undefined
       ? {}
-      : { cases: path.resolve(root, config.cases) }),
+      : { cases: listOf(config.cases).map((dir) => path.resolve(root, dir)) }),
+    ...(config.heldoutCases === undefined
+      ? {}
+      : {
+          heldoutCases: listOf(config.heldoutCases).map((dir) =>
+            path.resolve(root, dir),
+          ),
+        }),
     ...(config.noise === undefined
       ? {}
       : { noise: path.resolve(root, config.noise) }),
@@ -281,22 +319,40 @@ function loadConfig(root: string): Config {
  * Layers the options a command works with.
  * @param project - Where the config file and the default cases directory are.
  * @param options - What the caller set; a property that is undefined counts as not set.
- * @returns The built-in default for `cases`, then the config file, then every option that is set. `cases` is absolute.
+ * @returns The built-in default for `cases`, then the config file, then every option that is set. `cases` and
+ *   `heldoutCases` are lists of absolute paths; the second is empty when nothing sets it.
  */
 export function withConfig<Options extends object>(
   project: Project,
-  options: Options & { cases?: string | undefined; noise?: string | undefined },
-): Config & Options & { cases: string } {
+  options: Options & {
+    cases?: string | string[] | undefined;
+    heldoutCases?: string | string[] | undefined;
+    noise?: string | undefined;
+  },
+): Omit<Config, "cases" | "heldoutCases"> &
+  Omit<Options, "cases" | "heldoutCases"> & {
+    cases: string[];
+    heldoutCases: string[];
+  } {
   const set = Object.fromEntries(
     Object.entries(options).filter(([, value]) => value !== undefined),
   ) as typeof options;
+  const config = loadConfig(project.root);
+  const absolute = (dirs: string | string[] | undefined, base: string) =>
+    listOf(dirs).map((dir) => path.resolve(base, dir));
   return {
-    cases: path.join(project.root, "evals", "cases"),
-    ...loadConfig(project.root),
+    ...config,
     ...set,
-    ...(set.cases === undefined
-      ? {}
-      : { cases: path.resolve(project.cwd, set.cases) }),
+    cases:
+      set.cases === undefined
+        ? config.cases === undefined
+          ? [path.join(project.root, "evals", "cases")]
+          : listOf(config.cases)
+        : absolute(set.cases, project.cwd),
+    heldoutCases:
+      set.heldoutCases === undefined
+        ? listOf(config.heldoutCases)
+        : absolute(set.heldoutCases, project.cwd),
     ...(set.noise === undefined
       ? {}
       : { noise: path.resolve(project.cwd, set.noise) }),

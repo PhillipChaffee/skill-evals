@@ -1,6 +1,7 @@
 import { allChecks } from "./case-checks.js";
 import { openCache, scopedCache } from "./cache.js";
 import type { Cache } from "./cache.js";
+import type { RootOptions } from "./case-roots.js";
 import type { Case } from "./cases.js";
 import { describeCheck, isJudged } from "./checks/index.js";
 import type { DecisionService } from "./decision.js";
@@ -43,7 +44,9 @@ export interface Rescored {
 }
 
 /** The options that re-scoring reads, after the config file was applied. */
-type Merged = Config & Options & { cases: string };
+type Merged = Omit<Config, "cases" | "heldoutCases"> &
+  Omit<Options, "cases" | "heldoutCases"> &
+  RootOptions;
 
 /** Who scores the judged and decision checks of this command. */
 interface Judging {
@@ -118,7 +121,7 @@ const decisionModelOf = (source: Source, options: Merged): string | undefined =>
 function judgingOf(source: Source, cases: Case[], options: Merged): Judging {
   const { results } = source;
   const recorded = recordedJudge(results);
-  const config: Config & { cases: string } = options;
+  const config: Config = options;
   const judging: Config = { ...config };
   if (results.model !== null) judging.model = results.model;
   const api =

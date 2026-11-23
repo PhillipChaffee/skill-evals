@@ -85,7 +85,7 @@ export interface Masking {
 
 /** What decides the masks of one run. */
 interface Where {
-  casesDir?: string | undefined;
+  casesDirs?: string[] | undefined;
   outDir: string;
   projectRoot?: string | undefined;
   bin: string;
@@ -176,11 +176,11 @@ function directoriesOnPath(
 /**
  * Checks the config's `sandboxExpose`.
  * @param paths - The entries.
- * @param casesDir - The cases directory.
+ * @param casesDirs - The cases directories.
  * @throws {UsageError} For an entry that is not absolute, does not exist, or is your real home or the cases directory.
  */
-export function requireExposable(paths: string[], casesDir: string): void {
-  const never = [os.homedir(), casesDir].map(realOrNull);
+export function requireExposable(paths: string[], casesDirs: string[]): void {
+  const never = [os.homedir(), ...casesDirs].map(realOrNull);
   for (const one of paths) {
     const real = path.isAbsolute(one) ? realOrNull(one) : null;
     if (real === null) {
@@ -212,7 +212,7 @@ export function maskingOf(where: Where): Masking {
     os.tmpdir(),
     "/run",
     "/var/run",
-    where.casesDir,
+    ...(where.casesDirs ?? []),
     where.outDir,
     where.projectRoot,
   ]

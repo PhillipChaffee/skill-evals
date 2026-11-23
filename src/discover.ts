@@ -32,7 +32,8 @@ export const isSkippedName = (name: string): boolean => name.startsWith("_");
  * Finds the case directories under a directory, at any depth. A directory is a case when it holds `prompt.md` or
  * `case.json`. Nothing under a case is searched, and a directory whose name starts with `_` is skipped with all it holds.
  * @param dir - The directory to search.
- * @param prefix - The names of the directories above it, below the cases directory.
+ * @param prefix - The names that every id starts with: those of the directories above `dir`, or the root's basename
+ *   when ids are prefixed.
  * @param onError - Collecting mode: hears of each fault with the case's id, or the directory when it has none, and
  *   discovery goes on without that directory. Absent: the first fault throws.
  * @returns The cases, unsorted.
@@ -44,24 +45,41 @@ export function discover(
   prefix: string[] = [],
   onError?: (caseId: string, message: string) => void,
 ): Found[] {
+  return search(dir, { names: prefix, top: true }, onError);
+}
+
+/**
+ * Searches one directory of the tree that `discover` walks.
+ * @param dir - The directory.
+ * @param where - The names above it, and whether it is the root, whose message says to pass `--cases`.
+ * @param where.names - The names of the id so far.
+ * @param where.top - True for the directory that `discover` was given.
+ * @param onError - As for `discover`.
+ * @returns The cases below it.
+ * @throws {UsageError} As for `discover`.
+ */
+function search(
+  dir: string,
+  where: { names: string[]; top: boolean },
+  onError?: (caseId: string, message: string) => void,
+): Found[] {
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
-    const message =
-      prefix.length === 0
-        ? `cannot read the cases directory ${dir} (${String(code)}); create it or pass --cases`
-        : `cannot read ${dir} (${String(code)})`;
+    const message = where.top
+      ? `cannot read the cases directory ${dir} (${String(code)}); create it or pass --cases`
+      : `cannot read ${dir} (${String(code)})`;
     if (!onError) throw new UsageError(message);
     onError(dir, message);
     return [];
   }
   return entries.flatMap((entry) => {
     if (!entry.isDirectory() || isSkippedName(entry.name)) return [];
-    const where = path.join(dir, entry.name);
-    const names = [...prefix, entry.name];
-    if (!isCaseDir(where)) return discover(where, names, onError);
+    const here = path.join(dir, entry.name);
+    const names = [...where.names, entry.name];
+    if (!isCaseDir(here)) return search(here, { names, top: false }, onError);
     const id = names.join("/");
     const [problem] = names.flatMap((name) => nameProblem(name) ?? []);
     if (problem !== undefined) {
@@ -71,7 +89,7 @@ export function discover(
       onError(safe, message);
       return [];
     }
-    return [{ id, dir: where }];
+    return [{ id, dir: here }];
   });
 }
 

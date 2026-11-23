@@ -11,8 +11,19 @@
     },
     "cases": {
       "title": "cases",
-      "description": "The directory that holds the cases.",
-      "type": "string"
+      "description": "The directories that hold the cases. Repeat the flag or separate directories with commas. With more than one, each case id starts with the name of its directory and a slash, and two directories may not have the same name.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
+    },
+    "heldoutCases": {
+      "title": "heldoutCases",
+      "description": "Directories whose every case is held out: its cases load only with --heldout, and the agent never sees the directory. Repeat the flag or separate directories with commas. When more than one directory is in use in all, ids are prefixed as for --cases.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
     },
     "harness": {
       "title": "harness",

@@ -6,6 +6,8 @@ import type { Partition } from "./applicability.js";
 import { requireTar } from "./archive.js";
 import { partitionApplicable } from "./applicability.js";
 import type { Case } from "./cases.js";
+import type { RootOptions } from "./case-roots.js";
+import { dirsOf, rootsOf } from "./case-roots.js";
 import type { DecisionService } from "./decision.js";
 import type { EvaluateOptions } from "./evaluate.js";
 import {
@@ -47,10 +49,9 @@ import { requireNoRulesClash } from "./rules-clash.js";
 
 /** What a command settles before it resolves any subject. */
 export interface Context {
-  options: Config & { cases: string } & Pick<
-      EvaluateOptions,
-      "outDir" | "useCache" | "rateLimitBackoffMs"
-    >;
+  options: Omit<Config, "cases" | "heldoutCases"> &
+    RootOptions &
+    Pick<EvaluateOptions, "outDir" | "useCache" | "rateLimitBackoffMs">;
   decision: DecisionService | null;
   decisionModel: string | undefined;
   selection: { chosen: Located[]; reason: string };
@@ -135,7 +136,8 @@ function settingsOf(options: Context["options"]) {
   reportFormats(options);
   if (options.keepWorkspaces) requireTar();
   const sandbox = options.sandbox ? requireSandbox() : null;
-  if (sandbox) requireExposable(options.sandboxExpose ?? [], options.cases);
+  if (sandbox)
+    requireExposable(options.sandboxExpose ?? [], dirsOf(rootsOf(options)));
   return { reps, jobs, maxInvalid, historyMode, sandbox };
 }
 
@@ -355,6 +357,6 @@ export const basePlan = (
   sandbox: context.sandbox,
   projectRoot: context.projectRoot,
   blinding: { words: context.blindingWords, warned: new Set<string>() },
-  casesDir: context.options.cases,
+  casesDirs: dirsOf(rootsOf(context.options)),
   sandboxExpose: context.options.sandboxExpose,
 });

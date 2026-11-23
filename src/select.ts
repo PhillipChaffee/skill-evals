@@ -1,5 +1,7 @@
 import type { Case, LoadOptions } from "./cases.js";
 import { loadWhere } from "./cases.js";
+import type { CaseRoot } from "./case-roots.js";
+import { dirsOf, prefixOf, repeatedIds } from "./case-roots.js";
 import { baseGlobOf, globToRegExp, mayReachVariantOf } from "./glob.js";
 import { declaresVariants } from "./discover.js";
 import { UsageError } from "./scope.js";
@@ -164,30 +166,44 @@ function describe(by: Selection): string {
 
 /**
  * Loads the cases of a suite and chooses among them. A case whose id the selection rules out is never read.
- * @param casesDir - The directory to search at any depth.
+ * @param roots - The directories to search, each at any depth. With more than one, every id starts with the basename
+ *   of its root and `/`. Every case of a held-out root is held out.
  * @param by - Which cases to choose.
  * @param options - How to treat unknown keys, and whether to collect load errors. When `onError` is set, an empty
  *   choice is not an error if some case failed to load, because the case asked for may be one of them.
  * @returns The chosen cases, sorted by id.
- * @throws {UsageError} When the directory cannot be read, a case is invalid, or no case is chosen; with `onError`,
- *   only when no case is chosen and none failed.
+ * @throws {UsageError} When a directory cannot be read, a case is invalid, two cases have one id, or no case is
+ *   chosen; with `onError`, only when no case is chosen and none failed.
  */
 export function loadSelection(
-  casesDir: string,
+  roots: CaseRoot[],
   by: Selection,
   options: LoadOptions,
 ): Case[] {
   const failures: string[] = [];
   const { onError } = options;
-  const loaded = loadWhere(casesDir, idTests(by).mayLoad, {
-    ...options,
-    ...(onError && {
-      onError: (caseId: string, message: string) => {
-        failures.push(caseId);
-        onError(caseId, message);
-      },
-    }),
-  });
+  const collecting = onError && {
+    onError: (caseId: string, message: string) => {
+      failures.push(caseId);
+      onError(caseId, message);
+    },
+  };
+  const loaded = roots
+    .flatMap((root) =>
+      loadWhere(root.dir, idTests(by).mayLoad, {
+        ...options,
+        ...collecting,
+        prefix: prefixOf(root, roots),
+        heldout: root.heldout,
+      }),
+    )
+    .sort((x, y) => x.id.localeCompare(y.id));
+  const twice = repeatedIds(loaded.map(({ id }) => id));
+  if (twice.length > 0) {
+    throw new UsageError(
+      `more than one case has the id ${twice.join(", ")}; the cases directories ${dirsOf(roots).join(", ")} must have different names`,
+    );
+  }
   const chosen = selectCases(loaded, by);
   if (chosen.length === 0 && failures.length === 0) {
     const asked = describe(by);
@@ -196,7 +212,7 @@ export function loadSelection(
         ? "; held-out variants run only with --heldout"
         : "";
     throw new UsageError(
-      `no case in ${casesDir}${asked && ` matches ${asked}`}${hidden}`,
+      `no case in ${dirsOf(roots).join(", ")}${asked && ` matches ${asked}`}${hidden}`,
     );
   }
   return chosen;

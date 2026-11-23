@@ -253,24 +253,24 @@ test("a cases directory that is or contains the subject, and an output directory
   const outer = path.join(box.root, "outer");
   const kit = path.join(outer, "kit");
   const project = { root: box.root, isGitRepo: false, cwd: box.root };
-  const resolve = (left: { cases: string | null; out: string | null }) =>
+  const resolve = (left: { cases: string[]; out: string | null }) =>
     resolveSubject("subject", kit, {
       ...project,
       left: { ...NO_EXCLUSIONS, ...left },
     });
-  expect(() => resolve({ cases: kit, out: null })).toThrow(
+  expect(() => resolve({ cases: [kit], out: null })).toThrow(
     new RegExp(
       `cases directory ${kit} is, or contains, the subject directory ${kit}`,
     ),
   );
-  expect(() => resolve({ cases: outer, out: null })).toThrow(
+  expect(() => resolve({ cases: [outer], out: null })).toThrow(
     /is, or contains, the subject directory/,
   );
-  expect(() => resolve({ cases: null, out: kit })).toThrow(
+  expect(() => resolve({ cases: [], out: kit })).toThrow(
     new RegExp(`output directory ${kit} is the subject directory ${kit}`),
   );
   resolve({
-    cases: path.join(kit, "cases"),
+    cases: [path.join(kit, "cases")],
     out: path.join(kit, "out"),
   }).dispose();
 });

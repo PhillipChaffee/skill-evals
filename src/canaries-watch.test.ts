@@ -224,7 +224,7 @@ test("the sandbox and the canaries of a run follow the plan and the case", () =>
     harness,
     bin: "claude",
     projectRoot: undefined,
-    casesDir: undefined,
+    casesDirs: undefined,
     outDir: "/out",
   };
   const plain = confinementOf({

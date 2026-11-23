@@ -93,7 +93,7 @@ test("a terminal is asked once, the answer is remembered, and a change to the co
   const { cases, env } = dirs();
   const first = answering("y");
   await requireApproved(
-    { casesDir: cases, count: 3 },
+    { casesDirs: [cases], count: 3 },
     { terminal: first, env },
   );
   expect(first.asked).toEqual([
@@ -103,7 +103,7 @@ test("a terminal is asked once, the answer is remembered, and a change to the co
   expect(stored).toEqual({ [digestOf(cases)]: cases });
   const again = answering();
   await requireApproved(
-    { casesDir: cases, count: 3 },
+    { casesDirs: [cases], count: 3 },
     { terminal: again, env },
   );
   expect(again.asked).toEqual([]);
@@ -114,7 +114,7 @@ test("a terminal is asked once, the answer is remembered, and a change to the co
   );
   const changed = answering("yes");
   await requireApproved(
-    { casesDir: cases, count: 3 },
+    { casesDirs: [cases], count: 3 },
     { terminal: changed, env },
   );
   expect(changed.asked).toHaveLength(1);
@@ -126,7 +126,7 @@ test("an answer that is not yes stops the command, and an unreadable memory is n
   for (const answer of ["", "n", "yeah no"]) {
     await expect(
       requireApproved(
-        { casesDir: cases, count: 1 },
+        { casesDirs: [cases], count: 1 },
         { terminal: answering(answer), env },
       ),
     ).rejects.toThrow(new UsageError("not approved; nothing was run"));
@@ -137,7 +137,7 @@ test("an answer that is not yes stops the command, and an unreadable memory is n
   for (const memory of ["not json", "[1]", "null"]) {
     fs.writeFileSync(file, memory);
     const terminal = answering("y");
-    await requireApproved({ casesDir: cases, count: 1 }, { terminal, env });
+    await requireApproved({ casesDirs: [cases], count: 1 }, { terminal, env });
     expect(terminal.asked).toHaveLength(1);
   }
 });
@@ -214,13 +214,13 @@ test("a single case is asked about as a case, and the project's config file is p
   fs.writeFileSync(config, '{ "reps": 1 }');
   const once = answering("y");
   await requireApproved(
-    { casesDir: cases, count: 1, configFile: config },
+    { casesDirs: [cases], count: 1, configFile: config },
     { terminal: once, env },
   );
   expect(once.asked[0]).toMatch(/Run these 1 case\? \[y\/N\] $/);
   const same = answering();
   await requireApproved(
-    { casesDir: cases, count: 1, configFile: config },
+    { casesDirs: [cases], count: 1, configFile: config },
     { terminal: same, env },
   );
   expect(same.asked).toEqual([]);
@@ -228,7 +228,7 @@ test("a single case is asked about as a case, and the project's config file is p
   fs.writeFileSync(config, '{ "judgeUrl": "https://elsewhere.example" }');
   const changed = answering("y");
   await requireApproved(
-    { casesDir: cases, count: 1, configFile: config },
+    { casesDirs: [cases], count: 1, configFile: config },
     { terminal: changed, env },
   );
   expect(changed.asked).toHaveLength(1);
@@ -244,7 +244,7 @@ test("a state directory that cannot be written is a warning, and the run goes on
   fs.writeFileSync(blocked, "a file where the directory should be");
   const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
   await requireApproved(
-    { casesDir: cases, count: 2 },
+    { casesDirs: [cases], count: 2 },
     { terminal: answering("y"), env: { [STATE]: path.join(blocked, "state") } },
   );
   expect(String(warn.mock.calls[0]?.[0])).toMatch(

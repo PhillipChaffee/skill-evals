@@ -1,5 +1,8 @@
 import type { Flag } from "./flags.js";
 
+/** The flags that name the directories of cases, which most commands take together. */
+export const ROOT_FLAGS: Flag[] = ["cases", "heldout-cases"];
+
 /** The flags of the commands that run a suite: `run`, `score`, `plan` and `calibrate`. */
 export const SUITE_FLAGS: Flag[] = [
   "harness",
@@ -9,7 +12,7 @@ export const SUITE_FLAGS: Flag[] = [
   "tag-all",
   "not-tag",
   "heldout",
-  "cases",
+  ...ROOT_FLAGS,
   "reps",
   "jobs",
   "retries",

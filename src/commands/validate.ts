@@ -14,6 +14,7 @@ import { exclusionsOf } from "../exclusions.js";
 import { installedOf } from "../harnesses/index.js";
 import type { Located } from "../harnesses/index.js";
 import type { Project } from "../project.js";
+import { dirsOf, rootsOf } from "../case-roots.js";
 import { withConfig } from "../project.js";
 import { loadSelection, selectionOf } from "../select.js";
 import { UsageError } from "../scope.js";
@@ -39,7 +40,7 @@ export interface LintContext {
   /** Every harness that is installed on this machine. */
   harnesses: Located[];
   project: Project;
-  /** The absolute path of the cases directory. */
+  /** The absolute path of the cases directory; with more than one, every path, joined with ", ". */
   casesDir: string;
   /** The share of a case's weight that judge and decision checks may carry before a warning. Default: 0.5. */
   maxJudgedWeightShare?: number;
@@ -300,7 +301,7 @@ async function lintsOf(
     subject,
     harnesses: installedOf(),
     project,
-    casesDir: options.cases,
+    casesDir: dirsOf(rootsOf(options)).join(", "),
     historyMode: requireHistoryMode(options),
     blindingWords: options.blindingWords,
     ...(options.maxJudgedWeightShare === undefined
@@ -318,7 +319,7 @@ async function lintsOf(
 /**
  * Checks a suite without running it, and prints every problem and warning at once. No harness is started and no model
  * is called.
- * @param given - The options of the command line: `subject`, `cases`, `lenient`, `deep`, `heldout` and the selection.
+ * @param given - The options of the command line: `subject`, `cases`, `heldoutCases`, `lenient`, `deep`, `heldout` and the selection.
  * @param project - Where the config file and the default cases directory are.
  * @returns The exit code: 2 when any case does not load or a lint finds a problem, else 0. A blinding word is a warning;
  *   an `x-unblinded` without a `why` does not load.
@@ -328,12 +329,17 @@ export async function validate(
   project: Project,
 ): Promise<number> {
   const options = withConfig(project, given);
-  const casesDir = options.cases;
+  const roots = rootsOf(options);
   const found: Lint[] = [];
   const problem = (caseId: string, text: string): void => {
     found.push({ level: "problem", caseId, text });
   };
-  const cases = loadSelection(casesDir, selectionOf(options), {
+  // A held-out root is checked whether or not --heldout is given: a broken case in it would otherwise stay hidden.
+  const selection = selectionOf({
+    ...options,
+    heldout: options.heldout === true || roots.some((root) => root.heldout),
+  });
+  const cases = loadSelection(roots, selection, {
     lenient: options.lenient ?? false,
     onError: problem,
     onWarning: (text, caseId) => {

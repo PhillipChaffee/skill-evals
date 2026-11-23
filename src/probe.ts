@@ -6,6 +6,7 @@ import type { Case } from "./cases.js";
 import { loadCases } from "./cases.js";
 import { findBin, namedHarnesses } from "./harnesses/index.js";
 import type { Harness } from "./harnesses/shared.js";
+import { dirsOf, rootsOf } from "./case-roots.js";
 import type { Project } from "./project.js";
 import { withConfig } from "./project.js";
 import type { RunRecord } from "./run.js";
@@ -267,9 +268,12 @@ export async function check(
       model: options.model,
       pass: options.env,
     });
-    const cases = fs.existsSync(options.cases)
-      ? loadSafely(options.cases, options.lenient ?? false)
-      : [];
+    const loaded = dirsOf(rootsOf(options))
+      .filter((dir) => fs.existsSync(dir))
+      .map((dir) => loadSafely(dir, options.lenient ?? false));
+    const cases =
+      loaded.find((one) => typeof one === "string") ??
+      loaded.filter((one) => typeof one !== "string").flat();
     const harnesses = located.map((entry) => entry.harness);
     console.log(
       options.json

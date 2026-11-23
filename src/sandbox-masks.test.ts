@@ -49,7 +49,7 @@ function machine() {
 test("the sandbox hides the home, the temp directories, /run, the cases, the output and the project, outermost only", () => {
   const box = machine();
   const { masked } = maskingOf({
-    casesDir: box.at(ELSEWHERE),
+    casesDirs: [box.at(ELSEWHERE)],
     outDir: box.at("proj/out"),
     projectRoot: box.at("proj"),
     bin: "tool",
@@ -194,7 +194,7 @@ test("a PATH entry that is the home, a relative entry or the cases directory is 
   const cases = box.at(ELSEWHERE);
   vi.stubEnv("PATH", `${box.home}:.::${cases}:/usr/bin:${box.at("absent")}`);
   const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
-  const where = { casesDir: cases, outDir: GONE, bin: "tool" };
+  const where = { casesDirs: [cases], outDir: GONE, bin: "tool" };
   const { exposed } = maskingOf(where);
   maskingOf(where);
   const said = warn.mock.calls.map((call) => String(call[0]));
@@ -216,7 +216,7 @@ test("sandboxExpose paths are bound back, and none may be the home or the cases 
   ).toContain(tool);
   const cases = box.at(ELSEWHERE);
   const check = (paths: string[]) => () => {
-    requireExposable(paths, cases);
+    requireExposable(paths, [cases]);
   };
   expect(check([tool, box.at(SUBJECT_DIR)])).not.toThrow();
   expect(check(["relative/dir"])).toThrow(/absolute path that exists/);

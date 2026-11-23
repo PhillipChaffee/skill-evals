@@ -9,7 +9,7 @@ import { EXIT } from "./exit-codes.js";
 import { failed } from "./fatal.js";
 import type { Flag, FlagSpec } from "./flags.js";
 import { FLAGS } from "./flags.js";
-import { COMPARE_FLAGS, SUITE_FLAGS } from "./command-flags.js";
+import { COMPARE_FLAGS, ROOT_FLAGS, SUITE_FLAGS } from "./command-flags.js";
 import type { CommandDoc, Options } from "./usage.js";
 import { commandUsage, commandsTaking, usageText } from "./usage.js";
 import { calibrate } from "./commands/calibrate.js";
@@ -94,7 +94,7 @@ export const COMMANDS: Record<string, Command> = {
     handler: validate,
     flags: [
       "subject",
-      "cases",
+      ...ROOT_FLAGS,
       "lenient",
       "deep",
       "case",
@@ -111,7 +111,7 @@ export const COMMANDS: Record<string, Command> = {
     handler: rejudge,
     positionals: ["out dir"],
     flags: [
-      "cases",
+      ...ROOT_FLAGS,
       "case",
       "judge-model",
       "judge-api",
@@ -139,7 +139,7 @@ export const COMMANDS: Record<string, Command> = {
       "Print one case as a run reads it, as JSON in Markdown: the prompt, the layers of files in order, the setup steps, every check with its defaults written out, the capabilities it needs, and whether each installed harness can run it. A case with variants lists them. It starts no harness: what is installed comes from a lookup on PATH.",
     handler: explain,
     positionals: ["id"],
-    flags: ["cases", "lenient"],
+    flags: [...ROOT_FLAGS, "lenient"],
   },
   show: {
     description:
@@ -153,7 +153,7 @@ export const COMMANDS: Record<string, Command> = {
       "Show the harnesses in default-preference order, and the cases.",
     handler: list,
     flags: [
-      "cases",
+      ...ROOT_FLAGS,
       "lenient",
       "case",
       "not-case",

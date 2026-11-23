@@ -7,6 +7,7 @@ export const EXAMPLE_CONFIG: Record<
   string | number | boolean | string[]
 > = {
   cases: "evals/cases",
+  heldoutCases: ["evals/heldout"],
   harness: CLAUDE_CODE,
   reps: 3,
   jobs: 4,

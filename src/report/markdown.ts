@@ -16,6 +16,7 @@ import {
 } from "./delta.js";
 import { discriminationLines } from "./discrimination-table.js";
 import { noteSections } from "./notes.js";
+import { triggerTable } from "./trigger.js";
 import type { RunRecord } from "../run.js";
 import { invalidReason } from "../run.js";
 import type { SuiteScore } from "../score.js";
@@ -259,6 +260,27 @@ function coverageSection(evaluation: Evaluation): string[] {
 }
 
 /**
+ * Shows, for each target skill, how often it loads when it should on the development and the held-out prompts, the
+ * gap between the two, and how often it loads when it should not. The table gives no verdict.
+ * @param evaluation - What `evaluate` returned.
+ * @returns The section, or nothing when no case names a target.
+ */
+function triggerSection(evaluation: Evaluation): string[] {
+  const table = triggerTable(evaluation);
+  if (table === null) return [];
+  const line = (cells: string[]): string =>
+    `| ${cells.map((each) => cell(each)).join(" | ")} |`;
+  return [
+    "",
+    "## Trigger recall by target skill",
+    "",
+    line(table.head),
+    line(table.head.map(() => "---")),
+    ...table.body.map(line),
+  ];
+}
+
+/**
  * Shows the score over the cases that apply to every harness, the only score that compares harnesses.
  * @param evaluation - What `evaluate` returned.
  * @returns The section, or nothing for a single harness.
@@ -347,6 +369,7 @@ export function renderReport(evaluation: Evaluation): string {
     sections.join("\n\n"),
     ...commonSection(evaluation),
     ...coverageSection(evaluation),
+    ...triggerSection(evaluation),
     ...footnoteLines(evaluation),
     ...noteSections(evaluation),
     ...(belowBar.length
