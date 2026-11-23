@@ -4,7 +4,7 @@ import { Worker } from "node:worker_threads";
 const CHECK_MATCH_BUDGET_MS = 10_000;
 // A text over this many UTF-8 bytes is matched in a worker thread, so that a slow pattern cannot block the event loop
 // that the other runs of the command share.
-const LARGE_TEXT_BYTES = 65_536;
+const LARGE_TEXT_BYTES = 16_384;
 // The most bytes a UTF-8 character takes, so that a text this many times shorter than the limit is never large.
 const MOST_BYTES_PER_CHAR = 4;
 const BYTES_PER_KB = 1024;
@@ -47,7 +47,7 @@ const keyOf = (pattern: RegExp): string => `${pattern.flags}/${pattern.source}`;
 /**
  * Tells whether a text is large enough to be matched in a worker thread.
  * @param text - The text a pattern is tested against.
- * @returns True for a text of more than 64 KB in UTF-8.
+ * @returns True for a text of more than 16 KB in UTF-8.
  */
 function isLarge(text: string): boolean {
   if (text.length <= LARGE_TEXT_BYTES / MOST_BYTES_PER_CHAR) return false;

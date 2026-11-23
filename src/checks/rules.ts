@@ -13,7 +13,7 @@ export const PASS: Verdict = { score: 1 };
  * Compiles a pattern of a check.
  * @param pattern - The source of a regular expression.
  * @param flags - Its flags; none when absent.
- * @returns The expression. While a rule runs under `budgeted`, its test of a text over 64 KB is made in a worker thread.
+ * @returns The expression. While a rule runs under `budgeted`, its test of a text over 16 KB is made in a worker thread.
  * @throws {SyntaxError} When the pattern or the flags are not valid.
  */
 export const regex = (pattern: string, flags = ""): RegExp =>

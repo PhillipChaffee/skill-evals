@@ -3,7 +3,7 @@ title: Migrate from 0.0.1
 description: What changes for a suite written for 0.0.1, and what stays unproven on real harnesses.
 ---
 
-A suite written for 0.0.1 still loads in 0.1.0, and most of its scores do not move. Eight changes can make a command fail or a score change. Read them first. Items 2, 3, 7 and 8 change what a 0.0.1 suite scores; the others make a command fail or exit with a different code.
+A suite written for 0.0.1 still loads in 0.1.0, and most of its scores do not move. Eight changes can make a command fail or a score change. Read them first. Items 2, 3 and 7 change what a 0.0.1 suite scores; the others make a command fail or exit with a different code.
 
 ## What you must check
 
@@ -14,7 +14,7 @@ A suite written for 0.0.1 still loads in 0.1.0, and most of its scores do not mo
 5. **The harness gets an allowlisted environment.** It no longer gets a copy of yours. It gets `PATH`, `SHELL`, `USER`, `LOGNAME`, `TMPDIR`, `TERM`, `TZ`, `LANG`, `LANGUAGE`, `LC_*`, the proxy and certificate variables, its own adapter's login variables, and the names you list in the `env` config key. Its `TMPDIR` is a new directory of the run's own, not yours. If a harness needs another variable, add its name to `env`. The judge gets the same environment.
 6. **A `--b` plugin subject is loaded from a copy.** Every run copies the subject (a directory, or a git ref exported with `git archive`), so an agent's edits never reach your checkout or the next run. The copy leaves out `.git`, `node_modules`, the cases directory and the output directory. A hook that depends on its absolute path or on `.git` sees the copy instead. Add globs to `subjectExclude` to leave out more.
 7. **A check of kind `subagent` needs a harness that reports subagents.** A tool check or matcher of kind `subagent` needs the capability `subagents`, so on Pi such a case is "not applicable". In 0.0.1, `tool_not_called` with `kind: "subagent"` passed there, because Pi never shows a subagent call. The new kinds `question` and `mcp` need `askUser` and `mcp` in the same way.
-8. **A matcher of kind `other` with a `name` no longer matches `AskUserQuestion`.** In 0.0.1, `AskUserQuestion` and every MCP tool had kind `other`. Now they have the kinds `question` and `mcp`. A matcher of kind `other` with no `name` still matches both. With a `name`, it matches an MCP call whose native name (`mcp__server__tool`) fits, and it never matches a question call. Write `kind: "question"` for a question call.
+8. **`AskUserQuestion` and MCP tools have kinds of their own.** In 0.0.1 they had kind `other`; now they have the kinds `question` and `mcp`. A 0.0.1 matcher of kind `other` still matches them as it did: with no `name` it matches both, it matches a question call whatever its `name` says (the name is tested on its own, against the tool's own name), and it matches an MCP call when its `name` fits the native name (`mcp__server__tool`). A new check can say `kind: "question"` or `kind: "mcp"`.
 
 ## Also changed
 

@@ -157,7 +157,8 @@ export const tester = (
  * @param nameFits - Tests a name against the matcher's `name` pattern.
  * @returns True when the matcher names no kind or the call's own. For compatibility with 0.0.1, in which every MCP
  *   tool and Claude Code's `AskUserQuestion` had kind `other`, a matcher of kind `other` with no `name` also fits an
- *   `mcp` call and a `question` call. A matcher of kind `other` also fits an `mcp` call when its `name` fits the call's
+ *   `mcp` call, and it fits a `question` call whatever its `name` says (the name is tested on its own, and a question
+ *   call's name is the harness's own, as in 0.0.1). A matcher of kind `other` also fits an `mcp` call when its `name` fits the call's
  *   native name (`mcp__server__tool`); a `name` that fits only the mapped name does not make it one, because no 0.0.1
  *   check could have written that.
  */
@@ -171,9 +172,8 @@ const kindFits = (
   (matcher.kind === "other" &&
     (call.kind === "mcp" || call.kind === "question") &&
     (matcher.name === undefined ||
-      (call.kind === "mcp" &&
-        call.native !== undefined &&
-        nameFits(call.native))));
+      call.kind === "question" ||
+      (call.native !== undefined && nameFits(call.native))));
 
 /**
  * Compiles a matcher once, for a check that tests many calls.

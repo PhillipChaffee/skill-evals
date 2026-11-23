@@ -36,7 +36,7 @@ const notRun = (because: string) => ({
 });
 /**
  * Scores a check by its rule. A rule that throws, such as a user's regular expression that overflows the stack, scores
- * its check 0 and leaves the run valid. A pattern's test of a text over 64 KB runs in a worker thread, so that it
+ * its check 0 and leaves the run valid. A pattern's test of a text over 16 KB runs in a worker thread, so that it
  * cannot block the other runs; one that takes longer than its budget leaves the check unscored, and the run invalid.
  * @param check - A check that a rule scores.
  * @param outcome - What the run left behind. A check of a turn reads that turn's slice of it.

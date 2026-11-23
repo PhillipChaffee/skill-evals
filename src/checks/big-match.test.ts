@@ -5,7 +5,7 @@ import { regex } from "./rules.js";
 import { OverBudget, budgeted, setMatchBudget } from "./big-match.js";
 import { bareOutcome } from "../testing/outcome.js";
 
-// Over 64 KB, so a pattern's test of it runs in a worker thread under `budgeted`.
+// Over 16 KB, so a pattern's test of it runs in a worker thread under `budgeted`.
 const LARGE = `${"a".repeat(70_000)}needle`;
 // A pattern that takes seconds on LARGE: each start scans to the end and back.
 const SLOW = ".*X.*Y";
@@ -97,9 +97,9 @@ test("a pattern that fails in the worker rejects with the worker's error", async
 });
 
 test("the size that counts is UTF-8 bytes, and one pass can send several texts to the worker", async () => {
-  // 30,000 characters: 90 KB of three-byte characters is large, 30 KB of ASCII is not.
-  const euros = `${"€".repeat(30_000)}needle`;
-  const ascii = `${"a".repeat(30_000)}needle`;
+  // 10,000 characters: 30 KB of three-byte characters is large, 10 KB of ASCII is not.
+  const euros = `${"€".repeat(10_000)}needle`;
+  const ascii = `${"a".repeat(10_000)}needle`;
   const tested: string[] = [];
   const both = await budgeted(() => {
     const found = [euros, LARGE, ascii].map((text) =>

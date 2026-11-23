@@ -166,7 +166,7 @@ test("a matcher of kind other still counts a question call and an mcp call, as 0
     ]),
   );
   expect(scores).toEqual({
-    "other-question": [1, 0, 1],
+    "other-question": [1, 0, 1, 1, 0],
     "other-mcp": [1, 0, 1],
   });
 });
